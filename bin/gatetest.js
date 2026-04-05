@@ -94,6 +94,17 @@ async function main() {
     return;
   }
 
+  if (args.initClaudeMd) {
+    const { ClaudeMdGenerator } = require('../src/core/claude-md-generator');
+    const siteUrl = args.crawl || args.crawlLoop || null;
+    const generator = new ClaudeMdGenerator(projectRoot, { siteUrl });
+    const outPath = await generator.generateAndWrite();
+    console.log(`\n[GateTest] CLAUDE.md generated at: ${outPath}`);
+    console.log('[GateTest] Hooks installed at: .claude/settings.json');
+    console.log('[GateTest] Scan script created: gatetest-scan.js\n');
+    return;
+  }
+
   const gatetest = new GateTest(projectRoot, {
     parallel: args.parallel || false,
     stopOnFirstFailure: args['stop-first'] || false,
@@ -172,6 +183,7 @@ function parseArgs(argv) {
     else if (arg === '--list') args.list = true;
     else if (arg === '--report') args.report = true;
     else if (arg === '--init') args.init = true;
+    else if (arg === '--init-claude-md') args.initClaudeMd = true;
     else if (arg === '--parallel') args.parallel = true;
     else if (arg === '--stop-first') args['stop-first'] = true;
     else if (arg === '--suite' && argv[i + 1]) args.suite = argv[++i];
