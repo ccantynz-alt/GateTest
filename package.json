@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "node --test tests/**/*.test.js",
+    "app": "node src/app-server.js",
     "gatetest": "node bin/gatetest.js",
     "gatetest:full": "node bin/gatetest.js --suite full",
     "gatetest:quick": "node bin/gatetest.js --suite quick",
