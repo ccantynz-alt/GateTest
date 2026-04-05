@@ -24,6 +24,8 @@ const BUILT_IN_MODULES = {
   dataIntegrity: '../modules/data-integrity.js',
   documentation: '../modules/documentation.js',
   liveCrawler: '../modules/live-crawler.js',
+  explorer: '../modules/explorer.js',
+  chaos: '../modules/chaos.js',
 };
 
 class ModuleRegistry {
