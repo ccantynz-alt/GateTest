@@ -165,7 +165,23 @@ class ClaudeMdGenerator {
     const lines = [];
 
     // Header
-    lines.push(`## GATETEST QUALITY GATE (MANDATORY)`);
+    lines.push(`# ${s.name || this.projectName} — Project Rules`);
+    lines.push('');
+    lines.push(`## READ THIS FIRST — MANDATORY FOR EVERY SESSION`);
+    lines.push('');
+    lines.push(`**You are working on ${s.name || this.projectName}.** Before doing ANYTHING:`);
+    lines.push('');
+    lines.push('1. **READ this entire file.** Do not code until you understand the project.');
+    lines.push('2. **Run `git status` and `git log --oneline -10`** to see where the last session left off.');
+    lines.push('3. **Do NOT start from scratch.** This is an existing project. Build on what\'s here.');
+    lines.push('4. **Do NOT reorganize, refactor, or "improve"** unless explicitly asked.');
+    lines.push('5. **Do NOT create new files** unless absolutely necessary. Edit existing files first.');
+    lines.push('6. **Check the current branch** with `git branch` — stay on it unless told otherwise.');
+    lines.push('7. **Commit and push** when work is complete.');
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    lines.push(`## GATETEST QUALITY GATE`);
     lines.push('');
     lines.push(`GateTest is the QA gate for **${s.name || this.projectName}**.`);
     lines.push('It scans code and the live site, catches every error, and blocks deployment until clean.');
@@ -302,17 +318,18 @@ class ClaudeMdGenerator {
     // Session health check script
     const healthScript = `#!/bin/bash
 PROJECT_DIR="${this.root}"
-echo '{'
-echo '  "systemMessage": "SESSION START — MANDATORY INSTRUCTIONS:\\n\\n'
-echo '1. READ CLAUDE.md NOW. It contains GateTest quality gate rules.\\n'
-echo '2. GATETEST IS ACTIVE. After ANY code change, run: node gatetest-scan.js\\n'
-echo '3. SHOW the user ALL scan results. Do not fix silently.\\n'
-echo '4. Do NOT say fixed until gatetest-scan.js returns ALL CLEAR.\\n\\n'
 cd "$PROJECT_DIR" 2>/dev/null
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
-LAST=$(git log --oneline -1 2>/dev/null || echo "no commits")
-echo "Branch: $BRANCH | Last: $LAST\\n'
-echo '"}'
+LAST_5=$(git log --oneline -5 2>/dev/null || echo "no commits")
+STATUS=$(git status --short 2>/dev/null || echo "unknown")
+CLAUDE_MD_EXISTS="false"
+if [ -f "CLAUDE.md" ]; then CLAUDE_MD_EXISTS="true"; fi
+
+cat <<EOJSON
+{
+  "systemMessage": "SESSION START — MANDATORY COMPLIANCE CHECK\\n\\n=== PROJECT: ${this.projectName} ===\\nBranch: $BRANCH\\nCLAUDE.md exists: $CLAUDE_MD_EXISTS\\n\\nRecent commits:\\n$LAST_5\\n\\nWorking tree status:\\n$STATUS\\n\\n=== MANDATORY INSTRUCTIONS ===\\n1. READ CLAUDE.md NOW. It contains quality gate rules and project context.\\n2. Do NOT start from scratch. Continue where the last session left off.\\n3. Do NOT reorganize or refactor unless explicitly asked.\\n4. After ANY code change, run: node gatetest-scan.js\\n5. SHOW the user ALL scan results. Do not fix silently.\\n6. Do NOT say it is fixed until gatetest-scan.js returns ALL CLEAR.\\n7. Commit and push when work is complete."
+}
+EOJSON
 `;
 
     const healthPath = path.join(claudeDir, 'session-health-check.sh');
