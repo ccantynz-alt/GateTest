@@ -1,0 +1,62 @@
+export default function Footer() {
+  return (
+    <footer className="border-t border-border/30 py-12 px-6">
+      <div className="mx-auto max-w-6xl">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-6 h-6 rounded bg-accent flex items-center justify-center">
+                <span className="text-white font-bold text-xs font-[var(--font-mono)]">G</span>
+              </div>
+              <span className="font-bold">
+                Gate<span className="text-accent-light">Test</span>
+              </span>
+            </div>
+            <p className="text-sm text-muted leading-relaxed">
+              The advanced QA gate between AI and GitHub. Nothing ships unless it&apos;s pristine.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-4">Product</h4>
+            <ul className="space-y-2">
+              <li><a href="#features" className="text-sm text-muted hover:text-foreground transition-colors">Features</a></li>
+              <li><a href="#modules" className="text-sm text-muted hover:text-foreground transition-colors">Modules</a></li>
+              <li><a href="#pricing" className="text-sm text-muted hover:text-foreground transition-colors">Pricing</a></li>
+              <li><a href="#comparison" className="text-sm text-muted hover:text-foreground transition-colors">Compare</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-4">Resources</h4>
+            <ul className="space-y-2">
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Documentation</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">GitHub</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Changelog</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Blog</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-4">Company</h4>
+            <ul className="space-y-2">
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">About</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Privacy</a></li>
+              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Terms</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-border/30 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-muted">
+            &copy; {new Date().getFullYear()} GateTest. All rights reserved.
+          </p>
+          <p className="text-xs text-muted">
+            AI writes fast. GateTest keeps it honest.
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
