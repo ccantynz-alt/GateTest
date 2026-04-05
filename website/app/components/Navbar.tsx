@@ -8,7 +8,7 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-        <a href="#" className="flex items-center gap-3">
+        <a href="/" className="flex items-center gap-3">
           <div className="relative w-8 h-8">
             <div className="absolute inset-0 rounded-lg bg-accent/20 pulse-glow" />
             <div className="absolute inset-1 rounded-md bg-accent flex items-center justify-center">

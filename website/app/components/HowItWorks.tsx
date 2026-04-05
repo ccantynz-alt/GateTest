@@ -70,7 +70,7 @@ export default function HowItWorks() {
             <div
               key={step.step}
               className={`grid lg:grid-cols-2 gap-10 items-center ${
-                index % 2 === 1 ? "lg:direction-rtl" : ""
+                index % 2 === 1 ? "" : ""
               }`}
             >
               <div className={index % 2 === 1 ? "lg:order-2" : ""}>
