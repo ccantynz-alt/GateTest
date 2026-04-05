@@ -5,19 +5,22 @@
 **You are working on GateTest.** Before doing ANYTHING, follow these rules:
 
 1. **READ this entire file first.** Do not start coding until you understand the project.
-2. **Check git status and git log** to understand where the previous session left off.
-3. **Do NOT start from scratch.** This is an existing project. Build on what's here.
-4. **Do NOT create new files** unless absolutely necessary. Edit existing files first.
-5. **Do NOT reorganize, refactor, or "improve"** unless explicitly asked.
-6. **Run `node --test tests/*.test.js`** before committing anything.
-7. **Run `cd website && npm run build`** before committing website changes.
-8. **Commit and push** when work is complete. Branch: check `git branch` for current branch.
+2. **READ `HANDOVER.md`** — it has the latest session state, what's done, what's next.
+3. **Check git status and git log** to understand where the previous session left off.
+4. **Do NOT start from scratch.** This is an existing project. Build on what's here.
+5. **Do NOT create new files** unless absolutely necessary. Edit existing files first.
+6. **Do NOT reorganize, refactor, or "improve"** unless explicitly asked.
+7. **Run `node --test tests/*.test.js`** before committing anything.
+8. **Run `cd website && npm run build`** before committing website changes.
+9. **Commit and push** when work is complete. Branch: check `git branch` for current branch.
+10. **UPDATE `HANDOVER.md`** after every commit — sessions can die without warning.
 
 ### Project Structure (DO NOT RECREATE — IT EXISTS)
 
 ```
 GateTest/
 ├── CLAUDE.md          ← THIS FILE (quality rules, read every session)
+├── HANDOVER.md        ← SESSION TRANSFER FILE (read first, update after every commit)
 ├── MARKETING.md       ← Positioning, pricing, website copy
 ├── package.json       ← CLI tool config
 ├── bin/gatetest.js    ← CLI entry point
@@ -481,6 +484,36 @@ When a gate check fails:
 5. **RE-RUN** — Run the full gate suite again from the beginning
 6. **VERIFY** — Confirm the fix didn't introduce new failures
 7. **LOG** — Record the failure and fix in the quality ledger
+
+---
+
+## HANDOVER PROTOCOL (CRITICAL)
+
+Sessions can die without warning — context runs out mid-sentence. To ensure
+continuity across sessions and usernames:
+
+### Rules
+1. **HANDOVER.md** is the session transfer file. It lives in the project root.
+2. **UPDATE IT AFTER EVERY COMMIT** — not at the end of the session (there is no "end").
+3. Every update must include:
+   - Last commit hash and message
+   - Current branch
+   - What was just completed
+   - What's next / in progress
+   - Any blockers or decisions pending
+4. **READ IT FIRST** when starting any new session.
+5. The user works across multiple usernames/sessions. This file is how they all stay in sync.
+
+### What to Update
+```
+- Last Updated: [date]
+- Branch: [current branch]
+- Last Commit: [hash] — [message]
+- Just Completed: [what you just finished]
+- In Progress: [what was being worked on when session might die]
+- Next Up: [what should be done next]
+- Blockers: [anything waiting on the user]
+```
 
 ---
 
