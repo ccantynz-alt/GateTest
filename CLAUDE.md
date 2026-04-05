@@ -484,7 +484,44 @@ When a gate check fails:
 
 ---
 
+## AGGRESSIVE QUALITY MANDATE
+
+GateTest exists to be the best QA product on the market. Not second best. THE best.
+These principles are non-negotiable:
+
+### Zero Tolerance for "It Looks Fine"
+- If a button doesn't work, GateTest MUST catch it. No exceptions.
+- If a link goes nowhere, GateTest MUST flag it. No exceptions.
+- If a page renders blank after JavaScript execution, GateTest MUST report it.
+- "Claude says it's fixed" is not evidence. GateTest verifies in a real browser.
+
+### Every Interactive Element Gets Tested
+- Every button is clicked. If nothing happens, it's flagged as **DEAD**.
+- Every link is followed. If it 404s, it's flagged as **BROKEN**.
+- Every form is filled and submitted. If it errors, it's flagged.
+- Every image is verified rendered. If naturalWidth is 0, it's flagged.
+- This applies to EVERY page, not just the homepage.
+
+### JavaScript Execution is Mandatory
+- Static HTML parsing is not enough for modern sites (React, Next.js, Vue, etc.).
+- The live crawler MUST execute JavaScript via Playwright when available.
+- Console errors, uncaught exceptions, and hydration failures MUST be captured.
+- If Playwright is not installed, warn loudly that coverage is degraded.
+
+### Template Files Are Not Exempt
+- Links in JSX, TSX, Vue, Svelte, and Markdown files MUST be scanned.
+- Dead href patterns (href="#", javascript:void(0)) MUST be flagged everywhere.
+- "It's just a template" is not an excuse. Templates become real pages.
+
+### Continuous Improvement
+- After every project scan, review what was missed and add detection for it.
+- If a user finds a bug that GateTest didn't catch, that's a GateTest bug. Fix it.
+- Stay current: scan for new testing tools, techniques, and standards regularly.
+- No feature is "done" until it catches real bugs in real projects.
+
+---
+
 ## VERSION
 
-GateTest v1.0.0
+GateTest v1.1.0
 Last updated: 2026-04-05
