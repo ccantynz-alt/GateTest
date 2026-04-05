@@ -1,0 +1,10 @@
+node_modules/
+.gatetest/reports/
+.gatetest/screenshots/
+.gatetest/baselines/
+coverage/
+dist/
+.env
+*.pem
+*.key
+.DS_Store

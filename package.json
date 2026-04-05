@@ -1,0 +1,47 @@
+{
+  "name": "gatetest",
+  "version": "1.0.0",
+  "description": "GateTest - Advanced QA gate between Claude and GitHub. Nothing ships unless it's pristine.",
+  "main": "src/index.js",
+  "bin": {
+    "gatetest": "./bin/gatetest.js"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js",
+    "gatetest": "node bin/gatetest.js",
+    "gatetest:full": "node bin/gatetest.js --suite full",
+    "gatetest:quick": "node bin/gatetest.js --suite quick",
+    "gatetest:security": "node bin/gatetest.js --module security",
+    "gatetest:visual": "node bin/gatetest.js --module visual",
+    "gatetest:a11y": "node bin/gatetest.js --module accessibility",
+    "gatetest:perf": "node bin/gatetest.js --module performance",
+    "gatetest:seo": "node bin/gatetest.js --module seo",
+    "gatetest:links": "node bin/gatetest.js --module links",
+    "gatetest:scan": "node bin/gatetest.js --mode scan",
+    "gatetest:report": "node bin/gatetest.js --report",
+    "lint": "eslint src/ --ext .js",
+    "precommit": "node src/hooks/pre-commit.js",
+    "prepush": "node src/hooks/pre-push.js"
+  },
+  "keywords": [
+    "testing",
+    "qa",
+    "quality-assurance",
+    "gatetest",
+    "gatecode",
+    "claude",
+    "ci-cd",
+    "security",
+    "accessibility",
+    "performance",
+    "visual-regression",
+    "seo"
+  ],
+  "author": "GateTest Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
