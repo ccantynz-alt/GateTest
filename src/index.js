@@ -12,6 +12,9 @@ const { ClaudeMdParser } = require('./core/claude-md-parser');
 const { ConsoleReporter } = require('./reporters/console-reporter');
 const { JsonReporter } = require('./reporters/json-reporter');
 const { HtmlReporter } = require('./reporters/html-reporter');
+const { SessionLedger } = require('./core/session-ledger');
+const { AccountManager, TIERS } = require('./core/accounts');
+const { BillingManager, PLANS } = require('./core/billing');
 
 class GateTest {
   constructor(projectRoot, options = {}) {
@@ -19,6 +22,8 @@ class GateTest {
     this.config = new GateTestConfig(this.projectRoot);
     this.registry = new ModuleRegistry();
     this.options = options;
+    this.ledger = new SessionLedger(this.projectRoot);
+    this.accounts = new AccountManager(this.projectRoot);
   }
 
   /**
@@ -90,6 +95,20 @@ class GateTest {
     // Run and return summary
     const summary = await runner.run(moduleNames);
 
+    // Auto-snapshot session state after every scan
+    try {
+      this.ledger.snapshot(summary);
+    } catch {
+      // Don't fail the scan if ledger write fails
+    }
+
+    // Record scan against quota
+    try {
+      this.accounts.recordScan();
+    } catch {
+      // Don't fail the scan if quota tracking fails
+    }
+
     // Exit with non-zero if gate is blocked
     if (summary.gateStatus === 'BLOCKED' && this.config.get('gate.blockOnFailure')) {
       process.exitCode = 1;
@@ -109,4 +128,9 @@ module.exports = {
   ConsoleReporter,
   JsonReporter,
   HtmlReporter,
+  SessionLedger,
+  AccountManager,
+  TIERS,
+  BillingManager,
+  PLANS,
 };

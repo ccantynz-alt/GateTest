@@ -44,12 +44,24 @@ const HELP = `
     --crawl-max <n>    Max pages to crawl (default: 100)
     --feedback         Show the latest crawl feedback report
 
+  SESSION CONTINUITY
+    --resume           Show session briefing (for switching between Claude accounts)
+    --snapshot         Take a manual session snapshot
+
+  ACCOUNT & BILLING
+    auth login <key>   Authenticate with API key
+    auth logout        Remove local credentials
+    auth status        Show account tier, usage, and features
+    auth upgrade       Open billing portal to upgrade plan
+
   EXAMPLES
     gatetest                          Run standard checks
     gatetest --suite full             Run every single check
     gatetest --module security        Security scan only
     gatetest --module visual          Visual regression only
     gatetest --suite quick            Fast pre-commit checks
+    gatetest --resume                 Session briefing after account switch
+    gatetest auth status              Check plan and usage
     gatetest --crawl https://zoobicon.com   Crawl and test live site
     gatetest --crawl-loop https://zoobicon.com  Continuous test-fix loop
 
@@ -92,6 +104,97 @@ async function main() {
   if (args.init) {
     initProject(projectRoot);
     return;
+  }
+
+  // ─── Session Continuity ────────────────────────────────
+  if (args.resume) {
+    const { SessionLedger } = require('../src/core/session-ledger');
+    const ledger = new SessionLedger(projectRoot);
+    const briefing = ledger.generateResumeBriefing();
+    console.log('\n' + briefing.text);
+    return;
+  }
+
+  if (args.snapshot) {
+    const { SessionLedger } = require('../src/core/session-ledger');
+    const ledger = new SessionLedger(projectRoot);
+    const state = ledger.snapshot();
+    console.log(`\n[GateTest] Session snapshot saved: ${state.sessionId}`);
+    console.log(`[GateTest] Branch: ${state.git?.branch || 'unknown'}`);
+    console.log(`[GateTest] Uncommitted: ${state.git?.uncommittedCount || 0} files\n`);
+    return;
+  }
+
+  // ─── Account & Billing ─────────────────────────────────
+  if (args.auth) {
+    const { AccountManager } = require('../src/core/accounts');
+    const accounts = new AccountManager(projectRoot);
+
+    if (args.auth === 'login') {
+      const key = args.authArg;
+      if (!key) {
+        console.log('\n  Usage: gatetest auth login <api-key>');
+        console.log('  Get your key at: https://gatetest.io/account/keys\n');
+        process.exit(1);
+      }
+      try {
+        const account = await accounts.login(key);
+        console.log(`\n[GateTest] Logged in as ${account.email} (${account.tier} plan)\n`);
+      } catch (err) {
+        console.error(`\n[GateTest] Login failed: ${err.message}\n`);
+        process.exit(1);
+      }
+      return;
+    }
+
+    if (args.auth === 'logout') {
+      accounts.logout();
+      console.log('\n[GateTest] Logged out. Local credentials removed.\n');
+      return;
+    }
+
+    if (args.auth === 'status') {
+      const status = accounts.getStatusSummary();
+      console.log('\n  GateTest Account');
+      console.log('  ' + '─'.repeat(35));
+      if (status.authenticated) {
+        console.log(`  Email:    ${status.email}`);
+        console.log(`  Plan:     ${status.tierName}`);
+        if (status.metered) {
+          console.log(`  Usage:    ${status.scansUsed}/${status.scansLimit} scans this month`);
+          console.log(`  Left:     ${status.scansRemaining} scans remaining`);
+        } else {
+          console.log(`  Usage:    Unlimited (admin)`);
+        }
+        console.log(`  Features: ${status.features.join(', ')}`);
+      } else {
+        console.log('  Not logged in.');
+        console.log('  Run `gatetest auth login <key>` to authenticate.');
+        console.log('  Get a key at: https://gatetest.io/account/keys');
+      }
+      console.log('');
+      return;
+    }
+
+    if (args.auth === 'upgrade') {
+      const { BillingManager } = require('../src/core/billing');
+      const billing = new BillingManager();
+      const account = accounts.getAccount();
+      if (!account?.stripeCustomerId) {
+        console.log('\n  Visit https://gatetest.io/pricing to upgrade your plan.\n');
+      } else {
+        try {
+          const portal = await billing.createPortalSession(account.stripeCustomerId);
+          console.log(`\n  Open this URL to manage your subscription:\n  ${portal.url}\n`);
+        } catch (err) {
+          console.log(`\n  Visit https://gatetest.io/pricing to upgrade.\n  (${err.message})\n`);
+        }
+      }
+      return;
+    }
+
+    console.log('\n  Usage: gatetest auth <login|logout|status|upgrade>\n');
+    process.exit(1);
   }
 
   if (args.initClaudeMd) {
@@ -193,6 +296,12 @@ function parseArgs(argv) {
     else if (arg === '--crawl-loop' && argv[i + 1]) args.crawlLoop = argv[++i];
     else if (arg === '--crawl-max' && argv[i + 1]) args.crawlMax = parseInt(argv[++i]);
     else if (arg === '--feedback') args.feedback = true;
+    else if (arg === '--resume') args.resume = true;
+    else if (arg === '--snapshot') args.snapshot = true;
+    else if (arg === 'auth' && argv[i + 1]) {
+      args.auth = argv[++i];
+      if (argv[i + 1] && !argv[i + 1].startsWith('-')) args.authArg = argv[++i];
+    }
   }
   return args;
 }
