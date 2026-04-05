@@ -30,20 +30,20 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-4">Resources</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Documentation</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">GitHub</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Changelog</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Blog</a></li>
+              <li><a href="https://github.com/ccantynz-alt/GateTest#readme" target="_blank" rel="noopener noreferrer" className="text-sm text-muted hover:text-foreground transition-colors">Documentation</a></li>
+              <li><a href="https://github.com/ccantynz-alt/GateTest" target="_blank" rel="noopener noreferrer" className="text-sm text-muted hover:text-foreground transition-colors">GitHub</a></li>
+              <li><a href="https://github.com/ccantynz-alt/GateTest/releases" target="_blank" rel="noopener noreferrer" className="text-sm text-muted hover:text-foreground transition-colors">Changelog</a></li>
+              <li><a href="https://github.com/ccantynz-alt/GateTest/issues" target="_blank" rel="noopener noreferrer" className="text-sm text-muted hover:text-foreground transition-colors">Report Issue</a></li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-2">
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">About</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Privacy</a></li>
-              <li><a href="#" className="text-sm text-muted hover:text-foreground transition-colors">Terms</a></li>
+              <li><a href="#features" className="text-sm text-muted hover:text-foreground transition-colors">About</a></li>
+              <li><a href="mailto:hello@gatetest.io" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
+              <li><span className="text-sm text-muted/50">Privacy Policy</span></li>
+              <li><span className="text-sm text-muted/50">Terms of Service</span></li>
             </ul>
           </div>
         </div>
