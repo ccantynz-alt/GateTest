@@ -52,159 +52,30 @@ class LiveCrawlerModule extends BaseModule {
     const redirects = [];
     const brokenImages = [];
 
+    // Determine crawl mode: Playwright (JS-rendered) or HTTP-only
+    let playwright = null;
+    let useBrowser = crawlConfig.browser !== false; // Default: try browser mode
+    if (useBrowser) {
+      try {
+        playwright = require('playwright');
+      } catch {
+        playwright = null;
+        useBrowser = false;
+      }
+    }
+
     result.addCheck('crawl:start', true, {
-      message: `Crawling ${baseUrl} (max ${maxPages} pages)...`,
+      message: `Crawling ${baseUrl} (max ${maxPages} pages, mode: ${useBrowser ? 'browser (JS-rendered)' : 'HTTP-only'})...`,
     });
 
-    while (queue.length > 0 && visited.size < maxPages) {
-      const url = queue.shift();
-      if (!url || visited.has(url)) continue;
-      visited.add(url);
-
-      try {
-        const pageResult = await this._fetchPage(url, timeout);
-        pages.push(pageResult);
-
-        // Check HTTP status
-        if (pageResult.status >= 400) {
-          errors.push({
-            url,
-            status: pageResult.status,
-            type: 'http-error',
-            message: `HTTP ${pageResult.status} ${pageResult.statusText}`,
-          });
-        }
-
-        // Check for redirects
-        if (pageResult.redirected) {
-          redirects.push({
-            from: url,
-            to: pageResult.finalUrl,
-            status: pageResult.redirectStatus,
-          });
-        }
-
-        // Only parse HTML pages
-        if (!pageResult.contentType?.includes('text/html')) continue;
-        if (!pageResult.body) continue;
-
-        const body = pageResult.body;
-
-        // Check for empty/blank pages
-        const textContent = body.replace(/<[^>]*>/g, '').trim();
-        if (textContent.length < 50 && !url.includes('api')) {
-          errors.push({
-            url,
-            type: 'empty-page',
-            message: `Page appears blank or nearly empty (${textContent.length} chars of text)`,
-          });
-        }
-
-        // Check for page title
-        const titleMatch = body.match(/<title>([^<]*)<\/title>/i);
-        if (!titleMatch || titleMatch[1].trim().length === 0) {
-          errors.push({
-            url,
-            type: 'missing-title',
-            message: 'Page has no <title> or title is empty',
-          });
-        }
-
-        // Check for common error messages in page content
-        const errorPatterns = [
-          { regex: /application error/i, type: 'app-error' },
-          { regex: /internal server error/i, type: 'server-error' },
-          { regex: /page not found/i, type: '404-content' },
-          { regex: /something went wrong/i, type: 'generic-error' },
-          { regex: /uncaught (type)?error/i, type: 'js-error-in-html' },
-          { regex: /cannot read propert/i, type: 'js-runtime-error' },
-          { regex: /module not found/i, type: 'module-error' },
-          { regex: /hydration failed/i, type: 'hydration-error' },
-          { regex: /unhandled runtime error/i, type: 'runtime-error' },
-        ];
-
-        for (const { regex, type } of errorPatterns) {
-          if (regex.test(body)) {
-            errors.push({
-              url,
-              type,
-              message: `Error pattern detected on page: "${type}"`,
-            });
-          }
-        }
-
-        // Extract and queue internal links
-        const links = this._extractLinks(body, baseUrl, url);
-        for (const link of links.internal) {
-          if (!visited.has(link.href) && !queue.includes(link.href)) {
-            queue.push(link.href);
-          }
-        }
-
-        // Check images
-        const images = this._extractImages(body, baseUrl, url);
-        for (const imgUrl of images) {
-          try {
-            const imgResult = await this._checkUrl(imgUrl, timeout);
-            if (imgResult.status >= 400) {
-              brokenImages.push({
-                page: url,
-                image: imgUrl,
-                status: imgResult.status,
-              });
-            }
-          } catch {
-            brokenImages.push({
-              page: url,
-              image: imgUrl,
-              status: 'timeout/error',
-            });
-          }
-        }
-
-        // Check external links if enabled
-        if (checkExternal) {
-          for (const link of links.external.slice(0, 20)) { // Limit external checks
-            try {
-              const linkResult = await this._checkUrl(link.href, timeout);
-              if (linkResult.status >= 400) {
-                brokenLinks.push({
-                  page: url,
-                  link: link.href,
-                  status: linkResult.status,
-                  type: 'external',
-                });
-              }
-            } catch {
-              brokenLinks.push({
-                page: url,
-                link: link.href,
-                status: 'timeout/error',
-                type: 'external',
-              });
-            }
-          }
-        }
-
-        // Check for mixed content (HTTP resources on HTTPS page)
-        if (url.startsWith('https://')) {
-          const httpResources = body.match(/(?:src|href|action)\s*=\s*["']http:\/\//gi);
-          if (httpResources && httpResources.length > 0) {
-            errors.push({
-              url,
-              type: 'mixed-content',
-              message: `${httpResources.length} HTTP resource(s) on HTTPS page (mixed content)`,
-            });
-          }
-        }
-
-      } catch (err) {
-        errors.push({
-          url,
-          type: 'fetch-error',
-          message: `Failed to fetch: ${err.message}`,
-        });
-      }
+    if (useBrowser) {
+      // BROWSER MODE: Full JS execution, console error capture, real DOM inspection
+      await this._crawlWithBrowser(playwright, baseUrl, maxPages, timeout, checkExternal,
+        visited, pages, errors, brokenLinks, brokenImages, redirects, queue, result);
+    } else {
+      // FALLBACK: HTTP-only mode (no JS execution)
+      await this._crawlWithHttp(baseUrl, maxPages, timeout, checkExternal,
+        visited, pages, errors, brokenLinks, brokenImages, redirects, queue, result);
     }
 
     // Record results
@@ -346,6 +217,257 @@ class LiveCrawlerModule extends BaseModule {
       });
       req.end();
     });
+  }
+
+  async _crawlWithBrowser(playwright, baseUrl, maxPages, timeout, checkExternal,
+    visited, pages, errors, brokenLinks, brokenImages, redirects, queue, result) {
+
+    const browser = await playwright.chromium.launch({ headless: true });
+    const context = await browser.newContext({
+      userAgent: 'GateTest/1.0 (Quality Assurance Browser Crawler)',
+    });
+
+    const consoleErrors = [];
+    const jsErrors = [];
+
+    try {
+      const page = await context.newPage();
+
+      // Capture console errors and JS exceptions globally
+      page.on('console', msg => {
+        if (msg.type() === 'error') {
+          consoleErrors.push({ text: msg.text(), url: page.url() });
+        }
+      });
+      page.on('pageerror', err => {
+        jsErrors.push({ message: err.message, url: page.url() });
+      });
+
+      while (queue.length > 0 && visited.size < maxPages) {
+        const url = queue.shift();
+        if (!url || visited.has(url)) continue;
+        visited.add(url);
+
+        try {
+          const response = await page.goto(url, { timeout, waitUntil: 'networkidle' });
+
+          const status = response?.status() || 0;
+          const body = await page.content();
+          pages.push({ url, status, body });
+
+          // Check HTTP status
+          if (status >= 400) {
+            errors.push({ url, status, type: 'http-error', message: `HTTP ${status}` });
+          }
+
+          // Check for blank/empty page (AFTER JS execution — catches SPA rendering failures)
+          const textContent = await page.evaluate(() => document.body?.innerText?.trim() || '');
+          if (textContent.length < 50 && !url.includes('api')) {
+            errors.push({ url, type: 'empty-page',
+              message: `Page appears blank after JS execution (${textContent.length} chars of visible text)` });
+          }
+
+          // Check page title
+          const title = await page.title();
+          if (!title || title.trim().length === 0) {
+            errors.push({ url, type: 'missing-title', message: 'Page has no <title> or title is empty' });
+          }
+
+          // Check for error messages in the RENDERED page (not raw HTML)
+          const errorPatterns = [
+            { regex: /application error/i, type: 'app-error' },
+            { regex: /internal server error/i, type: 'server-error' },
+            { regex: /page not found/i, type: '404-content' },
+            { regex: /something went wrong/i, type: 'generic-error' },
+            { regex: /uncaught (type)?error/i, type: 'js-error-in-html' },
+            { regex: /cannot read propert/i, type: 'js-runtime-error' },
+            { regex: /module not found/i, type: 'module-error' },
+            { regex: /hydration failed/i, type: 'hydration-error' },
+            { regex: /unhandled runtime error/i, type: 'runtime-error' },
+          ];
+          for (const { regex, type } of errorPatterns) {
+            if (regex.test(textContent)) {
+              errors.push({ url, type, message: `Error pattern "${type}" visible on rendered page` });
+            }
+          }
+
+          // Check for broken images (naturalWidth === 0 means failed to load)
+          const broken = await page.evaluate(() => {
+            return Array.from(document.querySelectorAll('img'))
+              .filter(img => img.src && (!img.complete || img.naturalWidth === 0))
+              .map(img => img.src);
+          });
+          for (const imgSrc of broken) {
+            brokenImages.push({ page: url, image: imgSrc, status: 'failed-to-render' });
+          }
+
+          // Extract internal links from the RENDERED DOM (catches JS-generated links)
+          const renderedLinks = await page.evaluate((base) => {
+            return Array.from(document.querySelectorAll('a[href]'))
+              .map(a => a.href)
+              .filter(href => href.startsWith(base) && !href.includes('#'));
+          }, baseUrl);
+          for (const link of renderedLinks) {
+            if (!visited.has(link) && !queue.includes(link)) queue.push(link);
+          }
+
+          // Check external links if enabled
+          if (checkExternal) {
+            const extLinks = await page.evaluate((base) => {
+              return Array.from(document.querySelectorAll('a[href]'))
+                .map(a => a.href)
+                .filter(href => href.startsWith('http') && !href.startsWith(base));
+            }, baseUrl);
+            for (const extLink of extLinks.slice(0, 20)) {
+              try {
+                const linkResult = await this._checkUrl(extLink, timeout);
+                if (linkResult.status >= 400) {
+                  brokenLinks.push({ page: url, link: extLink, status: linkResult.status, type: 'external' });
+                }
+              } catch {
+                brokenLinks.push({ page: url, link: extLink, status: 'timeout/error', type: 'external' });
+              }
+            }
+          }
+
+          // Check for mixed content
+          if (url.startsWith('https://')) {
+            const mixedCount = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll('[src^="http:"], [href^="http:"]'))
+                .filter(el => !el.getAttribute('href')?.startsWith('http://localhost'))
+                .length;
+            });
+            if (mixedCount > 0) {
+              errors.push({ url, type: 'mixed-content',
+                message: `${mixedCount} HTTP resource(s) on HTTPS page (mixed content)` });
+            }
+          }
+
+        } catch (err) {
+          errors.push({ url, type: 'fetch-error', message: `Failed to load: ${err.message}` });
+        }
+      }
+
+      // Report console errors captured across all pages
+      if (consoleErrors.length > 0) {
+        errors.push({
+          url: baseUrl,
+          type: 'console-errors',
+          message: `${consoleErrors.length} console error(s) detected across site`,
+          details: consoleErrors.slice(0, 20),
+        });
+      }
+
+      // Report uncaught JS exceptions
+      if (jsErrors.length > 0) {
+        errors.push({
+          url: baseUrl,
+          type: 'js-exceptions',
+          message: `${jsErrors.length} uncaught JavaScript exception(s)`,
+          details: jsErrors.slice(0, 20),
+        });
+      }
+
+    } finally {
+      await browser.close();
+    }
+  }
+
+  async _crawlWithHttp(baseUrl, maxPages, timeout, checkExternal,
+    visited, pages, errors, brokenLinks, brokenImages, redirects, queue, result) {
+
+    while (queue.length > 0 && visited.size < maxPages) {
+      const url = queue.shift();
+      if (!url || visited.has(url)) continue;
+      visited.add(url);
+
+      try {
+        const pageResult = await this._fetchPage(url, timeout);
+        pages.push(pageResult);
+
+        if (pageResult.status >= 400) {
+          errors.push({ url, status: pageResult.status, type: 'http-error',
+            message: `HTTP ${pageResult.status} ${pageResult.statusText}` });
+        }
+
+        if (pageResult.redirected) {
+          redirects.push({ from: url, to: pageResult.finalUrl, status: pageResult.redirectStatus });
+        }
+
+        if (!pageResult.contentType?.includes('text/html')) continue;
+        if (!pageResult.body) continue;
+
+        const body = pageResult.body;
+        const textContent = body.replace(/<[^>]*>/g, '').trim();
+        if (textContent.length < 50 && !url.includes('api')) {
+          errors.push({ url, type: 'empty-page',
+            message: `Page appears blank or nearly empty (${textContent.length} chars of text)` });
+        }
+
+        const titleMatch = body.match(/<title>([^<]*)<\/title>/i);
+        if (!titleMatch || titleMatch[1].trim().length === 0) {
+          errors.push({ url, type: 'missing-title', message: 'Page has no <title> or title is empty' });
+        }
+
+        const errorPatterns = [
+          { regex: /application error/i, type: 'app-error' },
+          { regex: /internal server error/i, type: 'server-error' },
+          { regex: /page not found/i, type: '404-content' },
+          { regex: /something went wrong/i, type: 'generic-error' },
+          { regex: /uncaught (type)?error/i, type: 'js-error-in-html' },
+          { regex: /cannot read propert/i, type: 'js-runtime-error' },
+          { regex: /module not found/i, type: 'module-error' },
+          { regex: /hydration failed/i, type: 'hydration-error' },
+          { regex: /unhandled runtime error/i, type: 'runtime-error' },
+        ];
+        for (const { regex, type } of errorPatterns) {
+          if (regex.test(body)) {
+            errors.push({ url, type, message: `Error pattern detected on page: "${type}"` });
+          }
+        }
+
+        const links = this._extractLinks(body, baseUrl, url);
+        for (const link of links.internal) {
+          if (!visited.has(link.href) && !queue.includes(link.href)) queue.push(link.href);
+        }
+
+        const images = this._extractImages(body, baseUrl, url);
+        for (const imgUrl of images) {
+          try {
+            const imgResult = await this._checkUrl(imgUrl, timeout);
+            if (imgResult.status >= 400) {
+              brokenImages.push({ page: url, image: imgUrl, status: imgResult.status });
+            }
+          } catch {
+            brokenImages.push({ page: url, image: imgUrl, status: 'timeout/error' });
+          }
+        }
+
+        if (checkExternal) {
+          for (const link of links.external.slice(0, 20)) {
+            try {
+              const linkResult = await this._checkUrl(link.href, timeout);
+              if (linkResult.status >= 400) {
+                brokenLinks.push({ page: url, link: link.href, status: linkResult.status, type: 'external' });
+              }
+            } catch {
+              brokenLinks.push({ page: url, link: link.href, status: 'timeout/error', type: 'external' });
+            }
+          }
+        }
+
+        if (url.startsWith('https://')) {
+          const httpResources = body.match(/(?:src|href|action)\s*=\s*["']http:\/\//gi);
+          if (httpResources && httpResources.length > 0) {
+            errors.push({ url, type: 'mixed-content',
+              message: `${httpResources.length} HTTP resource(s) on HTTPS page (mixed content)` });
+          }
+        }
+
+      } catch (err) {
+        errors.push({ url, type: 'fetch-error', message: `Failed to fetch: ${err.message}` });
+      }
+    }
   }
 
   _extractLinks(html, baseUrl, pageUrl) {

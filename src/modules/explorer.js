@@ -332,14 +332,78 @@ class ExplorerModule extends BaseModule {
         case 'button': {
           const el = await page.$(element.selector);
           if (!el) { interaction.passed = true; return interaction; } // Element gone, skip
+
+          // Snapshot state BEFORE click to detect if anything changes
+          const beforeUrl = page.url();
+          const beforeHtml = await page.evaluate(() => document.body.innerHTML.length);
+          const beforeVisible = await page.evaluate(() => {
+            // Count visible modals, dialogs, dropdowns, toasts, overlays
+            const dynamicSelectors = [
+              '[role="dialog"]', '[role="alertdialog"]', '[role="menu"]',
+              '[role="listbox"]', '[role="tooltip"]', '.modal', '.dialog',
+              '.dropdown-menu', '.popover', '.toast', '.overlay', '.drawer',
+              '[data-state="open"]', '[aria-expanded="true"]', 'dialog[open]',
+            ];
+            return dynamicSelectors.reduce((count, sel) => {
+              return count + document.querySelectorAll(sel).length;
+            }, 0);
+          });
+
+          // Check if the button has any event handlers or href at all
+          const hasHandler = await page.evaluate((sel) => {
+            const el = document.querySelector(sel);
+            if (!el) return true; // Can't check, assume ok
+            // Check for href (anchor buttons), onclick, or form submit
+            const tag = el.tagName.toLowerCase();
+            const parent = el.closest('a[href]') || el.closest('form');
+            const hasOnClick = el.hasAttribute('onclick');
+            const hasHref = tag === 'a' && el.hasAttribute('href') && el.getAttribute('href') !== '#';
+            const hasFormAction = tag === 'input' && (el.type === 'submit' || el.type === 'button') && parent?.tagName === 'FORM';
+            // React/Vue/Angular attach handlers via addEventListener, so we can't detect those from attributes alone
+            // But we CAN detect common "dead" patterns
+            const href = el.getAttribute('href') || el.closest('a')?.getAttribute('href');
+            if (href === '#' || href === '#!' || href === 'javascript:void(0)' || href === 'javascript:;') {
+              return 'suspicious-href';
+            }
+            return hasOnClick || hasHref || hasFormAction || 'unknown';
+          }, element.selector);
+
+          // Track network requests triggered by the click
+          let networkRequestFired = false;
+          const onRequest = () => { networkRequestFired = true; };
+          page.on('request', onRequest);
+
+          // Track console errors triggered by click
+          const clickErrors = [];
+          const onError = (err) => { clickErrors.push(err.message); };
+          page.on('pageerror', onError);
+
           await el.click({ timeout: 5000 }).catch(() => {});
-          await page.waitForTimeout(500);
+          await page.waitForTimeout(800);
+
+          page.removeListener('request', onRequest);
+          page.removeListener('pageerror', onError);
+
+          // Snapshot state AFTER click
+          const afterUrl = page.url();
+          const afterHtml = await page.evaluate(() => document.body.innerHTML.length);
+          const afterVisible = await page.evaluate(() => {
+            const dynamicSelectors = [
+              '[role="dialog"]', '[role="alertdialog"]', '[role="menu"]',
+              '[role="listbox"]', '[role="tooltip"]', '.modal', '.dialog',
+              '.dropdown-menu', '.popover', '.toast', '.overlay', '.drawer',
+              '[data-state="open"]', '[aria-expanded="true"]', 'dialog[open]',
+            ];
+            return dynamicSelectors.reduce((count, sel) => {
+              return count + document.querySelectorAll(sel).length;
+            }, 0);
+          });
 
           // Check if clicking caused an error state
           const hasError = await page.evaluate(() => {
             const body = document.body.textContent || '';
             return /uncaught|error|exception|cannot read/i.test(body) &&
-                   body.length < 500; // Only flag if page is mostly error
+                   body.length < 500;
           });
 
           if (hasError) {
@@ -347,6 +411,32 @@ class ExplorerModule extends BaseModule {
             interaction.errorType = 'button-causes-error';
             interaction.error = `Clicking ${element.description} caused an error page`;
           }
+
+          // Check if click triggered JS errors
+          if (clickErrors.length > 0) {
+            interaction.passed = false;
+            interaction.errorType = 'button-js-error';
+            interaction.error = `Clicking ${element.description} threw: ${clickErrors[0]}`;
+          }
+
+          // DEAD BUTTON DETECTION: Did anything at all happen?
+          const urlChanged = beforeUrl !== afterUrl;
+          const domChanged = Math.abs(afterHtml - beforeHtml) > 50;
+          const visibilityChanged = beforeVisible !== afterVisible;
+          const somethingHappened = urlChanged || domChanged || visibilityChanged || networkRequestFired;
+
+          if (!somethingHappened && !hasError && hasHandler === 'suspicious-href') {
+            // Button with # href and nothing happened — definitely dead
+            interaction.passed = false;
+            interaction.errorType = 'dead-button';
+            interaction.error = `DEAD BUTTON: ${element.description} — clicked but nothing happened (href="#", no DOM change, no navigation, no network request)`;
+          } else if (!somethingHappened && !hasError && hasHandler === 'unknown') {
+            // Can't confirm it has a handler AND nothing visibly happened — flag as warning
+            interaction.passed = false;
+            interaction.errorType = 'suspect-dead-button';
+            interaction.error = `SUSPECT DEAD BUTTON: ${element.description} — clicked but no visible change detected (no URL change, no DOM change, no modal/dialog, no network request)`;
+          }
+
           break;
         }
 
