@@ -23,6 +23,7 @@ const BUILT_IN_MODULES = {
   codeQuality: '../modules/code-quality.js',
   dataIntegrity: '../modules/data-integrity.js',
   documentation: '../modules/documentation.js',
+  liveCrawler: '../modules/live-crawler.js',
 };
 
 class ModuleRegistry {
