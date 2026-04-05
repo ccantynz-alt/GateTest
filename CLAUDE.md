@@ -1,5 +1,57 @@
 # GateTest - Quality Assurance System
 
+## READ THIS FIRST — MANDATORY INSTRUCTIONS FOR EVERY SESSION
+
+**You are working on GateTest.** Before doing ANYTHING, follow these rules:
+
+1. **READ this entire file first.** Do not start coding until you understand the project.
+2. **Check git status and git log** to understand where the previous session left off.
+3. **Do NOT start from scratch.** This is an existing project. Build on what's here.
+4. **Do NOT create new files** unless absolutely necessary. Edit existing files first.
+5. **Do NOT reorganize, refactor, or "improve"** unless explicitly asked.
+6. **Run `node --test tests/*.test.js`** before committing anything.
+7. **Run `cd website && npm run build`** before committing website changes.
+8. **Commit and push** when work is complete. Branch: check `git branch` for current branch.
+
+### Project Structure (DO NOT RECREATE — IT EXISTS)
+
+```
+GateTest/
+├── CLAUDE.md          ← THIS FILE (quality rules, read every session)
+├── MARKETING.md       ← Positioning, pricing, website copy
+├── package.json       ← CLI tool config
+├── bin/gatetest.js    ← CLI entry point
+├── src/
+│   ├── index.js       ← Main library entry
+│   ├── core/          ← Config, runner, registry, CLAUDE.md parser
+│   ├── modules/       ← 16 test modules (syntax, security, a11y, etc.)
+│   ├── reporters/     ← Console, JSON, HTML reporters
+│   ├── scanners/      ← Continuous background scanner
+│   └── hooks/         ← Pre-commit, pre-push hooks
+├── tests/             ← Unit tests (must pass before commit)
+└── website/           ← gatetest.io marketing site (Next.js + Tailwind)
+    └── app/
+        ├── page.tsx           ← Main page (assembles all sections)
+        ├── layout.tsx         ← Root layout with metadata
+        ├── globals.css        ← Dark theme, animations, glow effects
+        └── components/        ← 12 React components (Navbar, Hero, etc.)
+```
+
+### What GateTest IS
+
+- A **CLI QA tool** with 16 test modules that checks everything before code ships
+- A **marketing website** at gatetest.io built with Next.js + Tailwind CSS
+- Works alongside **GateCode** (separate repo — authorization layer)
+- The first QA system **built for AI-generated code**
+
+### Key Files to Read Before Making Changes
+
+- `MARKETING.md` — All selling points, pricing, competitive positioning
+- `src/index.js` — How the 16 modules are orchestrated
+- `website/app/page.tsx` — How the website sections are composed
+
+---
+
 ## Purpose
 
 GateTest is the QA gate between Claude and GitHub. Nothing ships unless it passes
