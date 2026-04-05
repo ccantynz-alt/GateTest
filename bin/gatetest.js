@@ -39,12 +39,19 @@ const HELP = `
     --help, -h         Show this help message
     --version, -v      Show version
 
+    --crawl <url>      Crawl a live website and test every page
+    --crawl-loop <url> Crawl, report failures, wait for fixes, repeat until clean
+    --crawl-max <n>    Max pages to crawl (default: 100)
+    --feedback         Show the latest crawl feedback report
+
   EXAMPLES
     gatetest                          Run standard checks
     gatetest --suite full             Run every single check
     gatetest --module security        Security scan only
     gatetest --module visual          Visual regression only
     gatetest --suite quick            Fast pre-commit checks
+    gatetest --crawl https://zoobicon.com   Crawl and test live site
+    gatetest --crawl-loop https://zoobicon.com  Continuous test-fix loop
 
   MODULES
     syntax         Syntax & compilation validation
@@ -63,6 +70,7 @@ const HELP = `
     compatibility  Browser compatibility
     dataIntegrity  Data integrity validation
     documentation  Documentation completeness
+    liveCrawler    Live site crawl & verification
 `;
 
 async function main() {
@@ -126,6 +134,23 @@ async function main() {
     return;
   }
 
+  if (args.feedback) {
+    showCrawlFeedback(projectRoot);
+    return;
+  }
+
+  // Live site crawl
+  if (args.crawl) {
+    await runCrawl(gatetest, args.crawl, args.crawlMax || 100);
+    return;
+  }
+
+  // Continuous crawl-fix loop
+  if (args.crawlLoop) {
+    await runCrawlLoop(gatetest, args.crawlLoop, args.crawlMax || 100);
+    return;
+  }
+
   // Run tests
   let summary;
   if (args.module) {
@@ -152,6 +177,10 @@ function parseArgs(argv) {
     else if (arg === '--suite' && argv[i + 1]) args.suite = argv[++i];
     else if (arg === '--module' && argv[i + 1]) args.module = argv[++i];
     else if (arg === '--project' && argv[i + 1]) args.project = argv[++i];
+    else if (arg === '--crawl' && argv[i + 1]) args.crawl = argv[++i];
+    else if (arg === '--crawl-loop' && argv[i + 1]) args.crawlLoop = argv[++i];
+    else if (arg === '--crawl-max' && argv[i + 1]) args.crawlMax = parseInt(argv[++i]);
+    else if (arg === '--feedback') args.feedback = true;
   }
   return args;
 }
@@ -208,6 +237,82 @@ function showLatestReport(projectRoot) {
     }
   }
   console.log('');
+}
+
+async function runCrawl(gatetest, url, maxPages) {
+  // Inject crawl URL into config
+  gatetest.config.config.modules.liveCrawler = {
+    url,
+    maxPages,
+    timeout: 10000,
+    checkExternal: true,
+  };
+
+  console.log(`\n[GateTest] Crawling ${url} (max ${maxPages} pages)...\n`);
+  const summary = await gatetest.runModule('liveCrawler');
+
+  // Show the feedback report
+  const feedbackPath = path.join(gatetest.projectRoot, '.gatetest/reports/crawl-feedback.md');
+  if (fs.existsSync(feedbackPath)) {
+    console.log('\n' + fs.readFileSync(feedbackPath, 'utf-8'));
+  }
+
+  process.exit(summary.gateStatus === 'PASSED' ? 0 : 1);
+}
+
+async function runCrawlLoop(gatetest, url, maxPages) {
+  gatetest.config.config.modules.liveCrawler = {
+    url,
+    maxPages,
+    timeout: 10000,
+    checkExternal: true,
+  };
+
+  let round = 1;
+  const maxRounds = 20;
+
+  while (round <= maxRounds) {
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`[GateTest] CRAWL LOOP — Round ${round}/${maxRounds}`);
+    console.log(`[GateTest] Testing: ${url}`);
+    console.log(`${'='.repeat(50)}\n`);
+
+    const summary = await gatetest.runModule('liveCrawler');
+
+    const feedbackPath = path.join(gatetest.projectRoot, '.gatetest/reports/crawl-feedback.md');
+    if (fs.existsSync(feedbackPath)) {
+      const feedback = fs.readFileSync(feedbackPath, 'utf-8');
+      console.log('\n' + feedback);
+
+      if (feedback.includes('ALL CLEAR')) {
+        console.log('\n[GateTest] SITE IS CLEAN. All pages verified. Loop complete.\n');
+        process.exit(0);
+      }
+    }
+
+    console.log(`\n[GateTest] Issues found. Waiting for fixes...`);
+    console.log(`[GateTest] Fix the issues above, then press ENTER to re-test.`);
+    console.log(`[GateTest] Or press Ctrl+C to exit.\n`);
+
+    // Wait for user input (or for Claude to signal it's done fixing)
+    await new Promise((resolve) => {
+      process.stdin.once('data', resolve);
+    });
+
+    round++;
+  }
+
+  console.log(`\n[GateTest] Maximum rounds (${maxRounds}) reached. Exiting.\n`);
+  process.exit(1);
+}
+
+function showCrawlFeedback(projectRoot) {
+  const feedbackPath = path.join(projectRoot, '.gatetest/reports/crawl-feedback.md');
+  if (!fs.existsSync(feedbackPath)) {
+    console.log('\nNo crawl feedback found. Run "gatetest --crawl <url>" first.\n');
+    process.exit(1);
+  }
+  console.log('\n' + fs.readFileSync(feedbackPath, 'utf-8'));
 }
 
 main().catch(err => {
