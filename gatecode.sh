@@ -6,16 +6,20 @@
 #
 # Usage:
 #   ./gatecode.sh scan <url>              Scan a live site
+#   ./gatecode.sh scan-repo <repo> <url>  Clone/pull repo, scan site + code, open dashboard
 #   ./gatecode.sh setup <project> <url>   Install GateTest into a project
 #   ./gatecode.sh watch <project> <url>   Continuous scan loop
 #   ./gatecode.sh report <project>        Show latest scan report
+#   ./gatecode.sh dashboard <project>     Open the HTML dashboard in browser
 #   ./gatecode.sh status                  Show all monitored projects
 #   ./gatecode.sh add <repo-url> <site-url>  Clone repo and set up GateTest
 #
 # Examples:
 #   ./gatecode.sh scan https://zoobicon.com
+#   ./gatecode.sh scan-repo https://github.com/user/repo https://their-site.com
 #   ./gatecode.sh setup /home/user/Zoobicon.com https://zoobicon.com
 #   ./gatecode.sh watch /home/user/Zoobicon.com https://zoobicon.com
+#   ./gatecode.sh dashboard /home/user/Zoobicon.com
 #   ./gatecode.sh add https://github.com/user/repo https://their-site.com
 # ============================================================
 
@@ -266,26 +270,162 @@ cmd_add() {
 }
 
 # ============================================================
+# SCAN-REPO — Clone/pull a repo, run full code + site scan, open dashboard
+# ============================================================
+cmd_scan_repo() {
+    local repo_url="$1"
+    local site_url="$2"
+    local suite="${3:-full}"
+
+    if [ -z "$repo_url" ]; then
+        echo -e "${RED}Usage: ./gatecode.sh scan-repo <repo-url> [site-url] [suite]${NC}"
+        echo "Example: ./gatecode.sh scan-repo https://github.com/user/repo https://their-site.com"
+        exit 1
+    fi
+
+    banner
+
+    # Clone or pull the repo
+    local repo_name
+    repo_name="$(basename "$repo_url" .git)"
+    local clone_path="$HOME/$repo_name"
+
+    if [ -d "$clone_path" ]; then
+        echo -e "${CYAN}  Pulling latest: ${WHITE}$repo_name${NC}"
+        cd "$clone_path" && git pull 2>/dev/null || true
+    else
+        echo -e "${CYAN}  Cloning: ${WHITE}$repo_url${NC}"
+        git clone "$repo_url" "$clone_path"
+    fi
+
+    # Set up GateTest if not already done
+    if [ ! -d "$clone_path/.gatetest" ]; then
+        echo -e "${CYAN}  Installing GateTest...${NC}"
+        cmd_setup "$clone_path" "$site_url"
+    fi
+
+    echo ""
+    echo -e "${CYAN}  Running full code scan (${suite} suite)...${NC}"
+    echo ""
+
+    # Run code analysis
+    cd "$clone_path"
+    node "$GATECODE_DIR/bin/gatetest.js" --suite "$suite" --project "$clone_path" 2>&1
+
+    # Run live site scan if URL provided
+    if [ -n "$site_url" ]; then
+        echo ""
+        echo -e "${CYAN}  Crawling live site: ${WHITE}$site_url${NC}"
+        echo ""
+        node "$GATECODE_DIR/src/ai-loop.js" "$site_url" 2>&1 || true
+    fi
+
+    # Update project registry
+    local timestamp
+    timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    node -e "
+        const fs = require('fs');
+        const data = JSON.parse(fs.readFileSync('$GATECODE_PROJECTS', 'utf-8'));
+        const existing = data.projects.findIndex(p => p.path === '$clone_path');
+        const entry = {
+            name: '$repo_name',
+            path: '$clone_path',
+            url: '$site_url' || null,
+            repo: '$repo_url',
+            addedAt: '$timestamp',
+            lastScan: '$timestamp',
+            lastStatus: 'scanned',
+        };
+        if (existing >= 0) {
+            data.projects[existing] = { ...data.projects[existing], ...entry };
+        } else {
+            data.projects.push(entry);
+        }
+        fs.writeFileSync('$GATECODE_PROJECTS', JSON.stringify(data, null, 2));
+    " 2>/dev/null
+
+    # Open dashboard
+    local dashboard="$clone_path/.gatetest/reports/gatetest-report-latest.html"
+    if [ -f "$dashboard" ]; then
+        echo ""
+        echo -e "${GREEN}  ============================================================${NC}"
+        echo -e "${GREEN}  SCAN COMPLETE — Dashboard ready${NC}"
+        echo -e "${GREEN}  ============================================================${NC}"
+        echo ""
+        echo -e "  ${WHITE}Dashboard:${NC} $dashboard"
+        echo -e "  ${WHITE}Report:${NC}    $clone_path/.gatetest/reports/fix-these.md"
+        echo ""
+        echo -e "  Open the dashboard in your browser to see the checklist."
+        echo ""
+
+        # Try to open in browser (works on Mac/Linux)
+        if command -v open &>/dev/null; then
+            open "$dashboard"
+        elif command -v xdg-open &>/dev/null; then
+            xdg-open "$dashboard"
+        fi
+    fi
+}
+
+# ============================================================
+# DASHBOARD — Open the HTML dashboard for a project
+# ============================================================
+cmd_dashboard() {
+    local project="${1:-.}"
+    local dashboard="$project/.gatetest/reports/gatetest-report-latest.html"
+
+    if [ ! -f "$dashboard" ]; then
+        echo -e "${YELLOW}No dashboard found. Run a scan first:${NC}"
+        echo "  ./gatecode.sh scan-repo <repo-url> <site-url>"
+        exit 1
+    fi
+
+    banner
+    echo -e "  ${WHITE}Opening dashboard:${NC} $dashboard"
+    echo ""
+
+    # Try to open in browser
+    if command -v open &>/dev/null; then
+        open "$dashboard"
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$dashboard"
+    else
+        echo "  Open this file in your browser:"
+        echo "  file://$dashboard"
+    fi
+}
+
+# ============================================================
 # HELP
 # ============================================================
 cmd_help() {
     banner
     echo "  Commands:"
     echo ""
-    echo -e "    ${WHITE}scan${NC} <url>                     Scan a live website"
-    echo -e "    ${WHITE}setup${NC} <project> <url>          Install GateTest into a project"
-    echo -e "    ${WHITE}watch${NC} <project> <url> [secs]   Continuous scan loop"
-    echo -e "    ${WHITE}report${NC} <project>               Show latest scan report"
-    echo -e "    ${WHITE}status${NC}                         Show all monitored projects"
-    echo -e "    ${WHITE}add${NC} <repo-url> <site-url>      Clone repo and set up GateTest"
-    echo -e "    ${WHITE}help${NC}                           Show this help"
+    echo -e "    ${WHITE}scan-repo${NC} <repo> <url>          Clone repo, scan code + site, open dashboard"
+    echo -e "    ${WHITE}scan${NC} <url>                      Scan a live website only"
+    echo -e "    ${WHITE}dashboard${NC} <project>             Open the HTML dashboard in browser"
+    echo -e "    ${WHITE}setup${NC} <project> <url>           Install GateTest into a project"
+    echo -e "    ${WHITE}watch${NC} <project> <url> [secs]    Continuous scan loop"
+    echo -e "    ${WHITE}report${NC} <project>                Show latest scan report"
+    echo -e "    ${WHITE}status${NC}                          Show all monitored projects"
+    echo -e "    ${WHITE}add${NC} <repo-url> <site-url>       Clone repo and set up GateTest"
+    echo -e "    ${WHITE}help${NC}                            Show this help"
     echo ""
-    echo "  Examples:"
+    echo "  Quick start (one command does everything):"
     echo ""
-    echo "    ./gatecode.sh scan https://zoobicon.com"
-    echo "    ./gatecode.sh setup ~/Zoobicon.com https://zoobicon.com"
+    echo -e "    ${GREEN}./gatecode.sh scan-repo https://github.com/you/repo https://your-site.com${NC}"
+    echo ""
+    echo "  This will: clone the repo, install GateTest, scan the code,"
+    echo "  crawl the live site, and open the dashboard with a checklist"
+    echo "  of every issue found. Tick them off as you fix them."
+    echo ""
+    echo "  More examples:"
+    echo ""
+    echo "    ./gatecode.sh scan https://onbookaride.co.nz"
+    echo "    ./gatecode.sh scan-repo https://github.com/user/repo https://site.com"
+    echo "    ./gatecode.sh dashboard ~/Zoobicon.com"
     echo "    ./gatecode.sh watch ~/Zoobicon.com https://zoobicon.com 300"
-    echo "    ./gatecode.sh add https://github.com/user/repo https://site.com"
     echo "    ./gatecode.sh status"
     echo ""
 }
@@ -296,11 +436,13 @@ cmd_help() {
 init_gatecode
 
 case "${1:-help}" in
-    scan)    cmd_scan "$2" ;;
-    setup)   cmd_setup "$2" "$3" ;;
-    watch)   cmd_watch "$2" "$3" "$4" ;;
-    report)  cmd_report "$2" ;;
-    status)  cmd_status ;;
-    add)     cmd_add "$2" "$3" ;;
-    help|*)  cmd_help ;;
+    scan-repo)  cmd_scan_repo "$2" "$3" "$4" ;;
+    scan)       cmd_scan "$2" ;;
+    dashboard)  cmd_dashboard "$2" ;;
+    setup)      cmd_setup "$2" "$3" ;;
+    watch)      cmd_watch "$2" "$3" "$4" ;;
+    report)     cmd_report "$2" ;;
+    status)     cmd_status ;;
+    add)        cmd_add "$2" "$3" ;;
+    help|*)     cmd_help ;;
 esac
