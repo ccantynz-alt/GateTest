@@ -117,31 +117,56 @@ patterns AI gets wrong before they touch production.
 
 ## Revenue model
 
-### Phase 1: Free CLI (adoption engine) — NOW
-- Open source CLI runs on user's machine
-- Zero cost to us, zero cost to users
-- Builds community and brand recognition
+### THE MODEL: Pay on completion. Zero customer risk.
 
-### Phase 2: Revenue before infrastructure — NEXT
-- **Premium compliance modules**: HIPAA, SOC2, PCI-DSS packs ($49-199/month)
-- **Consulting/setup**: Configure GateTest for enterprise CI/CD ($500+)
-- **Priority support**: Direct support channel ($29/month)
-- Near-zero overhead — revenue with almost no costs
+We don't charge until the job is done. We hold the card, run the scan,
+deliver the report. If we can't complete it, the hold is released.
+No other QA tool on earth offers this. It's our killer advantage.
 
-### Phase 3: Cloud platform (gatetest.io) — WHEN REVENUE JUSTIFIES IT
-- Managed continuous scanning (no self-hosting)
-- Historical dashboards with trend analytics
-- Team features: shared baselines, approval workflows, audit trails
-- Cross-project benchmarking
-- AI-powered fix suggestions
-- GitHub App: auto-comments on PRs with gate status
-- Slack/Teams alert integration
-- Pricing: $49/month per team — 2 customers = profitable
+**Payment flow (Stripe Payment Intents, manual capture):**
+1. Customer selects scan tier → card hold placed
+2. GateTest clones repo, runs scan, generates report
+3. Scan completes → hold captured → customer charged
+4. Scan fails (503, access denied, outage) → hold released → customer pays nothing
+
+### Pricing tiers — per scan
+
+| Tier | Modules | What They Get | Price |
+|------|---------|---------------|-------|
+| **Quick Scan** | 4 (syntax, lint, secrets, code quality) | Report + pass/fail | **$29** |
+| **Full Scan** | All 20 modules | Full report, SARIF, JUnit | **$99** |
+| **Scan + Fix** | All 20 modules + auto-fix | Report + PR with fixes applied | **$199** |
+| **Nuclear** | 20 modules + crawl + mutation + fix | Everything. The works. | **$399** |
+
+### Recurring tier — after first scan proves value
+
+| Tier | What They Get | Price |
+|------|---------------|-------|
+| **Continuous** | Scan every push, dashboard, alerts | **$49/month** |
+| **Enterprise** | Continuous + compliance + SSO + SLA | **Custom** |
+
+### Why this model wins
+
+1. **Zero risk to buyer** — "We don't charge if we can't scan." Nobody else says this.
+2. **Low entry barrier** — $29 one-time is easier than $49/month commitment.
+3. **Value proven before recurring** — After 2 paid scans, $49/month is obvious.
+4. **The $199 tier is the money maker** — Every other tool just REPORTS problems.
+   GateTest REPORTS and FIXES. That's worth $199 every time.
+5. **Nuclear at $399** — For launches, audits, compliance checks. High margin, low volume.
+
+### Revenue math
+
+- 10 Quick Scans/day = $290/day = $8,700/month
+- 5 Full Scans/day = $495/day = $14,850/month
+- 3 Scan+Fix/day = $597/day = $17,910/month
+- 20 Continuous subscribers = $980/month recurring
+
+**Conservative month 1 target: $5,000-10,000**
+**Month 3 target: $20,000+ (mix of scans + recurring)**
 
 ### Key principle
-**Never spend money before it's earned.** CLI is free and costs nothing.
-Premium modules generate revenue first. Cloud platform comes only when
-the money is flowing.
+**Never charge before delivering.** The hold-then-charge model means
+customers trust us from scan #1. Trust converts to recurring revenue.
 
 ---
 
@@ -149,20 +174,19 @@ the money is flowing.
 
 People don't pay for code. They pay for:
 
-1. **Not running it themselves** — Self-hosting costs engineering time.
-   A startup with 5 devs would rather pay $50/month than spend 2 days
+1. **"Scan my repo and fix it"** — That's a service, not a tool.
+   The CLI is free. Having us run it, generate fixes, and deliver
+   a PR? That's worth $199. Every. Single. Time.
+
+2. **Not running it themselves** — Self-hosting costs engineering time.
+   A startup with 5 devs would rather pay $99 than spend 2 days
    on infrastructure. That dev time costs them $2,000+.
 
-2. **The dashboard, not the CLI** — Trends over time. "Your bundle size
-   grew 15% this month." "Accessibility score dropped after Tuesday."
-   "3 new CVEs hit your deps overnight." Intelligence > raw output.
+3. **The report** — Timestamped evidence that their code passed 20
+   quality modules. Hand that to an investor, a client, or an auditor.
 
-3. **Team features** — Shared baselines, PR integrations, approval
-   workflows, audit trails, role-based access. Solo = free CLI.
-   Team of 20 = paid platform.
-
-4. **Compliance evidence** — SOC2 auditors don't accept "we run a script."
-   They want timestamped reports, retention policies, audit logs.
+4. **The auto-fix** — GateTest doesn't just find problems. It FIXES them.
+   A PR with 15 auto-fixed issues landing in your repo? That's magic.
 
 5. **Continuous scanning** — Someone has to run the 24/7 scanner. Most
    teams don't want to manage that. "We'll run it for you" = money.
@@ -180,33 +204,37 @@ People don't pay for code. They pay for:
 
 ### Hero section
 **Headline**: "AI writes fast. GateTest keeps it honest."
-**Subhead**: The advanced QA gate that sits between AI and GitHub. 16 test modules.
-One gate. Nothing ships unless it's pristine.
-**CTA**: "Get Started Free" / "View on GitHub"
+**Subhead**: 20 test modules scan your entire codebase. We find the bugs AND fix them.
+You only pay when the scan completes.
+**CTA**: "Scan My Repo — $29" / "See All Plans"
 
 ### How it works section
-1. **CLAUDE.md** — Define your quality standards in one file
-2. **GateTest runs** — 16 modules check everything: security, accessibility,
-   performance, SEO, visual regression, code quality, and more
-3. **Gate decides** — PASS or BLOCKED. No grey area. No "ship it anyway."
+1. **Point us at your repo** — GitHub URL, that's it
+2. **We scan everything** — 20 modules, 200+ checks, security to accessibility
+3. **Get your report** — PASS or BLOCKED, with every issue detailed
+4. **We fix it** — Auto-fix PR lands in your repo (Scan+Fix tier)
+5. **Pay only if we deliver** — Card hold released if scan can't complete
 
 ### The problem section
 "Your team uses 8-10 separate tools for testing. Different configs. Different
 dashboards. Different billing. Things slip through the cracks. GateTest
-replaces them all with one unified quality gate."
+replaces them all with one scan, one report, one gate."
 
 ### Built for AI section
 "AI coding assistants write code 10x faster — but they also introduce
 hallucinated imports, forgotten cleanup, hardcoded secrets, and incomplete
-accessibility. GateTest catches every one of these before it reaches GitHub."
+accessibility. GateTest catches every one of these AND fixes them automatically."
 
 ### Comparison section
 (Use the competitive positioning table from above)
 
 ### Pricing section
-- **Free**: CLI, all 16 modules, unlimited local runs
-- **Pro** ($49/month): Cloud dashboard, historical reports, team features
-- **Enterprise** (custom): Compliance modules, SSO, audit logs, SLA
+- **Quick Scan** ($29): 4 modules, instant report
+- **Full Scan** ($99): All 20 modules, full report
+- **Scan + Fix** ($199): Full scan + auto-fix PR — MOST POPULAR
+- **Nuclear** ($399): Everything including mutation testing and live crawl
+- **Continuous** ($49/mo): Scan every push, dashboard, alerts
+- All tiers: pay on completion only. Card hold released if scan fails.
 
 ---
 
@@ -227,5 +255,5 @@ accessibility. GateTest catches every one of these before it reaches GitHub."
 
 ## Version
 
-Marketing doc v1.0.0
-Last updated: 2026-04-05
+Marketing doc v2.0.0 — Pay-on-completion model
+Last updated: 2026-04-08

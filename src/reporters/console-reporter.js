@@ -46,19 +46,40 @@ class ConsoleReporter {
   }
 
   _onModuleEnd(result) {
+    const errors = result.errorChecks.length;
+    const warnings = result.warningChecks.length;
+    const fixes = result.fixes.length;
+
     if (result.status === 'passed') {
       const checkCount = result.checks.length;
+      let extra = `${checkCount} checks, ${result.duration}ms`;
+      if (warnings > 0) extra += `, ${warnings} warnings`;
+      if (fixes > 0) extra += `, ${fixes} auto-fixed`;
       console.log(
         `${COLORS.green}[PASS]${COLORS.reset} ` +
-        `${COLORS.dim}(${checkCount} checks, ${result.duration}ms)${COLORS.reset}`
+        `${COLORS.dim}(${extra})${COLORS.reset}`
       );
+      // Show warnings even on pass
+      for (const check of result.warningChecks) {
+        console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
+        if (check.message) {
+          console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+        }
+      }
     } else {
+      let extra = `${errors} errors, ${result.duration}ms`;
+      if (warnings > 0) extra += `, ${warnings} warnings`;
+      if (fixes > 0) extra += `, ${fixes} auto-fixed`;
       console.log(
         `${COLORS.red}[FAIL]${COLORS.reset} ` +
-        `${COLORS.dim}(${result.duration}ms)${COLORS.reset}`
+        `${COLORS.dim}(${extra})${COLORS.reset}`
       );
-      for (const check of result.failedChecks) {
-        console.log(`    ${COLORS.red}x ${check.name}${COLORS.reset}`);
+      // Show errors first
+      for (const check of result.errorChecks) {
+        const prefix = check.autoFixed
+          ? `${COLORS.green}+ FIXED${COLORS.reset}`
+          : `${COLORS.red}x${COLORS.reset}`;
+        console.log(`    ${prefix} ${COLORS.red}${check.name}${COLORS.reset}`);
         if (check.expected !== undefined) {
           console.log(`      ${COLORS.dim}expected: ${check.expected}, got: ${check.actual}${COLORS.reset}`);
         }
@@ -69,6 +90,17 @@ class ConsoleReporter {
           console.log(`      ${COLORS.yellow}fix: ${check.suggestion}${COLORS.reset}`);
         }
       }
+      // Then warnings
+      for (const check of result.warningChecks) {
+        console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
+        if (check.message) {
+          console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+        }
+      }
+    }
+    // Show applied fixes
+    for (const fix of result.fixes) {
+      console.log(`    ${COLORS.green}+ auto-fixed: ${fix.description}${COLORS.reset}`);
     }
   }
 
@@ -87,9 +119,17 @@ class ConsoleReporter {
     }
 
     console.log('');
-    console.log(`  Modules: ${summary.modules.passed}/${summary.modules.total} passed`);
-    console.log(`  Checks:  ${summary.checks.passed}/${summary.checks.total} passed`);
-    console.log(`  Time:    ${summary.duration}ms`);
+    if (summary.diffOnly) {
+      console.log(`${COLORS.dim}  Mode: diff-only (${(summary.changedFiles || []).length} changed files)${COLORS.reset}`);
+    }
+    console.log(`  Modules:  ${summary.modules.passed}/${summary.modules.total} passed`);
+    console.log(`  Checks:   ${summary.checks.passed}/${summary.checks.total} passed`);
+    console.log(`  Errors:   ${COLORS.red}${summary.checks.errors}${COLORS.reset}`);
+    console.log(`  Warnings: ${COLORS.yellow}${summary.checks.warnings}${COLORS.reset}`);
+    if (summary.fixes.total > 0) {
+      console.log(`  Fixed:    ${COLORS.green}${summary.fixes.total}${COLORS.reset}`);
+    }
+    console.log(`  Time:     ${summary.duration}ms`);
 
     if (summary.failedModules.length > 0) {
       console.log('');

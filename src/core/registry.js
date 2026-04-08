@@ -26,6 +26,7 @@ const BUILT_IN_MODULES = {
   liveCrawler: '../modules/live-crawler.js',
   explorer: '../modules/explorer.js',
   chaos: '../modules/chaos.js',
+  mutation: '../modules/mutation.js',
 };
 
 class ModuleRegistry {

@@ -1,6 +1,16 @@
 /**
- * GateTest GitHub Bridge - Integration layer between GateTest and GitHub.
- * Merges GateCode authorization with GateTest quality gates.
+ * GateTest GitHub Bridge - Resilient integration layer between GateTest and GitHub.
+ *
+ * ZERO TOLERANCE FOR ACCESS FAILURES.
+ * If a customer pays for GateTest, we access their repo. Period.
+ *
+ * Resilience features:
+ * - Automatic retry with exponential backoff (2s, 4s, 8s, 16s)
+ * - Circuit breaker: detects GitHub outages, backs off gracefully
+ * - Rate limit awareness: reads X-RateLimit headers, pauses before hitting limits
+ * - Multi-strategy access: API → git clone → SSH fallback
+ * - Health check: verify GitHub is reachable before starting a scan
+ *
  * Uses Node.js built-in https module — no external dependencies.
  */
 
@@ -11,7 +21,120 @@ const { execFile } = require('child_process');
 
 const GITHUB_API_HOST = 'api.github.com';
 const GITHUB_API_VERSION = '2022-11-28';
-const USER_AGENT = 'GateTest/1.0.0';
+const USER_AGENT = 'GateTest/1.1.0';
+
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 4,
+  baseDelayMs: 2000,    // 2s, 4s, 8s, 16s
+  maxDelayMs: 30000,    // Cap at 30s
+  retryableStatuses: [408, 429, 500, 502, 503, 504],
+};
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER = {
+  failureThreshold: 5,    // Open circuit after 5 consecutive failures
+  resetTimeMs: 60000,     // Try again after 60s
+  halfOpenRequests: 1,    // Allow 1 test request when half-open
+};
+
+/**
+ * Sleep for a given number of milliseconds.
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Circuit breaker state — shared across all requests in this process.
+ */
+const circuitState = {
+  status: 'closed',       // closed (normal) | open (blocking) | half-open (testing)
+  failures: 0,
+  lastFailureTime: null,
+  lastSuccessTime: null,
+};
+
+/**
+ * Rate limit state — updated from GitHub response headers.
+ */
+const rateLimitState = {
+  remaining: null,
+  limit: null,
+  resetTime: null,        // Unix timestamp when limit resets
+};
+
+/**
+ * Check if the circuit breaker allows a request through.
+ */
+function circuitAllows() {
+  if (circuitState.status === 'closed') return true;
+
+  if (circuitState.status === 'open') {
+    const elapsed = Date.now() - circuitState.lastFailureTime;
+    if (elapsed >= CIRCUIT_BREAKER.resetTimeMs) {
+      circuitState.status = 'half-open';
+      return true;
+    }
+    return false;
+  }
+
+  // half-open: allow one test request
+  return true;
+}
+
+/**
+ * Record a successful API call — resets circuit breaker.
+ */
+function recordSuccess() {
+  circuitState.failures = 0;
+  circuitState.status = 'closed';
+  circuitState.lastSuccessTime = Date.now();
+}
+
+/**
+ * Record a failed API call — may trip the circuit breaker.
+ */
+function recordFailure() {
+  circuitState.failures++;
+  circuitState.lastFailureTime = Date.now();
+
+  if (circuitState.failures >= CIRCUIT_BREAKER.failureThreshold) {
+    circuitState.status = 'open';
+  }
+}
+
+/**
+ * Update rate limit state from response headers.
+ */
+function updateRateLimit(headers) {
+  if (headers['x-ratelimit-remaining'] !== undefined) {
+    rateLimitState.remaining = parseInt(headers['x-ratelimit-remaining'], 10);
+  }
+  if (headers['x-ratelimit-limit'] !== undefined) {
+    rateLimitState.limit = parseInt(headers['x-ratelimit-limit'], 10);
+  }
+  if (headers['x-ratelimit-reset'] !== undefined) {
+    rateLimitState.resetTime = parseInt(headers['x-ratelimit-reset'], 10);
+  }
+}
+
+/**
+ * Wait if we're about to hit the rate limit.
+ * Returns the number of ms waited (0 if no wait needed).
+ */
+async function respectRateLimit() {
+  if (rateLimitState.remaining !== null && rateLimitState.remaining <= 5) {
+    if (rateLimitState.resetTime) {
+      const waitMs = Math.max(0, (rateLimitState.resetTime * 1000) - Date.now() + 1000);
+      if (waitMs > 0 && waitMs < 120000) {
+        await sleep(waitMs);
+        return waitMs;
+      }
+    }
+  }
+  return 0;
+}
 
 /**
  * Resolves the GitHub token from environment or config file.
@@ -43,10 +166,9 @@ function resolveToken(projectRoot) {
 }
 
 /**
- * Low-level HTTPS request against the GitHub REST API v3.
- * Returns a promise that resolves with { statusCode, headers, data }.
+ * Single HTTPS request (no retry) against the GitHub REST API v3.
  */
-function apiRequest(method, urlPath, token, body) {
+function rawRequest(method, urlPath, token, body) {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: GITHUB_API_HOST,
@@ -82,6 +204,10 @@ function apiRequest(method, urlPath, token, body) {
         } catch (_) {
           // Response may not be JSON (e.g. 204 No Content).
         }
+
+        // Update rate limit tracking from every response
+        updateRateLimit(res.headers);
+
         resolve({ statusCode: res.statusCode, headers: res.headers, data });
       });
     });
@@ -99,6 +225,89 @@ function apiRequest(method, urlPath, token, body) {
   });
 }
 
+/**
+ * Resilient API request with retry, circuit breaker, and rate limit awareness.
+ * This is the function all GitHubBridge methods should use.
+ */
+async function apiRequest(method, urlPath, token, body) {
+  // Check circuit breaker
+  if (!circuitAllows()) {
+    const waitSec = Math.ceil((CIRCUIT_BREAKER.resetTimeMs - (Date.now() - circuitState.lastFailureTime)) / 1000);
+    throw new Error(
+      `[GateTest] GitHub API circuit breaker is OPEN — ${circuitState.failures} consecutive failures. ` +
+      `Retrying in ${waitSec}s. GitHub may be experiencing an outage.`
+    );
+  }
+
+  // Respect rate limits
+  await respectRateLimit();
+
+  let lastError = null;
+  let lastResponse = null;
+
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      const res = await rawRequest(method, urlPath, token, body);
+      lastResponse = res;
+
+      // Success
+      if (res.statusCode >= 200 && res.statusCode < 400) {
+        recordSuccess();
+        return res;
+      }
+
+      // Rate limited — wait for reset
+      if (res.statusCode === 429) {
+        recordFailure();
+        const retryAfter = res.headers['retry-after']
+          ? parseInt(res.headers['retry-after'], 10) * 1000
+          : RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt);
+
+        const waitMs = Math.min(retryAfter, RETRY_CONFIG.maxDelayMs);
+        if (attempt < RETRY_CONFIG.maxRetries) {
+          await sleep(waitMs);
+          continue;
+        }
+      }
+
+      // Retryable server error (500, 502, 503, 504)
+      if (RETRY_CONFIG.retryableStatuses.includes(res.statusCode)) {
+        recordFailure();
+        if (attempt < RETRY_CONFIG.maxRetries) {
+          const delayMs = Math.min(
+            RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
+            RETRY_CONFIG.maxDelayMs
+          );
+          await sleep(delayMs);
+          continue;
+        }
+      }
+
+      // Non-retryable error (4xx client errors except 408/429)
+      return res;
+
+    } catch (err) {
+      recordFailure();
+      lastError = err;
+
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delayMs = Math.min(
+          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
+          RETRY_CONFIG.maxDelayMs
+        );
+        await sleep(delayMs);
+        continue;
+      }
+    }
+  }
+
+  // All retries exhausted
+  if (lastResponse) {
+    return lastResponse;
+  }
+  throw lastError || new Error(`[GateTest] GitHub API request failed after ${RETRY_CONFIG.maxRetries + 1} attempts`);
+}
+
 
 class GitHubBridge {
   /**
@@ -109,6 +318,180 @@ class GitHubBridge {
   constructor(options = {}) {
     this.projectRoot = options.projectRoot || process.cwd();
     this.token = options.token || resolveToken(this.projectRoot);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Health check & diagnostics
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Check if GitHub API is reachable and responsive.
+   * Returns { available, latencyMs, rateLimit, circuitBreaker }.
+   * Call this BEFORE starting a paid scan to verify access.
+   */
+  async healthCheck() {
+    const start = Date.now();
+    try {
+      const res = await rawRequest('GET', '/rate_limit', this.token, null);
+      const latencyMs = Date.now() - start;
+
+      return {
+        available: res.statusCode === 200,
+        latencyMs,
+        statusCode: res.statusCode,
+        rateLimit: {
+          remaining: rateLimitState.remaining,
+          limit: rateLimitState.limit,
+          resetsAt: rateLimitState.resetTime
+            ? new Date(rateLimitState.resetTime * 1000).toISOString()
+            : null,
+        },
+        circuitBreaker: {
+          status: circuitState.status,
+          failures: circuitState.failures,
+        },
+      };
+    } catch (err) {
+      return {
+        available: false,
+        latencyMs: Date.now() - start,
+        error: err.message,
+        circuitBreaker: {
+          status: circuitState.status,
+          failures: circuitState.failures,
+        },
+      };
+    }
+  }
+
+  /**
+   * Get current circuit breaker and rate limit status.
+   */
+  getAccessStatus() {
+    return {
+      circuitBreaker: { ...circuitState },
+      rateLimit: { ...rateLimitState },
+      retryConfig: { ...RETRY_CONFIG },
+    };
+  }
+
+  /**
+   * Manually reset the circuit breaker (e.g. after confirming GitHub is back).
+   */
+  resetCircuitBreaker() {
+    circuitState.status = 'closed';
+    circuitState.failures = 0;
+    circuitState.lastFailureTime = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resilient repo access — multiple strategies
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Access a repository using the best available strategy.
+   * Tries in order: API clone → HTTPS git clone → SSH clone.
+   *
+   * This is the method to use when a customer pays for a scan.
+   * It WILL get their code, or clearly explain why it can't.
+   *
+   * @returns {{ strategy: string, localPath: string }}
+   */
+  async accessRepo(owner, repo, destDir, options = {}) {
+    const strategies = [
+      { name: 'https-clone', fn: () => this._cloneHttps(owner, repo, destDir, options) },
+      { name: 'ssh-clone', fn: () => this._cloneSsh(owner, repo, destDir, options) },
+      { name: 'api-download', fn: () => this._downloadViaApi(owner, repo, destDir, options) },
+    ];
+
+    const errors = [];
+
+    for (const strategy of strategies) {
+      try {
+        await strategy.fn();
+        return { strategy: strategy.name, localPath: destDir };
+      } catch (err) {
+        errors.push({ strategy: strategy.name, error: err.message });
+      }
+    }
+
+    // All strategies failed — give a clear diagnostic
+    const errorReport = errors.map(e => `  - ${e.strategy}: ${e.error}`).join('\n');
+    throw new Error(
+      `[GateTest] CANNOT ACCESS REPO ${owner}/${repo}\n` +
+      `All access strategies failed:\n${errorReport}\n\n` +
+      `Possible causes:\n` +
+      `  - Repository is private and no valid token is configured\n` +
+      `  - GitHub is experiencing an outage (check githubstatus.com)\n` +
+      `  - Network connectivity issue\n` +
+      `  - Token has insufficient permissions (needs 'repo' scope)\n\n` +
+      `Run 'gatetest --health' to diagnose connectivity.`
+    );
+  }
+
+  async _cloneHttps(owner, repo, destDir, options) {
+    const url = this.token
+      ? `https://x-access-token:${this.token}@github.com/${owner}/${repo}.git`
+      : `https://github.com/${owner}/${repo}.git`;
+
+    const args = ['clone', '--single-branch'];
+    if (options.depth) args.push('--depth', String(options.depth));
+    if (options.branch) args.push('--branch', options.branch);
+    args.push(url, destDir);
+
+    return this._git(args, options.cwd || this.projectRoot);
+  }
+
+  async _cloneSsh(owner, repo, destDir, options) {
+    const url = `git@github.com:${owner}/${repo}.git`;
+    const args = ['clone', '--single-branch'];
+    if (options.depth) args.push('--depth', String(options.depth));
+    if (options.branch) args.push('--branch', options.branch);
+    args.push(url, destDir);
+
+    return this._git(args, options.cwd || this.projectRoot);
+  }
+
+  async _downloadViaApi(owner, repo, destDir, options) {
+    const branch = options.branch || 'main';
+    const res = await this._api('GET', `/repos/${owner}/${repo}/tarball/${branch}`);
+
+    if (res.statusCode === 302 && res.headers.location) {
+      // GitHub redirects to a download URL
+      const tarball = await this._downloadUrl(res.headers.location);
+      fs.mkdirSync(destDir, { recursive: true });
+      const tarPath = path.join(destDir, '__gatetest_download.tar.gz');
+      fs.writeFileSync(tarPath, tarball);
+
+      // Extract
+      await this._git(['init'], destDir);
+      const { execSync } = require('child_process');
+      execSync(`tar -xzf "${tarPath}" --strip-components=1 -C "${destDir}"`, { timeout: 60000 });
+      fs.unlinkSync(tarPath);
+      return destDir;
+    }
+
+    throw new Error(`API download failed (HTTP ${res.statusCode})`);
+  }
+
+  _downloadUrl(url) {
+    return new Promise((resolve, reject) => {
+      const handler = url.startsWith('https') ? https : require('http');
+      handler.get(url, { headers: { 'User-Agent': USER_AGENT } }, (res) => {
+        // Follow one redirect
+        if (res.statusCode === 302 && res.headers.location) {
+          handler.get(res.headers.location, { headers: { 'User-Agent': USER_AGENT } }, (res2) => {
+            const chunks = [];
+            res2.on('data', c => chunks.push(c));
+            res2.on('end', () => resolve(Buffer.concat(chunks)));
+          }).on('error', reject);
+          return;
+        }
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -634,4 +1017,13 @@ class GitHubBridge {
   }
 }
 
-module.exports = { GitHubBridge, resolveToken, apiRequest };
+module.exports = {
+  GitHubBridge,
+  resolveToken,
+  apiRequest,
+  // Exposed for testing and diagnostics
+  circuitState,
+  rateLimitState,
+  RETRY_CONFIG,
+  CIRCUIT_BREAKER,
+};

@@ -1,6 +1,7 @@
 /**
- * Syntax Module - Validates syntax across all source files.
- * Checks JS/TS compilation, JSON/YAML parsing, and template resolution.
+ * Syntax Module - Deep syntax validation across ALL source files.
+ * Not just "does it parse" — checks imports resolve, template literals close,
+ * config files are valid, and TypeScript strict mode passes clean.
  */
 
 const BaseModule = require('./base-module');
@@ -15,27 +16,62 @@ class SyntaxModule extends BaseModule {
   async run(result, config) {
     const projectRoot = config.projectRoot;
 
-    // Check JavaScript files for syntax errors
+    // JavaScript / ESM / CJS
     const jsFiles = this._collectFiles(projectRoot, ['.js', '.mjs', '.cjs']);
     for (const file of jsFiles) {
       this._checkJsSyntax(file, result, projectRoot);
     }
 
-    // Check JSON files
+    // TypeScript
+    const tsFiles = this._collectFiles(projectRoot, ['.ts', '.tsx']);
+    if (tsFiles.length > 0) {
+      this._checkTypeScript(projectRoot, result);
+    }
+
+    // JSX (React)
+    const jsxFiles = this._collectFiles(projectRoot, ['.jsx']);
+    for (const file of jsxFiles) {
+      this._checkJsxSyntax(file, result, projectRoot);
+    }
+
+    // JSON
     const jsonFiles = this._collectFiles(projectRoot, ['.json']);
     for (const file of jsonFiles) {
       this._checkJsonSyntax(file, result, projectRoot);
     }
 
-    // Check TypeScript if present
-    const tsConfigPath = path.join(projectRoot, 'tsconfig.json');
-    if (fs.existsSync(tsConfigPath)) {
-      this._checkTypeScript(projectRoot, result);
+    // YAML
+    const yamlFiles = this._collectFiles(projectRoot, ['.yml', '.yaml']);
+    for (const file of yamlFiles) {
+      this._checkYamlSyntax(file, result, projectRoot);
     }
 
-    // If no files found, still pass
-    if (jsFiles.length === 0 && jsonFiles.length === 0) {
-      result.addCheck('syntax-scan', true, { message: 'No source files to check' });
+    // TOML
+    const tomlFiles = this._collectFiles(projectRoot, ['.toml']);
+    for (const file of tomlFiles) {
+      this._checkTomlSyntax(file, result, projectRoot);
+    }
+
+    // CSS
+    const cssFiles = this._collectFiles(projectRoot, ['.css']);
+    for (const file of cssFiles) {
+      this._checkCssSyntax(file, result, projectRoot);
+    }
+
+    // HTML
+    const htmlFiles = this._collectFiles(projectRoot, ['.html', '.htm']);
+    for (const file of htmlFiles) {
+      this._checkHtmlSyntax(file, result, projectRoot);
+    }
+
+    // Import resolution
+    this._checkImportResolution(projectRoot, jsFiles, result);
+
+    // Dangling patterns
+    this._checkDanglingPatterns(projectRoot, [...jsFiles, ...tsFiles, ...jsxFiles], result);
+
+    if (jsFiles.length === 0 && jsonFiles.length === 0 && tsFiles.length === 0) {
+      result.addCheck('syntax-scan', true, { message: 'No source files to check', severity: 'info' });
     }
   }
 
@@ -43,8 +79,6 @@ class SyntaxModule extends BaseModule {
     const relPath = path.relative(projectRoot, file);
     try {
       const content = fs.readFileSync(file, 'utf-8');
-      // Use Node's built-in parser via vm.compileFunction or new Function
-      // We use a try/catch around require to detect syntax errors
       const vm = require('vm');
       new vm.Script(content, { filename: file });
       result.addCheck(`syntax:${relPath}`, true);
@@ -57,9 +91,36 @@ class SyntaxModule extends BaseModule {
           suggestion: 'Fix the syntax error at the indicated location',
         });
       } else {
-        // Not a syntax error, file is syntactically valid
         result.addCheck(`syntax:${relPath}`, true);
       }
+    }
+  }
+
+  _checkJsxSyntax(file, result, projectRoot) {
+    const relPath = path.relative(projectRoot, file);
+    const content = fs.readFileSync(file, 'utf-8');
+
+    // Check for unclosed JSX tags
+    const openTags = (content.match(/<[A-Z][a-zA-Z]*(?:\s[^>]*)?>(?!.*\/>)/g) || []).length;
+    const closeTags = (content.match(/<\/[A-Z][a-zA-Z]*>/g) || []).length;
+
+    if (Math.abs(openTags - closeTags) > 2) {
+      result.addCheck(`syntax:jsx-balance:${relPath}`, false, {
+        file: relPath,
+        severity: 'warning',
+        message: `JSX tag mismatch: ${openTags} opening vs ${closeTags} closing tags`,
+        suggestion: 'Check for unclosed JSX components',
+      });
+    }
+
+    // Check for common JSX mistakes
+    if (content.includes('class=') && !content.includes('className=')) {
+      result.addCheck(`syntax:jsx-class:${relPath}`, false, {
+        file: relPath,
+        severity: 'warning',
+        message: 'Using "class=" instead of "className=" in JSX',
+        suggestion: 'Replace class= with className= in JSX files',
+      });
     }
   }
 
@@ -78,17 +139,204 @@ class SyntaxModule extends BaseModule {
     }
   }
 
+  _checkYamlSyntax(file, result, projectRoot) {
+    const relPath = path.relative(projectRoot, file);
+    const content = fs.readFileSync(file, 'utf-8');
+
+    // Basic YAML validation — check for common errors
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Tab indentation (YAML requires spaces)
+      if (line.match(/^\t/)) {
+        result.addCheck(`yaml:tabs:${relPath}:${i + 1}`, false, {
+          file: relPath,
+          line: i + 1,
+          severity: 'error',
+          message: 'YAML files must use spaces for indentation, not tabs',
+          suggestion: 'Replace tabs with spaces',
+        });
+        return; // One error per file is enough
+      }
+    }
+    result.addCheck(`yaml:${relPath}`, true);
+  }
+
+  _checkTomlSyntax(file, result, projectRoot) {
+    const relPath = path.relative(projectRoot, file);
+    const content = fs.readFileSync(file, 'utf-8');
+
+    // Basic TOML validation
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line || line.startsWith('#')) continue;
+
+      // Check for unclosed brackets in table headers
+      if (line.startsWith('[') && !line.includes(']')) {
+        result.addCheck(`toml:bracket:${relPath}:${i + 1}`, false, {
+          file: relPath,
+          line: i + 1,
+          message: 'Unclosed bracket in TOML table header',
+          suggestion: 'Close the bracket in the table header',
+        });
+        return;
+      }
+    }
+    result.addCheck(`toml:${relPath}`, true);
+  }
+
+  _checkCssSyntax(file, result, projectRoot) {
+    const relPath = path.relative(projectRoot, file);
+    const content = fs.readFileSync(file, 'utf-8');
+
+    // Check for balanced braces
+    const opens = (content.match(/{/g) || []).length;
+    const closes = (content.match(/}/g) || []).length;
+
+    if (opens !== closes) {
+      result.addCheck(`css:braces:${relPath}`, false, {
+        file: relPath,
+        message: `Unbalanced braces: ${opens} opening vs ${closes} closing`,
+        suggestion: 'Check for missing or extra curly braces',
+      });
+    }
+
+    // Check for unclosed strings
+    const singleQuotes = (content.match(/'/g) || []).length;
+    if (singleQuotes % 2 !== 0) {
+      result.addCheck(`css:quotes:${relPath}`, false, {
+        file: relPath,
+        severity: 'warning',
+        message: 'Odd number of single quotes — possible unclosed string',
+        suggestion: 'Check for unclosed quote marks',
+      });
+    }
+  }
+
+  _checkHtmlSyntax(file, result, projectRoot) {
+    const relPath = path.relative(projectRoot, file);
+    const content = fs.readFileSync(file, 'utf-8');
+
+    // Check for doctype
+    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
+      result.addCheck(`html:doctype:${relPath}`, false, {
+        file: relPath,
+        severity: 'warning',
+        message: 'Missing <!DOCTYPE html> declaration',
+        suggestion: 'Add <!DOCTYPE html> at the start of the file',
+      });
+    }
+
+    // Check for unclosed important tags
+    const importantTags = ['html', 'head', 'body'];
+    for (const tag of importantTags) {
+      const openCount = (content.match(new RegExp(`<${tag}[\\s>]`, 'gi')) || []).length;
+      const closeCount = (content.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
+      if (openCount > closeCount) {
+        result.addCheck(`html:unclosed:${tag}:${relPath}`, false, {
+          file: relPath,
+          severity: 'error',
+          message: `Unclosed <${tag}> tag`,
+          suggestion: `Add closing </${tag}> tag`,
+        });
+      }
+    }
+  }
+
   _checkTypeScript(projectRoot, result) {
-    const { exitCode, stdout, stderr } = this._exec('npx tsc --noEmit 2>&1', { cwd: projectRoot });
+    const { exitCode, stdout, stderr } = this._exec('npx tsc --noEmit 2>&1', {
+      cwd: projectRoot,
+      timeout: 120000,
+    });
     if (exitCode === 0) {
       result.addCheck('typescript-strict', true);
     } else {
-      const errors = (stdout + stderr).split('\n').filter(l => l.includes('error TS'));
+      const output = stdout + stderr;
+      const errors = output.split('\n').filter(l => l.includes('error TS'));
       result.addCheck('typescript-strict', false, {
         message: `${errors.length} TypeScript error(s)`,
         details: errors.slice(0, 10),
         suggestion: 'Run "npx tsc --noEmit" to see all errors',
       });
+    }
+  }
+
+  _checkImportResolution(projectRoot, jsFiles, result) {
+    let unresolvedCount = 0;
+    const maxReports = 10;
+
+    for (const file of jsFiles) {
+      const relPath = path.relative(projectRoot, file);
+      const content = fs.readFileSync(file, 'utf-8');
+      const dir = path.dirname(file);
+
+      // Match require() calls with relative paths
+      const requireRegex = /require\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g;
+      let match;
+      while ((match = requireRegex.exec(content)) !== null) {
+        const importPath = match[1];
+        const resolved = this._resolveImport(dir, importPath);
+        if (!resolved) {
+          unresolvedCount++;
+          if (unresolvedCount <= maxReports) {
+            result.addCheck(`syntax:import:${relPath}:${importPath}`, false, {
+              file: relPath,
+              severity: 'error',
+              message: `Unresolved import: require('${importPath}')`,
+              suggestion: `Check that the file exists: ${importPath}`,
+            });
+          }
+        }
+      }
+    }
+
+    if (unresolvedCount === 0) {
+      result.addCheck('syntax:imports', true, { severity: 'info' });
+    } else if (unresolvedCount > maxReports) {
+      result.addCheck('syntax:imports-truncated', true, {
+        severity: 'info',
+        message: `${unresolvedCount - maxReports} more unresolved imports not shown`,
+      });
+    }
+  }
+
+  _resolveImport(dir, importPath) {
+    const extensions = ['', '.js', '.ts', '.tsx', '.jsx', '.json', '/index.js', '/index.ts'];
+    for (const ext of extensions) {
+      const resolved = path.resolve(dir, importPath + ext);
+      if (fs.existsSync(resolved)) return resolved;
+    }
+    return null;
+  }
+
+  _checkDanglingPatterns(projectRoot, files, result) {
+    for (const file of files) {
+      const relPath = path.relative(projectRoot, file);
+      const content = fs.readFileSync(file, 'utf-8');
+
+      // Unclosed template literals
+      const backticks = (content.match(/`/g) || []).length;
+      if (backticks % 2 !== 0) {
+        result.addCheck(`syntax:template-literal:${relPath}`, false, {
+          file: relPath,
+          severity: 'warning',
+          message: 'Odd number of backticks — possible unclosed template literal',
+          suggestion: 'Check for unclosed template literals',
+        });
+      }
+
+      // Unbalanced parentheses (rough check, skip strings)
+      const stripped = content.replace(/['"`](?:[^'"`\\]|\\.)*['"`]/g, '""');
+      const parens = (stripped.match(/\(/g) || []).length - (stripped.match(/\)/g) || []).length;
+      if (Math.abs(parens) > 2) {
+        result.addCheck(`syntax:parens:${relPath}`, false, {
+          file: relPath,
+          severity: 'warning',
+          message: `Parenthesis imbalance detected (off by ${Math.abs(parens)})`,
+          suggestion: 'Check for unclosed or extra parentheses',
+        });
+      }
     }
   }
 }

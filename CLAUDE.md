@@ -1,72 +1,182 @@
-# GateTest - Quality Assurance System
+# GateTest - The Bible
 
-## READ THIS FIRST — MANDATORY INSTRUCTIONS FOR EVERY SESSION
+## THIS FILE IS LAW. READ EVERY WORD BEFORE TOUCHING ANYTHING.
 
-**You are working on GateTest.** Before doing ANYTHING, follow these rules:
+**GateTest is the #1 QA system on the internet.** Not #2. Not "competitive." #1.
+Every session, every build, every decision serves one purpose: TOTAL MARKET DOMINATION.
 
-1. **READ this entire file first.** Do not start coding until you understand the project.
-2. **Check git status and git log** to understand where the previous session left off.
-3. **Do NOT start from scratch.** This is an existing project. Build on what's here.
-4. **Do NOT create new files** unless absolutely necessary. Edit existing files first.
-5. **Do NOT reorganize, refactor, or "improve"** unless explicitly asked.
-6. **Run `node --test tests/*.test.js`** before committing anything.
-7. **Run `cd website && npm run build`** before committing website changes.
-8. **Commit and push** when work is complete. Branch: check `git branch` for current branch.
+The boss is **Craig**. Major website changes require his authorization. If you're
+unsure whether something is "major" — ask Craig. Do not guess. Do not assume.
 
-### Project Structure (DO NOT RECREATE — IT EXISTS)
+---
+
+## MANDATORY SESSION STARTUP — NO EXCEPTIONS
+
+Before writing a SINGLE line of code, execute these steps IN ORDER:
+
+1. **READ this entire CLAUDE.md.** Not skim. READ. Every word is here for a reason.
+2. **`git status && git log --oneline -10`** — Understand where the last session ended.
+3. **`git branch`** — Verify you're on the correct branch.
+4. **DO NOT start from scratch.** This project has 20 modules, 37+ tests, 5 reporters,
+   a full website, CI generators, caching, mutation testing, and more. Build on what exists.
+5. **DO NOT create new files** unless there is no existing file that can be edited.
+6. **DO NOT reorganize, rename, or "improve" architecture** unless Craig explicitly asks.
+7. **DO NOT remove features** unless Craig explicitly asks.
+
+---
+
+## PROJECT ARCHITECTURE (BUILT — DO NOT RECREATE)
 
 ```
 GateTest/
-├── CLAUDE.md          ← THIS FILE (quality rules, read every session)
-├── MARKETING.md       ← Positioning, pricing, website copy
-├── package.json       ← CLI tool config
-├── bin/gatetest.js    ← CLI entry point
+├── CLAUDE.md               ← THIS FILE — THE BIBLE
+├── MARKETING.md            ← Positioning, pricing, website copy (read before website work)
+├── package.json            ← CLI tool config (name: gatetest, bin: gatetest)
+├── bin/gatetest.js         ← CLI entry point (20+ flags, watch mode, crawl loop)
 ├── src/
-│   ├── index.js       ← Main library entry
-│   ├── core/          ← Config, runner, registry, CLAUDE.md parser
-│   ├── modules/       ← 16 test modules (syntax, security, a11y, etc.)
-│   ├── reporters/     ← Console, JSON, HTML reporters
-│   ├── scanners/      ← Continuous background scanner
-│   └── hooks/         ← Pre-commit, pre-push hooks
-├── tests/             ← Unit tests (must pass before commit)
-└── website/           ← gatetest.io marketing site (Next.js + Tailwind)
+│   ├── index.js            ← Main library entry (exports everything)
+│   ├── core/
+│   │   ├── config.js       ← Config + thresholds + suite definitions
+│   │   ├── runner.js       ← Test runner (severity levels, auto-fix, diff-mode, parallel)
+│   │   ├── registry.js     ← Module discovery + registration
+│   │   ├── cache.js        ← SHA-256 file hashing, skip unchanged files
+│   │   ├── ci-generator.js ← GitHub Actions, GitLab CI, CircleCI generation
+│   │   ├── claude-md-parser.js    ← Parses CLAUDE.md checklists
+│   │   ├── claude-md-generator.js ← Generates CLAUDE.md for target projects
+│   │   └── github-bridge.js      ← GitHub API integration
+│   ├── modules/            ← 20 TEST MODULES (the core product)
+│   │   ├── base-module.js         ← Abstract base class
+│   │   ├── syntax.js              ← JS/TS/JSON/YAML/CSS/HTML syntax validation
+│   │   ├── lint.js                ← ESLint, Stylelint, Markdownlint
+│   │   ├── secrets.js             ← API keys, tokens, passwords, private keys
+│   │   ├── code-quality.js        ← console.log, debugger, TODO, eval, complexity
+│   │   ├── unit-tests.js          ← Auto-detects test framework + coverage
+│   │   ├── integration-tests.js   ← API endpoints, DB ops, service detection
+│   │   ├── e2e.js                 ← Playwright/Cypress/Puppeteer execution
+│   │   ├── visual.js              ← Visual regression, layout shifts
+│   │   ├── accessibility.js       ← WCAG 2.2 AAA — 542 lines of checks
+│   │   ├── performance.js         ← Bundle budgets, Core Web Vitals, Lighthouse
+│   │   ├── security.js            ← OWASP, CVE deps, CSP, XSS/SQLi patterns
+│   │   ├── seo.js                 ← Meta tags, OG, structured data, sitemaps
+│   │   ├── links.js               ← Broken link detection (internal + external)
+│   │   ├── compatibility.js       ← Browser matrix, CSS/JS API compat, polyfills
+│   │   ├── data-integrity.js      ← Migrations, ORM, PII, SQL injection
+│   │   ├── documentation.js       ← README, CHANGELOG, JSDoc, license, dead links
+│   │   ├── live-crawler.js        ← Live site crawl with Playwright — 600 lines
+│   │   ├── explorer.js            ← Autonomous interactive element testing — 592 lines
+│   │   ├── chaos.js               ← Chaos & resilience testing
+│   │   └── mutation.js            ← Mutation testing — tests the tests themselves
+│   ├── reporters/
+│   │   ├── console-reporter.js    ← Rich terminal output (color, severity, auto-fix)
+│   │   ├── json-reporter.js       ← JSON report output
+│   │   ├── html-reporter.js       ← Full HTML dashboard report
+│   │   ├── sarif-reporter.js      ← SARIF 2.1.0 (GitHub Security tab)
+│   │   └── junit-reporter.js      ← JUnit XML (CI pipeline integration)
+│   ├── scanners/
+│   │   └── continuous-scanner.js  ← Background scanning daemon
+│   └── hooks/
+│       ├── pre-commit.js          ← Pre-commit quality gate
+│       └── pre-push.js           ← Pre-push full validation
+├── tests/                  ← Unit tests (37+ tests, MUST ALL PASS)
+│   ├── runner.test.js      ← Core runner tests (severity, auto-fix, diff, parallel)
+│   ├── parser.test.js      ← CLAUDE.md parser tests
+│   ├── cache.test.js       ← Cache system tests
+│   └── reporters.test.js   ← SARIF + JUnit reporter tests
+└── website/                ← gatetest.io marketing site (Next.js 16 + Tailwind 4)
     └── app/
-        ├── page.tsx           ← Main page (assembles all sections)
-        ├── layout.tsx         ← Root layout with metadata
-        ├── globals.css        ← Dark theme, animations, glow effects
-        └── components/        ← 12 React components (Navbar, Hero, etc.)
+        ├── page.tsx                ← Main page (assembles all sections)
+        ├── layout.tsx              ← Root layout with metadata
+        ├── globals.css             ← Dark theme, animations, glow effects
+        ├── api/webhook/route.ts    ← GitHub App webhook handler
+        └── components/             ← 13 React components
+            ├── Navbar.tsx          ├── Hero.tsx
+            ├── Problem.tsx         ├── Modules.tsx
+            ├── HowItWorks.tsx      ├── AiNative.tsx
+            ├── ContinuousScanning.tsx ├── GateRules.tsx
+            ├── Comparison.tsx      ├── Integrations.tsx
+            ├── Pricing.tsx         ├── Cta.tsx
+            └── Footer.tsx
 ```
 
-### What GateTest IS
+---
 
-- A **CLI QA tool** with 16 test modules that checks everything before code ships
-- A **marketing website** at gatetest.io built with Next.js + Tailwind CSS
-- Works alongside **GateCode** (separate repo — authorization layer)
-- The first QA system **built for AI-generated code**
+## WHAT GATETEST IS
 
-### Key Files to Read Before Making Changes
+GateTest is the most advanced QA testing system on the internet. Period.
 
-- `MARKETING.md` — All selling points, pricing, competitive positioning
-- `src/index.js` — How the 16 modules are orchestrated
-- `website/app/page.tsx` — How the website sections are composed
+- **20 test modules** covering every aspect of software quality
+- **5 report formats**: Console, JSON, HTML, SARIF (GitHub Security), JUnit XML (CI)
+- **Severity levels**: error (blocks gate), warning (reports), info (informational)
+- **Auto-fix engine**: Modules can automatically repair safe issues
+- **Diff-based scanning**: `--diff` only checks git-changed files (instant pre-commit)
+- **Watch mode**: `--watch` monitors file changes, re-scans continuously
+- **Mutation testing**: Tests the tests themselves — finds gaps in test coverage
+- **CI/CD generation**: `--ci-init github|gitlab|circleci` bootstraps pipelines
+- **File caching**: SHA-256 hashing skips unchanged files
+- **Live site crawler**: Playwright-powered full-site crawl and verification
+- **Chaos testing**: Resilience and failure mode testing
+- **CLAUDE.md enforcement**: Parses AND generates quality checklists automatically
+
+### CLI Reference
+
+```
+gatetest                          Run standard checks
+gatetest --suite full             Run every single check (20 modules)
+gatetest --suite quick            Fast pre-commit checks
+gatetest --module security        Security scan only
+gatetest --module mutation        Mutation testing only
+gatetest --diff                   Only scan git-changed files
+gatetest --fix                    Auto-fix safe issues
+gatetest --watch                  Watch mode — re-scan on file changes
+gatetest --sarif                  Output SARIF for GitHub Security
+gatetest --junit                  Output JUnit XML for CI
+gatetest --ci-init github         Generate GitHub Actions workflow
+gatetest --crawl <url>            Crawl live site
+gatetest --crawl-loop <url>       Continuous test-fix loop
+gatetest --parallel               Run modules in parallel
+gatetest --stop-first             Stop on first module failure
+```
 
 ---
 
-## Purpose
+## AGGRESSIVE QUALITY MANDATE
 
-GateTest is the QA gate between Claude and GitHub. Nothing ships unless it passes
-every check. No exceptions. This file is the single source of truth — it is read
-and enforced before every build, every commit, and every push.
+### This is war. We are not building a "nice" tool. We are building THE tool.
 
-GateTest works alongside **GateCode** (the authorization layer between Claude and
-GitHub) to form a complete CI/CD quality pipeline.
+Every feature must be the best implementation available. Every check must be
+deeper than the competition. Every report must be more actionable. Every module
+must catch real bugs that real users have.
+
+**If a competitor does something we don't, that's a GateTest bug. Fix it.**
+
+### Zero Tolerance Philosophy
+
+- **Warnings ARE errors.** Everything not explicitly `severity: 'info'` or
+  `severity: 'warning'` blocks the pipeline.
+- **"It looks fine" is not evidence.** GateTest verifies in real code, real browsers,
+  real parsers. Visual inspection is not testing.
+- **"I'll fix it later" is not allowed.** Either it passes NOW or it doesn't ship.
+- **"Claude says it's fixed" is not verification.** Run GateTest. Show the PASS.
+
+### The Standard We Hold Ourselves To
+
+| Metric | Minimum | Target |
+|--------|---------|--------|
+| Unit Test Coverage | 90% | 100% |
+| Integration Test Coverage | 85% | 95% |
+| Mutation Test Score | 80% | 90% |
+| Lighthouse Performance | 95 | 100 |
+| Lighthouse Accessibility | 100 | 100 |
+| Security Vulnerabilities | 0 high | 0 any |
+| Broken Links | 0 | 0 |
+| Bundle Size JS gzipped | < 200KB | < 150KB |
+| FCP | < 1.0s | < 0.5s |
+| LCP | < 2.0s | < 1.5s |
+| CLS | < 0.05 | < 0.01 |
 
 ---
 
-## MANDATORY PRE-BUILD CHECKLIST
-
-Before ANY code is committed, pushed, or deployed, ALL of the following must pass.
-A failure in ANY category blocks the entire build.
+## PRE-BUILD CHECKLIST — ALL MUST PASS
 
 ### 1. Syntax & Compilation
 
@@ -80,7 +190,7 @@ A failure in ANY category blocks the entire build.
 
 ### 2. Unit Tests
 
-- [ ] 100% of existing unit tests pass
+- [ ] 100% of existing unit tests pass (37+ tests)
 - [ ] Every new function has at least one unit test
 - [ ] Every new branch/conditional has a test case
 - [ ] Edge cases tested: null, undefined, empty string, zero, negative, overflow
@@ -88,144 +198,91 @@ A failure in ANY category blocks the entire build.
 - [ ] Mock/stub cleanup verified — no test pollution across suites
 - [ ] Test isolation confirmed — tests pass in any order
 
-### 3. Integration Tests
+### 3. Code Quality
 
-- [ ] All API endpoint tests pass
-- [ ] Database read/write/update/delete operations verified
-- [ ] Third-party service integrations tested (mocked in CI, live in staging)
-- [ ] Authentication and authorization flows tested end-to-end
-- [ ] WebSocket / real-time connections tested where applicable
-- [ ] File upload/download pipelines tested
-- [ ] Queue/worker integrations tested
+- [ ] No console.log, console.debug, or debugger statements in library code
+- [ ] No unused variables, imports, or functions
+- [ ] No TODO, FIXME, HACK, or XXX comments left unresolved
+- [ ] No eval() or Function() constructor usage in production code
+- [ ] No innerHTML with unsanitized content
+- [ ] Function length < 50 lines (extract if longer)
+- [ ] File length < 300 lines (split if longer)
+- [ ] Cyclomatic complexity < 10 per function
+- [ ] All promises have rejection handlers
+- [ ] No race conditions in async code
+- [ ] No circular dependencies
 
-### 4. End-to-End (E2E) Tests
+### 4. Security
 
-- [ ] Full user journey tests pass on all target browsers
-- [ ] Critical paths tested: signup, login, core workflow, logout
-- [ ] Form submissions validated (valid input, invalid input, edge cases)
-- [ ] Navigation flows verified (forward, back, deep links, bookmarks)
-- [ ] Multi-step workflows tested start-to-finish
-- [ ] Error recovery flows tested (network drop, timeout, server error)
-- [ ] Mobile viewport E2E tests pass
+- [ ] No hardcoded secrets, API keys, tokens, or passwords in source
+- [ ] No secrets in git history (git-secrets scan clean)
+- [ ] All dependencies scanned for CVEs (npm audit clean)
+- [ ] No critical or high severity vulnerabilities in dependency tree
+- [ ] All user input sanitized before rendering (XSS prevention)
+- [ ] All database queries parameterized (SQL injection prevention)
+- [ ] No eval() or Function() constructor usage
+- [ ] No open redirects
+- [ ] CORS configured to minimum required origins
 
-### 5. Visual & UI Testing
-
-- [ ] No visual regressions detected (pixel-diff comparison)
-- [ ] All fonts load correctly — no FOIT/FOUT issues
-- [ ] Font sizes, weights, and families match design spec exactly
-- [ ] Color values match design tokens (hex, RGB, HSL verified)
-- [ ] Spacing (margin, padding) matches design system grid
-- [ ] Icons render at correct size and color
-- [ ] Images have correct aspect ratio, no distortion
-- [ ] Animations and transitions are smooth (no jank, 60fps target)
-- [ ] Dark mode / light mode renders correctly
-- [ ] Print stylesheet renders correctly
-- [ ] No text overflow, truncation, or clipping issues
-- [ ] No orphaned or widowed text in paragraphs
-- [ ] Cursor styles correct on all interactive elements
-- [ ] Scrollbars styled consistently (where custom)
-- [ ] No layout shifts (CLS < 0.1)
-
-### 6. Responsive Design
-
-- [ ] Layout correct at 320px (small mobile)
-- [ ] Layout correct at 375px (standard mobile)
-- [ ] Layout correct at 414px (large mobile)
-- [ ] Layout correct at 768px (tablet portrait)
-- [ ] Layout correct at 1024px (tablet landscape / small desktop)
-- [ ] Layout correct at 1280px (standard desktop)
-- [ ] Layout correct at 1920px (large desktop)
-- [ ] Layout correct at 2560px+ (ultra-wide)
-- [ ] Touch targets minimum 44x44px on mobile
-- [ ] No horizontal scrollbar on any viewport
-- [ ] Images scale properly across breakpoints
-- [ ] Navigation adapts correctly (hamburger menu, drawer, etc.)
-
-### 7. Accessibility (WCAG 2.2 AAA)
-
-- [ ] All images have meaningful alt text
-- [ ] Decorative images have empty alt="" and role="presentation"
-- [ ] Color contrast ratio meets AAA (7:1 normal text, 4.5:1 large text)
-- [ ] All interactive elements keyboard-accessible (Tab, Enter, Space, Escape)
-- [ ] Focus indicators visible on all interactive elements
-- [ ] Skip-to-content link present and functional
-- [ ] ARIA labels on all non-text interactive elements
-- [ ] ARIA landmarks used correctly (main, nav, aside, footer)
-- [ ] Live regions (aria-live) for dynamic content updates
-- [ ] Form inputs have associated labels
-- [ ] Error messages associated with inputs via aria-describedby
-- [ ] Screen reader tested (NVDA, VoiceOver, JAWS)
-- [ ] No keyboard traps
-- [ ] Logical tab order matches visual order
-- [ ] Heading hierarchy is sequential (h1 > h2 > h3, no skips)
-- [ ] Page language attribute set correctly
-- [ ] Reduced motion preference respected (prefers-reduced-motion)
-
-### 8. Performance
+### 5. Performance
 
 - [ ] Lighthouse Performance score >= 95
 - [ ] Lighthouse Accessibility score >= 100
 - [ ] Lighthouse Best Practices score >= 100
 - [ ] Lighthouse SEO score >= 100
-- [ ] First Contentful Paint (FCP) < 1.0s
-- [ ] Largest Contentful Paint (LCP) < 2.0s
-- [ ] Time to Interactive (TTI) < 2.5s
-- [ ] Total Blocking Time (TBT) < 150ms
-- [ ] Cumulative Layout Shift (CLS) < 0.05
-- [ ] Interaction to Next Paint (INP) < 200ms
 - [ ] Bundle size within budget (JS < 200KB gzipped, CSS < 50KB gzipped)
 - [ ] No render-blocking resources
 - [ ] Images optimized (WebP/AVIF with fallbacks)
 - [ ] Lazy loading on below-fold images and components
-- [ ] HTTP/2 or HTTP/3 in use
-- [ ] Caching headers set correctly (immutable assets, ETags)
-- [ ] No memory leaks (heap snapshot stable over 5-minute run)
-- [ ] No CPU spikes during idle (< 1% idle CPU)
-- [ ] Database queries optimized (no N+1, indexed lookups)
-- [ ] API response times < 200ms (p95)
+- [ ] No memory leaks
 
-### 9. Security
+### 6. Accessibility (WCAG 2.2 AAA)
 
-- [ ] No hardcoded secrets, API keys, tokens, or passwords in source
-- [ ] No secrets in git history (git-secrets scan clean)
-- [ ] All dependencies scanned for CVEs (npm audit / Snyk / Dependabot clean)
-- [ ] No critical or high severity vulnerabilities in dependency tree
-- [ ] Content Security Policy (CSP) headers set and strict
-- [ ] X-Frame-Options set (DENY or SAMEORIGIN)
-- [ ] X-Content-Type-Options: nosniff set
-- [ ] Strict-Transport-Security (HSTS) enabled
-- [ ] All user input sanitized before rendering (XSS prevention)
-- [ ] All database queries parameterized (SQL injection prevention)
-- [ ] CSRF tokens on all state-changing requests
-- [ ] Authentication tokens stored securely (httpOnly, secure, sameSite)
-- [ ] Rate limiting on authentication endpoints
-- [ ] Rate limiting on API endpoints
-- [ ] File upload validation (type, size, content inspection)
-- [ ] No directory traversal vulnerabilities
-- [ ] No open redirects
-- [ ] CORS configured to minimum required origins
-- [ ] Subresource Integrity (SRI) on CDN resources
-- [ ] No eval() or Function() constructor usage
-- [ ] No innerHTML with unsanitized content
-- [ ] SSL/TLS certificate valid and not near expiry
+- [ ] All images have meaningful alt text
+- [ ] Color contrast ratio meets AAA (7:1 normal text, 4.5:1 large text)
+- [ ] All interactive elements keyboard-accessible
+- [ ] Focus indicators visible on all interactive elements
+- [ ] ARIA labels on all non-text interactive elements
+- [ ] Heading hierarchy is sequential (h1 > h2 > h3, no skips)
+- [ ] Form inputs have associated labels
+- [ ] Reduced motion preference respected (prefers-reduced-motion)
 
-### 10. SEO & Metadata
+### 7. SEO & Metadata
 
-- [ ] Unique, descriptive <title> on every page (50-60 chars)
+- [ ] Unique, descriptive title on every page (50-60 chars)
 - [ ] Meta description on every page (150-160 chars)
 - [ ] Open Graph tags (og:title, og:description, og:image, og:url)
-- [ ] Twitter Card tags (twitter:card, twitter:title, twitter:description)
 - [ ] Canonical URLs set on all pages
-- [ ] Structured data (JSON-LD) validated with Google Rich Results Test
-- [ ] XML sitemap generated and accurate
-- [ ] robots.txt configured correctly
+- [ ] Structured data (JSON-LD) validated
 - [ ] No broken internal links (404s)
-- [ ] No broken external links
-- [ ] Proper heading hierarchy for SEO
-- [ ] Image alt text is descriptive and keyword-relevant
 - [ ] URL structure is clean, readable, and consistent
-- [ ] hreflang tags for multi-language sites
-- [ ] 301 redirects for moved/renamed pages
+
+### 8. Visual & UI Testing
+
+- [ ] No visual regressions detected
+- [ ] All fonts load correctly
+- [ ] Dark mode renders correctly
+- [ ] No layout shifts (CLS < 0.1)
+- [ ] No text overflow, truncation, or clipping issues
+- [ ] Animations and transitions are smooth (60fps target)
+
+### 9. Responsive Design
+
+- [ ] Layout correct at 320px (small mobile)
+- [ ] Layout correct at 375px (standard mobile)
+- [ ] Layout correct at 768px (tablet)
+- [ ] Layout correct at 1280px (desktop)
+- [ ] Layout correct at 1920px+ (large desktop)
+- [ ] Touch targets minimum 44x44px on mobile
+- [ ] No horizontal scrollbar on any viewport
+
+### 10. Documentation
+
+- [ ] README.md is accurate and up-to-date
+- [ ] API endpoints documented with request/response examples
+- [ ] Environment variables documented
+- [ ] CHANGELOG updated for user-facing changes
+- [ ] All 20 modules listed in README and CLI help
 
 ### 11. Browser Compatibility
 
@@ -233,295 +290,196 @@ A failure in ANY category blocks the entire build.
 - [ ] Firefox (latest 2 versions)
 - [ ] Safari (latest 2 versions)
 - [ ] Edge (latest 2 versions)
-- [ ] iOS Safari (latest 2 versions)
-- [ ] Android Chrome (latest 2 versions)
 - [ ] No vendor-prefix-only CSS without fallback
 - [ ] No unpolyfilled modern JS features for target browsers
-- [ ] Web API usage checked against caniuse.com compatibility
 
-### 12. Code Quality
-
-- [ ] No TODO, FIXME, HACK, or XXX comments left unresolved
-- [ ] No commented-out code blocks
-- [ ] No console.log, console.debug, or debugger statements
-- [ ] No unused variables, imports, or functions
-- [ ] No unused CSS classes or selectors
-- [ ] No duplicate code blocks (DRY principle)
-- [ ] Function length < 50 lines (extract if longer)
-- [ ] File length < 300 lines (split if longer)
-- [ ] Cyclomatic complexity < 10 per function
-- [ ] Consistent naming conventions throughout
-- [ ] Error handling is explicit, not silent catches
-- [ ] All promises have rejection handlers
-- [ ] No race conditions in async code
-- [ ] No circular dependencies
-
-### 13. Documentation
-
-- [ ] README.md is accurate and up-to-date
-- [ ] API endpoints documented with request/response examples
-- [ ] Environment variables documented
-- [ ] Setup/installation instructions verified (fresh clone test)
-- [ ] CHANGELOG updated for user-facing changes
-- [ ] Breaking changes clearly documented with migration path
-
-### 14. Infrastructure & DevOps
-
-- [ ] Docker builds succeed
-- [ ] Docker image size is optimized (multi-stage builds)
-- [ ] Health check endpoints respond correctly
-- [ ] Environment-specific configs are correct (dev, staging, prod)
-- [ ] Database migrations run forward and backward cleanly
-- [ ] Rollback procedure tested
-- [ ] Monitoring and alerting configured
-- [ ] Log levels appropriate (no sensitive data in logs)
-- [ ] Error tracking integration working (Sentry, etc.)
-
-### 15. Data Integrity
+### 12. Data Integrity
 
 - [ ] Database schema matches ORM/model definitions
-- [ ] Foreign key constraints in place
 - [ ] Data validation at API boundary AND database level
-- [ ] Backup and restore procedure tested
-- [ ] Data migration scripts are idempotent
-- [ ] No data loss on deploy (zero-downtime deployment verified)
 - [ ] PII handling complies with GDPR/CCPA requirements
+- [ ] No sensitive data logged or serialized unsafely
+
+### 13. Infrastructure
+
+- [ ] All 20 modules load (`gatetest --list`)
+- [ ] Quick suite runs clean (`gatetest --suite quick`)
+- [ ] Website builds successfully (`cd website && npm run build`)
+- [ ] All 37+ tests pass (`node --test tests/*.test.js`)
+- [ ] CI config generates correctly (`gatetest --ci-init github`)
+
+### Before website commits (additional):
+- [ ] `cd website && npm run build` — Build succeeds
+- [ ] No TypeScript errors
+- [ ] No broken links in components
+- [ ] Craig has authorized major changes
+
+### Before push:
+- [ ] All of the above pass
+- [ ] Commit message is descriptive (what + why)
+- [ ] Branch is correct (check `git branch`)
+- [ ] No unnecessary files included
 
 ---
 
-## CONTINUOUS SCANNING PROTOCOL
+## GATE RULES — NON-NEGOTIABLE
 
-GateTest does not sleep. Even when no build is active, the following scans run
-continuously:
+1. **ZERO TOLERANCE**: Any error-severity check failure blocks the pipeline.
+   No "it's just a warning" — if it's an error, it blocks. Period.
 
-### Passive Monitoring (Always Active)
-- **Dependency Watch**: Monitor npm/pip/cargo advisories for new CVEs in project deps
-- **SSL Monitor**: Track certificate expiry dates, alert 30 days before
-- **Uptime Monitor**: Ping all endpoints every 60 seconds
-- **Error Rate Monitor**: Alert if error rate exceeds 0.1% over 5-minute window
-- **Performance Baseline**: Collect Core Web Vitals every hour, alert on regression
-- **Security Headers**: Verify security headers haven't been stripped or weakened
-- **DNS Monitor**: Watch for unauthorized DNS changes
-- **Domain Expiry**: Track domain registration expiry
+2. **NO MANUAL OVERRIDES**: No human can bypass the gate without Craig's authorization.
+   The checks pass or the build is rejected.
 
-### Active Scanning (Scheduled)
-- **Full Security Audit**: Weekly OWASP ZAP scan against staging
-- **Dependency Audit**: Daily npm audit / pip audit / cargo audit
-- **Broken Link Check**: Daily crawl for 404s and broken links
-- **Lighthouse Full Audit**: Daily performance/accessibility/SEO audit
-- **Visual Regression**: Screenshot comparison after every deploy
-- **Load Test**: Weekly baseline load test (normal traffic patterns)
-- **Penetration Test Patterns**: Monthly automated penetration testing
-- **Compliance Scan**: Monthly WCAG 2.2 AAA full audit
+3. **NO PARTIAL DEPLOYS**: Everything passes or nothing ships.
 
-### Competitive Intelligence Scanning
-- **Technology Watch**: Scan for new testing tools, frameworks, and methodologies
-- **CVE Database**: Monitor NVD, GitHub Security Advisories, Snyk DB
-- **Best Practices**: Track OWASP, W3C, Google Web Dev updates
-- **Browser Updates**: Monitor upcoming browser changes that affect compatibility
+4. **EVIDENCE REQUIRED**: Every gate pass produces a timestamped report.
+   Reports are permanent evidence.
+
+5. **REGRESSION = ROLLBACK**: If production detects regression within 15 minutes,
+   automatic rollback triggers.
+
+6. **SHIFT LEFT**: Catch issues as early as possible. `--diff` in pre-commit,
+   `--suite quick` in CI, `--suite full` before merge.
+
+7. **TEST THE TESTS**: Mutation testing validates tests actually catch bugs.
+   A passing test suite that doesn't catch mutations is a liability.
+
+8. **EVERYTHING IS VERSIONED**: Thresholds, baselines, configs — all in version control.
 
 ---
 
-## GATE RULES (NON-NEGOTIABLE)
+## WEBSITE RULES
 
-1. **ZERO TOLERANCE**: Any single check failure blocks the entire pipeline.
-   No "it's just a warning" — warnings are errors.
+The gatetest.io website is the face of the product. It must be PERFECT.
 
-2. **NO MANUAL OVERRIDES**: No human can bypass the gate. The checks either
-   pass or the build is rejected. Period.
+### Before making website changes:
+1. **Read `MARKETING.md`** — All copy, positioning, and pricing live there.
+2. **Major changes require Craig's authorization.** This includes:
+   - Changing pricing structure or tiers
+   - Changing the tagline or hero copy
+   - Adding or removing entire sections
+   - Changing the color scheme or brand identity
+   - Adding third-party scripts or tracking
+   - Changing the navigation structure
+3. **Minor changes do NOT require authorization:**
+   - Fixing typos
+   - Fixing broken links
+   - Performance optimizations
+   - Bug fixes (things that are clearly broken)
+   - Updating dependency versions
 
-3. **NO PARTIAL DEPLOYS**: Either everything passes and ships, or nothing ships.
-   No "deploy anyway, we'll fix it later."
-
-4. **EVIDENCE REQUIRED**: Every gate pass must produce a timestamped report
-   with full pass/fail details. Reports are stored permanently.
-
-5. **REGRESSION = ROLLBACK**: If production monitoring detects a regression
-   within 15 minutes of deploy, automatic rollback triggers.
-
-6. **SHIFT LEFT**: Catch issues as early as possible. IDE-level checks first,
-   pre-commit hooks second, CI third. Never defer a check to a later stage.
-
-7. **TEST THE TESTS**: Mutation testing validates that tests actually catch
-   bugs. Mutation score must be >= 80%.
-
-8. **EVERYTHING IS VERSIONED**: Test configurations, thresholds, baselines —
-   all version controlled. No magic numbers in CI configs.
-
----
-
-## HOOK ENFORCEMENT
-
-This CLAUDE.md file is loaded and enforced automatically via hooks:
-
-### Pre-Build Hook
-```
-Every build MUST:
-1. Parse this CLAUDE.md file
-2. Extract all checklist items
-3. Run the corresponding GateTest module for each item
-4. Generate a pass/fail report
-5. Block on any failure
-```
-
-### Pre-Commit Hook
-```
-Every commit MUST:
-1. Run syntax checks on changed files
-2. Run linting on changed files
-3. Run unit tests for affected modules
-4. Scan for secrets in staged files
-5. Verify no console.log/debugger statements
-6. Check code quality metrics on changed files
-```
-
-### Pre-Push Hook
-```
-Every push MUST:
-1. Run full test suite
-2. Run security scan
-3. Run performance budget check
-4. Verify all checklist items from this file
-5. Generate and attach quality report
-```
+### Website Technical Standards:
+- Next.js 16 + Tailwind CSS 4 (already configured, do not change)
+- All components are in `website/app/components/`
+- Dark theme with glow effects (see `globals.css`)
+- Must build clean: `cd website && npm run build`
+- No console errors in browser
+- Mobile responsive (all components must work 320px - 2560px)
+- All links must be real URLs (no `href="#"` or `javascript:void(0)`)
+- All images must have alt text
+- Lighthouse scores: Performance 95+, Accessibility 100, Best Practices 100, SEO 100
 
 ---
 
-## GATETEST ARCHITECTURE
+## COMPETITIVE INTELLIGENCE
 
-```
-+-------------------+
-|    Claude Code    |
-+--------+----------+
-         |
-         v
-+--------+----------+
-|     GateCode      |  <-- Authorization layer (tokens, auth, GitHub access)
-+--------+----------+
-         |
-         v
-+--------+----------+
-|     GateTest      |  <-- THIS SYSTEM (quality gate)
-|                   |
-|  +-------------+  |
-|  | Test Runner  |  |
-|  +------+------+  |
-|         |         |
-|  +------+------+  |
-|  |   Modules   |  |
-|  |             |  |
-|  | - Syntax    |  |
-|  | - Unit      |  |
-|  | - E2E       |  |
-|  | - Visual    |  |
-|  | - A11y      |  |
-|  | - Perf      |  |
-|  | - Security  |  |
-|  | - SEO       |  |
-|  | - Compat    |  |
-|  | - Quality   |  |
-|  | - Links     |  |
-|  | - Data      |  |
-|  +------+------+  |
-|         |         |
-|  +------+------+  |
-|  |  Reporter   |  |
-|  +------+------+  |
-|         |         |
-+--------+----------+
-         |
-         v
-+--------+----------+
-|      GitHub       |  <-- Only receives code that passed ALL gates
-+-------------------+
-```
+### We replace 10+ tools with ONE:
+
+| They use | We replace it with |
+|----------|-------------------|
+| Jest/Vitest/Mocha | `gatetest --module unitTests` |
+| Playwright/Cypress | `gatetest --module e2e` |
+| ESLint/Stylelint | `gatetest --module lint` |
+| Snyk/npm audit | `gatetest --module security` |
+| Lighthouse | `gatetest --module performance` |
+| axe/pa11y | `gatetest --module accessibility` |
+| Percy/Chromatic | `gatetest --module visual` |
+| SonarQube | `gatetest --module codeQuality` |
+| git-secrets/truffleHog | `gatetest --module secrets` |
+| broken-link-checker | `gatetest --module links` |
+
+Plus 10 more modules they don't even have: mutation testing, chaos testing,
+autonomous exploration, live crawling, data integrity, documentation validation,
+compatibility analysis, integration test detection, CI generation, SARIF output.
+
+### We are 80-90% ahead of ANY single competitor.
+
+When implementing features, ASK: "Does any competitor do this? If yes, do it BETTER.
+If no, do it FIRST."
 
 ---
 
-## QUALITY THRESHOLDS
+## DEVELOPMENT PRACTICES
 
-| Metric                        | Minimum  | Target   |
-|-------------------------------|----------|----------|
-| Unit Test Coverage            | 90%      | 100%     |
-| Integration Test Coverage     | 85%      | 95%      |
-| E2E Critical Path Coverage   | 100%     | 100%     |
-| Mutation Test Score           | 80%      | 90%      |
-| Lighthouse Performance        | 95       | 100      |
-| Lighthouse Accessibility      | 100      | 100      |
-| Lighthouse Best Practices     | 100      | 100      |
-| Lighthouse SEO                | 100      | 100      |
-| WCAG Compliance Level         | AAA      | AAA      |
-| Security Vulnerabilities      | 0 high   | 0 any    |
-| Broken Links                  | 0        | 0        |
-| Console Errors                | 0        | 0        |
-| TypeScript Strict Errors      | 0        | 0        |
-| ESLint Errors                 | 0        | 0        |
-| Bundle Size (JS gzipped)      | < 200KB  | < 150KB  |
-| Bundle Size (CSS gzipped)     | < 50KB   | < 30KB   |
-| API Response Time (p95)       | < 200ms  | < 100ms  |
-| FCP                           | < 1.0s   | < 0.5s   |
-| LCP                           | < 2.0s   | < 1.5s   |
-| CLS                           | < 0.05   | < 0.01   |
-| INP                           | < 200ms  | < 100ms  |
+### Architecture Principles
+- **Zero external dependencies** for the core CLI. Pure Node.js. Install and run
+  anywhere without `npm install`. External tools (Playwright, ESLint) are detected
+  and used if present, but never required.
+- **Module system**: Every check category is a self-contained module extending `BaseModule`.
+  Modules are registered in `src/core/registry.js`.
+- **Severity-aware**: All checks use `severity: 'error' | 'warning' | 'info'`.
+  Only errors block the gate. Warnings are reported. Info is informational.
+- **Reporter pattern**: Reporters attach to runner events. Adding a new report
+  format means creating one file in `src/reporters/`.
+- **Suite configuration**: Suites are defined in `src/core/config.js` under `suites`.
+  `quick`, `standard`, `full`, `live`, `nuclear` are built-in.
+
+### Code Standards
+- **No console.log in library code** — use the reporter system
+- **console.log is OK in CLI code** (bin/gatetest.js) and reporter code
+- **Every new module must be registered** in `src/core/registry.js`
+- **Every new module needs tests** in `tests/`
+- **Maximum function length: 50 lines** (extract helpers)
+- **Maximum file length: 300 lines** (split into modules)
+- **All error paths must be handled** — no silent catches
+- **Use severity levels** — not everything is a gate-blocking error
+
+### Testing Requirements
+- Run `node --test tests/*.test.js` before EVERY commit
+- All new features need test coverage
+- Tests must be deterministic — no flaky tests
+- Tests must be fast — the full suite should complete in < 5 seconds
+
+---
+
+## KEY FILES — READ BEFORE MODIFYING
+
+| File | What it controls | Read before... |
+|------|-----------------|---------------|
+| `MARKETING.md` | All marketing copy, pricing, positioning | Any website change |
+| `src/index.js` | All public exports, reporter wiring | Adding exports |
+| `src/core/runner.js` | Severity, auto-fix, diff-mode, gate decision | Changing how checks work |
+| `src/core/config.js` | Thresholds, suite definitions | Changing what modules run |
+| `src/core/registry.js` | Module registration | Adding new modules |
+| `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
+| `website/app/page.tsx` | How website sections are composed | Changing page structure |
+| `website/app/globals.css` | Dark theme, animations, glow effects | Changing visual style |
 
 ---
 
 ## FAILURE RESPONSE PROTOCOL
 
-When a gate check fails:
+When something breaks:
 
-1. **STOP** — Do not proceed with any further build steps
-2. **IDENTIFY** — Pinpoint the exact failing check and affected files
-3. **REPORT** — Generate a detailed failure report with:
-   - Which check failed
-   - Expected vs actual values
-   - File and line number where issue was found
-   - Suggested fix (auto-generated where possible)
-4. **FIX** — Apply the fix (auto-fix where safe, manual review where not)
-5. **RE-RUN** — Run the full gate suite again from the beginning
-6. **VERIFY** — Confirm the fix didn't introduce new failures
-7. **LOG** — Record the failure and fix in the quality ledger
+1. **STOP** — Do not proceed.
+2. **IDENTIFY** — What exactly failed? Which file? Which line?
+3. **REPORT** — State the failure clearly before attempting to fix.
+4. **FIX** — Apply the smallest fix that resolves the issue.
+5. **VERIFY** — Run `node --test tests/*.test.js` and confirm ALL tests pass.
+6. **ENSURE NO REGRESSIONS** — The fix must not break anything else.
 
----
-
-## AGGRESSIVE QUALITY MANDATE
-
-GateTest exists to be the best QA product on the market. Not second best. THE best.
-These principles are non-negotiable:
-
-### Zero Tolerance for "It Looks Fine"
-- If a button doesn't work, GateTest MUST catch it. No exceptions.
-- If a link goes nowhere, GateTest MUST flag it. No exceptions.
-- If a page renders blank after JavaScript execution, GateTest MUST report it.
-- "Claude says it's fixed" is not evidence. GateTest verifies in a real browser.
-
-### Every Interactive Element Gets Tested
-- Every button is clicked. If nothing happens, it's flagged as **DEAD**.
-- Every link is followed. If it 404s, it's flagged as **BROKEN**.
-- Every form is filled and submitted. If it errors, it's flagged.
-- Every image is verified rendered. If naturalWidth is 0, it's flagged.
-- This applies to EVERY page, not just the homepage.
-
-### JavaScript Execution is Mandatory
-- Static HTML parsing is not enough for modern sites (React, Next.js, Vue, etc.).
-- The live crawler MUST execute JavaScript via Playwright when available.
-- Console errors, uncaught exceptions, and hydration failures MUST be captured.
-- If Playwright is not installed, warn loudly that coverage is degraded.
-
-### Template Files Are Not Exempt
-- Links in JSX, TSX, Vue, Svelte, and Markdown files MUST be scanned.
-- Dead href patterns (href="#", javascript:void(0)) MUST be flagged everywhere.
-- "It's just a template" is not an excuse. Templates become real pages.
-
-### Continuous Improvement
-- After every project scan, review what was missed and add detection for it.
-- If a user finds a bug that GateTest didn't catch, that's a GateTest bug. Fix it.
-- Stay current: scan for new testing tools, techniques, and standards regularly.
-- No feature is "done" until it catches real bugs in real projects.
+When you encounter a test failure after your changes:
+- **DO NOT delete the test.** Fix your code to make the test pass.
+- **DO NOT weaken the assertion.** Fix the behavior to meet the expectation.
+- **DO NOT skip the test.** If a test exists, it exists for a reason.
 
 ---
 
 ## VERSION
 
-GateTest v1.1.0
-Last updated: 2026-04-05
+GateTest v1.1.0 — 20 modules, 5 reporters, auto-fix, diff-mode, watch mode,
+mutation testing, CI generation, caching, SARIF/JUnit output.
+
+Last updated: 2026-04-08
+
+**=== CLAUDE.MD LOADED. ALL RULES ABOVE ARE MANDATORY. DOMINATE. ===**
