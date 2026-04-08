@@ -7,40 +7,65 @@ export default function Cta() {
         <h2 className="text-3xl sm:text-5xl font-bold mb-6">
           Stop shipping <span className="text-danger">broken code</span>.
         </h2>
-        <p className="text-lg text-muted mb-10 max-w-xl mx-auto">
-          Install GateTest in 30 seconds. Run your first gate check in 60.
-          All 16 modules. Free forever.
+        <p className="text-lg text-muted mb-4 max-w-xl mx-auto">
+          Point us at your repo. We scan 20 modules, find every issue, and fix what we can.
+          You only pay when the scan delivers.
+        </p>
+        <p className="text-sm text-success mb-10">
+          Card hold only &mdash; released if scan cannot complete. Zero risk.
         </p>
 
-        {/* Install command */}
-        <div className="terminal max-w-xl mx-auto mb-10">
-          <div className="terminal-header">
-            <div className="terminal-dot bg-[#ff5f57]" />
-            <div className="terminal-dot bg-[#febc2e]" />
-            <div className="terminal-dot bg-[#28c840]" />
+        {/* Two paths */}
+        <div className="grid sm:grid-cols-2 gap-5 max-w-2xl mx-auto mb-10">
+          {/* Paid scan */}
+          <div className="terminal">
+            <div className="terminal-header">
+              <div className="terminal-dot bg-[#ff5f57]" />
+              <div className="terminal-dot bg-[#febc2e]" />
+              <div className="terminal-dot bg-[#28c840]" />
+              <span className="ml-3 text-xs text-muted">We scan it for you</span>
+            </div>
+            <div className="p-5 text-left">
+              <p className="text-sm font-bold text-foreground mb-2">Scan + Fix &mdash; $199</p>
+              <p className="text-xs text-muted mb-3">
+                20 modules. Full report. Auto-fix PR lands in your repo.
+              </p>
+              <a
+                href="#pricing"
+                className="block text-center py-3 px-5 rounded-lg font-semibold text-sm bg-accent hover:bg-accent-light text-white transition-colors"
+              >
+                Scan My Repo
+              </a>
+            </div>
           </div>
-          <div className="p-5 font-[var(--font-mono)] text-sm text-left">
-            <p className="text-muted">
-              <span className="text-accent-light">$</span> npm install -g gatetest
-            </p>
-            <p className="text-muted">
-              <span className="text-accent-light">$</span> gatetest --init
-            </p>
-            <p className="text-muted">
-              <span className="text-accent-light">$</span> gatetest --suite full
-            </p>
-            <p className="text-success mt-3 font-bold">GATE: PASSED</p>
+
+          {/* Free CLI */}
+          <div className="terminal">
+            <div className="terminal-header">
+              <div className="terminal-dot bg-[#ff5f57]" />
+              <div className="terminal-dot bg-[#febc2e]" />
+              <div className="terminal-dot bg-[#28c840]" />
+              <span className="ml-3 text-xs text-muted">Run it yourself</span>
+            </div>
+            <div className="p-5 font-[var(--font-mono)] text-sm text-left">
+              <p className="text-muted">
+                <span className="text-accent-light">$</span> npm install -g gatetest
+              </p>
+              <p className="text-muted">
+                <span className="text-accent-light">$</span> gatetest --suite full --fix
+              </p>
+              <p className="text-success mt-3 font-bold">GATE: PASSED</p>
+              <p className="text-xs text-muted mt-2">Free forever. All 20 modules.</p>
+            </div>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <a
-            href="https://www.npmjs.com/package/gatetest"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#pricing"
             className="px-8 py-4 text-base font-semibold rounded-xl bg-accent hover:bg-accent-light text-white transition-all pulse-glow"
           >
-            Get Started Free
+            See All Pricing
           </a>
           <a
             href="https://github.com/ccantynz-alt/GateTest"
