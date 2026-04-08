@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
       "20 test modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
-    url: "https://gatecode.sh",
+    url: "https://gatetest.io",
     siteName: "GateTest",
     type: "website",
   },
