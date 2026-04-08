@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
-    "The advanced QA gate between AI and GitHub. 16 test modules. One gate. Nothing ships unless it's pristine. Replace 10 testing tools with one unified quality system.",
+    "20 test modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay only when the scan completes.",
   keywords: [
     "QA",
     "testing",
@@ -16,12 +16,14 @@ export const metadata: Metadata = {
     "visual regression",
     "CI/CD",
     "code quality",
+    "mutation testing",
+    "auto-fix",
   ],
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "The advanced QA gate between AI and GitHub. 16 test modules. One gate. Nothing ships unless it's pristine.",
-    url: "https://gatetest.io",
+      "20 test modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
+    url: "https://gatecode.sh",
     siteName: "GateTest",
     type: "website",
   },
@@ -29,7 +31,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "The advanced QA gate between AI and GitHub. 16 test modules. One gate. Nothing ships unless it's pristine.",
+      "20 test modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
   },
 };
 
