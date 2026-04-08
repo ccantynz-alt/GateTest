@@ -70,6 +70,7 @@ const DEFAULT_CONFIG = {
       'compatibility',
       'dataIntegrity',
       'documentation',
+      'mutation',
     ],
     live: [
       'liveCrawler',
@@ -96,6 +97,7 @@ const DEFAULT_CONFIG = {
       'liveCrawler',
       'explorer',
       'chaos',
+      'mutation',
     ],
   },
 

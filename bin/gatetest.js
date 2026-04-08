@@ -35,6 +35,12 @@ const HELP = `
     --init             Initialize GateTest in the current project
     --parallel         Run modules in parallel
     --stop-first       Stop on first module failure
+    --fix              Auto-fix safe issues (formatting, imports, etc.)
+    --diff             Only scan git-changed files (fast pre-commit mode)
+    --watch            Watch for file changes and re-scan continuously
+    --sarif            Output results in SARIF format (for GitHub Security)
+    --junit            Output results in JUnit XML format (for CI)
+    --ci-init <type>   Generate CI config: github, gitlab, circleci
     --project <path>   Set project root (default: cwd)
     --help, -h         Show this help message
     --version, -v      Show version
@@ -105,12 +111,31 @@ async function main() {
     return;
   }
 
+  // CI config generation
+  if (args.ciInit) {
+    const { CiGenerator } = require('../src/core/ci-generator');
+    const gen = new CiGenerator(projectRoot);
+    const outPath = gen.generate(args.ciInit);
+    console.log(`\n[GateTest] CI config generated: ${outPath}\n`);
+    return;
+  }
+
   const gatetest = new GateTest(projectRoot, {
     parallel: args.parallel || false,
     stopOnFirstFailure: args['stop-first'] || false,
+    autoFix: args.fix || false,
+    diffOnly: args.diff || false,
+    sarif: args.sarif || false,
+    junit: args.junit || false,
   });
 
   gatetest.init();
+
+  // Watch mode
+  if (args.watch) {
+    await runWatchMode(gatetest, args);
+    return;
+  }
 
   if (args.validate) {
     const validation = gatetest.validateClaudeMd();
@@ -186,6 +211,12 @@ function parseArgs(argv) {
     else if (arg === '--init-claude-md') args.initClaudeMd = true;
     else if (arg === '--parallel') args.parallel = true;
     else if (arg === '--stop-first') args['stop-first'] = true;
+    else if (arg === '--fix') args.fix = true;
+    else if (arg === '--diff') args.diff = true;
+    else if (arg === '--watch') args.watch = true;
+    else if (arg === '--sarif') args.sarif = true;
+    else if (arg === '--junit') args.junit = true;
+    else if (arg === '--ci-init' && argv[i + 1]) args.ciInit = argv[++i];
     else if (arg === '--suite' && argv[i + 1]) args.suite = argv[++i];
     else if (arg === '--module' && argv[i + 1]) args.module = argv[++i];
     else if (arg === '--project' && argv[i + 1]) args.project = argv[++i];
@@ -325,6 +356,70 @@ function showCrawlFeedback(projectRoot) {
     process.exit(1);
   }
   console.log('\n' + fs.readFileSync(feedbackPath, 'utf-8'));
+}
+
+/**
+ * Watch mode — monitors file changes and re-runs GateTest continuously.
+ * Uses fs.watch for near-instant feedback during development.
+ */
+async function runWatchMode(gatetest, args) {
+  const watchDirs = ['src', 'lib', 'app', 'pages', 'components', 'website', 'tests', 'test'];
+  const projectRoot = gatetest.projectRoot;
+  const debounceMs = 500;
+  let timer = null;
+  let running = false;
+  let round = 0;
+
+  const runScan = async () => {
+    if (running) return;
+    running = true;
+    round++;
+
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`[GateTest] WATCH MODE — Scan #${round}`);
+    console.log(`[GateTest] ${new Date().toLocaleTimeString()}`);
+    console.log(`${'='.repeat(50)}\n`);
+
+    try {
+      if (args.module) {
+        await gatetest.runModule(args.module);
+      } else {
+        await gatetest.runSuite(args.suite || 'quick');
+      }
+    } catch (err) {
+      console.error(`[GateTest] Error: ${err.message}`);
+    }
+
+    running = false;
+    console.log(`\n${'-'.repeat(50)}`);
+    console.log(`[GateTest] Watching for changes... (Ctrl+C to exit)`);
+  };
+
+  // Initial scan
+  await runScan();
+
+  // Watch directories
+  for (const dir of watchDirs) {
+    const fullPath = path.join(projectRoot, dir);
+    if (!fs.existsSync(fullPath)) continue;
+
+    try {
+      fs.watch(fullPath, { recursive: true }, (eventType, filename) => {
+        if (!filename) return;
+        // Ignore generated files
+        if (filename.includes('.gatetest') || filename.includes('node_modules')) return;
+        if (filename.endsWith('.map') || filename.endsWith('.d.ts')) return;
+
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(runScan, debounceMs);
+      });
+    } catch {
+      // fs.watch may not support recursive on all platforms
+    }
+  }
+
+  // Keep process alive
+  await new Promise(() => {});
 }
 
 main().catch(err => {

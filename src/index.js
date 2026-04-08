@@ -6,12 +6,15 @@
  */
 
 const { GateTestConfig } = require('./core/config');
-const { GateTestRunner, TestResult } = require('./core/runner');
+const { GateTestRunner, TestResult, Severity } = require('./core/runner');
 const { ModuleRegistry } = require('./core/registry');
 const { ClaudeMdParser } = require('./core/claude-md-parser');
 const { ConsoleReporter } = require('./reporters/console-reporter');
 const { JsonReporter } = require('./reporters/json-reporter');
 const { HtmlReporter } = require('./reporters/html-reporter');
+const { SarifReporter } = require('./reporters/sarif-reporter');
+const { JunitReporter } = require('./reporters/junit-reporter');
+const { GateTestCache } = require('./core/cache');
 
 class GateTest {
   constructor(projectRoot, options = {}) {
@@ -86,6 +89,8 @@ class GateTest {
     new ConsoleReporter(runner);
     new JsonReporter(runner, this.config);
     new HtmlReporter(runner, this.config);
+    if (this.options.sarif) new SarifReporter(runner, this.config);
+    if (this.options.junit) new JunitReporter(runner, this.config);
 
     // Run and return summary
     const summary = await runner.run(moduleNames);
@@ -104,9 +109,13 @@ module.exports = {
   GateTestConfig,
   GateTestRunner,
   TestResult,
+  Severity,
   ModuleRegistry,
   ClaudeMdParser,
+  GateTestCache,
   ConsoleReporter,
   JsonReporter,
   HtmlReporter,
+  SarifReporter,
+  JunitReporter,
 };
