@@ -100,6 +100,42 @@ async function main() {
     return;
   }
 
+  // Health check — verify GitHub API access before starting scans
+  if (args.health) {
+    const { GitHubBridge } = require('../src/core/github-bridge');
+    const bridge = new GitHubBridge({ projectRoot });
+    console.log('\n[GateTest] GitHub API Health Check\n');
+
+    const health = await bridge.healthCheck();
+    if (health.available) {
+      console.log(`  Status:     CONNECTED`);
+      console.log(`  Latency:    ${health.latencyMs}ms`);
+      console.log(`  Rate Limit: ${health.rateLimit.remaining}/${health.rateLimit.limit} remaining`);
+      if (health.rateLimit.resetsAt) {
+        console.log(`  Resets At:  ${health.rateLimit.resetsAt}`);
+      }
+    } else {
+      console.log(`  Status:     UNREACHABLE`);
+      console.log(`  Error:      ${health.error || `HTTP ${health.statusCode}`}`);
+    }
+
+    console.log(`  Circuit:    ${health.circuitBreaker.status} (${health.circuitBreaker.failures} failures)`);
+
+    const status = bridge.getAccessStatus();
+    console.log(`  Retry:      ${status.retryConfig.maxRetries} retries, ${status.retryConfig.baseDelayMs}ms base delay\n`);
+
+    // Try auth verification
+    try {
+      const auth = await bridge.verifyAuth();
+      console.log(`  Auth:       ${auth.type} — ${auth.login || auth.name}`);
+    } catch (err) {
+      console.log(`  Auth:       ${err.message}`);
+    }
+
+    console.log('');
+    process.exit(health.available ? 0 : 1);
+  }
+
   if (args.initClaudeMd) {
     const { ClaudeMdGenerator } = require('../src/core/claude-md-generator');
     const siteUrl = args.crawl || args.crawlLoop || null;
@@ -209,6 +245,7 @@ function parseArgs(argv) {
     else if (arg === '--report') args.report = true;
     else if (arg === '--init') args.init = true;
     else if (arg === '--init-claude-md') args.initClaudeMd = true;
+    else if (arg === '--health') args.health = true;
     else if (arg === '--parallel') args.parallel = true;
     else if (arg === '--stop-first') args['stop-first'] = true;
     else if (arg === '--fix') args.fix = true;
