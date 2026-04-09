@@ -1,392 +1,331 @@
-# GateTest - The Bible
+# GATETEST — THE BIBLE
 
-## THIS FILE IS LAW. READ EVERY WORD BEFORE TOUCHING ANYTHING.
-
-**GateTest is the #1 QA system on the internet.** Not #2. Not "competitive." #1.
-Every session, every build, every decision serves one purpose: TOTAL MARKET DOMINATION.
-
-The boss is **Craig**. Major website changes require his authorization. If you're
-unsure whether something is "major" — ask Craig. Do not guess. Do not assume.
+> **This document is the single source of truth for GateTest.**
+> **Read it FIRST. Reference it ALWAYS. Violate it NEVER.**
 
 ---
 
-## MANDATORY SESSION STARTUP — NO EXCEPTIONS
+## THE PRIME DIRECTIVE
 
-Before writing a SINGLE line of code, execute these steps IN ORDER:
+**GateTest kills SonarQube. GateTest kills Snyk. GateTest kills every fragmented QA tool.**
 
-1. **READ this entire CLAUDE.md.** Not skim. READ. Every word is here for a reason.
-2. **`git status && git log --oneline -10`** — Understand where the last session ended.
-3. **`git branch`** — Verify you're on the correct branch.
-4. **DO NOT start from scratch.** This project has 20 modules, 37+ tests, 5 reporters,
-   a full website, CI generators, caching, mutation testing, and more. Build on what exists.
-5. **DO NOT create new files** unless there is no existing file that can be edited.
-6. **DO NOT reorganize, rename, or "improve" architecture** unless Craig explicitly asks.
-7. **DO NOT remove features** unless Craig explicitly asks.
+Code quality has never been unified. Teams duct-tape 10+ tools together — different configs, different dashboards, different billing. We are the unification. There is no second place. We dominate or we die. Every line of code, every component, every decision, every commit must serve this mission.
+
+**The standard:** 80-90% ahead of every competitor at all times. Not 10%. Not 30%. Eighty to ninety percent.
+
+If a competitor closes the gap, we accelerate. If new technology threatens our lead, we absorb it. We are not in a race — we are lapping the field.
 
 ---
 
-## PROJECT ARCHITECTURE (BUILT — DO NOT RECREATE)
+## THE BIBLE RULE
 
-```
-GateTest/
-├── CLAUDE.md               ← THIS FILE — THE BIBLE
-├── MARKETING.md            ← Positioning, pricing, website copy (read before website work)
-├── package.json            ← CLI tool config (name: gatetest, bin: gatetest)
-├── bin/gatetest.js         ← CLI entry point (20+ flags, watch mode, crawl loop)
-├── src/
-│   ├── index.js            ← Main library entry (exports everything)
-│   ├── core/
-│   │   ├── config.js       ← Config + thresholds + suite definitions
-│   │   ├── runner.js       ← Test runner (severity levels, auto-fix, diff-mode, parallel)
-│   │   ├── registry.js     ← Module discovery + registration
-│   │   ├── cache.js        ← SHA-256 file hashing, skip unchanged files
-│   │   ├── ci-generator.js ← GitHub Actions, GitLab CI, CircleCI generation
-│   │   ├── claude-md-parser.js    ← Parses CLAUDE.md checklists
-│   │   ├── claude-md-generator.js ← Generates CLAUDE.md for target projects
-│   │   └── github-bridge.js      ← GitHub API integration
-│   ├── modules/            ← 20 TEST MODULES (the core product)
-│   │   ├── base-module.js         ← Abstract base class
-│   │   ├── syntax.js              ← JS/TS/JSON/YAML/CSS/HTML syntax validation
-│   │   ├── lint.js                ← ESLint, Stylelint, Markdownlint
-│   │   ├── secrets.js             ← API keys, tokens, passwords, private keys
-│   │   ├── code-quality.js        ← console.log, debugger, TODO, eval, complexity
-│   │   ├── unit-tests.js          ← Auto-detects test framework + coverage
-│   │   ├── integration-tests.js   ← API endpoints, DB ops, service detection
-│   │   ├── e2e.js                 ← Playwright/Cypress/Puppeteer execution
-│   │   ├── visual.js              ← Visual regression, layout shifts
-│   │   ├── accessibility.js       ← WCAG 2.2 AAA — 542 lines of checks
-│   │   ├── performance.js         ← Bundle budgets, Core Web Vitals, Lighthouse
-│   │   ├── security.js            ← OWASP, CVE deps, CSP, XSS/SQLi patterns
-│   │   ├── seo.js                 ← Meta tags, OG, structured data, sitemaps
-│   │   ├── links.js               ← Broken link detection (internal + external)
-│   │   ├── compatibility.js       ← Browser matrix, CSS/JS API compat, polyfills
-│   │   ├── data-integrity.js      ← Migrations, ORM, PII, SQL injection
-│   │   ├── documentation.js       ← README, CHANGELOG, JSDoc, license, dead links
-│   │   ├── live-crawler.js        ← Live site crawl with Playwright — 600 lines
-│   │   ├── explorer.js            ← Autonomous interactive element testing — 592 lines
-│   │   ├── chaos.js               ← Chaos & resilience testing
-│   │   └── mutation.js            ← Mutation testing — tests the tests themselves
-│   ├── reporters/
-│   │   ├── console-reporter.js    ← Rich terminal output (color, severity, auto-fix)
-│   │   ├── json-reporter.js       ← JSON report output
-│   │   ├── html-reporter.js       ← Full HTML dashboard report
-│   │   ├── sarif-reporter.js      ← SARIF 2.1.0 (GitHub Security tab)
-│   │   └── junit-reporter.js      ← JUnit XML (CI pipeline integration)
-│   ├── scanners/
-│   │   └── continuous-scanner.js  ← Background scanning daemon
-│   └── hooks/
-│       ├── pre-commit.js          ← Pre-commit quality gate
-│       └── pre-push.js           ← Pre-push full validation
-├── tests/                  ← Unit tests (37+ tests, MUST ALL PASS)
-│   ├── runner.test.js      ← Core runner tests (severity, auto-fix, diff, parallel)
-│   ├── parser.test.js      ← CLAUDE.md parser tests
-│   ├── cache.test.js       ← Cache system tests
-│   └── reporters.test.js   ← SARIF + JUnit reporter tests
-└── website/                ← gatetest.io marketing site (Next.js 16 + Tailwind 4)
-    └── app/
-        ├── page.tsx                ← Main page (assembles all sections)
-        ├── layout.tsx              ← Root layout with metadata
-        ├── globals.css             ← Dark theme, animations, glow effects
-        ├── api/webhook/route.ts    ← GitHub App webhook handler
-        └── components/             ← 13 React components
-            ├── Navbar.tsx          ├── Hero.tsx
-            ├── Problem.tsx         ├── Modules.tsx
-            ├── HowItWorks.tsx      ├── AiNative.tsx
-            ├── ContinuousScanning.tsx ├── GateRules.tsx
-            ├── Comparison.tsx      ├── Integrations.tsx
-            ├── Pricing.tsx         ├── Cta.tsx
-            └── Footer.tsx
-```
+**Before ANY new build, ANY refactor, ANY significant change — READ THIS FILE FIRST.**
+
+This file is read at the start of every session. It is referenced before every architectural decision. It is updated at the end of every session. No work happens outside the framework defined here.
+
+**No scatter-gun. No drift. No "just this once." No chicken scratchings.** Every action ties back to this document.
 
 ---
 
-## WHAT GATETEST IS
+## THE BOSS RULE — CRAIG MUST AUTHORIZE
 
-GateTest is the most advanced QA testing system on the internet. Period.
+The following actions require **explicit authorization from Craig BEFORE execution**:
 
-- **20 test modules** covering every aspect of software quality
-- **5 report formats**: Console, JSON, HTML, SARIF (GitHub Security), JUnit XML (CI)
-- **Severity levels**: error (blocks gate), warning (reports), info (informational)
-- **Auto-fix engine**: Modules can automatically repair safe issues
-- **Diff-based scanning**: `--diff` only checks git-changed files (instant pre-commit)
-- **Watch mode**: `--watch` monitors file changes, re-scans continuously
-- **Mutation testing**: Tests the tests themselves — finds gaps in test coverage
-- **CI/CD generation**: `--ci-init github|gitlab|circleci` bootstraps pipelines
-- **File caching**: SHA-256 hashing skips unchanged files
-- **Live site crawler**: Playwright-powered full-site crawl and verification
-- **Chaos testing**: Resilience and failure mode testing
-- **CLAUDE.md enforcement**: Parses AND generates quality checklists automatically
+1. **Major architectural changes** — swapping frameworks, changing core stack
+2. **New dependencies not already approved** — we don't add bloat
+3. **Pricing changes** — any modification to plans, tiers, or billing logic
+4. **Domain or DNS changes** — anything touching gatetest.io
+5. **Production deployments** — first-time deploy and any rollback
+6. **Stripe configuration** — webhook URLs, price IDs, plan structures
+7. **External API integrations** — adding new third-party services
+8. **Brand/marketing changes** — copy on landing page, logos, taglines
+9. **Anything that touches money, users' data, or public-facing communication**
 
-### CLI Reference
+**The rule:** When in doubt, ask Craig. Cost of asking = 30 seconds. Cost of acting wrong = days of damage.
 
+**The exception:** Craig has pre-authorized continuous building of features within the existing build plan and stack. Routine code, bug fixes, refactors within the approved architecture, and committing/pushing to main do NOT require additional authorization.
+
+---
+
+## THE MISSION
+
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 21 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+
+**The customer sees:** Their repo scanned by 21 modules in real time. Issues found. Issues fixed. Delivered.
+**The competition sees:** A force they cannot match without rebuilding from scratch.
+**Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
+
+---
+
+## THE AGGRESSIVE STACK
+
+Every tool here was chosen because it is the **best in its class right now.** If something better emerges, we replace it without sentiment.
+
+### Core Engine
+| Layer | Choice | Why |
+|---|---|---|
+| **Runtime** | Node.js 20+ | Zero dependencies, runs anywhere |
+| **Language** | JavaScript (core) + TypeScript (website) | Fast iteration, universal |
+| **Architecture** | Module system extending BaseModule | Every check is a self-contained module |
+| **Runner** | EventEmitter-based with severity levels | error/warning/info, parallel execution, auto-fix |
+| **Reporters** | 5 formats (Console, JSON, HTML, SARIF, JUnit) | Covers every CI/CD system |
+
+### Website & Frontend
+| Layer | Choice | Why |
+|---|---|---|
+| **Framework** | Next.js 16 (App Router) | Latest, fastest, Vercel-native |
+| **Styling** | Tailwind CSS 4 | Utility-first, dark theme, zero unused CSS |
+| **Hosting** | Vercel | Auto-deploy from main, serverless |
+| **Domain** | gatetest.io | Secured |
+
+### Payments
+| Layer | Choice | Why |
+|---|---|---|
+| **Billing** | Stripe | Hold-then-charge via Payment Intents with manual capture |
+| **Model** | Pay on completion | Customer only charged after scan delivers |
+
+### AI Layer
+| Layer | Choice | Why |
+|---|---|---|
+| **AI Code Review** | Claude API (Anthropic) | Best reasoning, finds real bugs not patterns |
+| **Model** | claude-sonnet-4-20250514 | Fast, accurate, cost-effective |
+
+### GitHub Integration
+| Layer | Choice | Why |
+|---|---|---|
+| **GitHub App** | GateTestHQ | Auto-scan on push/PR, commit statuses, PR comments |
+| **Auth** | JWT (RS256) from .pem private key | Standard GitHub App auth |
+| **Access** | Resilient bridge with retry, circuit breaker, multi-strategy | Never fails on 503 |
+
+---
+
+## THE AGGRESSIVE ARCHITECTURE
+
+### Scan Flow (Direct — No Webhooks)
 ```
-gatetest                          Run standard checks
-gatetest --suite full             Run every single check (20 modules)
-gatetest --suite quick            Fast pre-commit checks
-gatetest --module security        Security scan only
-gatetest --module mutation        Mutation testing only
-gatetest --diff                   Only scan git-changed files
-gatetest --fix                    Auto-fix safe issues
-gatetest --watch                  Watch mode — re-scan on file changes
-gatetest --sarif                  Output SARIF for GitHub Security
-gatetest --junit                  Output JUnit XML for CI
-gatetest --ci-init github         Generate GitHub Actions workflow
-gatetest --crawl <url>            Crawl live site
-gatetest --crawl-loop <url>       Continuous test-fix loop
-gatetest --parallel               Run modules in parallel
-gatetest --stop-first             Stop on first module failure
+Customer pays → Redirect to /scan/status → Page calls /api/scan/run →
+Scan reads repo via GitHub API → Runs all module checks → Returns result →
+Updates Stripe metadata → Captures payment → Customer sees results
+```
+**ONE call. ONE response. No polling. No webhooks. No shared state.**
+
+### GitHub App Flow
+```
+Developer pushes code → GitHub sends webhook → /api/webhook receives →
+JWT auth → Read repo via API → Run checks → Post commit status + PR comment
 ```
 
----
+### Module Architecture
+```
+BaseModule (abstract)
+  └── Every module extends this
+  └── run(result, config) → adds checks with severity
+  └── Registered in src/core/registry.js
+  └── Added to suites in src/core/config.js
+```
 
-## AGGRESSIVE QUALITY MANDATE
-
-### This is war. We are not building a "nice" tool. We are building THE tool.
-
-Every feature must be the best implementation available. Every check must be
-deeper than the competition. Every report must be more actionable. Every module
-must catch real bugs that real users have.
-
-**If a competitor does something we don't, that's a GateTest bug. Fix it.**
-
-### Zero Tolerance Philosophy
-
-- **Warnings ARE errors.** Everything not explicitly `severity: 'info'` or
-  `severity: 'warning'` blocks the pipeline.
-- **"It looks fine" is not evidence.** GateTest verifies in real code, real browsers,
-  real parsers. Visual inspection is not testing.
-- **"I'll fix it later" is not allowed.** Either it passes NOW or it doesn't ship.
-- **"Claude says it's fixed" is not verification.** Run GateTest. Show the PASS.
-
-### The Standard We Hold Ourselves To
-
-| Metric | Minimum | Target |
-|--------|---------|--------|
-| Unit Test Coverage | 90% | 100% |
-| Integration Test Coverage | 85% | 95% |
-| Mutation Test Score | 80% | 90% |
-| Lighthouse Performance | 95 | 100 |
-| Lighthouse Accessibility | 100 | 100 |
-| Security Vulnerabilities | 0 high | 0 any |
-| Broken Links | 0 | 0 |
-| Bundle Size JS gzipped | < 200KB | < 150KB |
-| FCP | < 1.0s | < 0.5s |
-| LCP | < 2.0s | < 1.5s |
-| CLS | < 0.05 | < 0.01 |
+### Serverless Rules (Vercel)
+- **NO in-memory state between requests** — every function is stateless
+- **NO long-running async after response** — Vercel kills the function
+- **NO shared memory between function instances** — use external storage
+- **ALL scan work completes WITHIN the function response**
+- **Stripe metadata is the persistence layer** for scan results
 
 ---
 
-## PRE-BUILD CHECKLIST — ALL MUST PASS
+## THE QUALITY BAR — ZERO TOLERANCE
 
-### 1. Syntax & Compilation
+### 1. Tests & Build
 
-- [ ] Zero syntax errors across all source files
-- [ ] Zero TypeScript / type-checking errors (strict mode)
-- [ ] Zero linting errors (ESLint, Stylelint, Markdownlint)
-- [ ] Zero import/require resolution failures
-- [ ] All JSON, YAML, TOML, and config files parse without error
-- [ ] No dangling commas, unclosed brackets, or malformed expressions
-- [ ] All template literals and string interpolations resolve correctly
+- [ ] All 51+ tests pass (`node --test tests/*.test.js`)
+- [ ] Website builds clean (`cd website && npx next build`)
+- [ ] All 21 modules load (`node bin/gatetest.js --list`)
+- [ ] Zero TypeScript errors in website
+- [ ] Zero syntax errors in source files
 
-### 2. Unit Tests
+### 2. Code Quality
 
-- [ ] 100% of existing unit tests pass (37+ tests)
-- [ ] Every new function has at least one unit test
-- [ ] Every new branch/conditional has a test case
-- [ ] Edge cases tested: null, undefined, empty string, zero, negative, overflow
-- [ ] Error paths tested: every catch block, every error handler
-- [ ] Mock/stub cleanup verified — no test pollution across suites
-- [ ] Test isolation confirmed — tests pass in any order
+- [ ] No console.log in library code
+- [ ] No debugger statements
+- [ ] No eval() in production code
+- [ ] No TODO/FIXME left unresolved
+- [ ] Function length under 50 lines
+- [ ] File length under 300 lines
+- [ ] All error paths handled
 
-### 3. Code Quality
+### 3. Security
 
-- [ ] No console.log, console.debug, or debugger statements in library code
-- [ ] No unused variables, imports, or functions
-- [ ] No TODO, FIXME, HACK, or XXX comments left unresolved
-- [ ] No eval() or Function() constructor usage in production code
-- [ ] No innerHTML with unsanitized content
-- [ ] Function length < 50 lines (extract if longer)
-- [ ] File length < 300 lines (split if longer)
-- [ ] Cyclomatic complexity < 10 per function
-- [ ] All promises have rejection handlers
-- [ ] No race conditions in async code
-- [ ] No circular dependencies
+- [ ] No hardcoded secrets, API keys, or tokens
+- [ ] No secrets in git history
+- [ ] All user input validated
+- [ ] All database queries parameterised
+- [ ] No eval() or innerHTML with unsanitised content
 
-### 4. Security
+### 4. Website & UX
 
-- [ ] No hardcoded secrets, API keys, tokens, or passwords in source
-- [ ] No secrets in git history (git-secrets scan clean)
-- [ ] All dependencies scanned for CVEs (npm audit clean)
-- [ ] No critical or high severity vulnerabilities in dependency tree
-- [ ] All user input sanitized before rendering (XSS prevention)
-- [ ] All database queries parameterized (SQL injection prevention)
-- [ ] No eval() or Function() constructor usage
-- [ ] No open redirects
-- [ ] CORS configured to minimum required origins
+- [ ] All links verified — no dead anchors or placeholder hrefs
+- [ ] All buttons functional — every onClick does something
+- [ ] All user flows tested end-to-end (click through, not just compile)
+- [ ] Scan page handles every state: pending, scanning, complete, failed
+- [ ] Mobile responsive — 320px to 2560px
+- [ ] Lighthouse Performance 95+, Accessibility 100, SEO 100
 
-### 5. Performance
+### 5. Stripe & Payments
 
-- [ ] Lighthouse Performance score >= 95
-- [ ] Lighthouse Accessibility score >= 100
-- [ ] Lighthouse Best Practices score >= 100
-- [ ] Lighthouse SEO score >= 100
-- [ ] Bundle size within budget (JS < 200KB gzipped, CSS < 50KB gzipped)
-- [ ] No render-blocking resources
-- [ ] Images optimized (WebP/AVIF with fallbacks)
-- [ ] Lazy loading on below-fold images and components
-- [ ] No memory leaks
+- [ ] Test keys used for testing (never live keys)
+- [ ] Hold-then-charge working (manual capture)
+- [ ] Session metadata includes repo_url and tier
+- [ ] Scan completes and captures payment
+- [ ] Failed scans cancel payment (release hold)
 
-### 6. Accessibility (WCAG 2.2 AAA)
+### 6. Serverless Architecture
 
-- [ ] All images have meaningful alt text
-- [ ] Color contrast ratio meets AAA (7:1 normal text, 4.5:1 large text)
+- [ ] NO in-memory state between requests
+- [ ] NO long-running async after response
+- [ ] ALL scan work completes within function response
+- [ ] Stripe metadata used for persistence (not Maps or variables)
+
+### 7. GitHub App
+
+- [ ] Webhook receives push/PR events
+- [ ] JWT auth with private key works
+- [ ] Commit status posted (pass/fail)
+- [ ] PR comment posted with scan results
+
+### 8. Documentation
+
+- [ ] README accurate and up-to-date
+- [ ] CLAUDE.md updated with any changes
+- [ ] Legal pages current (Terms, Privacy, Refunds)
+- [ ] All 21 modules listed in README and CLI help
+
+### 9. Performance
+
+- [ ] Quick scan under 15 seconds
+- [ ] Full scan under 60 seconds
+- [ ] API responses under 500ms
+- [ ] Website FCP under 1.0s
+
+### 10. Accessibility
+
+- [ ] All images have alt text
 - [ ] All interactive elements keyboard-accessible
-- [ ] Focus indicators visible on all interactive elements
-- [ ] ARIA labels on all non-text interactive elements
-- [ ] Heading hierarchy is sequential (h1 > h2 > h3, no skips)
-- [ ] Form inputs have associated labels
-- [ ] Reduced motion preference respected (prefers-reduced-motion)
-
-### 7. SEO & Metadata
-
-- [ ] Unique, descriptive title on every page (50-60 chars)
-- [ ] Meta description on every page (150-160 chars)
-- [ ] Open Graph tags (og:title, og:description, og:image, og:url)
-- [ ] Canonical URLs set on all pages
-- [ ] Structured data (JSON-LD) validated
-- [ ] No broken internal links (404s)
-- [ ] URL structure is clean, readable, and consistent
-
-### 8. Visual & UI Testing
-
-- [ ] No visual regressions detected
-- [ ] All fonts load correctly
+- [ ] Focus indicators visible
+- [ ] ARIA labels on non-text elements
 - [ ] Dark mode renders correctly
-- [ ] No layout shifts (CLS < 0.1)
-- [ ] No text overflow, truncation, or clipping issues
-- [ ] Animations and transitions are smooth (60fps target)
 
-### 9. Responsive Design
+### 11. SEO & Metadata
 
-- [ ] Layout correct at 320px (small mobile)
-- [ ] Layout correct at 375px (standard mobile)
-- [ ] Layout correct at 768px (tablet)
-- [ ] Layout correct at 1280px (desktop)
-- [ ] Layout correct at 1920px+ (large desktop)
-- [ ] Touch targets minimum 44x44px on mobile
-- [ ] No horizontal scrollbar on any viewport
+- [ ] Meta title and description set
+- [ ] Open Graph tags set
+- [ ] Canonical URL set to gatetest.io
+- [ ] Structured data valid
 
-### 10. Documentation
+### 12. Deployment
 
-- [ ] README.md is accurate and up-to-date
-- [ ] API endpoints documented with request/response examples
-- [ ] Environment variables documented
-- [ ] CHANGELOG updated for user-facing changes
-- [ ] All 20 modules listed in README and CLI help
+- [ ] Vercel deploys from main branch
+- [ ] Root Directory set to website
+- [ ] All 9 environment variables set
+- [ ] DNS pointing to Vercel
 
-### 11. Browser Compatibility
+### 13. Pre-Launch
 
-- [ ] Chrome (latest 2 versions)
-- [ ] Firefox (latest 2 versions)
-- [ ] Safari (latest 2 versions)
-- [ ] Edge (latest 2 versions)
-- [ ] No vendor-prefix-only CSS without fallback
-- [ ] No unpolyfilled modern JS features for target browsers
+- [ ] Fresh checkout → scan → result works end-to-end
+- [ ] GitHub App installed and posting commit statuses
+- [ ] Legal pages accessible from footer
+- [ ] Stripe webhook endpoint configured
+- [ ] Email forwarding set up for hello@gatetest.io
 
-### 12. Data Integrity
+---
 
-- [ ] Database schema matches ORM/model definitions
-- [ ] Data validation at API boundary AND database level
-- [ ] PII handling complies with GDPR/CCPA requirements
-- [ ] No sensitive data logged or serialized unsafely
+## THE FORBIDDEN LIST
 
-### 13. Infrastructure
+**NEVER do these things. Ever. Without exception:**
 
-- [ ] All 20 modules load (`gatetest --list`)
-- [ ] Quick suite runs clean (`gatetest --suite quick`)
-- [ ] Website builds successfully (`cd website && npm run build`)
-- [ ] All 37+ tests pass (`node --test tests/*.test.js`)
-- [ ] CI config generates correctly (`gatetest --ci-init github`)
+1. **Never ship code that "compiles but doesn't work."** "It compiles" is not testing.
+2. **Never use in-memory storage on Vercel serverless.** Functions don't share memory.
+3. **Never depend on webhooks for critical user flows.** Direct API calls only.
+4. **Never let the scan page sit at 0% or loop.** Every state must be handled.
+5. **Never test with live Stripe keys.** Test keys only. Card 4242 4242 4242 4242.
+6. **Never commit secrets.** Env vars only.
+7. **Never skip tests for "speed."** Untested code does not exist.
+8. **Never say "it's ready" without testing the actual user flow.** Click every button.
+9. **Never patch symptoms.** Find and fix the root cause.
+10. **Never make chicken scratchings.** Go big or go home.
+11. **Never deploy to production without Craig's authorization.**
+12. **Never modify Stripe configuration without Craig's authorization.**
+13. **Never add a dependency not in the approved stack without authorization.**
+14. **Never delete user data without explicit user action.**
+15. **Never let an error bubble unhandled to the user.** Wrap, log, recover.
+16. **Never silently fail.** Errors are visible.
+17. **Never ship a feature without updating this file.**
+18. **Never approve something you didn't test end-to-end.**
+19. **Never build an 80s website.** We are AI builders. The output must be stunning.
+20. **Never ask Craig "do you want me to fix this?"** If it's broken, FIX IT.
 
-### Before website commits (additional):
-- [ ] `cd website && npm run build` — Build succeeds
-- [ ] No TypeScript errors
-- [ ] No broken links in components
-- [ ] Craig has authorized major changes
+---
 
-### Before push:
-- [ ] All of the above pass
-- [ ] Commit message is descriptive (what + why)
-- [ ] Branch is correct (check `git branch`)
-- [ ] No unnecessary files included
+## PRE-BUILD CHECKLIST (BEFORE EVERY BUILD)
+
+Before writing a single line of new code:
+
+1. Read the relevant section of this CLAUDE.md
+2. Confirm the task aligns with the build plan
+3. Confirm it doesn't require Craig's authorization
+4. Confirm existing patterns to follow (check similar files)
+5. Confirm dependencies are in the approved stack
+6. Identify which tests need to be added
+7. Plan the commit message in advance
+
+---
+
+## POST-BUILD CHECKLIST (BEFORE COMMITTING)
+
+After writing the code:
+
+1. `node --test tests/*.test.js` — ALL pass
+2. `cd website && npx next build` — ZERO errors
+3. `node bin/gatetest.js --list` — all 21 modules load
+4. No `console.log` left in library code
+5. Every new route/page works (actually click it)
+6. Every user flow tested end-to-end (not just "it compiles")
+7. CLAUDE.md updated if anything changed
+8. Conventional commit message ready
+9. Push to main
 
 ---
 
 ## GATE RULES — NON-NEGOTIABLE
 
-1. **ZERO TOLERANCE**: Any error-severity check failure blocks the pipeline.
-   No "it's just a warning" — if it's an error, it blocks. Period.
-
-2. **NO MANUAL OVERRIDES**: No human can bypass the gate without Craig's authorization.
-   The checks pass or the build is rejected.
-
+1. **ZERO TOLERANCE**: Any error-severity check failure blocks the pipeline. No exceptions.
+2. **NO MANUAL OVERRIDES**: Checks pass or the build is rejected. Craig only.
 3. **NO PARTIAL DEPLOYS**: Everything passes or nothing ships.
-
 4. **EVIDENCE REQUIRED**: Every gate pass produces a timestamped report.
-   Reports are permanent evidence.
+5. **TEST THE TESTS**: Mutation testing validates tests catch bugs.
+6. **FIX IMMEDIATELY**: If it's broken, fix it. Don't ask. Don't wait.
+7. **ROOT CAUSE ONLY**: Never patch symptoms. Find and fix the real problem.
+8. **END-TO-END VERIFICATION**: "It compiles" is not testing. Click every button.
 
-5. **REGRESSION = ROLLBACK**: If production detects regression within 15 minutes,
-   automatic rollback triggers.
+## FAILURE RESPONSE PROTOCOL
 
-6. **SHIFT LEFT**: Catch issues as early as possible. `--diff` in pre-commit,
-   `--suite quick` in CI, `--suite full` before merge.
+When something breaks:
 
-7. **TEST THE TESTS**: Mutation testing validates tests actually catch bugs.
-   A passing test suite that doesn't catch mutations is a liability.
-
-8. **EVERYTHING IS VERSIONED**: Thresholds, baselines, configs — all in version control.
-
----
-
-## WEBSITE RULES
-
-The gatetest.io website is the face of the product. It must be PERFECT.
-
-### Before making website changes:
-1. **Read `MARKETING.md`** — All copy, positioning, and pricing live there.
-2. **Major changes require Craig's authorization.** This includes:
-   - Changing pricing structure or tiers
-   - Changing the tagline or hero copy
-   - Adding or removing entire sections
-   - Changing the color scheme or brand identity
-   - Adding third-party scripts or tracking
-   - Changing the navigation structure
-3. **Minor changes do NOT require authorization:**
-   - Fixing typos
-   - Fixing broken links
-   - Performance optimizations
-   - Bug fixes (things that are clearly broken)
-   - Updating dependency versions
-
-### Website Technical Standards:
-- Next.js 16 + Tailwind CSS 4 (already configured, do not change)
-- All components are in `website/app/components/`
-- Dark theme with glow effects (see `globals.css`)
-- Must build clean: `cd website && npm run build`
-- No console errors in browser
-- Mobile responsive (all components must work 320px - 2560px)
-- All links must be real URLs (no `href="#"` or `javascript:void(0)`)
-- All images must have alt text
-- Lighthouse scores: Performance 95+, Accessibility 100, Best Practices 100, SEO 100
+1. **STOP** — Do not proceed with other work
+2. **IDENTIFY** — What exactly failed? Which file? Which line? What state?
+3. **ROOT CAUSE** — Why did it fail? Not the symptom. The CAUSE.
+4. **FIX** — Fix the root cause, not the symptom
+5. **VERIFY** — Test the fix end-to-end. Actually use it.
+6. **ENSURE NO REGRESSIONS** — Run all tests. Build website. Load modules.
+7. **COMMIT** — Push the fix immediately
+8. **NEVER ask Craig "should I fix this?"** — YES. ALWAYS. FIX IT.
 
 ---
 
-## COMPETITIVE INTELLIGENCE
+## COMPETITIVE POSITION
 
 ### We replace 10+ tools with ONE:
-
-| They use | We replace it with |
-|----------|-------------------|
+| They use | GateTest replaces it with |
+|----------|--------------------------|
 | Jest/Vitest/Mocha | `gatetest --module unitTests` |
 | Playwright/Cypress | `gatetest --module e2e` |
 | ESLint/Stylelint | `gatetest --module lint` |
@@ -398,47 +337,56 @@ The gatetest.io website is the face of the product. It must be PERFECT.
 | git-secrets/truffleHog | `gatetest --module secrets` |
 | broken-link-checker | `gatetest --module links` |
 
-Plus 10 more modules they don't even have: mutation testing, chaos testing,
-autonomous exploration, live crawling, data integrity, documentation validation,
-compatibility analysis, integration test detection, CI generation, SARIF output.
+Plus 11 more modules they don't have: AI code review, mutation testing, chaos testing, autonomous exploration, live crawling, data integrity, documentation validation, compatibility analysis, integration test detection, CI generation, and SARIF output.
 
-### We are 80-90% ahead of ANY single competitor.
-
-When implementing features, ASK: "Does any competitor do this? If yes, do it BETTER.
-If no, do it FIRST."
+### Revenue model: Pay on completion
+| Tier | Price | Modules |
+|------|-------|---------|
+| Quick Scan | $29 | 4 modules |
+| Full Scan | $99 | All 21 modules |
+| Scan + Fix | $199 | 21 modules + auto-fix PR |
+| Nuclear | $399 | Everything + mutation + crawl + chaos |
+| Continuous | $49/mo | Scan every push |
 
 ---
 
-## DEVELOPMENT PRACTICES
+## PROJECT ARCHITECTURE (BUILT — DO NOT RECREATE)
 
-### Architecture Principles
-- **Zero external dependencies** for the core CLI. Pure Node.js. Install and run
-  anywhere without `npm install`. External tools (Playwright, ESLint) are detected
-  and used if present, but never required.
-- **Module system**: Every check category is a self-contained module extending `BaseModule`.
-  Modules are registered in `src/core/registry.js`.
-- **Severity-aware**: All checks use `severity: 'error' | 'warning' | 'info'`.
-  Only errors block the gate. Warnings are reported. Info is informational.
-- **Reporter pattern**: Reporters attach to runner events. Adding a new report
-  format means creating one file in `src/reporters/`.
-- **Suite configuration**: Suites are defined in `src/core/config.js` under `suites`.
-  `quick`, `standard`, `full`, `live`, `nuclear` are built-in.
-
-### Code Standards
-- **No console.log in library code** — use the reporter system
-- **console.log is OK in CLI code** (bin/gatetest.js) and reporter code
-- **Every new module must be registered** in `src/core/registry.js`
-- **Every new module needs tests** in `tests/`
-- **Maximum function length: 50 lines** (extract helpers)
-- **Maximum file length: 300 lines** (split into modules)
-- **All error paths must be handled** — no silent catches
-- **Use severity levels** — not everything is a gate-blocking error
-
-### Testing Requirements
-- Run `node --test tests/*.test.js` before EVERY commit
-- All new features need test coverage
-- Tests must be deterministic — no flaky tests
-- Tests must be fast — the full suite should complete in < 5 seconds
+```
+GateTest/
+├── CLAUDE.md               ← THIS FILE — THE BIBLE
+├── MARKETING.md            ← Positioning, pricing, website copy
+├── package.json            ← CLI tool (name: gatetest, bin: gatetest)
+├── bin/gatetest.js         ← CLI entry point (20+ flags)
+├── src/
+│   ├── index.js            ← Main library entry
+│   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
+│   ├── modules/            ← 21 TEST MODULES (the core product)
+│   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
+│   ├── scanners/           ← Continuous scanner
+│   └── hooks/              ← Pre-commit, pre-push
+├── tests/                  ← 51+ tests (MUST ALL PASS)
+└── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
+    └── app/
+        ├── page.tsx                 ← Main page
+        ├── layout.tsx               ← Root layout
+        ├── globals.css              ← Dark theme, animations
+        ├── api/checkout/            ← Stripe checkout
+        ├── api/scan/run/            ← Direct scan execution
+        ├── api/scan/status/         ← Scan status reader
+        ├── api/stripe-webhook/      ← Stripe webhook (backup)
+        ├── api/webhook/             ← GitHub App webhook
+        ├── api/github/callback/     ← GitHub App install callback
+        ├── scan/status/             ← Live scan page
+        ├── checkout/success/        ← Post-checkout redirect
+        ├── checkout/cancel/         ← Checkout cancelled
+        ├── github/setup/            ← GitHub App install page
+        ├── github/installed/        ← Post-install success
+        ├── legal/terms/             ← Terms of Service
+        ├── legal/privacy/           ← Privacy Policy
+        ├── legal/refunds/           ← Refund Policy
+        └── components/              ← 13 React components
+```
 
 ---
 
@@ -446,40 +394,95 @@ If no, do it FIRST."
 
 | File | What it controls | Read before... |
 |------|-----------------|---------------|
-| `MARKETING.md` | All marketing copy, pricing, positioning | Any website change |
+| `MARKETING.md` | All marketing copy, pricing | Any website change |
 | `src/index.js` | All public exports, reporter wiring | Adding exports |
-| `src/core/runner.js` | Severity, auto-fix, diff-mode, gate decision | Changing how checks work |
+| `src/core/runner.js` | Severity, auto-fix, diff-mode, gate | Changing how checks work |
 | `src/core/config.js` | Thresholds, suite definitions | Changing what modules run |
 | `src/core/registry.js` | Module registration | Adding new modules |
 | `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
-| `website/app/page.tsx` | How website sections are composed | Changing page structure |
-| `website/app/globals.css` | Dark theme, animations, glow effects | Changing visual style |
+| `website/app/api/scan/run/route.ts` | The actual scan execution | Changing scan logic |
+| `website/app/scan/status/page.tsx` | Live scan page | Changing scan UX |
+| `website/app/api/checkout/route.ts` | Stripe checkout creation | Changing payment flow |
+| `website/app/page.tsx` | How website sections compose | Changing page structure |
+| `website/app/globals.css` | Dark theme, animations | Changing visual style |
 
 ---
 
-## FAILURE RESPONSE PROTOCOL
+## ENVIRONMENT VARIABLES (Vercel)
 
-When something breaks:
+| Variable | Purpose |
+|----------|---------|
+| `STRIPE_SECRET_KEY` | Stripe API (sk_live_... or sk_test_...) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe client key |
+| `NEXT_PUBLIC_BASE_URL` | https://gatetest.io |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing |
+| `GATETEST_APP_ID` | GitHub App ID |
+| `GATETEST_PRIVATE_KEY` | GitHub App .pem contents |
+| `GATETEST_WEBHOOK_SECRET` | GitHub webhook secret |
+| `ANTHROPIC_API_KEY` | Claude API for AI review |
 
-1. **STOP** — Do not proceed.
-2. **IDENTIFY** — What exactly failed? Which file? Which line?
-3. **REPORT** — State the failure clearly before attempting to fix.
-4. **FIX** — Apply the smallest fix that resolves the issue.
-5. **VERIFY** — Run `node --test tests/*.test.js` and confirm ALL tests pass.
-6. **ENSURE NO REGRESSIONS** — The fix must not break anything else.
+---
 
-When you encounter a test failure after your changes:
-- **DO NOT delete the test.** Fix your code to make the test pass.
-- **DO NOT weaken the assertion.** Fix the behavior to meet the expectation.
-- **DO NOT skip the test.** If a test exists, it exists for a reason.
+## KNOWN ISSUES — QUEUED FOR FIX
+
+| # | Issue | Severity | Status |
+|---|-------|----------|--------|
+| 1 | Scan page needs fresh checkout — stale sessions show "cancelled" | MEDIUM | KNOWN |
+| 2 | Website design needs major upgrade — current is basic | HIGH | Craig's next priority |
+| 3 | Stripe test keys not yet swapped in | MEDIUM | Craig action |
+| 4 | GitHub App not yet installed on test repo | MEDIUM | Craig action |
+
+---
+
+## SESSION PROTOCOL
+
+### At the START of every session:
+1. Read this file end to end
+2. `git status && git log --oneline -10`
+3. `git branch` — verify on correct branch
+4. Check "Known Issues" section
+5. Check what needs to be done
+6. If unclear, ask Craig
+
+### At the END of every session:
+1. Run ALL tests — `node --test tests/*.test.js`
+2. Build website — `cd website && npx next build`
+3. Verify all 21 modules load — `node bin/gatetest.js --list`
+4. Update "Known Issues" if anything found
+5. Commit and push everything
+6. Leave the codebase in a WORKING state
+
+### When something breaks:
+1. **FIX IT.** Don't ask. Don't wait. Don't patch symptoms.
+2. Find the ROOT CAUSE.
+3. Fix the root cause.
+4. Test the fix END TO END.
+5. Commit. Push.
+
+---
+
+## THE AGGRESSIVE MANDATE (REPRISE)
+
+**This is not a hobby project. This is a business. Craig needs revenue.**
+
+Every feature must be the BEST implementation available. Every check must be DEEPER than the competition. Every report must be more ACTIONABLE. Every module must catch REAL bugs.
+
+The website must look like it was built in 2026 by the most advanced AI on the planet — because it was. Not the 80s. Not "functional but ugly." STUNNING.
+
+The scan experience must be CINEMATIC. Customers watch their repo get scanned in real time with animations, progress, and drama. They WANT to watch it.
+
+If a competitor does something we don't, that's a GateTest bug. Fix it.
+
+**No scatter-gun. No drift. No chicken scratchings. No "just this once."**
+
+**GateTest dominates or GateTest dies. There is no second place.**
 
 ---
 
 ## VERSION
 
-GateTest v1.1.0 — 20 modules, 5 reporters, auto-fix, diff-mode, watch mode,
-mutation testing, CI generation, caching, SARIF/JUnit output.
+GateTest v1.1.0 — 21 modules, 5 reporters, AI code review, auto-fix, diff-mode,
+watch mode, mutation testing, CI generation, caching, SARIF/JUnit output,
+Stripe pay-on-completion, GitHub App, legal pages.
 
-Last updated: 2026-04-08
-
-**=== CLAUDE.MD LOADED. ALL RULES ABOVE ARE MANDATORY. DOMINATE. ===**
+Date last updated: 2026-04-09
