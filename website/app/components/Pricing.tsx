@@ -124,8 +124,14 @@ export default function Pricing() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleCheckout(tierId: string) {
-    if (!repoUrl.includes("github.com")) {
-      setError("Please enter a valid GitHub repository URL");
+    if (!repoUrl || !repoUrl.includes("github.com")) {
+      setError("Please enter a valid GitHub repository URL above");
+      // Scroll to the input
+      const input = document.getElementById("repo-url");
+      if (input) {
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+        input.focus();
+      }
       return;
     }
 
@@ -188,7 +194,7 @@ export default function Pricing() {
         {/* Repo URL input */}
         <div className="max-w-xl mx-auto mb-12">
           <label htmlFor="repo-url" className="block text-sm font-medium text-muted mb-2 text-center">
-            Enter your GitHub repo URL to get started
+            1. Enter your GitHub repo URL
           </label>
           <div className="flex gap-2">
             <input
@@ -197,9 +203,12 @@ export default function Pricing() {
               value={repoUrl}
               onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
               placeholder="https://github.com/your-org/your-repo"
-              className="flex-1 px-4 py-3 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent/50 text-sm"
+              className={`flex-1 px-4 py-3 rounded-lg bg-surface border text-foreground placeholder:text-muted/50 focus:outline-none text-sm transition-colors ${
+                error ? "border-danger focus:border-danger" : "border-border focus:border-accent/50"
+              }`}
             />
           </div>
+          <p className="text-xs text-muted mt-2 text-center">2. Choose a scan tier below</p>
           {error && (
             <p className="text-sm text-danger mt-2 text-center">{error}</p>
           )}
