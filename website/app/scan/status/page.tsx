@@ -24,36 +24,21 @@ interface ScanResult {
   error?: string;
 }
 
-const MODULE_LABELS: Record<string, { desc: string; icon: string }> = {
-  syntax: { desc: "Validating syntax across all source files", icon: "{ }" },
-  lint: { desc: "Running linting checks", icon: "~~" },
-  secrets: { desc: "Hunting for hardcoded API keys & tokens", icon: "***" },
-  codeQuality: { desc: "Analysing code quality & complexity", icon: "<>" },
-  unitTests: { desc: "Running unit test suite", icon: "T" },
-  integrationTests: { desc: "Checking API endpoints", icon: "API" },
-  e2e: { desc: "Running end-to-end tests", icon: "E2E" },
-  visual: { desc: "Detecting visual regressions", icon: "EYE" },
-  accessibility: { desc: "Auditing WCAG 2.2 AAA", icon: "A11Y" },
-  performance: { desc: "Measuring Core Web Vitals", icon: "ms" },
-  security: { desc: "OWASP deep scan", icon: "!!!" },
-  seo: { desc: "Validating SEO & metadata", icon: "SEO" },
-  links: { desc: "Checking all links", icon: "URL" },
-  compatibility: { desc: "Browser compatibility check", icon: "CSS" },
-  dataIntegrity: { desc: "Migration & PII checks", icon: "DB" },
-  documentation: { desc: "Checking docs completeness", icon: "DOC" },
-  liveCrawler: { desc: "Crawling live site", icon: "WEB" },
-  explorer: { desc: "Testing interactive elements", icon: "BOT" },
-  chaos: { desc: "Chaos & resilience testing", icon: "ZAP" },
-  mutation: { desc: "Mutation testing", icon: "DNA" },
-  aiReview: { desc: "AI code review with Claude", icon: "AI" },
+const MODULE_LABELS: Record<string, string> = {
+  syntax: "Syntax validation",
+  lint: "Linting checks",
+  secrets: "Secret detection",
+  codeQuality: "Code quality",
+  security: "Security scan",
+  accessibility: "Accessibility audit",
+  seo: "SEO validation",
+  links: "Link checking",
+  compatibility: "Compatibility",
+  dataIntegrity: "Data integrity",
+  documentation: "Documentation",
+  performance: "Performance",
+  aiReview: "AI code review",
 };
-
-function StatusIcon({ status }: { status: string }) {
-  if (status === "passed") return <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success/20 text-success text-xs font-bold">&#10003;</span>;
-  if (status === "failed") return <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-danger/20 text-danger text-xs font-bold">&#10007;</span>;
-  if (status === "running") return <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent/20"><span className="w-2 h-2 rounded-full bg-accent-light animate-pulse" /></span>;
-  return <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-surface-light/50 text-muted/30 text-xs">&#9675;</span>;
-}
 
 export default function ScanStatus() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -63,9 +48,7 @@ export default function ScanStatus() {
   const [animIndex, setAnimIndex] = useState(0);
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
-  const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Get params from URL
   const [params, setParams] = useState<{ id: string; repo: string; tier: string }>({ id: "", repo: "", tier: "quick" });
 
   useEffect(() => {
@@ -89,19 +72,19 @@ export default function ScanStatus() {
     if (!params.tier) return;
     const names = params.tier === "quick"
       ? ["syntax", "lint", "secrets", "codeQuality"]
-      : ["syntax", "lint", "secrets", "codeQuality", "unitTests", "integrationTests",
-         "e2e", "visual", "accessibility", "performance", "security", "seo", "links",
-         "compatibility", "dataIntegrity", "documentation", "mutation", "aiReview"];
+      : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
+         "seo", "links", "compatibility", "dataIntegrity", "documentation",
+         "performance", "aiReview"];
     setAnimModules(names.map((n) => ({ name: n, status: "pending" as const, checks: 0, issues: 0, duration: 0 })));
   }, [params.tier]);
 
-  // Animate modules one by one
+  // Animate modules
   useEffect(() => {
     if (!scanning || animModules.length === 0 || scanResult) return;
     const t = setInterval(() => {
       setAnimIndex((prev) => {
         const next = prev + 1;
-        if (next >= animModules.length) return prev; // Stop at last one
+        if (next >= animModules.length) return prev;
         setAnimModules((mods) =>
           mods.map((m, i) => ({
             ...m,
@@ -116,16 +99,10 @@ export default function ScanStatus() {
     return () => clearInterval(t);
   }, [scanning, animModules.length, scanResult]);
 
-  // Auto-scroll terminal
-  useEffect(() => {
-    if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-  }, [animIndex, scanResult]);
-
-  // TRIGGER THE SCAN — one call, one response
+  // Trigger scan
   useEffect(() => {
     if (scanTriggered.current) return;
 
-    // If we don't have the repo URL yet, try fetching it from the session
     if (!params.repo && params.id) {
       fetch(`/api/scan/status?id=${params.id}`)
         .then((res) => res.json())
@@ -133,18 +110,12 @@ export default function ScanStatus() {
           if (data.repoUrl) {
             setParams((p) => ({ ...p, repo: data.repoUrl, tier: data.tier || p.tier }));
           } else {
-            setScanResult({
-              status: "failed", modules: [], totalModules: 0, completedModules: 0,
-              totalIssues: 0, totalFixed: 0, duration: 0, error: "No repository URL found for this session",
-            });
+            setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: "No repository URL found" });
             setScanning(false);
           }
         })
         .catch(() => {
-          setScanResult({
-            status: "failed", modules: [], totalModules: 0, completedModules: 0,
-            totalIssues: 0, totalFixed: 0, duration: 0, error: "Could not load scan session",
-          });
+          setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: "Could not load session" });
           setScanning(false);
         });
       return;
@@ -159,24 +130,14 @@ export default function ScanStatus() {
       body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier }),
     })
       .then((res) => res.json())
-      .then((data) => {
-        setScanResult(data);
-        setScanning(false);
-      })
+      .then((data) => { setScanResult(data); setScanning(false); })
       .catch((err) => {
-        setScanResult({
-          status: "failed", modules: [], totalModules: 0, completedModules: 0,
-          totalIssues: 0, totalFixed: 0, duration: 0, error: err.message,
-        });
+        setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: err.message });
         setScanning(false);
       });
   }, [params]);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return m > 0 ? `${m}m ${sec.toString().padStart(2, "0")}s` : `${sec}s`;
-  };
+  const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
 
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";
@@ -184,290 +145,212 @@ export default function ScanStatus() {
   const displayProgress = scanResult ? 100 : Math.min(Math.round((animIndex / Math.max(animModules.length, 1)) * 95) + 5, 95);
 
   return (
-    <div className="min-h-screen grid-bg px-6 py-12 relative overflow-hidden">
-      {scanning && <div className="scan-line" />}
-
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full blur-[120px] pointer-events-none transition-colors duration-1000"
-        style={{ background: isComplete ? "rgba(34,197,94,0.08)" : isFailed ? "rgba(239,68,68,0.08)" : "rgba(99,102,241,0.08)" }} />
-
-      <div className="max-w-3xl mx-auto relative z-10">
+    <div className="min-h-screen bg-background px-6 py-12">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-medium mb-5 ${
-            isComplete ? "border-success/30 bg-success/10 text-success" :
-            isFailed ? "border-danger/30 bg-danger/10 text-danger" :
-            "border-accent/30 bg-accent/5 text-accent-light"
+        <div className="text-center mb-8">
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-5 ${
+            isComplete ? "bg-green-50 border border-green-200 text-green-700" :
+            isFailed ? "bg-red-50 border border-red-200 text-red-700" :
+            "bg-indigo-50 border border-indigo-200 text-indigo-700"
           }`}>
-            {isComplete ? <span className="w-2.5 h-2.5 rounded-full bg-success" /> :
-             isFailed ? <span className="w-2.5 h-2.5 rounded-full bg-danger" /> :
-             <span className="w-2.5 h-2.5 rounded-full bg-accent-light animate-pulse" />}
-            {isComplete ? "Scan Complete" : isFailed ? "Scan Failed" : "Scanning in Progress"}
+            <span className={`w-2 h-2 rounded-full ${
+              isComplete ? "bg-green-500" : isFailed ? "bg-red-500" : "bg-indigo-500 animate-pulse"
+            }`} />
+            {isComplete ? "Scan Complete" : isFailed ? "Scan Failed" : "Scanning..."}
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-3 text-foreground">
             {isComplete ? (
-              <span className="celebrate inline-block">
-                {(scanResult?.totalIssues || 0) === 0 ? <span className="text-success">All Clear</span> :
-                  <>{scanResult?.totalIssues} Issue{(scanResult?.totalIssues || 0) > 1 ? "s" : ""} Found</>}
-              </span>
-            ) : isFailed ? <span className="text-danger">Scan Failed</span> :
-              <>Scanning<span className="cursor-blink" /></>}
+              (scanResult?.totalIssues || 0) === 0
+                ? "All Clear"
+                : `${scanResult?.totalIssues} Issue${(scanResult?.totalIssues || 0) > 1 ? "s" : ""} Found`
+            ) : isFailed ? "Scan Failed" : "Scanning..."}
           </h1>
 
-          {params.repo && <p className="text-sm text-muted font-mono bg-surface/50 inline-block px-3 py-1 rounded">{params.repo}</p>}
+          {params.repo && (
+            <p className="text-sm text-muted font-mono">{params.repo}</p>
+          )}
         </div>
 
         {/* Progress */}
-        <div className="mb-6">
+        <div className="mb-8">
           <div className="flex justify-between items-center text-sm mb-2">
-            <span className="text-muted">{scanResult ? `${scanResult.completedModules} modules complete` : `Module ${animIndex + 1} of ${animModules.length}`}</span>
-            <span className="font-mono text-accent-light text-lg font-bold">{displayProgress}%</span>
+            <span className="text-muted">{scanResult ? `${scanResult.completedModules} modules` : `Module ${animIndex + 1} of ${animModules.length}`}</span>
+            <span className="font-bold text-accent">{displayProgress}%</span>
             <span className="text-muted font-mono">{formatTime(elapsed)}</span>
           </div>
-          <div className="w-full h-4 bg-surface border border-border rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-700 ease-out ${scanning ? "progress-glow" : ""}`}
+          <div className="w-full h-2 bg-surface-dark rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-700 ${scanning ? "progress-glow" : ""}`}
               style={{
                 width: `${displayProgress}%`,
-                background: isComplete ? "linear-gradient(90deg,#22c55e,#4ade80)" :
-                  isFailed ? "linear-gradient(90deg,#ef4444,#f87171)" :
-                  "linear-gradient(90deg,#6366f1,#8b5cf6,#a78bfa)",
+                background: isComplete
+                  ? (scanResult?.totalIssues || 0) === 0 ? "#34c759" : "#6366f1"
+                  : isFailed ? "#ff3b30" : "#6366f1",
               }} />
           </div>
         </div>
 
-        {/* Terminal */}
-        <div className="terminal mb-6 relative">
-          <div className="terminal-header">
-            <div className="terminal-dot bg-[#ff5f57]" />
-            <div className="terminal-dot bg-[#febc2e]" />
-            <div className="terminal-dot bg-[#28c840]" />
-            <span className="ml-3 text-xs text-muted font-mono">gatetest --suite {params.tier} --sarif --junit</span>
-            {scanning && <span className="ml-auto text-xs text-accent-light animate-pulse">LIVE</span>}
-          </div>
+        {/* Module list — clean cards, not terminal */}
+        <div className="space-y-2 mb-8">
+          {displayModules.map((mod) => {
+            const label = MODULE_LABELS[mod.name] || mod.name;
+            return (
+              <div key={mod.name}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                  mod.status === "passed" ? "bg-white border-green-100" :
+                  mod.status === "failed" ? "bg-red-50/50 border-red-200" :
+                  mod.status === "running" ? "bg-indigo-50/50 border-indigo-200" :
+                  "bg-surface-dark border-border opacity-50"
+                } ${mod.status !== "pending" ? "slide-in" : ""}`}>
 
-          {scanning && <div className="terminal-scan-line" />}
-
-          <div ref={terminalRef} className="p-5 font-mono text-sm max-h-[450px] overflow-y-auto space-y-0.5 relative">
-            <p className="text-accent-light font-bold text-xs tracking-widest">══════════════════════════════════════</p>
-            <p className="text-accent-light font-bold">{"  "}GATETEST — Quality Assurance Gate</p>
-            <p className="text-accent-light font-bold text-xs tracking-widest">══════════════════════════════════════</p>
-            <p className="text-muted text-xs mt-1 mb-3">{"  "}{params.tier === "quick" ? "Quick scan: 4 modules" : "Full scan: 18 modules"}</p>
-
-            {displayModules.map((mod, idx) => {
-              const info = MODULE_LABELS[mod.name] || { desc: "Scanning...", icon: "?" };
-              return (
-                <div key={mod.name}
-                  className={`flex items-center gap-3 py-1.5 px-2 rounded transition-all duration-300 ${
-                    mod.status === "running" ? "module-running" :
-                    mod.status === "passed" ? "flash-pass" :
-                    mod.status === "failed" ? "flash-fail" : ""
-                  } ${mod.status !== "pending" ? "slide-in" : "opacity-40"}`}
-                  style={{ animationDelay: `${idx * 50}ms` }}>
-                  <StatusIcon status={mod.status} />
-                  <span className="text-xs font-mono text-muted/50 w-8">{info.icon}</span>
-                  <span className={`font-medium ${
-                    mod.status === "running" ? "text-foreground" :
-                    mod.status === "passed" ? "text-success/80" :
-                    mod.status === "failed" ? "text-danger" : "text-muted/40"
-                  }`}>{mod.name}</span>
-                  <span className="flex-1" />
-                  {mod.status === "running" && <span className="text-xs text-accent-light animate-pulse truncate max-w-[200px]">{info.desc}</span>}
-                  {mod.status === "passed" && <span className="text-xs text-muted">{mod.checks} checks &middot; {mod.duration}ms</span>}
-                  {mod.status === "failed" && <span className="text-xs text-danger font-medium">{mod.issues} issue{mod.issues > 1 ? "s" : ""}</span>}
+                {/* Status icon */}
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold ${
+                  mod.status === "passed" ? "bg-green-100 text-green-600" :
+                  mod.status === "failed" ? "bg-red-100 text-red-600" :
+                  mod.status === "running" ? "bg-indigo-100 text-indigo-600" :
+                  "bg-surface-dark text-muted"
+                }`}>
+                  {mod.status === "passed" ? "✓" :
+                   mod.status === "failed" ? "✗" :
+                   mod.status === "running" ? <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /> :
+                   "○"}
                 </div>
-              );
-            })}
 
-            {/* Show issue details for failed modules */}
-            {scanResult && scanResult.modules.filter((m) => m.status === "failed" && m.details).map((mod) => (
-              <div key={`details-${mod.name}`} className="ml-10 mt-1 mb-2">
-                {mod.details?.map((d, i) => (
-                  <p key={i} className="text-xs text-danger/70">{"  "}&rarr; {d}</p>
-                ))}
-              </div>
-            ))}
+                {/* Module name */}
+                <div className="flex-1 min-w-0">
+                  <span className={`font-medium text-sm ${
+                    mod.status === "passed" ? "text-foreground" :
+                    mod.status === "failed" ? "text-red-700" :
+                    mod.status === "running" ? "text-indigo-700" :
+                    "text-muted"
+                  }`}>{label}</span>
 
-            {isComplete && (
-              <div className="mt-4 pt-3 border-t border-[#30363d] celebrate">
-                <p className="text-accent-light font-bold text-xs tracking-widest">──────────────────────────────────────</p>
-                <div className="mt-2">
-                  {(scanResult?.totalIssues || 0) === 0 ? (
-                    <span className="text-success px-3 py-1 bg-success/10 rounded-lg font-bold text-sm">GATE: PASSED</span>
-                  ) : (
-                    <span className="text-danger px-3 py-1 bg-danger/10 rounded-lg font-bold text-sm">GATE: {scanResult?.totalIssues} ISSUES</span>
+                  {/* Issue details inline */}
+                  {mod.status === "failed" && mod.details && mod.details.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {mod.details.map((d, i) => (
+                        <p key={i} className="text-xs text-red-500 font-mono truncate">{d}</p>
+                      ))}
+                    </div>
                   )}
                 </div>
-                <p className="text-muted text-xs mt-2">
-                  {"  "}{scanResult?.completedModules}/{scanResult?.totalModules} modules &middot; {scanResult?.totalIssues} issues &middot; {scanResult?.duration}ms
-                </p>
-              </div>
-            )}
 
-            {isFailed && (
-              <div className="mt-4 pt-3 border-t border-[#30363d]">
-                <p className="text-danger font-bold">{"  "}ERROR: {scanResult?.error || "Scan failed"}</p>
+                {/* Right side info */}
+                <div className="text-right shrink-0">
+                  {mod.status === "passed" && (
+                    <span className="text-xs text-muted">{mod.checks} checks &middot; {mod.duration}ms</span>
+                  )}
+                  {mod.status === "failed" && (
+                    <span className="text-xs font-semibold text-red-600">{mod.issues} issue{mod.issues > 1 ? "s" : ""}</span>
+                  )}
+                  {mod.status === "running" && (
+                    <span className="text-xs text-indigo-600 animate-pulse">scanning...</span>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-8">
-          <div className="text-center p-4 rounded-xl border border-border bg-surface">
-            <div className="text-3xl font-bold gradient-text">{scanResult?.completedModules || animIndex}</div>
-            <div className="text-xs text-muted mt-1">Modules</div>
-          </div>
-          <div className={`text-center p-4 rounded-xl border ${(scanResult?.totalIssues || 0) > 0 ? "border-danger/30 bg-danger/5" : "border-border bg-surface"}`}>
-            <div className="text-3xl font-bold text-danger">{scanResult?.totalIssues || 0}</div>
-            <div className="text-xs text-muted mt-1">Issues</div>
-          </div>
-          <div className="text-center p-4 rounded-xl border border-border bg-surface">
-            <div className="text-3xl font-bold text-success">{scanResult?.totalFixed || 0}</div>
-            <div className="text-xs text-muted mt-1">Fixed</div>
-          </div>
-          <div className="text-center p-4 rounded-xl border border-border bg-surface">
-            <div className="text-3xl font-bold text-foreground font-mono">{formatTime(elapsed)}</div>
-            <div className="text-xs text-muted mt-1">Time</div>
-          </div>
+          {[
+            { value: scanResult?.completedModules || animIndex, label: "Modules", color: "text-accent" },
+            { value: scanResult?.totalIssues || 0, label: "Issues", color: (scanResult?.totalIssues || 0) > 0 ? "text-danger" : "text-foreground" },
+            { value: scanResult?.totalFixed || 0, label: "Fixed", color: "text-success" },
+            { value: formatTime(elapsed), label: "Time", color: "text-foreground" },
+          ].map((stat) => (
+            <div key={stat.label} className="text-center p-4 rounded-xl card">
+              <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+              <div className="text-xs text-muted mt-1">{stat.label}</div>
+            </div>
+          ))}
         </div>
 
+        {/* Completion section */}
         {isComplete && (
-          <div className="celebrate space-y-6">
-            {/* Result banner */}
-            <div className={`p-6 rounded-xl border ${
+          <div className="space-y-4">
+            {/* Result summary */}
+            <div className={`p-5 rounded-xl border ${
               (scanResult?.totalIssues || 0) === 0
-                ? "border-success/30 bg-success/5"
-                : "border-danger/30 bg-danger/5"
+                ? "bg-green-50 border-green-200"
+                : "bg-amber-50 border-amber-200"
             }`}>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-3xl">{(scanResult?.totalIssues || 0) === 0 ? "&#9989;" : "&#9888;&#65039;"}</span>
-                <div>
-                  <p className="text-xl font-bold">
-                    {(scanResult?.totalIssues || 0) === 0
-                      ? "Your code passed all checks"
-                      : `${scanResult?.totalIssues} issue${(scanResult?.totalIssues || 0) > 1 ? "s" : ""} found in your code`}
-                  </p>
-                  <p className="text-sm text-muted">
-                    {scanResult?.completedModules} modules scanned &middot; {scanResult?.duration}ms
-                  </p>
-                </div>
-              </div>
+              <p className="font-bold text-foreground">
+                {(scanResult?.totalIssues || 0) === 0
+                  ? "Your code passed all checks."
+                  : `${scanResult?.totalIssues} issue${(scanResult?.totalIssues || 0) > 1 ? "s" : ""} need attention.`}
+              </p>
+              <p className="text-sm text-muted mt-1">
+                {scanResult?.completedModules} modules scanned in {scanResult?.duration}ms
+              </p>
             </div>
 
-            {/* Issue breakdown by module */}
+            {/* What's next */}
             {(scanResult?.totalIssues || 0) > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-lg font-bold">Issues Found</h3>
-                {scanResult?.modules.filter((m) => m.status === "failed").map((mod) => (
-                  <div key={`breakdown-${mod.name}`} className="p-4 rounded-xl border border-danger/20 bg-danger/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-danger font-bold text-sm">&#10007;</span>
-                        <span className="font-semibold">{mod.name}</span>
-                      </div>
-                      <span className="text-xs text-danger font-medium px-2 py-1 bg-danger/10 rounded-full">
-                        {mod.issues} issue{mod.issues > 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    {mod.details && mod.details.length > 0 && (
-                      <ul className="space-y-1 mt-2">
-                        {mod.details.map((detail, i) => (
-                          <li key={i} className="text-sm text-muted flex items-start gap-2">
-                            <span className="text-danger/60 mt-0.5 shrink-0">&rarr;</span>
-                            <span className="font-mono text-xs">{detail}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Passed modules summary */}
-            {scanResult && scanResult.modules.filter((m) => m.status === "passed").length > 0 && (
-              <div className="p-4 rounded-xl border border-success/20 bg-success/5">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-success">&#10003;</span>
-                  <span className="font-semibold text-sm">
-                    {scanResult.modules.filter((m) => m.status === "passed").length} modules passed clean
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {scanResult.modules.filter((m) => m.status === "passed").map((mod) => (
-                    <span key={mod.name} className="text-xs px-2 py-1 rounded-full bg-success/10 text-success/80 border border-success/20">
-                      {mod.name}
-                    </span>
-                  ))}
+              <div className="p-5 rounded-xl border border-border bg-white">
+                <h3 className="font-bold text-foreground mb-2">What&apos;s next?</h3>
+                <p className="text-sm text-muted mb-4">
+                  The issues above show exactly what needs fixing — file names and line numbers included. You can fix them manually, or run a deeper scan for more coverage.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {params.tier === "quick" && (
+                    <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                      Run Full Scan — All 13 Modules
+                    </a>
+                  )}
+                  <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                    Scan Another Repo
+                  </a>
                 </div>
               </div>
             )}
 
-            {/* What to do next */}
-            <div className="p-6 rounded-xl border border-accent/30 bg-accent/5">
-              <h3 className="text-lg font-bold mb-3">What&apos;s Next?</h3>
-              {(scanResult?.totalIssues || 0) > 0 ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted">
-                    Your code has {scanResult?.totalIssues} issue{(scanResult?.totalIssues || 0) > 1 ? "s" : ""} that
-                    {params.tier === "quick"
-                      ? " were found in a Quick Scan (4 modules). A Full Scan checks 21 modules and finds even more."
-                      : " need attention. Upgrade to Scan + Fix and we'll automatically create a PR that fixes them."}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {params.tier === "quick" && (
-                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                        Upgrade to Full Scan — $99
-                      </a>
-                    )}
-                    {params.tier !== "fix" && params.tier !== "nuclear" && (
-                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                        Get Auto-Fix PR — $199
-                      </a>
-                    )}
-                    <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
-                      Run Another Scan
+            {(scanResult?.totalIssues || 0) === 0 && (
+              <div className="p-5 rounded-xl border border-border bg-white text-center">
+                <p className="text-sm text-muted mb-4">
+                  {params.tier === "quick"
+                    ? "Passed the Quick Scan. Want to go deeper with all 13 modules?"
+                    : "Clean across all modules."}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  {params.tier === "quick" && (
+                    <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                      Run Full Scan — $99
                     </a>
-                  </div>
+                  )}
+                  <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                    Scan Another Repo
+                  </a>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted">
-                    {params.tier === "quick"
-                      ? "Your code passed all Quick Scan checks. Want to go deeper? The Full Scan runs 21 modules including security, accessibility, and AI code review."
-                      : "Your code is clean across all modules. Consider setting up continuous monitoring to keep it that way."}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {params.tier === "quick" && (
-                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                        Run Full Scan — $99
-                      </a>
-                    )}
-                    <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
-                      {params.tier === "quick" ? "See All Plans" : "Run Another Scan"}
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Share / trust badge */}
-            <div className="text-center text-xs text-muted pt-4">
-              <p>Scanned by GateTest &middot; {scanResult?.completedModules} modules &middot; {new Date().toLocaleDateString()}</p>
-              <p className="mt-1">gatetest.io — The most advanced QA gate for AI-generated code</p>
-            </div>
+            {/* Branding */}
+            <p className="text-center text-xs text-muted pt-2">
+              Scanned by GateTest &middot; gatetest.io
+            </p>
           </div>
         )}
+
+        {/* Failed */}
         {isFailed && (
           <div className="text-center">
-            <div className="p-6 rounded-xl border border-danger/30 bg-danger/5 mb-6">
-              <p className="text-sm text-muted">Card hold released. No charge.</p>
+            <div className="p-5 rounded-xl bg-red-50 border border-red-200 mb-4">
+              <p className="font-bold text-red-700">{scanResult?.error || "Scan failed"}</p>
+              <p className="text-sm text-muted mt-1">No charge was made. Card hold released.</p>
             </div>
-            <a href="/#pricing" className="px-8 py-4 rounded-xl bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-all inline-block">Try Again</a>
+            <a href="/#pricing" className="btn-primary px-6 py-3 text-sm">Try Again</a>
           </div>
         )}
 
-        {scanning && <p className="text-center text-xs text-muted mt-6">Card held, not charged. Payment captured only after scan delivery.</p>}
+        {/* Scanning notice */}
+        {scanning && (
+          <p className="text-center text-xs text-muted mt-4">
+            Card held, not charged. Payment captured only after scan delivery.
+          </p>
+        )}
       </div>
     </div>
   );
