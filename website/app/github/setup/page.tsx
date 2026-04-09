@@ -38,7 +38,7 @@ export default function GitHubSetup() {
               results as commit statuses and PR comments.
             </p>
             <a
-              href="https://github.com/apps/gatetest"
+              href="https://github.com/apps/GateTestHQ"
               className="inline-block px-8 py-4 text-base font-semibold rounded-xl bg-accent hover:bg-accent-light text-white transition-all pulse-glow"
             >
               Install GateTest on GitHub

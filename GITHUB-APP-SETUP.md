@@ -63,7 +63,7 @@ Vercel handles multi-line env vars. If it doesn't work, replace newlines with `\
 ## Step 4: Deploy and Test
 
 1. Redeploy on Vercel (so it picks up the env vars)
-2. Install the app on a test repo: https://github.com/apps/gatetest
+2. Install the app on a test repo: https://github.com/apps/GateTestHQ
 3. Push a commit — you should see:
    - "GateTest: Scanning..." pending status
    - Then "GateTest: All clear" or "GateTest: X issues found"
