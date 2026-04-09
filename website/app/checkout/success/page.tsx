@@ -4,13 +4,21 @@ import { useEffect } from "react";
 
 export default function CheckoutSuccess() {
   useEffect(() => {
-    // Extract session ID and redirect to live scan status
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
 
     if (sessionId) {
-      // Redirect to the live scan page so customer watches it happen
-      window.location.href = `/scan/status?id=${sessionId}`;
+      // Fetch session to get repo URL and tier, then redirect to scan
+      fetch(`/api/scan/status?id=${sessionId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const scanUrl = `/scan/status?session_id=${sessionId}&repo_url=${encodeURIComponent(data.repoUrl || "")}&tier=${data.tier || "quick"}`;
+          window.location.href = scanUrl;
+        })
+        .catch(() => {
+          // Fallback — redirect with just session ID
+          window.location.href = `/scan/status?session_id=${sessionId}`;
+        });
     }
   }, []);
 
@@ -21,7 +29,7 @@ export default function CheckoutSuccess() {
           <span className="text-accent-light text-xl">&#9679;</span>
         </div>
         <h1 className="text-2xl font-bold mb-2">Starting your scan...</h1>
-        <p className="text-muted">Redirecting to live scan view.</p>
+        <p className="text-muted">Connecting to your repository.</p>
       </div>
     </div>
   );
