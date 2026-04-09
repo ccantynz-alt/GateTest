@@ -429,31 +429,42 @@ export async function POST(req: NextRequest) {
       const result = await runScan(repoUrl, tier);
 
       // Store result in Stripe metadata for the status page to read
-      const resultSummary = JSON.stringify({
-        status: result.status,
-        totalModules: result.totalModules,
-        completedModules: result.completedModules,
-        totalIssues: result.totalIssues,
-        totalFixed: result.totalFixed,
-        duration: result.duration,
-        modules: result.modules.map((m) => ({
-          name: m.name,
-          status: m.status,
-          checks: m.checks,
-          issues: m.issues,
-          duration: m.duration,
-        })),
-        error: result.error,
-      });
+      // Stripe metadata: max 500 chars per value, max 50 keys
+      // Store modules as compact strings across multiple keys
+      const modulesSummary = result.modules.map((m) =>
+        `${m.name}:${m.status}:${m.checks}:${m.issues}:${m.duration}`
+      ).join("|");
 
-      // Update payment intent metadata with scan result
       const updateParams = new URLSearchParams({
         "metadata[scan_status]": result.status,
-        "metadata[scan_result]": resultSummary.slice(0, 500), // Stripe metadata limit
         "metadata[total_issues]": String(result.totalIssues),
         "metadata[total_modules]": String(result.totalModules),
+        "metadata[total_fixed]": String(result.totalFixed),
+        "metadata[scan_duration]": String(result.duration),
         "metadata[scan_completed]": new Date().toISOString(),
+        "metadata[modules_list]": result.modules.map((m) => m.name).join(","),
       });
+
+      // Split modules data across multiple metadata keys (500 char limit each)
+      const chunks: string[] = [];
+      let current = "";
+      for (const entry of modulesSummary.split("|")) {
+        if ((current + "|" + entry).length > 490) {
+          chunks.push(current);
+          current = entry;
+        } else {
+          current = current ? current + "|" + entry : entry;
+        }
+      }
+      if (current) chunks.push(current);
+
+      chunks.forEach((chunk, i) => {
+        updateParams.set(`metadata[modules_${i}]`, chunk);
+      });
+
+      if (result.error) {
+        updateParams.set("metadata[scan_error]", result.error.slice(0, 500));
+      }
 
       await stripeApi(
         "POST",
