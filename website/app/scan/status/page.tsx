@@ -332,14 +332,132 @@ export default function ScanStatus() {
         </div>
 
         {isComplete && (
-          <div className="celebrate text-center">
-            <div className={`p-6 rounded-xl border mb-6 ${(scanResult?.totalIssues || 0) === 0 ? "border-success/30 bg-success/5" : "border-accent/30 bg-accent/5"}`}>
-              <p className="text-lg font-bold">{(scanResult?.totalIssues || 0) === 0 ? "Your code passed all checks." : `Found ${scanResult?.totalIssues} issues across ${scanResult?.completedModules} modules.`}</p>
+          <div className="celebrate space-y-6">
+            {/* Result banner */}
+            <div className={`p-6 rounded-xl border ${
+              (scanResult?.totalIssues || 0) === 0
+                ? "border-success/30 bg-success/5"
+                : "border-danger/30 bg-danger/5"
+            }`}>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-3xl">{(scanResult?.totalIssues || 0) === 0 ? "&#9989;" : "&#9888;&#65039;"}</span>
+                <div>
+                  <p className="text-xl font-bold">
+                    {(scanResult?.totalIssues || 0) === 0
+                      ? "Your code passed all checks"
+                      : `${scanResult?.totalIssues} issue${(scanResult?.totalIssues || 0) > 1 ? "s" : ""} found in your code`}
+                  </p>
+                  <p className="text-sm text-muted">
+                    {scanResult?.completedModules} modules scanned &middot; {scanResult?.duration}ms
+                  </p>
+                </div>
+              </div>
             </div>
-            <a href="/#pricing" className="px-8 py-4 rounded-xl border border-border hover:border-accent/50 text-foreground font-semibold text-sm transition-colors inline-block">Run Another Scan</a>
+
+            {/* Issue breakdown by module */}
+            {(scanResult?.totalIssues || 0) > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold">Issues Found</h3>
+                {scanResult?.modules.filter((m) => m.status === "failed").map((mod) => (
+                  <div key={`breakdown-${mod.name}`} className="p-4 rounded-xl border border-danger/20 bg-danger/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-danger font-bold text-sm">&#10007;</span>
+                        <span className="font-semibold">{mod.name}</span>
+                      </div>
+                      <span className="text-xs text-danger font-medium px-2 py-1 bg-danger/10 rounded-full">
+                        {mod.issues} issue{mod.issues > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    {mod.details && mod.details.length > 0 && (
+                      <ul className="space-y-1 mt-2">
+                        {mod.details.map((detail, i) => (
+                          <li key={i} className="text-sm text-muted flex items-start gap-2">
+                            <span className="text-danger/60 mt-0.5 shrink-0">&rarr;</span>
+                            <span className="font-mono text-xs">{detail}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Passed modules summary */}
+            {scanResult && scanResult.modules.filter((m) => m.status === "passed").length > 0 && (
+              <div className="p-4 rounded-xl border border-success/20 bg-success/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-success">&#10003;</span>
+                  <span className="font-semibold text-sm">
+                    {scanResult.modules.filter((m) => m.status === "passed").length} modules passed clean
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {scanResult.modules.filter((m) => m.status === "passed").map((mod) => (
+                    <span key={mod.name} className="text-xs px-2 py-1 rounded-full bg-success/10 text-success/80 border border-success/20">
+                      {mod.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* What to do next */}
+            <div className="p-6 rounded-xl border border-accent/30 bg-accent/5">
+              <h3 className="text-lg font-bold mb-3">What&apos;s Next?</h3>
+              {(scanResult?.totalIssues || 0) > 0 ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted">
+                    Your code has {scanResult?.totalIssues} issue{(scanResult?.totalIssues || 0) > 1 ? "s" : ""} that
+                    {params.tier === "quick"
+                      ? " were found in a Quick Scan (4 modules). A Full Scan checks 21 modules and finds even more."
+                      : " need attention. Upgrade to Scan + Fix and we'll automatically create a PR that fixes them."}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {params.tier === "quick" && (
+                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                        Upgrade to Full Scan — $99
+                      </a>
+                    )}
+                    {params.tier !== "fix" && params.tier !== "nuclear" && (
+                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                        Get Auto-Fix PR — $199
+                      </a>
+                    )}
+                    <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                      Run Another Scan
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted">
+                    {params.tier === "quick"
+                      ? "Your code passed all Quick Scan checks. Want to go deeper? The Full Scan runs 21 modules including security, accessibility, and AI code review."
+                      : "Your code is clean across all modules. Consider setting up continuous monitoring to keep it that way."}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {params.tier === "quick" && (
+                      <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                        Run Full Scan — $99
+                      </a>
+                    )}
+                    <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                      {params.tier === "quick" ? "See All Plans" : "Run Another Scan"}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Share / trust badge */}
+            <div className="text-center text-xs text-muted pt-4">
+              <p>Scanned by GateTest &middot; {scanResult?.completedModules} modules &middot; {new Date().toLocaleDateString()}</p>
+              <p className="mt-1">gatetest.io — The most advanced QA gate for AI-generated code</p>
+            </div>
           </div>
         )}
-
         {isFailed && (
           <div className="text-center">
             <div className="p-6 rounded-xl border border-danger/30 bg-danger/5 mb-6">
