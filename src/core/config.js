@@ -71,6 +71,7 @@ const DEFAULT_CONFIG = {
       'dataIntegrity',
       'documentation',
       'mutation',
+      'aiReview',
     ],
     live: [
       'liveCrawler',
@@ -98,6 +99,7 @@ const DEFAULT_CONFIG = {
       'explorer',
       'chaos',
       'mutation',
+      'aiReview',
     ],
   },
 
