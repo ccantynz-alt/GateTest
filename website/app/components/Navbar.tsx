@@ -75,8 +75,8 @@ export default function Navbar() {
           <a href="#comparison" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Compare</a>
           <a href="#integrations" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Integrations</a>
           <a href="#pricing" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Pricing</a>
-          <a href="#get-started" className="block px-5 py-2.5 text-sm font-medium rounded-lg bg-accent text-white text-center">
-            Get Started Free
+          <a href="#pricing" className="block px-5 py-2.5 text-sm font-medium rounded-lg bg-accent text-white text-center" onClick={() => setMobileOpen(false)}>
+            Scan My Repo
           </a>
         </div>
       )}
