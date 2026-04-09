@@ -15,6 +15,14 @@ import Footer from "./components/Footer";
 export default function Home() {
   return (
     <>
+      {/* Coming Soon Banner */}
+      <div className="fixed top-0 left-0 right-0 z-[60] bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 text-white text-center py-2 px-4 text-sm font-medium">
+        Coming Soon — GateTest is launching. Get early access on{" "}
+        <a href="https://github.com/apps/GateTestHQ" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-white/90">
+          GitHub
+        </a>
+      </div>
+      <div className="h-9" /> {/* Spacer for fixed banner */}
       <Navbar />
       <main>
         <Hero />

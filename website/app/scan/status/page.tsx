@@ -123,7 +123,34 @@ export default function ScanStatus() {
 
   // TRIGGER THE SCAN — one call, one response
   useEffect(() => {
-    if (!params.repo || scanTriggered.current) return;
+    if (scanTriggered.current) return;
+
+    // If we don't have the repo URL yet, try fetching it from the session
+    if (!params.repo && params.id) {
+      fetch(`/api/scan/status?id=${params.id}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.repoUrl) {
+            setParams((p) => ({ ...p, repo: data.repoUrl, tier: data.tier || p.tier }));
+          } else {
+            setScanResult({
+              status: "failed", modules: [], totalModules: 0, completedModules: 0,
+              totalIssues: 0, totalFixed: 0, duration: 0, error: "No repository URL found for this session",
+            });
+            setScanning(false);
+          }
+        })
+        .catch(() => {
+          setScanResult({
+            status: "failed", modules: [], totalModules: 0, completedModules: 0,
+            totalIssues: 0, totalFixed: 0, duration: 0, error: "Could not load scan session",
+          });
+          setScanning(false);
+        });
+      return;
+    }
+
+    if (!params.repo) return;
     scanTriggered.current = true;
 
     fetch("/api/scan/run", {
