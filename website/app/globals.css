@@ -125,3 +125,99 @@ body {
   animation: scan 3s linear infinite;
   opacity: 0.3;
 }
+
+/* === SCAN STATUS PAGE ANIMATIONS === */
+
+/* Module slide in from left */
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in { animation: slide-in 0.4s ease-out forwards; }
+
+/* Running module glow pulse */
+@keyframes module-pulse {
+  0%, 100% { background: rgba(99, 102, 241, 0.05); }
+  50% { background: rgba(99, 102, 241, 0.15); }
+}
+.module-running {
+  animation: module-pulse 1.5s ease-in-out infinite;
+  border-left: 2px solid var(--accent);
+}
+
+/* Check passed flash green */
+@keyframes flash-green {
+  0% { background: rgba(34, 197, 94, 0.3); }
+  100% { background: transparent; }
+}
+.flash-pass { animation: flash-green 0.8s ease-out; }
+
+/* Check failed flash red */
+@keyframes flash-red {
+  0% { background: rgba(239, 68, 68, 0.3); }
+  100% { background: transparent; }
+}
+.flash-fail { animation: flash-red 0.8s ease-out; }
+
+/* Progress bar glow */
+@keyframes progress-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.8); }
+}
+.progress-glow { animation: progress-glow 2s ease-in-out infinite; }
+
+/* Radar sweep for scanning state */
+@keyframes radar {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.radar-sweep { animation: radar 2s linear infinite; }
+
+/* Stats counter pop */
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop-in { animation: pop-in 0.5s ease-out forwards; }
+
+/* Completion celebration */
+@keyframes celebrate {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.celebrate { animation: celebrate 0.6s ease-out forwards; }
+
+/* Typing cursor blink */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: '|';
+  animation: blink 1s step-end infinite;
+  color: var(--accent-light);
+}
+
+/* Scan line across terminal */
+@keyframes terminal-scan {
+  0% { top: 0; opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+.terminal-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--accent-light) 50%, transparent 95%);
+  animation: terminal-scan 2.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Number counting animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.count-up { animation: count-up 0.3s ease-out; }
