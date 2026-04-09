@@ -6,7 +6,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong mt-9">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
           <div className="relative w-8 h-8">
