@@ -6,7 +6,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
           <div className="relative w-8 h-8">
@@ -69,7 +69,7 @@ export default function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl px-6 py-4 space-y-4">
+        <div className="md:hidden border-t border-border glass-strong px-6 py-4 space-y-4">
           <a href="#features" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Features</a>
           <a href="#modules" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Modules</a>
           <a href="#comparison" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Compare</a>
