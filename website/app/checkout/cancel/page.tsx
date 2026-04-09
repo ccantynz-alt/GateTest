@@ -1,0 +1,34 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Checkout Cancelled — GateTest",
+  description: "Your scan request was cancelled. No charge was made.",
+};
+
+export default function CheckoutCancel() {
+  return (
+    <div className="min-h-screen grid-bg flex items-center justify-center px-6 py-24">
+      <div className="max-w-xl w-full text-center">
+        <h1 className="text-3xl font-bold mb-4">Checkout cancelled</h1>
+        <p className="text-lg text-muted mb-8">
+          No worries — no charge was made. Your card was not held.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/#pricing"
+            className="px-8 py-4 text-base font-semibold rounded-xl bg-accent hover:bg-accent-light text-white transition-all"
+          >
+            Try Again
+          </a>
+          <a
+            href="/"
+            className="px-8 py-4 text-base font-semibold rounded-xl border border-border hover:border-accent/50 text-foreground transition-all"
+          >
+            Back to Home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}

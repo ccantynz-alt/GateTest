@@ -1,5 +1,10 @@
+"use client";
+
+import { useState } from "react";
+
 const scanPlans = [
   {
+    id: "quick",
     name: "Quick Scan",
     price: "$29",
     period: "per scan",
@@ -18,6 +23,7 @@ const scanPlans = [
     highlight: false,
   },
   {
+    id: "full",
     name: "Full Scan",
     price: "$99",
     period: "per scan",
@@ -38,6 +44,7 @@ const scanPlans = [
     highlight: false,
   },
   {
+    id: "fix",
     name: "Scan + Fix",
     price: "$199",
     period: "per scan",
@@ -58,6 +65,7 @@ const scanPlans = [
     highlight: true,
   },
   {
+    id: "nuclear",
     name: "Nuclear",
     price: "$399",
     period: "per scan",
@@ -111,6 +119,40 @@ const recurringPlans = [
 ];
 
 export default function Pricing() {
+  const [repoUrl, setRepoUrl] = useState("");
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCheckout(tierId: string) {
+    if (!repoUrl.includes("github.com")) {
+      setError("Please enter a valid GitHub repository URL");
+      return;
+    }
+
+    setLoading(tierId);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier: tierId, repoUrl }),
+      });
+
+      const data = await res.json();
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        setError(data.error || "Checkout is not available yet. Coming soon!");
+      }
+    } catch {
+      setError("Checkout is not available yet. Coming soon!");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <section
       id="pricing"
@@ -134,13 +176,33 @@ export default function Pricing() {
         </div>
 
         {/* Trust badge */}
-        <div className="flex justify-center mb-12">
+        <div className="flex justify-center mb-6">
           <div className="inline-flex items-center gap-2 bg-success/10 border border-success/20 rounded-full px-5 py-2 text-sm text-success">
             <span>&#9679;</span>
             <span>
               Card hold only &mdash; charged after successful scan delivery
             </span>
           </div>
+        </div>
+
+        {/* Repo URL input */}
+        <div className="max-w-xl mx-auto mb-12">
+          <label htmlFor="repo-url" className="block text-sm font-medium text-muted mb-2 text-center">
+            Enter your GitHub repo URL to get started
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="repo-url"
+              type="url"
+              value={repoUrl}
+              onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
+              placeholder="https://github.com/your-org/your-repo"
+              className="flex-1 px-4 py-3 rounded-lg bg-surface border border-border text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent/50 text-sm"
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-danger mt-2 text-center">{error}</p>
+          )}
         </div>
 
         {/* Per-scan tiers */}
@@ -172,16 +234,17 @@ export default function Pricing() {
               </div>
               <p className="text-sm text-muted mb-5">{plan.description}</p>
 
-              <a
-                href="#get-started"
-                className={`block text-center py-3 px-5 rounded-lg font-semibold text-sm transition-colors mb-6 ${
+              <button
+                onClick={() => handleCheckout(plan.id)}
+                disabled={loading === plan.id}
+                className={`block w-full text-center py-3 px-5 rounded-lg font-semibold text-sm transition-colors mb-6 cursor-pointer disabled:opacity-50 ${
                   plan.highlight
                     ? "bg-accent hover:bg-accent-light text-white"
                     : "border border-border hover:border-accent/50 text-foreground"
                 }`}
               >
-                {plan.cta}
-              </a>
+                {loading === plan.id ? "Redirecting..." : plan.cta}
+              </button>
 
               <ul className="space-y-2 mt-auto">
                 {plan.features.map((feature) => (

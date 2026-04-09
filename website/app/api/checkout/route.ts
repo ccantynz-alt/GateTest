@@ -1,0 +1,188 @@
+/**
+ * Stripe Checkout API — Creates a payment session with manual capture.
+ *
+ * Flow:
+ * 1. Customer selects a scan tier and provides repo URL
+ * 2. This route creates a Stripe Checkout Session with capture_method: manual
+ * 3. Customer completes payment → Stripe holds the funds
+ * 4. GateTest runs the scan
+ * 5. Scan succeeds → capture the payment
+ * 6. Scan fails → cancel the payment intent (hold released)
+ *
+ * Environment variables:
+ *   STRIPE_SECRET_KEY — Stripe secret key (sk_live_... or sk_test_...)
+ *   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY — For client-side (pk_live_... or pk_test_...)
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import https from "https";
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+
+interface ScanTier {
+  name: string;
+  priceInCents: number;
+  modules: string;
+  description: string;
+}
+
+const TIERS: Record<string, ScanTier> = {
+  quick: {
+    name: "Quick Scan",
+    priceInCents: 2900,
+    modules: "syntax, lint, secrets, codeQuality",
+    description: "4 modules — syntax, linting, secrets, code quality",
+  },
+  full: {
+    name: "Full Scan",
+    priceInCents: 9900,
+    modules: "all",
+    description: "All 21 modules — complete quality audit",
+  },
+  fix: {
+    name: "Scan + Fix",
+    priceInCents: 19900,
+    modules: "all+fix",
+    description: "All 21 modules + auto-fix PR delivered to your repo",
+  },
+  nuclear: {
+    name: "Nuclear",
+    priceInCents: 39900,
+    modules: "all+fix+crawl+mutation",
+    description: "Every module, mutation testing, live crawl, chaos testing, auto-fix PR",
+  },
+};
+
+function stripeRequest(
+  method: string,
+  path: string,
+  body?: string
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const options: https.RequestOptions = {
+      hostname: "api.stripe.com",
+      port: 443,
+      path,
+      method,
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    };
+
+    if (body) {
+      options.headers = {
+        ...options.headers,
+        "Content-Length": String(Buffer.byteLength(body)),
+      };
+    }
+
+    const req = https.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf-8");
+        try {
+          resolve(JSON.parse(raw));
+        } catch {
+          reject(new Error(`Stripe API error: ${raw}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => {
+      req.destroy();
+      reject(new Error("Stripe request timed out"));
+    });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+export async function POST(req: NextRequest) {
+  if (!STRIPE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Payments not configured yet" },
+      { status: 503 }
+    );
+  }
+
+  let input: { tier?: string; repoUrl?: string };
+  try {
+    input = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const tier = TIERS[input.tier || ""];
+  if (!tier) {
+    return NextResponse.json(
+      { error: `Invalid tier. Options: ${Object.keys(TIERS).join(", ")}` },
+      { status: 400 }
+    );
+  }
+
+  if (!input.repoUrl || !input.repoUrl.includes("github.com")) {
+    return NextResponse.json(
+      { error: "A valid GitHub repository URL is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Create Stripe Checkout Session with manual capture
+    const params = new URLSearchParams({
+      "payment_method_types[0]": "card",
+      mode: "payment",
+      "payment_intent_data[capture_method]": "manual",
+      "payment_intent_data[metadata][tier]": input.tier || "",
+      "payment_intent_data[metadata][repo_url]": input.repoUrl,
+      "payment_intent_data[metadata][modules]": tier.modules,
+      "line_items[0][price_data][currency]": "usd",
+      "line_items[0][price_data][unit_amount]": String(tier.priceInCents),
+      "line_items[0][price_data][product_data][name]": `GateTest ${tier.name}`,
+      "line_items[0][price_data][product_data][description]": tier.description,
+      "line_items[0][quantity]": "1",
+      success_url: `${BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/checkout/cancel`,
+    });
+
+    const session = await stripeRequest(
+      "POST",
+      "/v1/checkout/sessions",
+      params.toString()
+    );
+
+    if (session.error) {
+      return NextResponse.json(
+        { error: (session.error as Record<string, string>).message },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      checkoutUrl: session.url,
+      sessionId: session.id,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// GET — return available tiers
+export async function GET() {
+  return NextResponse.json({
+    tiers: Object.entries(TIERS).map(([key, tier]) => ({
+      id: key,
+      name: tier.name,
+      price: `$${(tier.priceInCents / 100).toFixed(0)}`,
+      priceInCents: tier.priceInCents,
+      modules: tier.modules,
+      description: tier.description,
+    })),
+    paymentModel: "hold-then-charge",
+    note: "Card is held at checkout. Charged only after successful scan delivery. Hold released if scan fails.",
+  });
+}
