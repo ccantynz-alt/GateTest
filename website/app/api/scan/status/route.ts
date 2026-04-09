@@ -1,10 +1,14 @@
 /**
- * Scan Status API — Reads scan progress from Stripe payment intent.
+ * Scan Status API — Reads scan result from Stripe payment intent metadata.
  *
  * GET /api/scan/status?id=<checkoutSessionId>
  *
- * Reads the checkout session and payment intent from Stripe to determine
- * scan status. All scan results are stored in Stripe metadata.
+ * Simple logic:
+ * 1. Fetch checkout session from Stripe
+ * 2. Fetch payment intent
+ * 3. If scan_status exists in metadata → return the result
+ * 4. If payment cancelled → return failed
+ * 5. Otherwise → show scanning animation
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -40,15 +44,10 @@ function stripeGet(path: string): Promise<Record<string, unknown>> {
   });
 }
 
-/**
- * Parse module results from Stripe metadata.
- * Modules are stored as: modules_0, modules_1, etc.
- * Each value is: "name:status:checks:issues:duration|name:status:..."
- */
 function parseModulesFromMetadata(meta: Record<string, string>): Array<Record<string, unknown>> {
   const modules: Array<Record<string, unknown>> = [];
 
-  // Collect all module chunks
+  // Collect chunked module data: modules_0, modules_1, etc.
   let allModuleData = "";
   for (let i = 0; i < 10; i++) {
     const chunk = meta[`modules_${i}`];
@@ -71,7 +70,7 @@ function parseModulesFromMetadata(meta: Record<string, string>): Array<Record<st
     }
   }
 
-  // Fallback: use modules_list if chunked data not available
+  // Fallback: use modules_list
   if (modules.length === 0 && meta.modules_list) {
     for (const name of meta.modules_list.split(",")) {
       if (name.trim()) {
@@ -83,43 +82,68 @@ function parseModulesFromMetadata(meta: Record<string, string>): Array<Record<st
   return modules;
 }
 
+function buildModuleAnimation(tier: string, startTime: number) {
+  const moduleNames =
+    tier === "quick"
+      ? ["syntax", "lint", "secrets", "codeQuality"]
+      : [
+          "syntax", "lint", "secrets", "codeQuality", "unitTests",
+          "integrationTests", "e2e", "visual", "accessibility",
+          "performance", "security", "seo", "links", "compatibility",
+          "dataIntegrity", "documentation", "mutation", "aiReview",
+        ];
+
+  // Progress based on time since scan started — never resets
+  const elapsedMs = Date.now() - startTime;
+  const totalEstimatedMs = moduleNames.length * 2000; // ~2s per module estimate
+  const progress = Math.min(Math.round((elapsedMs / totalEstimatedMs) * 95) + 5, 95);
+  const completed = Math.min(
+    Math.floor((elapsedMs / totalEstimatedMs) * moduleNames.length),
+    moduleNames.length - 1
+  );
+
+  return {
+    status: "scanning" as const,
+    progress,
+    currentModule: moduleNames[completed],
+    modules: moduleNames.map((name, i) => ({
+      name,
+      status: i < completed ? "passed" : i === completed ? "running" : "pending",
+      checks: i < completed ? 5 + (i * 3) : 0,
+      issues: 0,
+      duration: i < completed ? 100 + (i * 50) : 0,
+    })),
+    totalModules: moduleNames.length,
+    completedModules: completed,
+    totalIssues: 0,
+    totalFixed: 0,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const scanId = req.nextUrl.searchParams.get("id");
 
   if (!scanId || !STRIPE_SECRET_KEY) {
     return NextResponse.json({
-      id: scanId,
-      status: "pending",
-      progress: 0,
-      modules: [],
-      totalModules: 0,
-      completedModules: 0,
-      totalIssues: 0,
-      totalFixed: 0,
+      id: scanId, status: "pending", progress: 0, modules: [],
+      totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
     });
   }
 
   try {
-    // Fetch checkout session
+    // Step 1: Get checkout session
     const session = (await stripeGet(`/v1/checkout/sessions/${scanId}`)) as {
       payment_intent?: string;
       metadata?: Record<string, string>;
-      payment_status?: string;
       status?: string;
+      created?: number;
       error?: { message?: string };
     };
 
-    // Handle invalid session ID
     if (session.error) {
       return NextResponse.json({
-        id: scanId,
-        status: "failed",
-        progress: 0,
-        modules: [],
-        totalModules: 0,
-        completedModules: 0,
-        totalIssues: 0,
-        totalFixed: 0,
+        id: scanId, status: "failed", progress: 0, modules: [],
+        totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
         error: "Invalid scan ID",
       });
     }
@@ -127,169 +151,85 @@ export async function GET(req: NextRequest) {
     const sessionMeta = session.metadata || {};
     const tier = sessionMeta.tier || "full";
     const repoUrl = sessionMeta.repo_url || "";
+    const sessionCreated = (session.created || Math.floor(Date.now() / 1000)) * 1000;
 
-    // No payment intent yet — checkout not completed
+    // No payment intent — checkout not completed yet
     if (!session.payment_intent) {
       return NextResponse.json({
-        id: scanId,
-        status: "pending",
-        progress: 0,
-        modules: [],
-        totalModules: 0,
-        completedModules: 0,
-        totalIssues: 0,
-        totalFixed: 0,
-        repoUrl,
-        tier,
+        id: scanId, status: "pending", progress: 0, modules: [],
+        totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
+        repoUrl, tier,
       });
     }
 
-    // Fetch payment intent
+    // Step 2: Get payment intent
     const pi = (await stripeGet(`/v1/payment_intents/${session.payment_intent}`)) as {
       metadata?: Record<string, string>;
       status?: string;
     };
 
     const piMeta = pi.metadata || {};
-    const piStatus = pi.status; // requires_capture, succeeded, canceled
+    const piStatus = pi.status;
 
-    // CASE 1: Payment was cancelled — scan failed or hold released
-    if (piStatus === "canceled") {
-      const scanResult = piMeta.scan_status;
-      let modules: Array<Record<string, unknown>> = [];
-
-      modules = parseModulesFromMetadata(piMeta);
-
-      // If scan completed but payment was manually cancelled, show results
-      if (scanResult === "complete" && modules.length > 0) {
-        return NextResponse.json({
-          id: scanId,
-          status: "complete",
-          progress: 100,
-          modules,
-          totalModules: parseInt(piMeta.total_modules || "0"),
-          completedModules: parseInt(piMeta.total_modules || "0"),
-          totalIssues: parseInt(piMeta.total_issues || "0"),
-          totalFixed: 0,
-          repoUrl: piMeta.repo_url || repoUrl,
-          tier: piMeta.tier || tier,
-          completedAt: piMeta.scan_completed,
-        });
-      }
-
-      // Scan failed or was cancelled before completion
-      return NextResponse.json({
-        id: scanId,
-        status: "failed",
-        progress: 0,
-        modules,
-        totalModules: parseInt(piMeta.total_modules || "0"),
-        completedModules: 0,
-        totalIssues: 0,
-        totalFixed: 0,
-        repoUrl: piMeta.repo_url || repoUrl,
-        tier: piMeta.tier || tier,
-        error: piMeta.scan_status === "failed"
-          ? "Scan could not complete — card hold released"
-          : "Payment cancelled — card hold released",
-      });
-    }
-
-    // CASE 2: Payment captured — scan completed and charged
-    if (piStatus === "succeeded") {
+    // ──────────────────────────────────────────────────
+    // PRIORITY 1: Check if scan_status exists in metadata
+    // This is the DEFINITIVE answer — if it's there, the scan finished
+    // ──────────────────────────────────────────────────
+    if (piMeta.scan_status) {
       const modules = parseModulesFromMetadata(piMeta);
 
       return NextResponse.json({
         id: scanId,
-        status: "complete",
+        status: piMeta.scan_status === "complete" ? "complete" : "failed",
         progress: 100,
         modules,
         totalModules: parseInt(piMeta.total_modules || "0"),
         completedModules: parseInt(piMeta.total_modules || "0"),
         totalIssues: parseInt(piMeta.total_issues || "0"),
-        totalFixed: 0,
+        totalFixed: parseInt(piMeta.total_fixed || "0"),
         repoUrl: piMeta.repo_url || repoUrl,
         tier: piMeta.tier || tier,
         completedAt: piMeta.scan_completed,
+        duration: parseInt(piMeta.scan_duration || "0"),
+        error: piMeta.scan_status === "failed" ? (piMeta.scan_error || "Scan failed") : null,
       });
     }
 
-    // CASE 3: requires_capture — scan complete, payment waiting to be captured
-    if (piStatus === "requires_capture") {
-      const scanResult = piMeta.scan_status;
-
-      if (scanResult === "complete" || scanResult === "failed") {
-        const modules = parseModulesFromMetadata(piMeta);
-
-        return NextResponse.json({
-          id: scanId,
-          status: scanResult,
-          progress: 100,
-          modules,
-          totalModules: parseInt(piMeta.total_modules || "0"),
-          completedModules: parseInt(piMeta.total_modules || "0"),
-          totalIssues: parseInt(piMeta.total_issues || "0"),
-          totalFixed: 0,
-          repoUrl: piMeta.repo_url || repoUrl,
-          tier: piMeta.tier || tier,
-          completedAt: piMeta.scan_completed,
-          error: scanResult === "failed" ? "Scan failed" : null,
-        });
-      }
-
-      // Payment captured but no scan result yet — scan is running
-      // Fall through to scanning state
+    // ──────────────────────────────────────────────────
+    // PRIORITY 2: Payment cancelled without scan result
+    // ──────────────────────────────────────────────────
+    if (piStatus === "canceled") {
+      return NextResponse.json({
+        id: scanId,
+        status: "failed",
+        progress: 0,
+        modules: [],
+        totalModules: 0,
+        completedModules: 0,
+        totalIssues: 0,
+        totalFixed: 0,
+        repoUrl, tier,
+        error: "Payment cancelled — card hold released",
+      });
     }
 
-    // CASE 4: Scan is in progress (requires_payment_method or processing)
-    const moduleNames =
-      tier === "quick"
-        ? ["syntax", "lint", "secrets", "codeQuality"]
-        : [
-            "syntax", "lint", "secrets", "codeQuality", "unitTests",
-            "integrationTests", "e2e", "visual", "accessibility",
-            "performance", "security", "seo", "links", "compatibility",
-            "dataIntegrity", "documentation", "mutation", "aiReview",
-          ];
-
-    // Show animated scanning state
-    const elapsed = Date.now() % 20000; // Cycle every 20 seconds
-    const fakeProgress = Math.min(Math.round((elapsed / 20000) * 90) + 10, 95);
-    const fakeCompleted = Math.min(
-      Math.floor((elapsed / 20000) * moduleNames.length),
-      moduleNames.length - 1
-    );
+    // ──────────────────────────────────────────────────
+    // PRIORITY 3: Scan is still running — show animation
+    // Progress is based on time since checkout, never resets
+    // ──────────────────────────────────────────────────
+    const animation = buildModuleAnimation(tier, sessionCreated);
 
     return NextResponse.json({
       id: scanId,
-      status: "scanning",
-      progress: fakeProgress,
-      currentModule: moduleNames[fakeCompleted],
-      modules: moduleNames.map((name, i) => ({
-        name,
-        status: i < fakeCompleted ? "passed" : i === fakeCompleted ? "running" : "pending",
-        checks: i < fakeCompleted ? Math.floor(Math.random() * 20) + 5 : 0,
-        issues: 0,
-        duration: i < fakeCompleted ? Math.floor(Math.random() * 300) + 50 : 0,
-      })),
-      totalModules: moduleNames.length,
-      completedModules: fakeCompleted,
-      totalIssues: 0,
-      totalFixed: 0,
-      repoUrl: piMeta.repo_url || repoUrl,
-      tier,
+      ...animation,
+      repoUrl, tier,
     });
+
   } catch (err) {
     return NextResponse.json({
-      id: scanId,
-      status: "failed",
-      progress: 0,
-      modules: [],
-      totalModules: 0,
-      completedModules: 0,
-      totalIssues: 0,
-      totalFixed: 0,
-      error: `Error checking scan: ${err instanceof Error ? err.message : "unknown"}`,
+      id: scanId, status: "failed", progress: 0, modules: [],
+      totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
+      error: `Error: ${err instanceof Error ? err.message : "unknown"}`,
     });
   }
 }
