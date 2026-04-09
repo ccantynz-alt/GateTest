@@ -40,10 +40,16 @@ export default function Navbar() {
 
         <div className="hidden md:flex items-center gap-4">
           <a
-            href="#get-started"
+            href="/github/setup"
+            className="px-5 py-2.5 text-sm font-medium rounded-lg border border-border hover:border-accent/50 text-foreground transition-colors"
+          >
+            Install GitHub App
+          </a>
+          <a
+            href="#pricing"
             className="px-5 py-2.5 text-sm font-medium rounded-lg bg-accent hover:bg-accent-light text-white transition-colors pulse-glow"
           >
-            Get Started Free
+            Scan My Repo
           </a>
         </div>
 

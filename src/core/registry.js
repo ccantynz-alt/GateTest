@@ -27,6 +27,7 @@ const BUILT_IN_MODULES = {
   explorer: '../modules/explorer.js',
   chaos: '../modules/chaos.js',
   mutation: '../modules/mutation.js',
+  aiReview: '../modules/ai-review.js',
 };
 
 class ModuleRegistry {

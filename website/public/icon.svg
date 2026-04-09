@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0f23"/>
+      <stop offset="100%" style="stop-color:#13132b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#a78bfa"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#6366f1" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="400" rx="80" fill="url(#bg)"/>
+  <rect x="4" y="4" width="392" height="392" rx="76" fill="none" stroke="url(#accent)" stroke-width="3" opacity="0.4"/>
+
+  <!-- Shield -->
+  <path d="M200 55 L310 115 L310 245 Q310 320 200 355 Q90 320 90 245 L90 115 Z"
+        fill="url(#bg)" stroke="url(#glow)" stroke-width="5" filter="url(#shadow)"/>
+
+  <!-- Checkmark -->
+  <path d="M155 215 L190 250 L260 165"
+        fill="none" stroke="url(#accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Scan lines -->
+  <line x1="115" y1="175" x2="285" y2="175" stroke="#6366f1" stroke-width="1" opacity="0.15"/>
+  <line x1="110" y1="205" x2="290" y2="205" stroke="#6366f1" stroke-width="1" opacity="0.15"/>
+  <line x1="108" y1="235" x2="292" y2="235" stroke="#6366f1" stroke-width="1" opacity="0.1"/>
+  <line x1="115" y1="265" x2="285" y2="265" stroke="#6366f1" stroke-width="1" opacity="0.08"/>
+</svg>

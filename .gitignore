@@ -10,3 +10,4 @@ dist/
 .DS_Store
 website/.next/
 website/node_modules/
+package-lock.json

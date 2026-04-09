@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head><title>GateTest Logos — Right-click to Save</title></head>
+<body style="background:#000;padding:40px;text-align:center;">
+<h2 style="color:#fff;font-family:system-ui;">Right-click each image → Save Image As → PNG</h2>
+
+<h3 style="color:#888;font-family:system-ui;">Icon (for GitHub avatar)</h3>
+<canvas id="icon" width="400" height="400"></canvas>
+
+<h3 style="color:#888;font-family:system-ui;">Logo (for Stripe branding)</h3>
+<canvas id="logo" width="512" height="512"></canvas>
+
+<script>
+// Icon
+const ic = document.getElementById('icon').getContext('2d');
+// Background
+ic.fillStyle = '#0f0f23';
+ic.beginPath();
+ic.roundRect(0,0,400,400,80);
+ic.fill();
+// Border
+ic.strokeStyle = '#6366f1';
+ic.lineWidth = 3;
+ic.globalAlpha = 0.4;
+ic.beginPath();
+ic.roundRect(4,4,392,392,76);
+ic.stroke();
+ic.globalAlpha = 1;
+// Shield
+ic.fillStyle = '#0f0f23';
+ic.strokeStyle = '#818cf8';
+ic.lineWidth = 5;
+ic.beginPath();
+ic.moveTo(200,55);ic.lineTo(310,115);ic.lineTo(310,245);
+ic.quadraticCurveTo(310,320,200,355);
+ic.quadraticCurveTo(90,320,90,245);
+ic.lineTo(90,115);ic.closePath();
+ic.fill();
+ic.shadowColor = '#6366f1';
+ic.shadowBlur = 20;
+ic.stroke();
+ic.shadowBlur = 0;
+// Checkmark
+const g = ic.createLinearGradient(155,165,260,250);
+g.addColorStop(0,'#6366f1');g.addColorStop(1,'#8b5cf6');
+ic.strokeStyle = g;
+ic.lineWidth = 14;
+ic.lineCap = 'round';
+ic.lineJoin = 'round';
+ic.beginPath();
+ic.moveTo(155,215);ic.lineTo(190,250);ic.lineTo(260,165);
+ic.stroke();
+// Scan lines
+ic.strokeStyle = '#6366f1';ic.lineWidth = 1;
+[175,205,235,265].forEach((y,i) => {
+  ic.globalAlpha = 0.15 - i*0.03;
+  ic.beginPath();ic.moveTo(115,y);ic.lineTo(285,y);ic.stroke();
+});
+ic.globalAlpha = 1;
+
+// Logo
+const lc = document.getElementById('logo').getContext('2d');
+// Background
+lc.fillStyle = '#0a0a1a';
+lc.beginPath();lc.arc(256,256,250,0,Math.PI*2);lc.fill();
+lc.strokeStyle = '#6366f1';lc.lineWidth = 4;
+lc.beginPath();lc.arc(256,256,250,0,Math.PI*2);lc.stroke();
+// Shield
+lc.fillStyle = '#0a0a1a';
+lc.strokeStyle = '#818cf8';
+lc.lineWidth = 6;
+lc.beginPath();
+lc.moveTo(256,80);lc.lineTo(380,150);lc.lineTo(380,300);
+lc.quadraticCurveTo(380,380,256,430);
+lc.quadraticCurveTo(132,380,132,300);
+lc.lineTo(132,150);lc.closePath();
+lc.shadowColor = '#6366f1';lc.shadowBlur = 24;
+lc.stroke();lc.shadowBlur = 0;
+lc.globalAlpha = 0.8;lc.fill();lc.globalAlpha = 1;
+// Checkmark
+const g2 = lc.createLinearGradient(200,200,320,300);
+g2.addColorStop(0,'#6366f1');g2.addColorStop(1,'#8b5cf6');
+lc.strokeStyle = g2;
+lc.lineWidth = 16;lc.lineCap = 'round';lc.lineJoin = 'round';
+lc.shadowColor = '#818cf8';lc.shadowBlur = 12;
+lc.beginPath();lc.moveTo(200,260);lc.lineTo(240,300);lc.lineTo(320,200);
+lc.stroke();lc.shadowBlur = 0;
+// Scan lines
+lc.strokeStyle = '#6366f1';lc.lineWidth = 1;
+[210,240,270,300,330].forEach((y,i) => {
+  lc.globalAlpha = 0.2 - i*0.03;
+  lc.beginPath();lc.moveTo(160,y);lc.lineTo(352,y);lc.stroke();
+});
+lc.globalAlpha = 1;
+// Text
+lc.font = '800 36px system-ui, -apple-system, sans-serif';
+lc.letterSpacing = '8px';
+lc.textAlign = 'center';
+lc.fillStyle = '#e2e8f0';
+lc.fillText('GATE', 230, 480);
+lc.fillStyle = '#818cf8';
+lc.fillText('TEST', 330, 480);
+</script>
+</body>
+</html>

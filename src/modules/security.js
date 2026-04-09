@@ -20,7 +20,7 @@ class SecurityModule extends BaseModule {
     // Dependency vulnerability scan
     this._checkDependencies(projectRoot, result);
 
-    // Source code security patterns
+    // Source code security patterns (OWASP Top 10)
     this._checkSourcePatterns(projectRoot, result);
 
     // Check for dangerous file permissions
@@ -34,6 +34,18 @@ class SecurityModule extends BaseModule {
 
     // Scan for hardcoded secrets, API keys, tokens, and passwords
     this._scanForSecrets(projectRoot, result);
+
+    // Docker security
+    this._checkDockerSecurity(projectRoot, result);
+
+    // .gitignore validation — sensitive files must be ignored
+    this._checkGitignore(projectRoot, result);
+
+    // Dependency license compliance
+    this._checkLicenseCompliance(projectRoot, result);
+
+    // Environment file security
+    this._checkEnvFiles(projectRoot, result);
 
     // Live security headers validation
     await this._checkSecurityHeaders(config, result);
@@ -351,6 +363,229 @@ class SecurityModule extends BaseModule {
         message: `Failed to check security headers: ${err.message}`,
         suggestion: 'Ensure the URL is reachable and the server is running',
       });
+    }
+  }
+
+  _checkDockerSecurity(projectRoot, result) {
+    const dockerfiles = ['Dockerfile', 'docker-compose.yml', 'docker-compose.yaml'];
+
+    for (const df of dockerfiles) {
+      const filePath = path.join(projectRoot, df);
+      if (!fs.existsSync(filePath)) continue;
+
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n');
+
+      // Running as root
+      if (df === 'Dockerfile') {
+        const hasUser = lines.some(l => /^\s*USER\s+(?!root)/i.test(l));
+        if (!hasUser) {
+          result.addCheck('security:docker-root', false, {
+            file: df,
+            severity: 'error',
+            message: 'Dockerfile runs as root — no USER directive found',
+            suggestion: 'Add "USER node" or "USER appuser" before the CMD instruction',
+          });
+        }
+
+        // Using :latest tag
+        for (let i = 0; i < lines.length; i++) {
+          if (/^\s*FROM\s+\S+:latest/i.test(lines[i]) || /^\s*FROM\s+\S+\s*$/i.test(lines[i])) {
+            result.addCheck(`security:docker-latest:${i + 1}`, false, {
+              file: df, line: i + 1,
+              severity: 'warning',
+              message: 'Using :latest or untagged image — builds are not reproducible',
+              suggestion: 'Pin to a specific version: e.g., node:20-alpine',
+            });
+          }
+        }
+
+        // COPY . . without .dockerignore
+        if (content.includes('COPY . .') || content.includes('ADD . .')) {
+          if (!fs.existsSync(path.join(projectRoot, '.dockerignore'))) {
+            result.addCheck('security:docker-no-dockerignore', false, {
+              file: df,
+              severity: 'error',
+              message: 'COPY/ADD entire directory without .dockerignore — secrets may be included',
+              suggestion: 'Create a .dockerignore file excluding .env, .git, node_modules, etc.',
+            });
+          }
+        }
+
+        // Exposing secrets via ENV
+        for (let i = 0; i < lines.length; i++) {
+          if (/^\s*ENV\s+.*(?:password|secret|token|key|api_key)/i.test(lines[i])) {
+            result.addCheck(`security:docker-env-secret:${i + 1}`, false, {
+              file: df, line: i + 1,
+              severity: 'error',
+              message: 'Secret exposed in Dockerfile ENV instruction — visible in image layers',
+              suggestion: 'Use --mount=type=secret or runtime environment variables instead',
+            });
+          }
+        }
+      }
+
+      // docker-compose: privileged mode
+      if (df.includes('compose')) {
+        if (content.includes('privileged: true')) {
+          result.addCheck('security:docker-privileged', false, {
+            file: df,
+            severity: 'error',
+            message: 'Container running in privileged mode — full host access',
+            suggestion: 'Remove "privileged: true" unless absolutely necessary',
+          });
+        }
+
+        // Exposed ports to 0.0.0.0
+        const portPattern = /ports:\s*\n(\s+-\s*['"]?\d+:\d+)/g;
+        if (portPattern.test(content)) {
+          result.addCheck('security:docker-ports', true, {
+            file: df,
+            severity: 'info',
+            message: 'Review exposed ports — bind to 127.0.0.1 for local-only services',
+          });
+        }
+      }
+    }
+  }
+
+  _checkGitignore(projectRoot, result) {
+    const gitignorePath = path.join(projectRoot, '.gitignore');
+    if (!fs.existsSync(gitignorePath)) {
+      if (fs.existsSync(path.join(projectRoot, '.git'))) {
+        result.addCheck('security:gitignore-missing', false, {
+          severity: 'error',
+          message: 'Git repository has no .gitignore — sensitive files may be committed',
+          suggestion: 'Create a .gitignore excluding .env, node_modules, .pem, credentials, etc.',
+        });
+      }
+      return;
+    }
+
+    const content = fs.readFileSync(gitignorePath, 'utf-8').toLowerCase();
+
+    const mustIgnore = [
+      { pattern: '.env', check: content.includes('.env'), label: '.env files' },
+      { pattern: 'node_modules', check: content.includes('node_modules'), label: 'node_modules' },
+      { pattern: '.pem', check: content.includes('.pem') || content.includes('*.pem'), label: 'PEM keys' },
+    ];
+
+    for (const item of mustIgnore) {
+      if (!item.check) {
+        // Verify the files actually exist before flagging
+        const exists = this._collectFiles(projectRoot, ['*']).some(f =>
+          path.basename(f).includes(item.pattern) || f.includes(item.pattern)
+        );
+        if (item.pattern === 'node_modules' || item.pattern === '.env') {
+          result.addCheck(`security:gitignore:${item.pattern}`, false, {
+            file: '.gitignore',
+            severity: item.pattern === '.env' ? 'error' : 'warning',
+            message: `${item.label} not in .gitignore`,
+            suggestion: `Add "${item.pattern}" to .gitignore`,
+          });
+        }
+      }
+    }
+  }
+
+  _checkLicenseCompliance(projectRoot, result) {
+    const pkgPath = path.join(projectRoot, 'package.json');
+    if (!fs.existsSync(pkgPath)) return;
+
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+
+      if (Object.keys(allDeps).length === 0) return;
+
+      // Check for known copyleft/restrictive licenses in node_modules
+      const nodeModules = path.join(projectRoot, 'node_modules');
+      if (!fs.existsSync(nodeModules)) return;
+
+      const copyleftLicenses = ['GPL-2.0', 'GPL-3.0', 'AGPL-3.0', 'AGPL-1.0', 'SSPL-1.0', 'EUPL-1.1', 'EUPL-1.2'];
+      const flagged = [];
+
+      for (const dep of Object.keys(allDeps).slice(0, 50)) {
+        const depPkgPath = path.join(nodeModules, dep, 'package.json');
+        if (!fs.existsSync(depPkgPath)) continue;
+
+        try {
+          const depPkg = JSON.parse(fs.readFileSync(depPkgPath, 'utf-8'));
+          const license = depPkg.license || '';
+
+          if (copyleftLicenses.some(cl => license.toUpperCase().includes(cl.toUpperCase()))) {
+            flagged.push({ name: dep, license });
+          }
+        } catch { /* skip */ }
+      }
+
+      if (flagged.length > 0) {
+        for (const dep of flagged.slice(0, 5)) {
+          result.addCheck(`security:license:${dep.name}`, false, {
+            severity: 'warning',
+            message: `Dependency "${dep.name}" has copyleft license: ${dep.license}`,
+            suggestion: 'Copyleft licenses may require you to open-source your code. Review compliance.',
+          });
+        }
+      } else {
+        result.addCheck('security:licenses', true, {
+          severity: 'info',
+          message: 'No copyleft license conflicts detected in dependencies',
+        });
+      }
+    } catch { /* skip */ }
+  }
+
+  _checkEnvFiles(projectRoot, result) {
+    // Check if .env files are committed (should never be)
+    const envFiles = ['.env', '.env.local', '.env.production', '.env.staging'];
+    const gitDir = path.join(projectRoot, '.git');
+
+    if (!fs.existsSync(gitDir)) return;
+
+    for (const envFile of envFiles) {
+      const envPath = path.join(projectRoot, envFile);
+      if (!fs.existsSync(envPath)) continue;
+
+      // Check if file is tracked by git
+      const { exitCode } = this._exec(`git ls-files --error-unmatch "${envFile}" 2>/dev/null`, {
+        cwd: projectRoot,
+      });
+
+      if (exitCode === 0) {
+        result.addCheck(`security:env-tracked:${envFile}`, false, {
+          file: envFile,
+          severity: 'error',
+          message: `${envFile} is tracked by git — secrets are in your repo history`,
+          suggestion: `Add "${envFile}" to .gitignore and remove from tracking: git rm --cached ${envFile}`,
+        });
+      }
+
+      // Check env file contents for real-looking secrets (not placeholders)
+      const content = fs.readFileSync(envPath, 'utf-8');
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith('#')) continue;
+
+        const match = line.match(/^([^=]+)=(.+)$/);
+        if (match) {
+          const value = match[2].trim().replace(/^['"]|['"]$/g, '');
+          // Flag values that look like real secrets (high entropy, not placeholders)
+          if (value.length > 20 && !/^(your_|changeme|placeholder|example|xxx|test|dummy)/i.test(value)) {
+            if (/[A-Za-z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value)) {
+              result.addCheck(`security:env-secret:${envFile}:${match[1]}`, false, {
+                file: envFile,
+                line: i + 1,
+                severity: 'warning',
+                message: `${match[1]} in ${envFile} appears to contain a real secret`,
+                suggestion: 'Ensure this file is in .gitignore and never committed',
+              });
+              break; // One warning per file
+            }
+          }
+        }
+      }
     }
   }
 
