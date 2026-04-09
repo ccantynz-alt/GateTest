@@ -37,20 +37,8 @@ const TIERS: Record<string, ScanTier> = {
   full: {
     name: "Full Scan",
     priceInCents: 9900,
-    modules: "all",
-    description: "All 21 modules — complete quality audit",
-  },
-  fix: {
-    name: "Scan + Fix",
-    priceInCents: 19900,
-    modules: "all+fix",
-    description: "All 21 modules + auto-fix PR delivered to your repo",
-  },
-  nuclear: {
-    name: "Nuclear",
-    priceInCents: 39900,
-    modules: "all+fix+crawl+mutation",
-    description: "Every module, mutation testing, live crawl, chaos testing, auto-fix PR",
+    modules: "all-13",
+    description: "All 13 modules — security, accessibility, SEO, AI review, and more",
   },
 };
 

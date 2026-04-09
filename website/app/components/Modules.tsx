@@ -1,162 +1,166 @@
-const modules = [
+const activeModules = [
   {
     name: "Syntax",
-    description: "Zero compilation errors. JS, TS, JSON, YAML — every file validates.",
+    description: "Validates JS, TS, JSON, YAML, CSS, HTML. Catches broken imports and unclosed brackets.",
     icon: "{ }",
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
-    border: "border-blue-400/20",
   },
   {
     name: "Lint",
-    description: "ESLint, Stylelint, Markdownlint. Zero warnings policy.",
+    description: "ESLint, Stylelint checks. Catches var usage, formatting issues, style violations.",
     icon: "~",
-    color: "text-purple-400",
-    bg: "bg-purple-400/10",
-    border: "border-purple-400/20",
   },
   {
     name: "Secrets",
-    description: "Detects API keys, tokens, passwords, private keys in source code.",
+    description: "14 patterns: AWS keys, GitHub tokens, Stripe keys, passwords, private keys, DB strings.",
     icon: "!",
-    color: "text-red-400",
-    bg: "bg-red-400/10",
-    border: "border-red-400/20",
   },
   {
     name: "Code Quality",
-    description: "Catches console.log, debugger, TODO/FIXME, eval(), complexity issues.",
+    description: "Catches console.log, debugger, TODO/FIXME, eval(), function complexity.",
     icon: "Q",
-    color: "text-amber-400",
-    bg: "bg-amber-400/10",
-    border: "border-amber-400/20",
-  },
-  {
-    name: "Unit Tests",
-    description: "Auto-detects Jest, Vitest, Mocha. Enforces coverage thresholds.",
-    icon: "U",
-    color: "text-green-400",
-    bg: "bg-green-400/10",
-    border: "border-green-400/20",
-  },
-  {
-    name: "Integration",
-    description: "API endpoints, database operations, service integrations.",
-    icon: "I",
-    color: "text-teal-400",
-    bg: "bg-teal-400/10",
-    border: "border-teal-400/20",
-  },
-  {
-    name: "E2E",
-    description: "Playwright, Cypress, Puppeteer. Full user journey testing.",
-    icon: "E",
-    color: "text-cyan-400",
-    bg: "bg-cyan-400/10",
-    border: "border-cyan-400/20",
-  },
-  {
-    name: "Visual",
-    description: "Pixel-diff regression, fonts, layout shifts, design tokens.",
-    icon: "V",
-    color: "text-pink-400",
-    bg: "bg-pink-400/10",
-    border: "border-pink-400/20",
-  },
-  {
-    name: "Accessibility",
-    description: "WCAG 2.2 AAA — alt text, ARIA, focus, contrast, screen readers.",
-    icon: "A",
-    color: "text-violet-400",
-    bg: "bg-violet-400/10",
-    border: "border-violet-400/20",
-  },
-  {
-    name: "Performance",
-    description: "Bundle budgets, Core Web Vitals, Lighthouse scores, memory leaks.",
-    icon: "P",
-    color: "text-orange-400",
-    bg: "bg-orange-400/10",
-    border: "border-orange-400/20",
   },
   {
     name: "Security",
-    description: "OWASP patterns, CVE scanning, XSS, SQLi, CSRF, CSP validation.",
+    description: "OWASP patterns, XSS, SQL injection, innerHTML, shell exec, Docker misconfigs.",
     icon: "S",
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-    border: "border-red-500/20",
+  },
+  {
+    name: "Accessibility",
+    description: "WCAG 2.2 AAA — missing alt text, ARIA labels, keyboard traps, heading hierarchy.",
+    icon: "A",
   },
   {
     name: "SEO",
-    description: "Meta tags, Open Graph, structured data, sitemaps, robots.txt.",
+    description: "Meta tags, Open Graph, structured data, robots.txt, canonical URLs.",
     icon: "O",
-    color: "text-emerald-400",
-    bg: "bg-emerald-400/10",
-    border: "border-emerald-400/20",
   },
   {
     name: "Links",
-    description: "Broken internal and external link detection across your entire site.",
+    description: "Finds every broken href — dead anchors, placeholder links, 404s.",
     icon: "L",
-    color: "text-sky-400",
-    bg: "bg-sky-400/10",
-    border: "border-sky-400/20",
   },
   {
     name: "Compatibility",
-    description: "Browser matrix validation. Modern API and CSS polyfill checks.",
+    description: "Browser matrix validation. Modern API and CSS features without polyfills.",
     icon: "C",
-    color: "text-indigo-400",
-    bg: "bg-indigo-400/10",
-    border: "border-indigo-400/20",
   },
   {
     name: "Data Integrity",
-    description: "Database schema, migrations, PII handling, GDPR compliance.",
+    description: "Migration safety, SQL injection patterns, PII in logs, database schema validation.",
     icon: "D",
-    color: "text-yellow-400",
-    bg: "bg-yellow-400/10",
-    border: "border-yellow-400/20",
   },
   {
     name: "Documentation",
-    description: "README, CHANGELOG, env docs, API documentation completeness.",
+    description: "README, CHANGELOG, LICENSE, JSDoc coverage, env documentation.",
     icon: "R",
-    color: "text-slate-400",
-    bg: "bg-slate-400/10",
-    border: "border-slate-400/20",
+  },
+  {
+    name: "Performance",
+    description: "Dependency count, bundle size analysis, image optimisation checks.",
+    icon: "P",
+  },
+  {
+    name: "AI Code Review",
+    description: "Claude AI reads your code and finds real bugs — not patterns, actual understanding.",
+    icon: "AI",
+  },
+];
+
+const comingSoonModules = [
+  {
+    name: "Live Browser Testing",
+    description: "Playwright-powered. Opens a real browser, visits every page, clicks every button.",
+  },
+  {
+    name: "Visual Regression",
+    description: "Screenshot comparison between deploys. Catches pixel-level changes automatically.",
+  },
+  {
+    name: "E2E Testing",
+    description: "Full user journey testing. Login flows, checkout flows, form submissions.",
+  },
+  {
+    name: "Auto-Fix PRs",
+    description: "GateTest creates a pull request that fixes the issues it finds. Automatically.",
+  },
+  {
+    name: "Mutation Testing",
+    description: "Modifies your source code to verify your tests actually catch bugs.",
+  },
+  {
+    name: "Chaos Testing",
+    description: "Simulates slow networks, API failures, and missing resources.",
+  },
+  {
+    name: "Live Site Crawler",
+    description: "Crawls your entire live site checking every page for errors.",
+  },
+  {
+    name: "Autonomous Explorer",
+    description: "AI agent that fills forms, clicks buttons, and verifies state changes.",
   },
 ];
 
 export default function Modules() {
   return (
-    <section id="modules" className="py-24 px-6 border-t border-border/30">
-      <div className="mx-auto max-w-7xl">
+    <section id="modules" className="py-24 px-6 border-t border-border">
+      <div className="mx-auto max-w-6xl">
         <div className="text-center mb-16">
-          <span className="text-sm font-semibold text-accent-light uppercase tracking-wider">
-            16 Test Modules
+          <span className="text-sm font-semibold text-accent uppercase tracking-wider">
+            What We Check
           </span>
-          <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4">
-            Every angle. <span className="gradient-text">Every check.</span>
+          <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4 text-foreground">
+            13 modules. <span className="gradient-text">Every scan.</span>
           </h2>
           <p className="text-muted text-lg max-w-2xl mx-auto">
-            From syntax to security, from fonts to GDPR. If it can break, GateTest catches it.
-            No other tool covers this much ground.
+            Source code analysis that catches what other tools miss.
+            Every module runs on every scan. No configuration needed.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {modules.map((mod) => (
+        {/* Active modules */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-16">
+          {activeModules.map((mod) => (
             <div
               key={mod.name}
-              className={`rounded-xl p-5 border ${mod.border} ${mod.bg} hover:scale-[1.02] transition-transform`}
+              className="card p-5"
             >
-              <div className={`w-10 h-10 rounded-lg ${mod.bg} border ${mod.border} flex items-center justify-center font-[var(--font-mono)] font-bold ${mod.color} text-lg mb-3`}>
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center font-[var(--font-mono)] font-bold text-accent text-sm mb-3">
                 {mod.icon}
               </div>
-              <h3 className={`font-semibold ${mod.color} mb-1`}>{mod.name}</h3>
+              <h3 className="font-semibold text-foreground mb-1">{mod.name}</h3>
               <p className="text-sm text-muted leading-relaxed">{mod.description}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Coming Soon */}
+        <div className="text-center mb-8">
+          <span className="text-sm font-semibold text-muted uppercase tracking-wider">
+            Coming Soon
+          </span>
+          <h3 className="text-2xl font-bold mt-3 mb-2 text-foreground">
+            8 more modules in development
+          </h3>
+          <p className="text-muted max-w-xl mx-auto">
+            Live browser testing, visual regression, auto-fix PRs, and more.
+            Powered by real browser automation.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {comingSoonModules.map((mod) => (
+            <div
+              key={mod.name}
+              className="p-4 rounded-xl border border-dashed border-border bg-surface-dark"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium text-muted bg-surface-dark border border-border rounded-full px-2 py-0.5">
+                  Soon
+                </span>
+                <h4 className="font-semibold text-sm text-foreground">{mod.name}</h4>
+              </div>
+              <p className="text-xs text-muted leading-relaxed">{mod.description}</p>
             </div>
           ))}
         </div>

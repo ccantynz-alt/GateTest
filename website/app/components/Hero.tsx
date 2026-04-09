@@ -11,7 +11,7 @@ export default function Hero() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
           </span>
-          21 Modules &middot; AI-Powered &middot; Pay Only When Delivered
+          13 Modules &middot; AI-Powered &middot; Pay Only When Delivered
         </div>
 
         {/* Headline */}
@@ -23,8 +23,8 @@ export default function Hero() {
 
         {/* Subheadline */}
         <p className="text-lg sm:text-xl text-muted max-w-2xl mx-auto mb-12 leading-relaxed fade-up">
-          21 modules scan your entire codebase — security, accessibility, performance,
-          and 18 more. We find the bugs <strong className="text-foreground">and fix them</strong>.
+          13 modules scan your entire codebase — security, accessibility, SEO,
+          code quality, and more. AI-powered code review finds real bugs.
           You only pay when the scan completes.
         </p>
 
@@ -49,7 +49,7 @@ export default function Hero() {
           </div>
           <div className="p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed text-gray-300">
             <p className="text-indigo-400 font-bold text-xs tracking-wider">GATETEST — Quality Assurance Gate</p>
-            <p className="text-gray-500 text-xs">Running full suite: 21 modules (auto-fix ON)</p>
+            <p className="text-gray-500 text-xs">Running full suite: 13 modules</p>
             <p className="mt-2" />
             <p>{"  "}<span className="text-green-400">&#10003;</span> syntax <span className="text-gray-500">— 47 checks, 12ms</span></p>
             <p>{"  "}<span className="text-green-400">&#10003;</span> secrets <span className="text-gray-500">— 312 files, 0 found</span></p>
@@ -59,17 +59,14 @@ export default function Hero() {
             <p>{"  "}<span className="text-green-400">&#10003;</span> aiReview <span className="text-gray-500">— Claude: 2 suggestions</span></p>
             <p>{"  "}<span className="text-gray-500 text-xs">...15 more modules passed</span></p>
             <p className="mt-2" />
-            <p>{"  "}<span className="text-green-400">+</span> <span className="text-gray-400">auto-fixed: Removed 3 console.log statements</span></p>
-            <p>{"  "}<span className="text-green-400">+</span> <span className="text-gray-400">auto-fixed: Added missing alt text to 2 images</span></p>
-            <p className="mt-2" />
-            <p className="text-green-400 font-bold">{"  "}GATE: PASSED <span className="text-gray-500 font-normal">— 21/21 modules, 200+ checks, 2.4s</span></p>
+            <p className="text-green-400 font-bold">{"  "}GATE: PASSED <span className="text-gray-500 font-normal">— 13/13 modules, 150+ checks, 2.4s</span></p>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-16 max-w-2xl mx-auto fade-up stagger">
           {[
-            { value: "21", label: "Test Modules" },
+            { value: "13", label: "Test Modules" },
             { value: "200+", label: "Quality Checks" },
             { value: "$0", label: "If Scan Fails" },
             { value: "0", label: "Tolerance for Bugs" },

@@ -126,11 +126,12 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<{
     } catch { /* skip */ }
   }
 
+  // Only the 13 modules that actually work via GitHub API
   const moduleNames = tier === "quick"
     ? ["syntax", "lint", "secrets", "codeQuality"]
-    : ["syntax", "lint", "secrets", "codeQuality", "unitTests", "integrationTests",
-       "e2e", "visual", "accessibility", "performance", "security", "seo", "links",
-       "compatibility", "dataIntegrity", "documentation", "mutation", "aiReview"];
+    : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
+       "seo", "links", "compatibility", "dataIntegrity", "documentation",
+       "performance", "aiReview"];
 
   const results: ModuleResult[] = [];
   let totalIssues = 0;
