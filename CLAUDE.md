@@ -49,9 +49,9 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 21 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 22 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 21 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 22 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -137,9 +137,10 @@ BaseModule (abstract)
 
 ### 1. Tests & Build
 
-- [ ] All 51+ tests pass (`node --test tests/*.test.js`)
+- [ ] All 62+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 21 modules load (`node bin/gatetest.js --list`)
+- [ ] All 22 modules load (`node bin/gatetest.js --list`)
+- [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
 
@@ -197,7 +198,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 21 modules listed in README and CLI help
+- [ ] All 22 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -285,7 +286,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 21 modules load
+3. `node bin/gatetest.js --list` — all 22 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -337,14 +338,14 @@ When something breaks:
 | git-secrets/truffleHog | `gatetest --module secrets` |
 | broken-link-checker | `gatetest --module links` |
 
-Plus 11 more modules they don't have: AI code review, mutation testing, chaos testing, autonomous exploration, live crawling, data integrity, documentation validation, compatibility analysis, integration test detection, CI generation, and SARIF output.
+Plus 12 more modules they don't have: AI code review, **fake-fix detector (catches AI chicken-scratching symptom patches)**, mutation testing, chaos testing, autonomous exploration, live crawling, data integrity, documentation validation, compatibility analysis, integration test detection, CI generation, and SARIF output.
 
 ### Revenue model: Pay on completion
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 21 modules |
-| Scan + Fix | $199 | 21 modules + auto-fix PR |
+| Full Scan | $99 | All 22 modules |
+| Scan + Fix | $199 | 22 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -361,11 +362,11 @@ GateTest/
 ├── src/
 │   ├── index.js            ← Main library entry
 │   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
-│   ├── modules/            ← 21 TEST MODULES (the core product)
+│   ├── modules/            ← 22 TEST MODULES (the core product, incl. fake-fix-detector)
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
-├── tests/                  ← 51+ tests (MUST ALL PASS)
+├── tests/                  ← 62+ tests (MUST ALL PASS)
 └── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
     └── app/
         ├── page.tsx                 ← Main page
@@ -447,7 +448,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 21 modules load — `node bin/gatetest.js --list`
+3. Verify all 22 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -481,8 +482,8 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.1.0 — 21 modules, 5 reporters, AI code review, auto-fix, diff-mode,
-watch mode, mutation testing, CI generation, caching, SARIF/JUnit output,
-Stripe pay-on-completion, GitHub App, legal pages.
+GateTest v1.2.0 — 22 modules, 5 reporters, AI code review, fake-fix detector,
+auto-fix, diff-mode, watch mode, mutation testing, CI generation, caching,
+SARIF/JUnit output, Stripe pay-on-completion, GitHub App, legal pages.
 
-Date last updated: 2026-04-09
+Date last updated: 2026-04-11

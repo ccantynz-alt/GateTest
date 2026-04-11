@@ -44,6 +44,7 @@ const DEFAULT_CONFIG = {
       'lint',
       'secrets',
       'codeQuality',
+      'fakeFixDetector',
     ],
     standard: [
       'syntax',
@@ -52,6 +53,7 @@ const DEFAULT_CONFIG = {
       'codeQuality',
       'unitTests',
       'integrationTests',
+      'fakeFixDetector',
     ],
     full: [
       'syntax',
@@ -72,6 +74,7 @@ const DEFAULT_CONFIG = {
       'documentation',
       'mutation',
       'aiReview',
+      'fakeFixDetector',
     ],
     live: [
       'liveCrawler',
@@ -100,6 +103,7 @@ const DEFAULT_CONFIG = {
       'chaos',
       'mutation',
       'aiReview',
+      'fakeFixDetector',
     ],
   },
 
@@ -190,6 +194,14 @@ const DEFAULT_CONFIG = {
         'ios_saf >= 17',
         'and_chr >= 120',
       ],
+    },
+    fakeFixDetector: {
+      patternEngine: true,
+      aiEngine: true,
+      // `against`: optional git ref — diff HEAD against this (e.g. 'main')
+      against: null,
+      // `context`: optional string describing the bug being fixed, passed to AI
+      context: null,
     },
     codeQuality: {
       forbiddenPatterns: [
