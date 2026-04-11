@@ -59,6 +59,6 @@ describe('ClaudeMdParser', () => {
   it('should extract version', () => {
     const parser = new ClaudeMdParser(projectRoot);
     const parsed = parser.parse();
-    assert.strictEqual(parsed.version, '1.1.0');
+    assert.strictEqual(parsed.version, '1.2.0');
   });
 });

@@ -28,6 +28,7 @@ const BUILT_IN_MODULES = {
   chaos: '../modules/chaos.js',
   mutation: '../modules/mutation.js',
   aiReview: '../modules/ai-review.js',
+  fakeFixDetector: '../modules/fake-fix-detector.js',
 };
 
 class ModuleRegistry {
