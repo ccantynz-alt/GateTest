@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
+import { isAdminRequest } from "@/app/lib/admin-auth";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
@@ -311,11 +312,16 @@ export async function POST(req: NextRequest) {
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
 
+  // Admin bypass: if the request carries a valid admin cookie, we skip all
+  // Stripe interaction entirely. Admin scans never create or capture charges.
+  const isAdmin = isAdminRequest(req);
+
   // Run the scan
   const result = await scanRepo(owner, repo, tier || "quick");
 
-  // If we have a session ID, update Stripe and capture payment
-  if (sessionId && STRIPE_SECRET_KEY) {
+  // If we have a session ID AND this is NOT an admin request, update Stripe
+  // and capture payment. Admins never touch billing.
+  if (!isAdmin && sessionId && STRIPE_SECRET_KEY) {
     try {
       const session = (await stripeApi("GET", `/v1/checkout/sessions/${sessionId}`)) as {
         payment_intent?: string;
@@ -369,6 +375,7 @@ export async function POST(req: NextRequest) {
     duration: result.duration,
     repoUrl,
     tier,
+    admin: isAdmin,
     error: result.error,
   });
 }

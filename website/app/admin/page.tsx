@@ -2,35 +2,89 @@
 
 import { useState } from "react";
 
-const ADMIN_KEY = "gatetest-craig-2026";
-
+/**
+ * Admin console — run scans on any repo without payment.
+ *
+ * Auth flow:
+ *   1. User types password → POST /api/admin/auth
+ *   2. Server verifies against GATETEST_ADMIN_PASSWORD env var (constant time)
+ *   3. On success, server sets an httpOnly cookie. The browser sends it
+ *      automatically on subsequent /api/scan/run requests, where it bypasses
+ *      Stripe entirely.
+ *
+ * The password is NEVER stored in this file or the JS bundle. It never touches
+ * localStorage or sessionStorage. It lives in React state for the duration of
+ * the login request and is then discarded.
+ */
 export default function AdminPage() {
   const [auth, setAuth] = useState(false);
-  const [key, setKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [authing, setAuthing] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [tier, setTier] = useState("quick");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
 
+  async function login() {
+    setError("");
+    if (!password) {
+      setError("Enter a password");
+      return;
+    }
+    setAuthing(true);
+    try {
+      const res = await fetch("/api/admin/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+        credentials: "same-origin",
+      });
+      if (res.ok) {
+        setAuth(true);
+        setPassword(""); // discard from memory
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Invalid password");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setAuthing(false);
+    }
+  }
+
+  async function logout() {
+    await fetch("/api/admin/auth", { method: "DELETE", credentials: "same-origin" });
+    setAuth(false);
+    setResult(null);
+    setRepoUrl("");
+  }
+
   if (!auth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="max-w-sm w-full">
-          <h1 className="text-2xl font-bold mb-6 text-center">Admin Access</h1>
+          <h1 className="text-2xl font-bold mb-2 text-center">Admin Access</h1>
+          <p className="text-xs text-muted text-center mb-6">
+            Password is verified server-side against the GATETEST_ADMIN_PASSWORD
+            environment variable.
+          </p>
           <input
             type="password"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && key === ADMIN_KEY) setAuth(true); }}
-            placeholder="Enter admin key"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") login(); }}
+            placeholder="Enter admin password"
             className="w-full px-4 py-3 rounded-xl border border-border bg-surface-solid text-foreground text-sm mb-3"
+            autoFocus
           />
           <button
-            onClick={() => { if (key === ADMIN_KEY) setAuth(true); else setError("Invalid key"); }}
-            className="btn-primary w-full py-3 text-sm"
+            onClick={login}
+            disabled={authing}
+            className="btn-primary w-full py-3 text-sm disabled:opacity-50"
           >
-            Enter
+            {authing ? "Verifying..." : "Enter"}
           </button>
           {error && <p className="text-danger text-sm mt-2 text-center">{error}</p>}
         </div>
@@ -53,6 +107,7 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repoUrl, tier }),
+        credentials: "same-origin",
       });
       const data = await res.json();
       setResult(data);
@@ -65,6 +120,7 @@ export default function AdminPage() {
 
   const modules = (result?.modules as Array<Record<string, unknown>>) || [];
   const totalIssues = (result?.totalIssues as number) || 0;
+  const adminMode = result?.admin === true;
 
   return (
     <div className="min-h-screen bg-background px-6 py-12">
@@ -74,7 +130,12 @@ export default function AdminPage() {
             <h1 className="text-2xl font-bold">GateTest Admin</h1>
             <p className="text-sm text-muted">Run scans on any repo. No payment required.</p>
           </div>
-          <a href="/" className="text-sm text-muted hover:text-foreground">&larr; Back to site</a>
+          <div className="flex items-center gap-4">
+            <button onClick={logout} className="text-sm text-muted hover:text-foreground">
+              Log out
+            </button>
+            <a href="/" className="text-sm text-muted hover:text-foreground">&larr; Back to site</a>
+          </div>
         </div>
 
         {/* Scan form */}
@@ -93,7 +154,7 @@ export default function AdminPage() {
               className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
             >
               <option value="quick">Quick (4 modules)</option>
-              <option value="full">Full (21 modules)</option>
+              <option value="full">Full (13 modules via GitHub API)</option>
             </select>
             <button
               onClick={runScan}
@@ -126,6 +187,7 @@ export default function AdminPage() {
                   </h2>
                   <p className="text-sm text-muted">
                     {modules.length} modules &middot; {result.duration as number}ms
+                    {adminMode && " \u00b7 admin mode (no charge)"}
                   </p>
                 </div>
                 <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
