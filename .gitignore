@@ -8,6 +8,7 @@ dist/
 *.pem
 *.key
 .DS_Store
+.next/
 website/.next/
 website/node_modules/
 website/test-results/
