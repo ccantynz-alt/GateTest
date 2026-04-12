@@ -114,6 +114,13 @@ class SecretsModule extends BaseModule {
       result.addCheck('secrets:gitignore-exists', false, {
         message: 'No .gitignore file found',
         suggestion: 'Create a .gitignore that excludes .env, credentials, and key files',
+        autoFix: () => {
+          try {
+            const template = 'node_modules/\n.env\n.env.*\n*.pem\n*.key\ncredentials.json\n.DS_Store\n';
+            fs.writeFileSync(gitignorePath, template, 'utf-8');
+            return { fixed: true, description: 'Created .gitignore with standard secret exclusions', filesChanged: ['.gitignore'] };
+          } catch { return { fixed: false }; }
+        },
       });
       return;
     }
@@ -121,11 +128,19 @@ class SecretsModule extends BaseModule {
     const content = fs.readFileSync(gitignorePath, 'utf-8');
     const requiredPatterns = ['.env', '*.pem', '*.key'];
 
-    for (const pattern of requiredPatterns) {
-      if (!content.includes(pattern)) {
-        result.addCheck(`secrets:gitignore-${pattern}`, false, {
-          message: `.gitignore missing pattern: ${pattern}`,
-          suggestion: `Add "${pattern}" to .gitignore`,
+    for (const pat of requiredPatterns) {
+      if (!content.includes(pat)) {
+        const gitignore = gitignorePath;
+        const patToAdd = pat;
+        result.addCheck(`secrets:gitignore-${pat}`, false, {
+          message: `.gitignore missing pattern: ${pat}`,
+          suggestion: `Add "${pat}" to .gitignore`,
+          autoFix: () => {
+            try {
+              fs.appendFileSync(gitignore, `\n${patToAdd}\n`);
+              return { fixed: true, description: `Added "${patToAdd}" to .gitignore`, filesChanged: ['.gitignore'] };
+            } catch { return { fixed: false }; }
+          },
         });
       }
     }

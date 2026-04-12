@@ -94,6 +94,16 @@ class LintModule extends BaseModule {
       result.addCheck('lint:eslint', false, {
         message: `ESLint: ${errorCount} error(s), ${warningCount} warning(s)`,
         suggestion: 'Run "npx eslint . --fix" to auto-fix, then manually resolve remaining issues',
+        autoFix: () => {
+          const fix = this._exec('npx eslint . --fix 2>/dev/null', { cwd: projectRoot, timeout: 120000 });
+          return {
+            fixed: fix.exitCode === 0,
+            description: fix.exitCode === 0
+              ? 'ESLint auto-fixed all issues'
+              : 'ESLint --fix applied partial fixes (some issues remain)',
+            filesChanged: [],
+          };
+        },
       });
     }
   }
@@ -110,6 +120,14 @@ class LintModule extends BaseModule {
       result.addCheck('lint:stylelint', false, {
         message: 'Stylelint found issues',
         suggestion: 'Run "npx stylelint --fix" to auto-fix',
+        autoFix: () => {
+          const fix = this._exec('npx stylelint "**/*.{css,scss,less}" --fix 2>/dev/null', { cwd: projectRoot, timeout: 60000 });
+          return {
+            fixed: fix.exitCode === 0,
+            description: 'Stylelint auto-fixed CSS issues',
+            filesChanged: [],
+          };
+        },
       });
     }
   }
@@ -137,6 +155,16 @@ class LintModule extends BaseModule {
         file: relPath,
         message: `${issues.length} markdown issue(s)`,
         details: issues.slice(0, 5),
+        autoFix: () => {
+          try {
+            const raw = fs.readFileSync(file, 'utf-8');
+            let fixed = raw.split('\n').map(l => l.trimEnd()).join('\n');
+            // Remove triple+ blank lines
+            fixed = fixed.replace(/\n{3,}/g, '\n\n');
+            fs.writeFileSync(file, fixed, 'utf-8');
+            return { fixed: true, description: `Fixed markdown whitespace in ${relPath}`, filesChanged: [relPath] };
+          } catch { return { fixed: false }; }
+        },
       });
     } else {
       result.addCheck(`lint:markdown:${relPath}`, true);
