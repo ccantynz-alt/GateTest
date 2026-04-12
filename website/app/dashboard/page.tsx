@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface ScanRecord {
   id: string;
@@ -14,190 +14,327 @@ interface ScanRecord {
   summary: string | null;
   created_at: string;
   completed_at: string | null;
+  results: Record<string, unknown> | null;
 }
 
-interface CustomerRecord {
+interface CustomerInfo {
+  login: string;
   email: string;
-  github_login: string | null;
-  total_scans: number;
-  total_spent_usd: string;
-  created_at: string;
 }
 
 interface DashboardData {
   scans: ScanRecord[];
-  customer: CustomerRecord | null;
+  customer: CustomerInfo | null;
   note?: string;
 }
 
 export default function Dashboard() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [customer, setCustomer] = useState<CustomerInfo | null>(null);
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [expandedScan, setExpandedScan] = useState<string | null>(null);
 
-  async function lookup() {
-    if (!email || !email.includes("@")) {
-      setError("Enter the email you used at checkout");
-      return;
-    }
+  // Check auth status on mount
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.login) {
+          setCustomer(d);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
-    setLoading(true);
-    setError("");
-
+  const loadScans = useCallback(async () => {
+    if (!customer) return;
     try {
       const res = await fetch("/api/dashboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: customer.email }),
       });
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json.error || "Failed to fetch scans");
-        return;
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
       }
-
-      setData(json);
     } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+      // silent
     }
+  }, [customer]);
+
+  useEffect(() => {
+    if (customer) loadScans();
+  }, [customer, loadScans]);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setCustomer(null);
+    setData(null);
   }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Not logged in — show sign-in
+  if (!customer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="max-w-sm w-full text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent flex items-center justify-center mx-auto mb-6">
+            <span className="text-white font-bold text-xl font-[var(--font-mono)]">G</span>
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Sign in to GateTest</h1>
+          <p className="text-muted text-sm mb-8">
+            View your scan history, detailed results, and manage your repos.
+          </p>
+          <a
+            href="/api/auth/github"
+            className="btn-cta w-full py-3.5 text-sm block text-center rounded-xl font-semibold"
+          >
+            Sign in with GitHub
+          </a>
+          <div className="mt-6">
+            <a href="/" className="text-sm text-muted hover:text-foreground">
+              &larr; Back to GateTest
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in — dashboard
+  const scans = data?.scans || [];
 
   return (
     <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-10">
-          <a href="/" className="text-sm text-muted hover:text-foreground">
-            &larr; Back to GateTest
-          </a>
-          <h1 className="text-3xl font-bold mt-4">Your Scans</h1>
-          <p className="text-muted mt-2">
-            Enter the email you used at checkout to view your scan history and results.
-          </p>
-        </div>
-
-        {/* Email lookup */}
-        <div className="card p-6 mb-8">
-          <label htmlFor="dash-email" className="block text-sm font-medium mb-2">
-            Email address
-          </label>
-          <div className="flex gap-3">
-            <input
-              id="dash-email"
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => { if (e.key === "Enter") lookup(); }}
-              placeholder="you@example.com"
-              className="flex-1 px-4 py-3 rounded-lg border border-border bg-white text-foreground text-sm focus:outline-none focus:border-accent"
-            />
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <p className="text-sm text-muted">
+              Signed in as <span className="font-mono font-medium">{customer.login}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <a href="/#pricing" className="btn-primary px-5 py-2.5 text-sm">
+              New Scan
+            </a>
             <button
-              onClick={lookup}
-              disabled={loading}
-              className="btn-primary px-6 py-3 text-sm disabled:opacity-50"
+              onClick={logout}
+              className="text-sm text-muted hover:text-foreground"
             >
-              {loading ? "Looking up..." : "View Scans"}
+              Sign out
             </button>
           </div>
-          {error && <p className="text-danger text-sm mt-2">{error}</p>}
-          {data?.note && (
-            <p className="text-sm text-muted mt-2">{data.note}</p>
-          )}
         </div>
 
-        {/* Customer summary */}
-        {data?.customer && (
+        {/* Stats */}
+        {scans.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{data.customer.total_scans}</p>
+              <p className="text-2xl font-bold">{scans.length}</p>
               <p className="text-xs text-muted">Total Scans</p>
             </div>
             <div className="card p-4 text-center">
               <p className="text-2xl font-bold">
-                ${Number(data.customer.total_spent_usd || 0).toFixed(0)}
+                {scans.filter((s) => s.status === "completed").length}
+              </p>
+              <p className="text-xs text-muted">Completed</p>
+            </div>
+            <div className="card p-4 text-center">
+              <p className="text-2xl font-bold">
+                {scans[0]?.score != null ? scans[0].score : "—"}
+              </p>
+              <p className="text-xs text-muted">Latest Score</p>
+            </div>
+            <div className="card p-4 text-center">
+              <p className="text-2xl font-bold">
+                $
+                {scans
+                  .reduce(
+                    (sum, s) => sum + Number(s.tier_price_usd || 0),
+                    0
+                  )
+                  .toFixed(0)}
               </p>
               <p className="text-xs text-muted">Total Spent</p>
-            </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold text-sm font-mono break-all">
-                {data.customer.github_login || "—"}
-              </p>
-              <p className="text-xs text-muted">GitHub</p>
-            </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold text-sm">
-                {data.customer.created_at
-                  ? new Date(data.customer.created_at).toLocaleDateString()
-                  : "—"}
-              </p>
-              <p className="text-xs text-muted">Customer Since</p>
             </div>
           </div>
         )}
 
-        {/* Scan list */}
-        {data && data.scans.length === 0 && (
-          <div className="card p-8 text-center">
-            <p className="text-muted">No scans found for this email.</p>
-            <p className="text-sm text-muted mt-2">
-              Make sure you&apos;re using the same email you entered at Stripe checkout.
+        {/* Empty state */}
+        {scans.length === 0 && (
+          <div className="card p-12 text-center">
+            <p className="text-lg font-bold mb-2">No scans yet</p>
+            <p className="text-muted text-sm mb-6">
+              Run your first scan to see results here.
             </p>
-            <a href="/#pricing" className="btn-primary px-6 py-3 text-sm inline-block mt-4">
-              Run Your First Scan
+            <a
+              href="/#pricing"
+              className="btn-primary px-6 py-3 text-sm inline-block"
+            >
+              Scan Your First Repo
             </a>
           </div>
         )}
 
-        {data && data.scans.length > 0 && (
+        {/* Scan list */}
+        {scans.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold mb-2">
-              {data.scans.length} Scan{data.scans.length !== 1 ? "s" : ""}
-            </h2>
-            {data.scans.map((scan) => (
-              <a
-                key={scan.id}
-                href={`/scan/status?session_id=${scan.session_id}&repo_url=${encodeURIComponent(scan.repo_url)}&tier=${scan.tier}`}
-                className="card p-5 block hover:border-accent/50 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-sm font-medium truncate max-w-[60%]">
-                    {scan.repo_url.replace("https://github.com/", "")}
-                  </span>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    scan.status === "completed"
-                      ? "bg-green-50 text-success"
-                      : scan.status === "failed"
-                        ? "bg-red-50 text-danger"
-                        : "bg-yellow-50 text-warning"
-                  }`}>
-                    {scan.status}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted">
-                  <span>{scan.tier} scan</span>
-                  {scan.score !== null && <span>Score: {scan.score}</span>}
-                  {scan.duration_ms && <span>{(scan.duration_ms / 1000).toFixed(1)}s</span>}
-                  {scan.tier_price_usd && <span>${Number(scan.tier_price_usd).toFixed(0)}</span>}
-                  <span className="ml-auto">
-                    {scan.created_at ? new Date(scan.created_at).toLocaleDateString() : ""}
-                  </span>
-                </div>
-                {scan.summary && (
-                  <p className="text-xs text-muted mt-2 truncate">{scan.summary}</p>
-                )}
-              </a>
-            ))}
-          </div>
-        )}
+            <h2 className="text-lg font-bold">Your Scans</h2>
+            {scans.map((scan) => {
+              const isExpanded = expandedScan === scan.id;
+              const modules = Array.isArray(
+                (scan.results as Record<string, unknown>)?.modules
+              )
+                ? ((scan.results as Record<string, unknown>).modules as Array<Record<string, unknown>>)
+                : [];
 
-        {/* Not looked up yet */}
-        {!data && !loading && (
-          <div className="text-center text-sm text-muted mt-12">
-            <p>Your scan results are stored securely and linked to your checkout email.</p>
+              return (
+                <div key={scan.id} className="card overflow-hidden">
+                  {/* Scan header — clickable */}
+                  <button
+                    onClick={() =>
+                      setExpandedScan(isExpanded ? null : scan.id)
+                    }
+                    className="w-full p-5 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-sm font-medium truncate max-w-[60%]">
+                        {scan.repo_url.replace("https://github.com/", "")}
+                      </span>
+                      <span
+                        className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                          scan.status === "completed"
+                            ? "bg-green-50 text-success"
+                            : scan.status === "failed"
+                              ? "bg-red-50 text-danger"
+                              : "bg-yellow-50 text-warning"
+                        }`}
+                      >
+                        {scan.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted">
+                      <span>{scan.tier} scan</span>
+                      {scan.score != null && <span>Score: {scan.score}</span>}
+                      {scan.duration_ms && (
+                        <span>{(scan.duration_ms / 1000).toFixed(1)}s</span>
+                      )}
+                      {scan.tier_price_usd && (
+                        <span>${Number(scan.tier_price_usd).toFixed(0)}</span>
+                      )}
+                      <span className="ml-auto">
+                        {scan.created_at
+                          ? new Date(scan.created_at).toLocaleDateString()
+                          : ""}
+                      </span>
+                      <span className="text-accent">
+                        {isExpanded ? "▲" : "▼"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Expanded: module results */}
+                  {isExpanded && (
+                    <div className="border-t border-border px-5 py-4 bg-gray-50/50">
+                      {scan.summary && (
+                        <p className="text-sm text-muted mb-4">
+                          {scan.summary}
+                        </p>
+                      )}
+
+                      {modules.length > 0 ? (
+                        <div className="space-y-2">
+                          {modules.map((mod) => {
+                            const status = mod.status as string;
+                            const details =
+                              (mod.details as string[]) || [];
+                            return (
+                              <div
+                                key={mod.name as string}
+                                className={`p-3 rounded-lg border ${
+                                  status === "passed"
+                                    ? "border-green-100 bg-white"
+                                    : status === "failed"
+                                      ? "border-red-100 bg-red-50/30"
+                                      : "border-border bg-white"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`text-xs font-bold ${
+                                        status === "passed"
+                                          ? "text-success"
+                                          : status === "failed"
+                                            ? "text-danger"
+                                            : "text-muted"
+                                      }`}
+                                    >
+                                      {status === "passed"
+                                        ? "PASS"
+                                        : status === "failed"
+                                          ? "FAIL"
+                                          : "SKIP"}
+                                    </span>
+                                    <span className="font-medium text-sm">
+                                      {mod.name as string}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-muted">
+                                    {mod.checks as number} checks
+                                    {(mod.issues as number) > 0 &&
+                                      ` · ${mod.issues} issues`}
+                                    {(mod.duration as number) > 0 &&
+                                      ` · ${mod.duration}ms`}
+                                  </span>
+                                </div>
+                                {details.length > 0 && (
+                                  <ul className="mt-2 space-y-1">
+                                    {details.map((d, i) => (
+                                      <li
+                                        key={i}
+                                        className="text-xs text-muted font-mono pl-6"
+                                      >
+                                        → {d}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted">
+                          Detailed module results not available for this scan.
+                        </p>
+                      )}
+
+                      {/* Link to full results */}
+                      <div className="mt-4 pt-3 border-t border-border">
+                        <a
+                          href={`/scan/status?session_id=${scan.session_id}&repo_url=${encodeURIComponent(scan.repo_url)}&tier=${scan.tier}`}
+                          className="text-sm text-accent hover:underline"
+                        >
+                          View full scan results →
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
