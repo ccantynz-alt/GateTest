@@ -36,6 +36,7 @@ class AiReviewModule extends BaseModule {
     }
 
     const projectRoot = config.projectRoot;
+    this._lastProjectRoot = projectRoot;
     const runnerOptions = config._runnerOptions || {};
 
     // Get files to review
@@ -216,7 +217,7 @@ ${filesText}`;
       const severity = ['error', 'warning', 'info'].includes(issue.severity)
         ? issue.severity : 'warning';
 
-      result.addCheck(`ai-review:${issue.category || 'quality'}:${issue.file}:${issue.line || 0}`, false, {
+      const checkDetails = {
         file: issue.file,
         line: issue.line,
         severity,
@@ -224,7 +225,18 @@ ${filesText}`;
         suggestion: issue.suggestion,
         explanation: issue.explanation,
         fixedCode: issue.fixedCode,
-      });
+      };
+
+      // Wire up auto-fix: if Claude returned fixedCode, apply it to the file
+      if (issue.fixedCode && issue.file && issue.line) {
+        const filePath = issue.file;
+        const lineNum = issue.line;
+        const fixed = issue.fixedCode;
+        const projectRoot = this._lastProjectRoot;
+        checkDetails.autoFix = () => this._applyFix(projectRoot, filePath, lineNum, fixed);
+      }
+
+      result.addCheck(`ai-review:${issue.category || 'quality'}:${issue.file}:${issue.line || 0}`, false, checkDetails);
     }
 
     // Summary
@@ -239,6 +251,39 @@ ${filesText}`;
       severity: 'info',
       message: `AI found ${issues.length} issue(s) across reviewed files`,
     });
+  }
+
+  /**
+   * Apply Claude's fixedCode to the source file.
+   * Replaces lines around the issue location with the AI-generated fix.
+   */
+  _applyFix(projectRoot, relPath, lineNum, fixedCode) {
+    try {
+      const absPath = path.join(projectRoot, relPath);
+      if (!fs.existsSync(absPath)) return { fixed: false };
+
+      const content = fs.readFileSync(absPath, 'utf-8');
+      const lines = content.split('\n');
+      const fixLines = fixedCode.split('\n');
+      const idx = lineNum - 1;
+
+      if (idx < 0 || idx >= lines.length) return { fixed: false };
+
+      // Replace the target line(s) with the fix.
+      // If the fix is multi-line, replace the same number of lines from the
+      // original, or just replace the single target line if we can't be sure.
+      const replaceCount = Math.min(fixLines.length, lines.length - idx);
+      lines.splice(idx, replaceCount, ...fixLines);
+
+      fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
+      return {
+        fixed: true,
+        description: `AI fix applied to ${relPath}:${lineNum}`,
+        filesChanged: [relPath],
+      };
+    } catch {
+      return { fixed: false };
+    }
   }
 
   _isReviewableFile(filePath) {
