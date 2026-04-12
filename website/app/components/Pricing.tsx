@@ -95,7 +95,7 @@ export default function Pricing() {
   }
 
   return (
-    <section id="pricing" className="py-24 px-6 border-t border-border section-alt">
+    <section id="pricing" className="py-24 px-6 section-accent">
       <div className="relative z-10 mx-auto max-w-5xl">
         <div className="text-center mb-6">
           <span className="text-sm font-semibold text-accent uppercase tracking-wider">
@@ -112,9 +112,9 @@ export default function Pricing() {
 
         {/* Trust badge */}
         <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 rounded-full px-5 py-2 text-sm text-green-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            Card hold only — charged after successful scan delivery
+          <div className="inline-flex items-center gap-2 badge-accent px-5 py-2 text-sm font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            Card hold only &mdash; charged after successful scan delivery
           </div>
         </div>
 

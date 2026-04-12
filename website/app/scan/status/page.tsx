@@ -151,11 +151,11 @@ export default function ScanStatus() {
         <div className="text-center mb-8">
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-5 ${
             isComplete ? "bg-green-50 border border-green-200 text-green-700" :
-            isFailed ? "bg-indigo-50 border border-indigo-200 text-indigo-700" :
-            "bg-indigo-50 border border-indigo-200 text-indigo-700"
+            isFailed ? "bg-amber-50 border border-amber-200 text-amber-700" :
+            "bg-amber-50 border border-amber-200 text-amber-700"
           }`}>
             <span className={`w-2 h-2 rounded-full ${
-              isComplete ? "bg-green-500" : isFailed ? "bg-indigo-500" : "bg-indigo-500 animate-pulse"
+              isComplete ? "bg-green-500" : isFailed ? "bg-amber-500" : "bg-amber-500 animate-pulse"
             }`} />
             {isComplete ? "Scan Complete" : isFailed ? "Scan Failed" : "Scanning..."}
           </div>
@@ -185,8 +185,8 @@ export default function ScanStatus() {
               style={{
                 width: `${displayProgress}%`,
                 background: isComplete
-                  ? (scanResult?.totalIssues || 0) === 0 ? "#34c759" : "#6366f1"
-                  : isFailed ? "#6366f1" : "#6366f1",
+                  ? (scanResult?.totalIssues || 0) === 0 ? "#059669" : "#059669"
+                  : isFailed ? "#059669" : "#059669",
               }} />
           </div>
         </div>
@@ -199,21 +199,21 @@ export default function ScanStatus() {
               <div key={mod.name}
                 className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                   mod.status === "passed" ? "bg-white border-green-100" :
-                  mod.status === "failed" ? "bg-indigo-50/50 border-indigo-200" :
-                  mod.status === "running" ? "bg-indigo-50/50 border-indigo-200" :
+                  mod.status === "failed" ? "bg-amber-50/50 border-amber-200" :
+                  mod.status === "running" ? "bg-amber-50/50 border-amber-200" :
                   "bg-surface-dark border-border opacity-50"
                 } ${mod.status !== "pending" ? "slide-in" : ""}`}>
 
                 {/* Status icon */}
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold ${
                   mod.status === "passed" ? "bg-green-100 text-green-600" :
-                  mod.status === "failed" ? "bg-indigo-100 text-indigo-600" :
-                  mod.status === "running" ? "bg-indigo-100 text-indigo-600" :
+                  mod.status === "failed" ? "bg-amber-100 text-amber-600" :
+                  mod.status === "running" ? "bg-amber-100 text-amber-600" :
                   "bg-surface-dark text-muted"
                 }`}>
                   {mod.status === "passed" ? "✓" :
                    mod.status === "failed" ? "!" :
-                   mod.status === "running" ? <span className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /> :
+                   mod.status === "running" ? <span className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" /> :
                    "○"}
                 </div>
 
@@ -221,8 +221,8 @@ export default function ScanStatus() {
                 <div className="flex-1 min-w-0">
                   <span className={`font-medium text-sm ${
                     mod.status === "passed" ? "text-foreground" :
-                    mod.status === "failed" ? "text-indigo-700" :
-                    mod.status === "running" ? "text-indigo-700" :
+                    mod.status === "failed" ? "text-amber-700" :
+                    mod.status === "running" ? "text-amber-700" :
                     "text-muted"
                   }`}>{label}</span>
 
@@ -230,7 +230,7 @@ export default function ScanStatus() {
                   {mod.status === "failed" && mod.details && mod.details.length > 0 && (
                     <div className="mt-1 space-y-0.5">
                       {mod.details.map((d, i) => (
-                        <p key={i} className="text-xs text-indigo-500 font-mono truncate">{d}</p>
+                        <p key={i} className="text-xs text-amber-500 font-mono truncate">{d}</p>
                       ))}
                     </div>
                   )}
@@ -242,10 +242,10 @@ export default function ScanStatus() {
                     <span className="text-xs text-muted">{mod.checks} checks &middot; {mod.duration}ms</span>
                   )}
                   {mod.status === "failed" && (
-                    <span className="text-xs font-semibold text-indigo-600">{mod.issues} issue{mod.issues > 1 ? "s" : ""}</span>
+                    <span className="text-xs font-semibold text-amber-600">{mod.issues} issue{mod.issues > 1 ? "s" : ""}</span>
                   )}
                   {mod.status === "running" && (
-                    <span className="text-xs text-indigo-600 animate-pulse">scanning...</span>
+                    <span className="text-xs text-amber-600 animate-pulse">scanning...</span>
                   )}
                 </div>
               </div>
@@ -275,7 +275,7 @@ export default function ScanStatus() {
             <div className={`p-5 rounded-xl border ${
               (scanResult?.totalIssues || 0) === 0
                 ? "bg-green-50 border-green-200"
-                : "bg-indigo-50 border-indigo-200"
+                : "bg-amber-50 border-amber-200"
             }`}>
               <p className="font-bold text-foreground">
                 {(scanResult?.totalIssues || 0) === 0
@@ -337,8 +337,8 @@ export default function ScanStatus() {
         {/* Failed */}
         {isFailed && (
           <div className="text-center">
-            <div className="p-5 rounded-xl bg-indigo-50 border border-indigo-200 mb-4">
-              <p className="font-bold text-indigo-700">{scanResult?.error || "Scan failed"}</p>
+            <div className="p-5 rounded-xl bg-amber-50 border border-amber-200 mb-4">
+              <p className="font-bold text-amber-700">{scanResult?.error || "Scan failed"}</p>
               <p className="text-sm text-muted mt-1">No charge was made. Card hold released.</p>
             </div>
             <a href="/#pricing" className="btn-primary px-6 py-3 text-sm">Try Again</a>

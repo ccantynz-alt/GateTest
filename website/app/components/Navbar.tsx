@@ -6,17 +6,17 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong mt-9">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
           <div className="relative w-8 h-8">
-            <div className="absolute inset-0 rounded-lg bg-accent/20 pulse-glow" />
-            <div className="absolute inset-1 rounded-md bg-accent flex items-center justify-center">
+            <div className="absolute inset-0 rounded-lg bg-emerald-500/15" />
+            <div className="absolute inset-1 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
               <span className="text-white font-bold text-sm font-[var(--font-mono)]">G</span>
             </div>
           </div>
           <span className="text-xl font-bold tracking-tight">
-            Gate<span className="text-accent-light">Test</span>
+            Gate<span className="gradient-text">Test</span>
           </span>
         </a>
 
@@ -47,7 +47,7 @@ export default function Navbar() {
           </a>
           <a
             href="#pricing"
-            className="px-5 py-2.5 text-sm font-medium rounded-lg bg-accent hover:bg-accent-light text-white transition-colors pulse-glow"
+            className="btn-cta px-5 py-2.5 text-sm rounded-lg"
           >
             Scan My Repo
           </a>
@@ -75,7 +75,7 @@ export default function Navbar() {
           <a href="#comparison" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Compare</a>
           <a href="#integrations" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Integrations</a>
           <a href="#pricing" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Pricing</a>
-          <a href="#pricing" className="block px-5 py-2.5 text-sm font-medium rounded-lg bg-accent text-white text-center" onClick={() => setMobileOpen(false)}>
+          <a href="#pricing" className="block btn-cta px-5 py-2.5 text-sm text-center rounded-lg" onClick={() => setMobileOpen(false)}>
             Scan My Repo
           </a>
         </div>

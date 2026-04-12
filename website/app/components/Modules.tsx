@@ -125,7 +125,7 @@ export default function Modules() {
               key={mod.name}
               className="card p-5"
             >
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center font-[var(--font-mono)] font-bold text-accent text-sm mb-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center font-[var(--font-mono)] font-bold text-accent text-sm mb-3">
                 {mod.icon}
               </div>
               <h3 className="font-semibold text-foreground mb-1">{mod.name}</h3>

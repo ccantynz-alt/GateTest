@@ -1,24 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --background-warm: #f5f5f7;
-  --foreground: #1d1d1f;
-  --foreground-secondary: #424245;
-  --accent: #6366f1;
-  --accent-light: #818cf8;
-  --accent-hover: #4f46e5;
-  --surface: rgba(255, 255, 255, 0.8);
+  /* === BRAND COLORS — GateTest owns green/teal === */
+  --background: #fafaf9;
+  --background-warm: #f5f5f0;
+  --foreground: #111827;
+  --foreground-secondary: #374151;
+
+  /* Primary: emerald-teal gradient family */
+  --accent: #059669;
+  --accent-light: #10b981;
+  --accent-hover: #047857;
+  --accent-glow: rgba(5, 150, 105, 0.15);
+
+  /* CTA: warm amber — stands out from everything */
+  --cta: #f59e0b;
+  --cta-hover: #d97706;
+  --cta-glow: rgba(245, 158, 11, 0.2);
+
+  /* Surfaces */
+  --surface: rgba(255, 255, 255, 0.85);
   --surface-solid: #ffffff;
-  --surface-dark: #f5f5f7;
-  --border: rgba(0, 0, 0, 0.08);
-  --border-strong: rgba(0, 0, 0, 0.15);
-  --muted: #6e6e73;
-  --success: #34c759;
-  --danger: #ff3b30;
-  --warning: #ff9500;
-  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  --surface-warm: #fefdfb;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --muted: #6b7280;
+
+  /* Status */
+  --success: #059669;
+  --danger: #dc2626;
+  --warning: #f59e0b;
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
 }
 
 @theme inline {
@@ -26,8 +41,10 @@
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
+  --color-cta: var(--cta);
   --color-surface: var(--surface);
-  --color-surface-light: var(--surface-dark);
+  --color-surface-light: var(--background-warm);
+  --color-surface-solid: var(--surface-solid);
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-success: var(--success);
@@ -47,22 +64,48 @@ body {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(5, 150, 105, 0.15);
   color: var(--foreground);
 }
 
-/* === GLASS CARDS (Apple-style) === */
+/* === HERO BACKGROUND — dramatic gradient mesh === */
+
+.hero-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(5, 150, 105, 0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(20, 184, 166, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 50% 80%, rgba(245, 158, 11, 0.04) 0%, transparent 50%),
+    linear-gradient(180deg, #fafaf9 0%, #f0fdf4 40%, #fafaf9 100%);
+}
+
+/* === SECTION BACKGROUNDS === */
+
+.section-alt {
+  background: linear-gradient(180deg, var(--background-warm) 0%, var(--background) 100%);
+}
+
+.section-accent {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 50%, #fefce8 100%);
+}
+
+.grid-bg {
+  background-color: var(--background);
+}
+
+/* === GLASS CARDS === */
 
 .glass {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(40px) saturate(200%);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -75,13 +118,17 @@ body {
   background: var(--surface-solid);
   border: 1px solid var(--border);
   border-radius: 16px;
-  transition: all 0.25s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.02),
+    0 4px 16px rgba(0, 0, 0, 0.03);
 }
 
 .card:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.06),
+    0 8px 40px rgba(5, 150, 105, 0.04);
   transform: translateY(-2px);
 }
 
@@ -89,46 +136,41 @@ body {
   background: var(--surface-solid);
   border: 2px solid var(--accent);
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.1);
+  box-shadow:
+    0 4px 24px rgba(5, 150, 105, 0.08),
+    0 0 0 1px rgba(5, 150, 105, 0.05);
 }
 
 /* === GRADIENT TEXT === */
 
 .gradient-text {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #059669, #0d9488, #0891b2);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* === BACKGROUNDS === */
-
-.grid-bg {
-  background-color: var(--background);
+.gradient-text-warm {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.hero-bg {
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
-    var(--background);
-}
-
-.section-alt {
-  background: var(--background-warm);
-}
-
-/* === TERMINAL (Light theme) === */
+/* === TERMINAL (stays dark — it IS a terminal) === */
 
 .terminal {
-  background: #1e1e2e;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: linear-gradient(145deg, #0f172a, #1e293b);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .terminal-header {
-  background: #27273a;
+  background: rgba(255, 255, 255, 0.05);
   padding: 14px 18px;
   display: flex;
   align-items: center;
@@ -145,41 +187,59 @@ body {
 /* === BUTTONS === */
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #0d9488);
   color: white;
   font-weight: 600;
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-block;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: linear-gradient(135deg, var(--accent-hover), #0f766e);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
+}
+
+.btn-cta {
+  background: linear-gradient(135deg, var(--cta), #f97316);
+  color: #111827;
+  font-weight: 700;
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+.btn-cta:hover {
+  background: linear-gradient(135deg, var(--cta-hover), #ea580c);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
 }
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   color: var(--foreground);
   font-weight: 600;
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-block;
 }
 
 .btn-secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
+  background: rgba(5, 150, 105, 0.04);
   transform: translateY(-1px);
 }
 
-/* === GLOW (subtle, only on key elements) === */
+/* === GLOW === */
 
 .glow-border {
   border: 2px solid var(--accent);
-  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 4px 24px rgba(5, 150, 105, 0.1);
 }
 
 .pulse-glow {
@@ -187,19 +247,29 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.2); }
-  50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+  0%, 100% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25); }
+  50% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), 0 0 0 8px rgba(245, 158, 11, 0); }
+}
+
+/* === BADGE === */
+
+.badge-accent {
+  background: rgba(5, 150, 105, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(5, 150, 105, 0.15);
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 /* === ANIMATIONS === */
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-up {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .stagger > *:nth-child(1) { animation-delay: 0s; }
@@ -216,8 +286,8 @@ body {
 .slide-in { animation: slide-in 0.3s ease-out forwards; }
 
 @keyframes module-pulse {
-  0%, 100% { background: rgba(99, 102, 241, 0.04); }
-  50% { background: rgba(99, 102, 241, 0.08); }
+  0%, 100% { background: rgba(5, 150, 105, 0.04); }
+  50% { background: rgba(5, 150, 105, 0.08); }
 }
 .module-running {
   animation: module-pulse 1.5s ease-in-out infinite;
@@ -225,20 +295,20 @@ body {
 }
 
 @keyframes flash-green {
-  0% { background: rgba(52, 199, 89, 0.15); }
+  0% { background: rgba(5, 150, 105, 0.15); }
   100% { background: transparent; }
 }
 .flash-pass { animation: flash-green 0.6s ease-out; }
 
 @keyframes flash-red {
-  0% { background: rgba(255, 59, 48, 0.15); }
+  0% { background: rgba(220, 38, 38, 0.15); }
   100% { background: transparent; }
 }
 .flash-fail { animation: flash-red 0.6s ease-out; }
 
 @keyframes progress-glow {
-  0%, 100% { box-shadow: 0 0 4px rgba(99, 102, 241, 0.3); }
-  50% { box-shadow: 0 0 12px rgba(99, 102, 241, 0.5); }
+  0%, 100% { box-shadow: 0 0 4px rgba(5, 150, 105, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(5, 150, 105, 0.5); }
 }
 .progress-glow { animation: progress-glow 2s ease-in-out infinite; }
 
@@ -282,7 +352,7 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 5%, rgba(129, 140, 248, 0.5) 50%, transparent 95%);
+  background: linear-gradient(90deg, transparent 5%, rgba(16, 185, 129, 0.5) 50%, transparent 95%);
   animation: terminal-scan 2.5s linear infinite;
   pointer-events: none;
 }
@@ -293,7 +363,7 @@ body {
 
 .section-divider {
   height: 1px;
-  background: var(--border);
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
 
 /* === SMOOTH SCROLL === */
@@ -307,5 +377,5 @@ html {
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }

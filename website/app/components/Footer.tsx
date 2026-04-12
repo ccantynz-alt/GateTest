@@ -5,11 +5,11 @@ export default function Footer() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 rounded bg-accent flex items-center justify-center">
+              <div className="w-6 h-6 rounded bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <span className="text-white font-bold text-xs font-[var(--font-mono)]">G</span>
               </div>
               <span className="font-bold">
-                Gate<span className="text-accent-light">Test</span>
+                Gate<span className="gradient-text">Test</span>
               </span>
             </div>
             <p className="text-sm text-muted leading-relaxed">
