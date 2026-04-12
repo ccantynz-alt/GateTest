@@ -220,15 +220,25 @@ export default function Terms() {
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">12. Termination</h2>
             <p>
-              <strong>12.1</strong> We may suspend or terminate your access to the Service at any time,
-              with or without cause, with or without notice. Grounds for termination include but are not
-              limited to violation of these Terms, abusive behaviour, fraudulent payment activity, or
-              actions that harm the Service or its users.
+              <strong>12.1</strong> We may suspend or terminate your access to the Service at any time
+              for cause, including violation of these Terms, abusive behaviour, fraudulent payment
+              activity, or actions that harm the Service or its users.
             </p>
             <p className="mt-2">
-              <strong>12.2</strong> Upon termination, your right to use the Service ceases immediately.
-              Sections 5 (Intellectual Property), 6 (Disclaimers), 7 (Auto-Fix Disclaimer), 8 (AI Disclaimer),
-              9 (Limitation of Liability), 10 (Indemnification), and 13 (Governing Law) survive termination.
+              <strong>12.2</strong> For terminations not related to abuse or fraud, we will provide at
+              least 14 days&apos; written notice to the email address associated with your account.
+              During this period, you may export your scan reports.
+            </p>
+            <p className="mt-2">
+              <strong>12.3</strong> Upon termination, your right to use the Service ceases immediately.
+              Scan reports will be retained for 30 days post-termination, after which they are permanently
+              deleted. Sections 5 (Intellectual Property), 6 (Disclaimers), 7 (Auto-Fix Disclaimer),
+              8 (AI Disclaimer), 9 (Limitation of Liability), 10 (Indemnification), and 13 (Governing Law)
+              survive termination.
+            </p>
+            <p className="mt-2">
+              <strong>12.4</strong> You may terminate your account at any time by contacting us at
+              hello@gatetest.io. Active holds will be released and no further charges will be made.
             </p>
           </section>
 
@@ -270,7 +280,84 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">16. Severability</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">16. Service Availability</h2>
+            <p>
+              <strong>16.1</strong> We target 99.5% uptime for the GateTest web service, measured monthly,
+              excluding scheduled maintenance. This is a target, not a guarantee. We do not offer service
+              credits or compensation for downtime.
+            </p>
+            <p className="mt-2">
+              <strong>16.2</strong> Scheduled maintenance will be announced at least 24 hours in advance
+              where practicable. Emergency maintenance may occur without notice.
+            </p>
+            <p className="mt-2">
+              <strong>16.3</strong> If the Service is unavailable during a scan, the payment hold is
+              automatically released and no charge is made. You may retry the scan at no additional cost.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">17. Usage Limits</h2>
+            <p>
+              <strong>17.1</strong> Per-scan limits: individual repositories up to 500MB in size,
+              up to 50,000 files. Repositories exceeding these limits may result in incomplete scans.
+            </p>
+            <p className="mt-2">
+              <strong>17.2</strong> Rate limits: maximum 10 concurrent scans per account, maximum
+              100 scans per 24-hour period. If you require higher limits, contact us.
+            </p>
+            <p className="mt-2">
+              <strong>17.3</strong> Abuse of the Service (including scanning the same repository
+              repeatedly to exploit pricing, submitting repositories designed to attack our infrastructure,
+              or using the Service in any automated manner that degrades it for others) may result in
+              immediate suspension without notice.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">18. Payment Failures</h2>
+            <p>
+              <strong>18.1</strong> If a payment hold cannot be placed (insufficient funds, expired card,
+              bank decline), the scan will not proceed. No scan is initiated until a successful hold is confirmed.
+            </p>
+            <p className="mt-2">
+              <strong>18.2</strong> For the Continuous plan ($49/month), if a recurring charge fails, we
+              will attempt to charge the payment method up to 3 times over 7 days. If all attempts fail,
+              continuous scanning will be paused until payment is resolved. No data is deleted during this period.
+            </p>
+            <p className="mt-2">
+              <strong>18.3</strong> We accept payment by credit and debit card via Stripe. We do not accept
+              cryptocurrency, wire transfer, cheque, or other payment methods unless agreed in writing.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">19. Complaints and Disputes</h2>
+            <p>
+              <strong>19.1</strong> If you are dissatisfied with the Service or believe we have violated
+              these Terms, contact us at hello@gatetest.io with a detailed description of your concern.
+              We will acknowledge your complaint within 3 business days and respond substantively within
+              10 business days.
+            </p>
+            <p className="mt-2">
+              <strong>19.2</strong> Before initiating legal proceedings, both parties agree to attempt
+              to resolve disputes through good-faith negotiation for a period of at least 30 days.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">20. Export Controls and Sanctions</h2>
+            <p>
+              You may not use the Service if you are located in, or a national or resident of, any country
+              subject to comprehensive trade sanctions by New Zealand, the United States, the European Union,
+              or the United Nations. You may not use the Service if you are on any applicable sanctioned
+              persons list. You are responsible for compliance with all applicable export control and
+              sanctions laws in your jurisdiction.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">21. Severability</h2>
             <p>
               If any provision of these Terms is found to be unenforceable or invalid by a court of
               competent jurisdiction, that provision shall be limited or eliminated to the minimum extent
@@ -279,7 +366,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">17. Entire Agreement</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">22. Entire Agreement</h2>
             <p>
               These Terms, together with the Privacy Policy and Refund Policy, constitute the entire
               agreement between you and GateTest regarding the Service and supersede all prior agreements,
@@ -288,7 +375,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">18. Modifications</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">23. Modifications</h2>
             <p>
               We reserve the right to modify these Terms at any time. Material changes will be
               communicated via email or prominent notice on our website at least 14 days before
@@ -298,7 +385,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">19. Contact</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">24. Contact</h2>
             <p>
               For questions about these Terms, contact us at{" "}
               <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">

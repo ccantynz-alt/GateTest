@@ -209,14 +209,56 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">13. Governing Law</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">13. International Data Protection</h2>
+            <p>
+              <strong>13.1 European Economic Area (GDPR).</strong> If you are located in the EEA, UK,
+              or Switzerland, we process your personal data on the following legal bases: (a) performance
+              of a contract (to provide the Service you purchased); (b) legitimate interest (to improve
+              the Service and prevent fraud); (c) consent (where you have given it, which you may withdraw
+              at any time). Your data may be transferred to New Zealand and the United States (where our
+              infrastructure providers operate). We rely on standard contractual clauses and provider
+              certifications (SOC 2 Type II) as transfer safeguards.
+            </p>
+            <p className="mt-2">
+              <strong>13.2 GDPR rights.</strong> In addition to the rights listed in section 8 above,
+              EEA/UK data subjects have the right to: lodge a complaint with your local supervisory
+              authority; object to processing based on legitimate interest; and not be subject to
+              automated decision-making with legal effects (our scans are informational tools, not
+              automated decisions with legal effect).
+            </p>
+            <p className="mt-2">
+              <strong>13.3 California (CCPA/CPRA).</strong> If you are a California resident, you have the
+              right to: know what personal information we collect and why; request deletion of your personal
+              information; opt-out of the sale of personal information (we do not sell personal information);
+              and non-discrimination for exercising your rights. To exercise these rights, email
+              hello@gatetest.io with the subject &quot;CCPA Request&quot;.
+            </p>
+            <p className="mt-2">
+              <strong>13.4 Data Processing Agreement.</strong> Enterprise customers who require a formal
+              Data Processing Agreement (DPA) may request one by contacting hello@gatetest.io.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">14. Data Security</h2>
+            <p>
+              All data in transit is encrypted using TLS 1.2 or higher. Scan reports stored in our
+              database are encrypted at rest. Payment information is handled exclusively by Stripe and
+              never touches our servers. Source code is processed in-memory and is not written to
+              persistent storage. We conduct periodic security reviews of our infrastructure and
+              follow the principle of least privilege for all system access.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-foreground mb-2">15. Governing Law</h2>
             <p>
               This Privacy Policy is governed by the laws of New Zealand, including the Privacy Act 2020.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">14. Changes to This Policy</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">16. Changes to This Policy</h2>
             <p>
               We may update this policy from time to time. Material changes will be communicated via email
               or prominent notice on our website at least 14 days before taking effect. The &quot;Effective
@@ -225,7 +267,7 @@ export default function Privacy() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-foreground mb-2">15. Contact</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">17. Contact</h2>
             <p>
               For privacy questions, data requests, or concerns, contact us at{" "}
               <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
