@@ -327,6 +327,14 @@ export default function ScanStatus() {
               </div>
             )}
 
+            {/* Save & access later */}
+            <div className="p-4 rounded-xl border border-border bg-background-alt text-center">
+              <p className="text-sm text-muted">
+                Bookmark this page to revisit your results, or view all your scans at{" "}
+                <a href="/dashboard" className="text-accent font-medium hover:underline">My Scans</a>.
+              </p>
+            </div>
+
             {/* Branding */}
             <p className="text-center text-xs text-muted pt-2">
               Scanned by GateTest &middot; gatetest.io

@@ -37,6 +37,12 @@ export default function Navbar() {
 
         <div className="hidden md:flex items-center gap-4">
           <a
+            href="/dashboard"
+            className="text-sm text-muted hover:text-foreground transition-colors"
+          >
+            My Scans
+          </a>
+          <a
             href="/github/setup"
             className="px-5 py-2.5 text-sm font-medium rounded-lg border border-border hover:border-accent/50 text-foreground transition-colors"
           >
@@ -72,6 +78,7 @@ export default function Navbar() {
           <a href="#comparison" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Compare</a>
           <a href="#integrations" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Integrations</a>
           <a href="#pricing" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Pricing</a>
+          <a href="/dashboard" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>My Scans</a>
           <a href="#pricing" className="block btn-cta px-5 py-2.5 text-sm text-center rounded-lg" onClick={() => setMobileOpen(false)}>
             Scan My Repo
           </a>
