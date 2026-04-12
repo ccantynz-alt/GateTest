@@ -9,11 +9,8 @@ export default function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong">
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
-          <div className="relative w-8 h-8">
-            <div className="absolute inset-0 rounded-lg bg-emerald-500/15" />
-            <div className="absolute inset-1 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-sm font-[var(--font-mono)]">G</span>
-            </div>
+          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+            <span className="text-white font-bold text-sm font-[var(--font-mono)]">G</span>
           </div>
           <span className="text-xl font-bold tracking-tight">
             Gate<span className="gradient-text">Test</span>

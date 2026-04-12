@@ -1,22 +1,18 @@
 export default function Hero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center hero-bg overflow-hidden pt-20">
-      {/* Gradient mesh wash */}
-      <div className="absolute top-0 left-1/4 w-[800px] h-[600px] bg-gradient-to-br from-emerald-100/60 to-transparent rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute top-40 right-1/4 w-[600px] h-[400px] bg-gradient-to-bl from-teal-100/40 to-transparent rounded-full blur-[80px] pointer-events-none" />
-
       <div className="relative z-10 mx-auto max-w-5xl px-6 text-center">
         {/* Badge */}
         <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full badge-accent text-sm mb-10 fade-up">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600" />
           </span>
           13 Modules &middot; AI-Powered &middot; Pay Only When Delivered
         </div>
 
         {/* Headline */}
-        <h1 className="text-5xl sm:text-6xl lg:text-[4.5rem] font-bold tracking-tight leading-[1.1] mb-6 fade-up text-foreground">
+        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.08] mb-6 fade-up">
           AI writes fast.
           <br />
           <span className="gradient-text">GateTest keeps it honest.</span>
@@ -31,7 +27,7 @@ export default function Hero() {
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20 fade-up">
-          <a href="#pricing" className="btn-cta px-8 py-4 text-base font-bold pulse-glow rounded-xl">
+          <a href="#pricing" className="btn-cta px-8 py-4 text-base rounded-xl">
             Scan My Repo &mdash; From $29
           </a>
           <a href="#how-it-works" className="btn-secondary px-8 py-4 text-base">
@@ -49,7 +45,7 @@ export default function Hero() {
             <span className="ml-auto text-xs text-emerald-400 font-medium tracking-wider">LIVE</span>
           </div>
           <div className="p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed text-gray-300">
-            <p className="text-emerald-400 font-bold text-xs tracking-wider">GATETEST &mdash; Quality Assurance Gate</p>
+            <p className="text-teal-400 font-bold text-xs tracking-wider">GATETEST &mdash; Quality Assurance Gate</p>
             <p className="text-gray-500 text-xs">Running full suite: 13 modules</p>
             <p className="mt-2" />
             <p>{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">syntax</span> <span className="text-gray-500">&mdash; 47 checks, 12ms</span></p>
@@ -72,8 +68,8 @@ export default function Hero() {
             { value: "$0", label: "If Scan Fails" },
             { value: "0", label: "Tolerance for Bugs" },
           ].map((stat) => (
-            <div key={stat.label} className="text-center p-4 rounded-2xl glass">
-              <div className="text-3xl font-bold gradient-text">{stat.value}</div>
+            <div key={stat.label} className="text-center p-4 rounded-xl border border-border bg-white">
+              <div className="text-3xl font-bold text-foreground">{stat.value}</div>
               <div className="text-sm text-muted mt-1">{stat.label}</div>
             </div>
           ))}

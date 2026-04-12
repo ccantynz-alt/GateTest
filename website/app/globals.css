@@ -1,39 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  /* === BRAND COLORS — GateTest owns green/teal === */
-  --background: #fafaf9;
-  --background-warm: #f5f5f0;
+  /* === CLEAN, PROFESSIONAL PALETTE === */
+  --background: #ffffff;
+  --background-alt: #f8f9fa;
   --foreground: #111827;
   --foreground-secondary: #374151;
 
-  /* Primary: emerald-teal gradient family */
-  --accent: #059669;
-  --accent-light: #10b981;
-  --accent-hover: #047857;
-  --accent-glow: rgba(5, 150, 105, 0.15);
-
-  /* CTA: warm amber — stands out from everything */
-  --cta: #f59e0b;
-  --cta-hover: #d97706;
-  --cta-glow: rgba(245, 158, 11, 0.2);
+  /* Single accent: refined teal — professional, distinctive */
+  --accent: #0f766e;
+  --accent-light: #14b8a6;
+  --accent-hover: #0d6560;
 
   /* Surfaces */
-  --surface: rgba(255, 255, 255, 0.85);
+  --surface: rgba(255, 255, 255, 0.9);
   --surface-solid: #ffffff;
-  --surface-warm: #fefdfb;
-  --border: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.12);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
   --muted: #6b7280;
 
   /* Status */
   --success: #059669;
   --danger: #dc2626;
-  --warning: #f59e0b;
+  --warning: #d97706;
 
   /* Typography */
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
 }
 
 @theme inline {
@@ -41,9 +34,8 @@
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
-  --color-cta: var(--cta);
   --color-surface: var(--surface);
-  --color-surface-light: var(--background-warm);
+  --color-surface-light: var(--background-alt);
   --color-surface-solid: var(--surface-solid);
   --color-border: var(--border);
   --color-muted: var(--muted);
@@ -64,51 +56,43 @@ body {
 }
 
 ::selection {
-  background: rgba(5, 150, 105, 0.15);
+  background: rgba(15, 118, 110, 0.12);
   color: var(--foreground);
 }
 
-/* === HERO BACKGROUND — dramatic gradient mesh === */
+/* === BACKGROUNDS === */
 
 .hero-bg {
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(5, 150, 105, 0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(20, 184, 166, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 50% 80%, rgba(245, 158, 11, 0.04) 0%, transparent 50%),
-    linear-gradient(180deg, #fafaf9 0%, #f0fdf4 40%, #fafaf9 100%);
+  background: var(--background);
 }
 
-/* === SECTION BACKGROUNDS === */
-
 .section-alt {
-  background: linear-gradient(180deg, var(--background-warm) 0%, var(--background) 100%);
+  background: var(--background-alt);
 }
 
 .section-accent {
-  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 50%, #fefce8 100%);
+  background: var(--background-alt);
 }
 
 .grid-bg {
-  background-color: var(--background);
+  background: var(--background);
 }
 
-/* === GLASS CARDS === */
+/* === GLASS === */
 
 .glass {
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 4px 12px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(40px) saturate(200%);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
@@ -117,61 +101,43 @@ body {
 .card {
   background: var(--surface-solid);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.02),
-    0 4px 16px rgba(0, 0, 0, 0.03);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .card:hover {
   border-color: var(--border-strong);
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.06),
-    0 8px 40px rgba(5, 150, 105, 0.04);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .card-highlight {
   background: var(--surface-solid);
   border: 2px solid var(--accent);
-  border-radius: 16px;
-  box-shadow:
-    0 4px 24px rgba(5, 150, 105, 0.08),
-    0 0 0 1px rgba(5, 150, 105, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(15, 118, 110, 0.08);
 }
 
-/* === GRADIENT TEXT === */
+/* === ACCENT TEXT (solid, not gradient) === */
 
 .gradient-text {
-  background: linear-gradient(135deg, #059669, #0d9488, #0891b2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
 }
 
-.gradient-text-warm {
-  background: linear-gradient(135deg, #f59e0b, #f97316);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* === TERMINAL (stays dark — it IS a terminal) === */
+/* === TERMINAL === */
 
 .terminal {
-  background: linear-gradient(145deg, #0f172a, #1e293b);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow:
-    0 8px 30px rgba(0, 0, 0, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
 .terminal-header {
-  background: rgba(255, 255, 255, 0.05);
-  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -184,38 +150,36 @@ body {
   border-radius: 50%;
 }
 
-/* === BUTTONS === */
+/* === BUTTONS — solid, no gradients === */
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), #0d9488);
+  background: var(--accent);
   color: white;
   font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  transition: all 0.15s ease;
   display: inline-block;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, var(--accent-hover), #0f766e);
+  background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);
 }
 
 .btn-cta {
-  background: linear-gradient(135deg, var(--cta), #f97316);
-  color: #111827;
-  font-weight: 700;
-  border-radius: 12px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--foreground);
+  color: white;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.15s ease;
   display: inline-block;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
 }
 
 .btn-cta:hover {
-  background: linear-gradient(135deg, var(--cta-hover), #ea580c);
+  background: #1f2937;
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .btn-secondary {
@@ -223,71 +187,63 @@ body {
   border: 1.5px solid var(--border-strong);
   color: var(--foreground);
   font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  transition: all 0.15s ease;
   display: inline-block;
 }
 
 .btn-secondary:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(5, 150, 105, 0.04);
+  border-color: var(--foreground);
   transform: translateY(-1px);
-}
-
-/* === GLOW === */
-
-.glow-border {
-  border: 2px solid var(--accent);
-  box-shadow: 0 4px 24px rgba(5, 150, 105, 0.1);
-}
-
-.pulse-glow {
-  animation: pulse-glow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25); }
-  50% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), 0 0 0 8px rgba(245, 158, 11, 0); }
 }
 
 /* === BADGE === */
 
 .badge-accent {
-  background: rgba(5, 150, 105, 0.08);
+  background: rgba(15, 118, 110, 0.06);
   color: var(--accent);
-  border: 1px solid rgba(5, 150, 105, 0.15);
+  border: 1px solid rgba(15, 118, 110, 0.12);
   border-radius: 999px;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+/* === GLOW (minimal) === */
+
+.glow-border {
+  border: 2px solid var(--accent);
+}
+
+.pulse-glow {
+  /* No animation — clean and still */
 }
 
 /* === ANIMATIONS === */
 
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(24px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-up {
-  animation: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .stagger > *:nth-child(1) { animation-delay: 0s; }
-.stagger > *:nth-child(2) { animation-delay: 0.08s; }
-.stagger > *:nth-child(3) { animation-delay: 0.16s; }
-.stagger > *:nth-child(4) { animation-delay: 0.24s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.stagger > *:nth-child(4) { animation-delay: 0.18s; }
 
-/* === SCAN PAGE ANIMATIONS === */
+/* === SCAN PAGE === */
 
 @keyframes slide-in {
-  from { opacity: 0; transform: translateX(-12px); }
+  from { opacity: 0; transform: translateX(-8px); }
   to { opacity: 1; transform: translateX(0); }
 }
-.slide-in { animation: slide-in 0.3s ease-out forwards; }
+.slide-in { animation: slide-in 0.25s ease-out forwards; }
 
 @keyframes module-pulse {
-  0%, 100% { background: rgba(5, 150, 105, 0.04); }
-  50% { background: rgba(5, 150, 105, 0.08); }
+  0%, 100% { background: rgba(15, 118, 110, 0.03); }
+  50% { background: rgba(15, 118, 110, 0.06); }
 }
 .module-running {
   animation: module-pulse 1.5s ease-in-out infinite;
@@ -295,28 +251,28 @@ body {
 }
 
 @keyframes flash-green {
-  0% { background: rgba(5, 150, 105, 0.15); }
+  0% { background: rgba(5, 150, 105, 0.1); }
   100% { background: transparent; }
 }
-.flash-pass { animation: flash-green 0.6s ease-out; }
+.flash-pass { animation: flash-green 0.5s ease-out; }
 
 @keyframes flash-red {
-  0% { background: rgba(220, 38, 38, 0.15); }
+  0% { background: rgba(220, 38, 38, 0.1); }
   100% { background: transparent; }
 }
-.flash-fail { animation: flash-red 0.6s ease-out; }
+.flash-fail { animation: flash-red 0.5s ease-out; }
 
 @keyframes progress-glow {
-  0%, 100% { box-shadow: 0 0 4px rgba(5, 150, 105, 0.3); }
-  50% { box-shadow: 0 0 12px rgba(5, 150, 105, 0.5); }
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 8px rgba(15, 118, 110, 0.2); }
 }
 .progress-glow { animation: progress-glow 2s ease-in-out infinite; }
 
 @keyframes celebrate {
-  0% { transform: scale(0.95); opacity: 0; }
+  0% { transform: scale(0.97); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
-.celebrate { animation: celebrate 0.4s ease-out forwards; }
+.celebrate { animation: celebrate 0.3s ease-out forwards; }
 
 @keyframes blink {
   0%, 50% { opacity: 1; }
@@ -330,8 +286,8 @@ body {
 
 @keyframes scan {
   0% { transform: translateY(-100%); opacity: 0; }
-  10% { opacity: 0.3; }
-  90% { opacity: 0.3; }
+  10% { opacity: 0.2; }
+  90% { opacity: 0.2; }
   100% { transform: translateY(100vh); opacity: 0; }
 }
 
@@ -344,7 +300,7 @@ body {
 }
 
 @keyframes terminal-scan {
-  0% { top: 0; opacity: 0.4; }
+  0% { top: 0; opacity: 0.3; }
   100% { top: 100%; opacity: 0; }
 }
 .terminal-scan-line {
@@ -352,25 +308,25 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 5%, rgba(16, 185, 129, 0.5) 50%, transparent 95%);
+  background: linear-gradient(90deg, transparent 5%, rgba(20, 184, 166, 0.4) 50%, transparent 95%);
   animation: terminal-scan 2.5s linear infinite;
   pointer-events: none;
 }
 
 .count-up { animation: fade-up 0.3s ease-out; }
 
-/* === SECTION DIVIDER === */
+/* === DIVIDER === */
 
 .section-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+  background: var(--border);
 }
 
-/* === SMOOTH SCROLL === */
+/* === SCROLL === */
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 120px;
+  scroll-padding-top: 80px;
 }
 
 /* === SCROLLBAR === */
