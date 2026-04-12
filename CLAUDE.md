@@ -421,6 +421,7 @@ GateTest/
 | `GATETEST_PRIVATE_KEY` | GitHub App .pem contents |
 | `GATETEST_WEBHOOK_SECRET` | GitHub webhook secret |
 | `ANTHROPIC_API_KEY` | Claude API for AI review |
+| `GATETEST_ADMIN_PASSWORD` | Admin console password for `/admin` (bypasses Stripe) |
 
 ---
 
