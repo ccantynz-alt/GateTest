@@ -73,6 +73,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#0f766e" />
+      </head>
       <body className="min-h-full flex flex-col">
         <script
           type="application/ld+json"
