@@ -15,10 +15,6 @@ import Footer from "./components/Footer";
 export default function Home() {
   return (
     <>
-      {/* Coming Soon Banner */}
-      <div className="fixed top-0 left-0 right-0 z-[60] bg-indigo-600 text-white text-center py-2.5 px-4 text-sm font-medium">
-        Coming Soon — GateTest is launching shortly
-      </div>
       <Navbar />
       <main>
         <Hero />

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://gatetest.io"),
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
     "20 test modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay only when the scan completes.",
@@ -18,7 +19,18 @@ export const metadata: Metadata = {
     "code quality",
     "mutation testing",
     "auto-fix",
+    "code review",
+    "SonarQube alternative",
+    "Snyk alternative",
+    "GitHub code scanning",
+    "static analysis",
+    "OWASP",
+    "WCAG",
+    "SEO audit",
   ],
+  alternates: {
+    canonical: "https://gatetest.io",
+  },
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
@@ -26,12 +38,31 @@ export const metadata: Metadata = {
     url: "https://gatetest.io",
     siteName: "GateTest",
     type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
       "20 test modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon-180.png",
   },
 };
 
@@ -42,7 +73,41 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "GateTest",
+              applicationCategory: "DeveloperApplication",
+              operatingSystem: "Any",
+              url: "https://gatetest.io",
+              description:
+                "AI-powered QA platform that scans your entire codebase with 20+ modules — security, accessibility, performance, code quality, and more. Pay only when the scan completes.",
+              offers: [
+                {
+                  "@type": "Offer",
+                  name: "Quick Scan",
+                  price: "29.00",
+                  priceCurrency: "USD",
+                  description: "4 modules: syntax, lint, secrets, code quality",
+                },
+                {
+                  "@type": "Offer",
+                  name: "Full Scan",
+                  price: "99.00",
+                  priceCurrency: "USD",
+                  description:
+                    "All 13 modules including AI code review, security, accessibility, and performance",
+                },
+              ],
+            }),
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
