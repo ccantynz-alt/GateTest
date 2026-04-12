@@ -1,6 +1,23 @@
-"use client";
+/**
+ * Admin Page — server-rendered entry point.
+ *
+ * Auth model: GitHub OAuth, allowlisted by username via GATETEST_ADMIN_USERNAMES.
+ *
+ * Flow:
+ *   1. Read signed session cookie (HMAC-SHA256, 7-day expiry)
+ *   2. Verify cookie and check GitHub login against allowlist
+ *   3. If missing/invalid, show a sign-in CTA that redirects to /api/github/admin-login
+ *   4. If the panel is not configured (missing env vars), show a clear notice
+ *      instead of crashing (green ecosystem mandate: never leak data by default).
+ */
 
-import { useState } from "react";
+import { cookies } from "next/headers";
+import {
+  getAdminConfig,
+  getAdminUser,
+  SESSION_COOKIE_NAME,
+} from "../lib/admin-session";
+import AdminPanel from "./AdminPanel";
 
 /**
  * Admin console — run scans on any repo without payment.
@@ -89,18 +106,39 @@ export default function AdminPage() {
           {error && <p className="text-danger text-sm mt-2 text-center">{error}</p>}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  async function runScan() {
-    if (!repoUrl.includes("github.com")) {
-      setError("Enter a valid GitHub repo URL");
-      return;
-    }
+function SignInPrompt({ error }: { error?: string }) {
+  const messages: Record<string, string> = {
+    invalid_state: "OAuth state mismatch. Please try again.",
+    token_exchange_failed: "GitHub rejected the token exchange.",
+    user_fetch_failed: "Could not read your GitHub profile.",
+    not_authorized: "That GitHub account is not on the admin allowlist.",
+  };
+  const message = error ? messages[error] || "Sign in required." : null;
 
-    setScanning(true);
-    setResult(null);
-    setError("");
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-6">
+      <div className="max-w-sm w-full">
+        <h1 className="text-2xl font-bold mb-2 text-center">Admin Access</h1>
+        <p className="text-sm text-muted text-center mb-6">
+          Sign in with GitHub to continue.
+        </p>
+        <a
+          href="/api/github/admin-login"
+          className="btn-primary w-full py-3 text-sm block text-center"
+        >
+          Sign in with GitHub
+        </a>
+        {message && (
+          <p className="text-danger text-sm mt-4 text-center">{message}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
     try {
       const res = await fetch("/api/scan/run", {
@@ -198,43 +236,5 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Module results */}
-            {modules.map((mod) => {
-              const status = mod.status as string;
-              const details = (mod.details as string[]) || [];
-              return (
-                <div key={mod.name as string} className={`card p-4 ${
-                  status === "failed" ? "border-l-4 border-l-danger" :
-                  status === "passed" ? "border-l-4 border-l-success" : ""
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-bold ${
-                        status === "passed" ? "text-success" : status === "failed" ? "text-danger" : "text-muted"
-                      }`}>
-                        {status === "passed" ? "PASS" : status === "failed" ? "FAIL" : "SKIP"}
-                      </span>
-                      <span className="font-semibold text-sm">{mod.name as string}</span>
-                    </div>
-                    <div className="text-xs text-muted">
-                      {mod.checks as number} checks &middot; {mod.issues as number} issues &middot; {mod.duration as number}ms
-                    </div>
-                  </div>
-                  {details.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {details.map((d, i) => (
-                        <li key={i} className="text-xs text-muted font-mono pl-14">
-                          &rarr; {d}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <AdminPanel adminLogin={adminLogin} />;
 }
