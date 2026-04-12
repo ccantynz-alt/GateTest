@@ -1,178 +1,99 @@
-"use client";
+/**
+ * Admin Page — server-rendered entry point.
+ *
+ * Auth model: GitHub OAuth, allowlisted by username via GATETEST_ADMIN_USERNAMES.
+ *
+ * Flow:
+ *   1. Read signed session cookie (HMAC-SHA256, 7-day expiry)
+ *   2. Verify cookie and check GitHub login against allowlist
+ *   3. If missing/invalid, show a sign-in CTA that redirects to /api/github/admin-login
+ *   4. If the panel is not configured (missing env vars), show a clear notice
+ *      instead of crashing (green ecosystem mandate: never leak data by default).
+ */
 
-import { useState } from "react";
+import { cookies } from "next/headers";
+import {
+  getAdminConfig,
+  getAdminUser,
+  SESSION_COOKIE_NAME,
+} from "../lib/admin-session";
+import AdminPanel from "./AdminPanel";
 
-const ADMIN_KEY = "gatetest-craig-2026";
+export const dynamic = "force-dynamic";
 
-export default function AdminPage() {
-  const [auth, setAuth] = useState(false);
-  const [key, setKey] = useState("");
-  const [repoUrl, setRepoUrl] = useState("");
-  const [tier, setTier] = useState("quick");
-  const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [error, setError] = useState("");
+interface PageProps {
+  searchParams: Promise<{ error?: string }>;
+}
 
-  if (!auth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="max-w-sm w-full">
-          <h1 className="text-2xl font-bold mb-6 text-center">Admin Access</h1>
-          <input
-            type="password"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && key === ADMIN_KEY) setAuth(true); }}
-            placeholder="Enter admin key"
-            className="w-full px-4 py-3 rounded-xl border border-border bg-surface-solid text-foreground text-sm mb-3"
-          />
-          <button
-            onClick={() => { if (key === ADMIN_KEY) setAuth(true); else setError("Invalid key"); }}
-            className="btn-primary w-full py-3 text-sm"
-          >
-            Enter
-          </button>
-          {error && <p className="text-danger text-sm mt-2 text-center">{error}</p>}
-        </div>
+function NotConfigured({ missing }: { missing: string[] }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-6">
+      <div className="max-w-lg w-full card p-8">
+        <h1 className="text-2xl font-bold mb-3">Admin panel not configured</h1>
+        <p className="text-sm text-muted mb-4">
+          The GateTest admin panel is intentionally locked down until the
+          following environment variables are set on the server. No data is
+          exposed until configuration is complete.
+        </p>
+        <ul className="text-sm font-mono bg-surface-solid rounded-lg p-4 space-y-1">
+          {missing.map((m) => (
+            <li key={m}>&rarr; {m}</li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted mt-4">
+          See <span className="font-mono">GITHUB-APP-SETUP.md</span> for setup
+          instructions.
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  async function runScan() {
-    if (!repoUrl.includes("github.com")) {
-      setError("Enter a valid GitHub repo URL");
-      return;
-    }
-
-    setScanning(true);
-    setResult(null);
-    setError("");
-
-    try {
-      const res = await fetch("/api/scan/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, tier }),
-      });
-      const data = await res.json();
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  const modules = (result?.modules as Array<Record<string, unknown>>) || [];
-  const totalIssues = (result?.totalIssues as number) || 0;
+function SignInPrompt({ error }: { error?: string }) {
+  const messages: Record<string, string> = {
+    invalid_state: "OAuth state mismatch. Please try again.",
+    token_exchange_failed: "GitHub rejected the token exchange.",
+    user_fetch_failed: "Could not read your GitHub profile.",
+    not_authorized: "That GitHub account is not on the admin allowlist.",
+  };
+  const message = error ? messages[error] || "Sign in required." : null;
 
   return (
-    <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">GateTest Admin</h1>
-            <p className="text-sm text-muted">Run scans on any repo. No payment required.</p>
-          </div>
-          <a href="/" className="text-sm text-muted hover:text-foreground">&larr; Back to site</a>
-        </div>
-
-        {/* Scan form */}
-        <div className="card p-6 mb-8">
-          <div className="grid sm:grid-cols-[1fr,auto,auto] gap-3">
-            <input
-              type="url"
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo"
-              className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-full"
-            />
-            <select
-              value={tier}
-              onChange={(e) => setTier(e.target.value)}
-              className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
-            >
-              <option value="quick">Quick (4 modules)</option>
-              <option value="full">Full (21 modules)</option>
-            </select>
-            <button
-              onClick={runScan}
-              disabled={scanning}
-              className="btn-primary px-6 py-3 text-sm disabled:opacity-50"
-            >
-              {scanning ? "Scanning..." : "Run Scan"}
-            </button>
-          </div>
-          {error && <p className="text-danger text-sm mt-3">{error}</p>}
-        </div>
-
-        {/* Scanning state */}
-        {scanning && (
-          <div className="card p-8 text-center">
-            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted">Scanning {repoUrl}...</p>
-          </div>
-        )}
-
-        {/* Results */}
-        {result && !scanning && (
-          <div className="space-y-4">
-            {/* Summary */}
-            <div className={`card p-6 ${totalIssues === 0 ? "border-success" : "border-danger"}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold">
-                    {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
-                  </h2>
-                  <p className="text-sm text-muted">
-                    {modules.length} modules &middot; {result.duration as number}ms
-                  </p>
-                </div>
-                <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                  totalIssues === 0 ? "bg-green-50 text-success" : "bg-red-50 text-danger"
-                }`}>
-                  {totalIssues === 0 ? "PASSED" : "BLOCKED"}
-                </span>
-              </div>
-            </div>
-
-            {/* Module results */}
-            {modules.map((mod) => {
-              const status = mod.status as string;
-              const details = (mod.details as string[]) || [];
-              return (
-                <div key={mod.name as string} className={`card p-4 ${
-                  status === "failed" ? "border-l-4 border-l-danger" :
-                  status === "passed" ? "border-l-4 border-l-success" : ""
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-bold ${
-                        status === "passed" ? "text-success" : status === "failed" ? "text-danger" : "text-muted"
-                      }`}>
-                        {status === "passed" ? "PASS" : status === "failed" ? "FAIL" : "SKIP"}
-                      </span>
-                      <span className="font-semibold text-sm">{mod.name as string}</span>
-                    </div>
-                    <div className="text-xs text-muted">
-                      {mod.checks as number} checks &middot; {mod.issues as number} issues &middot; {mod.duration as number}ms
-                    </div>
-                  </div>
-                  {details.length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {details.map((d, i) => (
-                        <li key={i} className="text-xs text-muted font-mono pl-14">
-                          &rarr; {d}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-background px-6">
+      <div className="max-w-sm w-full">
+        <h1 className="text-2xl font-bold mb-2 text-center">Admin Access</h1>
+        <p className="text-sm text-muted text-center mb-6">
+          Sign in with GitHub to continue.
+        </p>
+        <a
+          href="/api/github/admin-login"
+          className="btn-primary w-full py-3 text-sm block text-center"
+        >
+          Sign in with GitHub
+        </a>
+        {message && (
+          <p className="text-danger text-sm mt-4 text-center">{message}</p>
         )}
       </div>
     </div>
   );
+}
+
+export default async function AdminPage({ searchParams }: PageProps) {
+  const status = getAdminConfig();
+  if (!status.ok || !status.config) {
+    return <NotConfigured missing={status.missing} />;
+  }
+
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const adminLogin = getAdminUser(sessionCookie, status.config);
+
+  const params = await searchParams;
+
+  if (!adminLogin) {
+    return <SignInPrompt error={params.error} />;
+  }
+
+  return <AdminPanel adminLogin={adminLogin} />;
 }

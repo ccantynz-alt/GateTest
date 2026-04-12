@@ -1,20 +1,29 @@
 /**
- * Stripe Webhook Handler — Triggers scans after successful payment.
+ * Stripe Webhook Handler — Acknowledges Stripe in <5s, runs scan async.
  *
- * ARCHITECTURE (Vercel serverless compatible):
+ * ARCHITECTURE (decoupled — fixes the 60s-timeout double-charge bug):
  * - Webhook receives checkout.session.completed
- * - Runs scan SYNCHRONOUSLY within the function (Vercel Pro: 60s timeout)
- * - Stores result in Stripe payment intent metadata
- * - Captures payment on success, cancels on failure
- * - Status page reads result from /api/scan/status which checks Stripe
+ * - Verifies signature
+ * - Stamps the payment intent with a scan_job_id (Stripe metadata acts as
+ *   the idempotency lock)
+ * - Schedules the scan via `after()` so the response returns immediately
+ * - Returns 200 to Stripe within milliseconds
+ * - Background job captures or cancels the payment intent when the scan
+ *   finishes. The capture/cancel step is idempotent — if Stripe retries
+ *   the webhook (e.g. cold start dropped our response), the second run
+ *   sees the stamped scan_job_id and bails out, so the customer is never
+ *   double-charged.
  *
- * This runs within Vercel's serverless function timeout.
- * The scan uses the GitHub API (no git clone needed).
+ * Prior behavior: scan ran inline, Vercel killed the function at 60s, Stripe
+ * retried, second invocation double-captured.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import crypto from "crypto";
 import https from "https";
+import { runScanJob } from "../../lib/scan-executor";
+import { getDb } from "../../lib/db";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
@@ -81,317 +90,25 @@ function stripeApi(
       });
     });
     req.on("error", reject);
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error("Stripe request timed out"));
+    });
     if (body) req.write(body);
     req.end();
   });
 }
 
-function githubApi(
-  token: string,
-  path: string
-): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const options: https.RequestOptions = {
-      hostname: "api.github.com",
-      port: 443,
-      path,
-      method: "GET",
-      headers: {
-        "User-Agent": "GateTest/1.1.0",
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-      },
-    };
-    const req = https.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(Buffer.concat(chunks).toString("utf-8")));
-        } catch {
-          resolve({});
-        }
-      });
-    });
-    req.on("error", reject);
-    req.end();
-  });
-}
-
-interface ScanResult {
-  status: "complete" | "failed";
-  modules: Array<{
-    name: string;
-    status: "passed" | "failed" | "warning";
-    checks: number;
-    issues: number;
-    duration: number;
-  }>;
-  totalModules: number;
-  completedModules: number;
-  totalIssues: number;
-  totalFixed: number;
-  duration: number;
-  error?: string;
-}
-
-async function runScan(repoUrl: string, tier: string): Promise<ScanResult> {
-  const startTime = Date.now();
-
-  const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
-  if (!repoMatch) {
-    return {
-      status: "failed",
-      modules: [],
-      totalModules: 0,
-      completedModules: 0,
-      totalIssues: 0,
-      totalFixed: 0,
-      duration: Date.now() - startTime,
-      error: "Invalid GitHub repository URL",
-    };
-  }
-
-  const owner = repoMatch[1];
-  const repo = repoMatch[2].replace(/\.git$/, "");
-
-  // Use GitHub API to read the repo (no clone needed on serverless)
-  const token = process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
-
-  // Get file tree
-  let tree: { tree?: Array<{ path: string; type: string }> };
-  try {
-    tree = (await githubApi(
-      token,
-      `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
-    )) as typeof tree;
-  } catch {
-    // Try without auth for public repos
-    tree = (await githubApi(
-      "",
-      `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
-    )) as typeof tree;
-  }
-
-  if (!tree?.tree) {
-    return {
-      status: "failed",
-      modules: [],
-      totalModules: 0,
-      completedModules: 0,
-      totalIssues: 0,
-      totalFixed: 0,
-      duration: Date.now() - startTime,
-      error: `Cannot access repository ${owner}/${repo}. Check if it's public or provide a GitHub token.`,
-    };
-  }
-
-  const files = tree.tree.filter((f) => f.type === "blob").map((f) => f.path);
-  const sourceFiles = files.filter(
-    (f) =>
-      (f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".js") ||
-       f.endsWith(".jsx") || f.endsWith(".py") || f.endsWith(".go")) &&
-      !f.includes("node_modules") && !f.includes(".next") && !f.includes("dist/")
-  );
-
-  const moduleNames =
-    tier === "quick"
-      ? ["syntax", "lint", "secrets", "codeQuality"]
-      : [
-          "syntax", "lint", "secrets", "codeQuality", "unitTests",
-          "integrationTests", "e2e", "visual", "accessibility",
-          "performance", "security", "seo", "links", "compatibility",
-          "dataIntegrity", "documentation", "mutation", "aiReview",
-        ];
-
-  const moduleResults: ScanResult["modules"] = [];
-  let totalIssues = 0;
-
-  // Read up to 20 source files for analysis
-  const filesToCheck = sourceFiles.slice(0, 20);
-  const fileContents: Array<{ path: string; content: string }> = [];
-
-  for (const filePath of filesToCheck) {
-    try {
-      const fileData = (await githubApi(
-        token || "",
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`
-      )) as { content?: string; encoding?: string };
-
-      if (fileData.content && fileData.encoding === "base64") {
-        fileContents.push({
-          path: filePath,
-          content: Buffer.from(fileData.content, "base64").toString("utf-8"),
-        });
-      }
-    } catch {
-      // Skip unreadable files
-    }
-  }
-
-  // Run each module's checks
-  for (const moduleName of moduleNames) {
-    const modStart = Date.now();
-    let checks = 0;
-    let issues = 0;
-
-    switch (moduleName) {
-      case "syntax": {
-        for (const f of fileContents) {
-          checks++;
-          // Check for obvious syntax issues
-          const opens = (f.content.match(/{/g) || []).length;
-          const closes = (f.content.match(/}/g) || []).length;
-          if (Math.abs(opens - closes) > 2) issues++;
-        }
-        checks += files.filter((f) => f.endsWith(".json")).length;
-        break;
-      }
-      case "lint": {
-        checks = fileContents.length;
-        // Check for common lint issues
-        for (const f of fileContents) {
-          if (f.content.includes("var ")) issues++;
-        }
-        break;
-      }
-      case "secrets": {
-        const secretPatterns = [
-          /['"]sk_live_[a-zA-Z0-9]+['"]/,
-          /['"]ghp_[a-zA-Z0-9]+['"]/,
-          /['"]AKIA[A-Z0-9]{16}['"]/,
-          /password\s*[:=]\s*['"][^'"]{8,}['"]/i,
-          /-----BEGIN.*PRIVATE KEY-----/,
-          /(mongodb|postgres|mysql):\/\/[^:\s]+:[^@\s]+@/i,
-        ];
-        for (const f of fileContents) {
-          checks++;
-          for (const pattern of secretPatterns) {
-            if (pattern.test(f.content)) { issues++; break; }
-          }
-        }
-        // Check for sensitive files in repo
-        const sensitiveFiles = [".env", ".pem", ".key", "credentials.json"];
-        for (const f of files) {
-          checks++;
-          const basename = f.split("/").pop() || "";
-          if (sensitiveFiles.includes(basename)) issues++;
-        }
-        break;
-      }
-      case "codeQuality": {
-        for (const f of fileContents) {
-          if (f.path.includes("test") || f.path.includes("spec")) continue;
-          checks++;
-          if (/console\.(log|debug|info)\(/.test(f.content)) issues++;
-          checks++;
-          if (/\bdebugger\b/.test(f.content)) issues++;
-          checks++;
-          if (/\/\/\s*(TODO|FIXME|HACK|XXX)/i.test(f.content)) issues++;
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) issues++;
-        }
-        break;
-      }
-      case "security": {
-        for (const f of fileContents) {
-          checks++;
-          if (/\.innerHTML\s*=/.test(f.content)) issues++;
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) issues++;
-          checks++;
-          if (/child_process.*exec\s*\(/.test(f.content)) issues++;
-          checks++;
-          if (/document\.write\s*\(/.test(f.content)) issues++;
-        }
-        break;
-      }
-      case "accessibility": {
-        for (const f of fileContents) {
-          if (!f.path.endsWith(".tsx") && !f.path.endsWith(".jsx")) continue;
-          checks++;
-          if (/<img\s(?![^>]*\balt\b)/i.test(f.content)) issues++;
-          checks++;
-          if (/<input(?![^>]*\b(?:aria-label|id)\b)/i.test(f.content)) issues++;
-          checks++;
-          if (f.content.includes("onClick") && !f.content.includes("onKeyDown")) issues++;
-        }
-        break;
-      }
-      case "seo": {
-        checks++;
-        const hasMetaTitle = files.some((f) => f.includes("layout") || f.includes("_app"));
-        if (!hasMetaTitle) issues++;
-        checks++;
-        if (!files.some((f) => f === "robots.txt" || f === "public/robots.txt")) issues++;
-        break;
-      }
-      case "documentation": {
-        checks++;
-        if (!files.some((f) => f === "README.md")) issues++;
-        checks++;
-        if (!files.some((f) => f === "CHANGELOG.md" || f === "CHANGES.md")) issues++;
-        checks++;
-        if (!files.some((f) => f === "LICENSE" || f === "LICENSE.md")) issues++;
-        break;
-      }
-      case "links": {
-        for (const f of fileContents) {
-          const linkMatches = f.content.match(/href=["']([^"']+)["']/g) || [];
-          checks += linkMatches.length;
-          for (const link of linkMatches) {
-            const href = link.match(/href=["']([^"']+)["']/)?.[1] || "";
-            if (href === "#" || href === "javascript:void(0)") issues++;
-          }
-        }
-        break;
-      }
-      case "performance": {
-        checks++;
-        const pkgJson = files.find((f) => f === "package.json");
-        if (pkgJson) {
-          const pkg = fileContents.find((f) => f.path === "package.json");
-          if (pkg) {
-            const deps = Object.keys(JSON.parse(pkg.content).dependencies || {});
-            if (deps.length > 50) issues++;
-          }
-        }
-        break;
-      }
-      case "compatibility": {
-        checks++;
-        if (!files.some((f) => f === ".browserslistrc") &&
-            !fileContents.some((f) => f.path === "package.json" && f.content.includes("browserslist"))) {
-          issues++;
-        }
-        break;
-      }
-      default: {
-        // Modules that need runtime (unitTests, e2e, etc.) — report info
-        checks = 1;
-        break;
-      }
-    }
-
-    totalIssues += issues;
-    moduleResults.push({
-      name: moduleName,
-      status: issues > 0 ? "failed" : "passed",
-      checks: Math.max(checks, 1),
-      issues,
-      duration: Date.now() - modStart,
-    });
-  }
-
-  return {
-    status: "complete",
-    modules: moduleResults,
-    totalModules: moduleNames.length,
-    completedModules: moduleNames.length,
-    totalIssues,
-    totalFixed: 0,
-    duration: Date.now() - startTime,
-  };
+/**
+ * Derive a stable idempotency key from the checkout session id. Same session
+ * id → same job id, regardless of how many times Stripe retries the webhook.
+ */
+function deriveJobId(sessionId: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(`gatetest-scan:${sessionId}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export async function POST(req: NextRequest) {
@@ -402,89 +119,143 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const event = JSON.parse(body);
+  let event: { type?: string; data?: { object?: Record<string, unknown> } };
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const paymentIntentId = session.payment_intent;
-    const metadata = session.metadata || {};
+  if (event.type !== "checkout.session.completed") {
+    return NextResponse.json({ received: true });
+  }
 
-    let tier = metadata.tier;
-    let repoUrl = metadata.repo_url;
+  const session = (event.data?.object || {}) as Record<string, unknown>;
+  const sessionId = typeof session.id === "string" ? session.id : "";
+  const paymentIntentId =
+    typeof session.payment_intent === "string" ? session.payment_intent : "";
+  const sessionMetadata =
+    (session.metadata as Record<string, string> | undefined) || {};
 
-    // Fallback to payment intent metadata
-    if ((!tier || !repoUrl) && paymentIntentId) {
-      const pi = await stripeApi("GET", `/v1/payment_intents/${paymentIntentId}`);
-      const piMeta = (pi.metadata || {}) as Record<string, string>;
-      tier = tier || piMeta.tier;
-      repoUrl = repoUrl || piMeta.repo_url;
-    }
+  let tier = sessionMetadata.tier || "";
+  let repoUrl = sessionMetadata.repo_url || "";
 
-    if (!tier || !repoUrl || !paymentIntentId) {
-      return NextResponse.json({ error: "Missing scan metadata" }, { status: 400 });
-    }
-
+  // Fallback to payment intent metadata if the checkout session didn't have it.
+  if ((!tier || !repoUrl) && paymentIntentId && STRIPE_SECRET_KEY) {
     try {
-      // Run the scan synchronously
-      const result = await runScan(repoUrl, tier);
-
-      // Store result in Stripe metadata for the status page to read
-      // Stripe metadata: max 500 chars per value, max 50 keys
-      // Store modules as compact strings across multiple keys
-      const modulesSummary = result.modules.map((m) =>
-        `${m.name}:${m.status}:${m.checks}:${m.issues}:${m.duration}`
-      ).join("|");
-
-      const updateParams = new URLSearchParams({
-        "metadata[scan_status]": result.status,
-        "metadata[total_issues]": String(result.totalIssues),
-        "metadata[total_modules]": String(result.totalModules),
-        "metadata[total_fixed]": String(result.totalFixed),
-        "metadata[scan_duration]": String(result.duration),
-        "metadata[scan_completed]": new Date().toISOString(),
-        "metadata[modules_list]": result.modules.map((m) => m.name).join(","),
-      });
-
-      // Split modules data across multiple metadata keys (500 char limit each)
-      const chunks: string[] = [];
-      let current = "";
-      for (const entry of modulesSummary.split("|")) {
-        if ((current + "|" + entry).length > 490) {
-          chunks.push(current);
-          current = entry;
-        } else {
-          current = current ? current + "|" + entry : entry;
-        }
-      }
-      if (current) chunks.push(current);
-
-      chunks.forEach((chunk, i) => {
-        updateParams.set(`metadata[modules_${i}]`, chunk);
-      });
-
-      if (result.error) {
-        updateParams.set("metadata[scan_error]", result.error.slice(0, 500));
-      }
-
-      await stripeApi(
-        "POST",
-        `/v1/payment_intents/${paymentIntentId}`,
-        updateParams.toString()
+      const pi = await stripeApi(
+        "GET",
+        `/v1/payment_intents/${paymentIntentId}`
       );
-
-      if (result.status === "complete" && !result.error) {
-        // Capture payment — scan delivered
-        await stripeApi("POST", `/v1/payment_intents/${paymentIntentId}/capture`);
-      } else {
-        // Cancel payment — scan failed
-        await stripeApi("POST", `/v1/payment_intents/${paymentIntentId}/cancel`);
-      }
+      const piMeta = (pi.metadata || {}) as Record<string, string>;
+      tier = tier || piMeta.tier || "";
+      repoUrl = repoUrl || piMeta.repo_url || "";
     } catch (err) {
-      // Scan crashed — release the hold
-      console.error("[GateTest] Scan error:", err);
-      await stripeApi("POST", `/v1/payment_intents/${paymentIntentId}/cancel`);
+      console.error("[GateTest] PI metadata lookup failed:", err);
     }
   }
 
-  return NextResponse.json({ received: true });
+  if (!tier || !repoUrl || !paymentIntentId || !sessionId) {
+    // Ack anyway so Stripe doesn't retry — missing metadata is not a
+    // transient failure we can recover from.
+    console.error("[GateTest] Missing scan metadata on webhook", {
+      sessionId,
+      paymentIntentId,
+      tier,
+      repoUrl,
+    });
+    return NextResponse.json({ received: true, note: "missing_metadata" });
+  }
+
+  const jobId = deriveJobId(sessionId);
+  const scanId = crypto.randomUUID();
+
+  // Extract customer email from the checkout session
+  const customerEmail =
+    typeof session.customer_email === "string"
+      ? session.customer_email
+      : (typeof session.customer_details === "object" &&
+          session.customer_details !== null &&
+          typeof (session.customer_details as Record<string, unknown>).email === "string"
+            ? (session.customer_details as Record<string, unknown>).email as string
+            : "");
+
+  // Tier price mapping (cents to USD)
+  const tierPrices: Record<string, number> = {
+    quick: 29, full: 99, scan_fix: 199, nuclear: 399,
+  };
+  const tierPriceUsd = tierPrices[tier] || 0;
+
+  // Write scan + customer records to the database
+  try {
+    const sql = getDb();
+    const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
+
+    // Upsert customer if we have an email
+    if (customerEmail) {
+      const customerId = crypto.randomUUID();
+      await sql`INSERT INTO customers (id, email, stripe_customer_id)
+        VALUES (${customerId}, ${customerEmail}, ${stripeCustomerId})
+        ON CONFLICT (email) DO UPDATE SET
+          stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id)`;
+    }
+
+    // Create scan record
+    const emailOrNull = customerEmail || null;
+    await sql`INSERT INTO scans (id, session_id, payment_intent_id, customer_email, repo_url, tier, status, tier_price_usd)
+      VALUES (${scanId}, ${sessionId}, ${paymentIntentId}, ${emailOrNull}, ${repoUrl}, ${tier}, 'pending', ${tierPriceUsd})
+      ON CONFLICT (id) DO NOTHING`;
+  } catch (dbErr) {
+    // DB write is best-effort — scan still proceeds via Stripe metadata fallback
+    console.error("[GateTest] DB write failed (webhook):", dbErr);
+  }
+
+  // Schedule the scan to run AFTER the response is sent. Vercel keeps the
+  // invocation alive via waitUntil for up to the function's maxDuration, but
+  // Stripe already has its 200 response so it won't retry.
+  after(async () => {
+    try {
+      const outcome = await runScanJob({
+        jobId,
+        paymentIntentId,
+        repoUrl,
+        tier,
+        scanId,
+        customerEmail: customerEmail || undefined,
+        tierPriceUsd,
+      });
+      if (outcome.skipped) {
+        console.log(
+          `[GateTest] Scan job ${jobId} skipped: ${outcome.reason}`
+        );
+      } else {
+        console.log(
+          `[GateTest] Scan job ${jobId} finished: ${outcome.result?.status}`
+        );
+      }
+    } catch (err) {
+      // Green ecosystem mandate: never leave a capture hanging. If the
+      // whole scan job throws, cancel the payment intent so the customer
+      // is not charged for a scan they never got.
+      console.error("[GateTest] Scan job crashed:", err);
+      try {
+        await stripeApi(
+          "POST",
+          `/v1/payment_intents/${paymentIntentId}/cancel`
+        );
+      } catch (cancelErr) {
+        console.error("[GateTest] Fallback cancel failed:", cancelErr);
+      }
+      // Mark scan as failed in DB
+      try {
+        const sql = getDb();
+        await sql`UPDATE scans SET status = 'failed', completed_at = NOW()
+          WHERE id = ${scanId}`;
+      } catch {
+        // best-effort
+      }
+    }
+  });
+
+  return NextResponse.json({ received: true, jobId, scanId });
 }

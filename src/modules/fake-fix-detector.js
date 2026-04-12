@@ -23,9 +23,106 @@ const BaseModule = require('./base-module');
 const https = require('https');
 
 const ANTHROPIC_API_HOST = 'api.anthropic.com';
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL_SONNET = 'claude-sonnet-4-20250514';
+const MODEL_HAIKU = 'claude-haiku-4-5-20251022';
+// Kept for backwards compatibility with tests that may reference it.
+const MODEL = MODEL_SONNET;
 const MAX_DIFF_SIZE = 120000; // 120KB — cap the payload sent to AI
 const AI_TIMEOUT_MS = 60000;
+
+// --------------------------------------------------------------------
+// Cost cap ledger — prevents Claude API spend from destroying tier margin
+// --------------------------------------------------------------------
+//
+// Every paid scan has a hard ceiling on AI spend. We estimate cost per call
+// from token counts (Anthropic pricing: see MODEL_PRICING below). When
+// cumulative spend hits 80% of the ceiling we fall back to Haiku. At 95%
+// we stop calling Claude entirely — remaining hunks are marked "unverified
+// (cost cap reached)" so the customer still gets a useful report.
+//
+// Ledger is keyed by scanId so parallel scans don't interfere. Memory-only:
+// this is a per-invocation tracker, not persistent state.
+
+const COST_CEILING_USD = {
+  quick: 1.0,        // $29 tier  → $1 max AI spend  (97% margin)
+  full: 3.0,         // $99 tier  → $3 max AI spend  (97% margin)
+  'scan+fix': 15.0,  // $199 tier → $15 max AI spend (92% margin)
+  nuclear: 30.0,     // $399 tier → $30 max AI spend (93% margin)
+};
+const DEFAULT_CEILING_USD = 3.0;
+
+// Per-million-token pricing (USD). Safe conservative estimates — update if
+// Anthropic pricing changes. Both figures cover input AND output.
+const MODEL_PRICING = {
+  [MODEL_SONNET]: { inputPerMTok: 3.0, outputPerMTok: 15.0 },
+  [MODEL_HAIKU]: { inputPerMTok: 0.8, outputPerMTok: 4.0 },
+};
+
+const DOWNGRADE_RATIO = 0.8;  // 80% → switch to Haiku
+const HARD_STOP_RATIO = 0.95; // 95% → stop calling Claude
+
+// Map<scanId, { ceiling, spent, calls, hitCap, downgraded, tier }>
+const costLedger = new Map();
+
+function estimateTokens(text) {
+  if (!text) return 0;
+  // ~4 chars per token is the commonly cited rule of thumb. This is an
+  // estimate, not a billing figure — we over-estimate slightly to err on
+  // the side of protecting margin.
+  return Math.ceil(text.length / 4);
+}
+
+function estimateCostUsd(model, inputTokens, outputTokens) {
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING[MODEL_SONNET];
+  return (
+    (inputTokens / 1_000_000) * pricing.inputPerMTok +
+    (outputTokens / 1_000_000) * pricing.outputPerMTok
+  );
+}
+
+function initCostLedger(scanId, tier) {
+  const ceiling = COST_CEILING_USD[tier] != null
+    ? COST_CEILING_USD[tier]
+    : DEFAULT_CEILING_USD;
+  const entry = {
+    ceiling,
+    spent: 0,
+    calls: 0,
+    hitCap: false,
+    downgraded: false,
+    tier: tier || 'full',
+  };
+  costLedger.set(scanId, entry);
+  return entry;
+}
+
+function getLedgerEntry(scanId) {
+  return costLedger.get(scanId) || null;
+}
+
+/**
+ * Returns a snapshot of AI spend for a given scan id.
+ * Exported so the website/report layer can surface it to Craig.
+ */
+function getCostReport(scanId) {
+  const entry = costLedger.get(scanId);
+  if (!entry) {
+    return { spent: 0, ceiling: 0, calls: 0, hitCap: false, tier: 'unknown' };
+  }
+  return {
+    spent: Math.round(entry.spent * 10000) / 10000,
+    ceiling: entry.ceiling,
+    calls: entry.calls,
+    hitCap: entry.hitCap,
+    tier: entry.tier,
+    downgraded: entry.downgraded,
+    remaining: Math.max(0, entry.ceiling - entry.spent),
+  };
+}
+
+function resetCostReport(scanId) {
+  costLedger.delete(scanId);
+}
 
 /**
  * Pattern rules. Each rule inspects an ADDED or REMOVED line from the diff.
@@ -197,6 +294,14 @@ class FakeFixDetectorModule extends BaseModule {
     const patternEnabled = moduleConfig.patternEngine !== false;
     const aiEnabled = moduleConfig.aiEngine !== false;
 
+    // Cost-cap setup. scanId is anything stable per invocation.
+    const scanId =
+      moduleConfig.scanId ||
+      runnerOptions.scanId ||
+      `scan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const tier = moduleConfig.tier || runnerOptions.tier || 'full';
+    const ledger = initCostLedger(scanId, tier);
+
     // Figure out what diff to analyse.
     const diff = this._getDiff(projectRoot, runnerOptions, moduleConfig);
 
@@ -220,13 +325,15 @@ class FakeFixDetectorModule extends BaseModule {
       this._recordFindings(result, patternFindings, 'pattern');
     }
 
-    // 2. AI engine — runs if key is set and enabled.
+    // 2. AI engine — runs if key is set and enabled. Uses the per-scan
+    //    cost ledger so we can never blow past a tier's AI budget.
     if (aiEnabled && process.env.ANTHROPIC_API_KEY) {
       try {
         const aiFindings = await this._runAiEngine(
           process.env.ANTHROPIC_API_KEY,
           diff,
-          moduleConfig.context || runnerOptions.fixContext || null
+          moduleConfig.context || runnerOptions.fixContext || null,
+          ledger
         );
         this._recordFindings(result, aiFindings, 'ai');
       } catch (err) {
@@ -240,6 +347,24 @@ class FakeFixDetectorModule extends BaseModule {
       result.addCheck('fake-fix:ai-skipped', true, {
         severity: 'info',
         message: 'AI engine skipped — set ANTHROPIC_API_KEY for deeper analysis',
+      });
+    }
+
+    // Attach the cost report to the result metadata so the website/reporters
+    // can display it. Green ecosystem mandate: the report is always present,
+    // even when the cap was hit.
+    const costReport = getCostReport(scanId);
+    if (!result.metadata) result.metadata = {};
+    result.metadata.fakeFixCostReport = costReport;
+    result.addCheck('fake-fix:cost-report', true, {
+      severity: 'info',
+      message: `AI spend: $${costReport.spent.toFixed(4)} / $${costReport.ceiling.toFixed(2)} (${costReport.calls} calls, tier=${costReport.tier})`,
+      costReport,
+    });
+    if (costReport.hitCap) {
+      result.addCheck('fake-fix:cost-cap-reached', true, {
+        severity: 'warning',
+        message: `AI verification stopped early — cost cap of $${costReport.ceiling.toFixed(2)} reached. Remaining hunks marked unverified.`,
       });
     }
 
@@ -369,16 +494,49 @@ class FakeFixDetectorModule extends BaseModule {
   // AI engine
   // ------------------------------------------------------------------
 
-  async _runAiEngine(apiKey, diff, context) {
-    const truncatedDiff = diff.length > MAX_DIFF_SIZE
-      ? diff.slice(0, MAX_DIFF_SIZE) + '\n[... diff truncated for length ...]'
-      : diff;
-
+  async _runAiEngine(apiKey, diff, context, ledger) {
+    // Split the diff into per-hunk chunks so the cost ledger can stop
+    // mid-scan if a big diff threatens to blow the budget. Each hunk is
+    // analysed with its own prompt and counts as one Claude call.
+    const hunks = this._parseDiff(diff);
     const contextBlock = context
       ? `\nCONTEXT — the bug/error this diff is supposed to fix:\n${context}\n`
       : '';
 
-    const prompt = `You are the Fake Fix Detector for GateTest. Your ONLY job is to decide whether a code change is a REAL fix (addresses the root cause) or a SYMPTOM PATCH (hides the problem).
+    const findings = [];
+    let unverifiedCount = 0;
+
+    for (const hunk of hunks) {
+      // --- Cost-cap gate: hard stop at 95% ---
+      if (ledger.spent >= ledger.ceiling * HARD_STOP_RATIO) {
+        ledger.hitCap = true;
+        unverifiedCount++;
+        findings.push({
+          ruleId: 'ai:unverified',
+          file: hunk.file,
+          line: hunk.lineNumber,
+          severity: 'info',
+          title: 'AI verification skipped (cost cap reached)',
+          explanation: `This diff hunk was not sent to Claude because the per-scan AI spend ceiling of $${ledger.ceiling.toFixed(2)} was reached. Pattern engine results still apply.`,
+          suggestion: 'Rerun with a higher tier if you need AI verification on every hunk.',
+        });
+        continue;
+      }
+
+      // --- Cost-cap gate: downgrade to Haiku at 80% ---
+      const useHaiku = ledger.spent >= ledger.ceiling * DOWNGRADE_RATIO;
+      if (useHaiku && !ledger.downgraded) {
+        ledger.downgraded = true;
+      }
+      const model = useHaiku ? MODEL_HAIKU : MODEL_SONNET;
+
+      // Build a per-hunk diff payload Claude can reason about.
+      const hunkDiff = this._renderHunk(hunk);
+      const truncated = hunkDiff.length > MAX_DIFF_SIZE
+        ? hunkDiff.slice(0, MAX_DIFF_SIZE) + '\n[... hunk truncated ...]'
+        : hunkDiff;
+
+      const prompt = `You are the Fake Fix Detector for GateTest. Decide whether this SINGLE diff hunk is a REAL fix or a SYMPTOM PATCH.
 
 Symptom patches include — but are not limited to:
 - Deleting, skipping, or weakening a failing test
@@ -392,17 +550,18 @@ Symptom patches include — but are not limited to:
 REAL fixes address WHY something was broken. They either change the faulty logic,
 add missing state, or correctly handle a previously unhandled case.
 ${contextBlock}
-DIFF:
+FILE: ${hunk.file}
+DIFF HUNK:
 \`\`\`diff
-${truncatedDiff}
+${truncated}
 \`\`\`
 
 Respond with STRICT JSON only. No prose before or after. Schema:
 {
   "findings": [
     {
-      "file": "path/to/file",
-      "line": 42,
+      "file": "${hunk.file}",
+      "line": ${hunk.lineNumber},
       "severity": "error" | "warning" | "info",
       "title": "Short description",
       "explanation": "Why this is a symptom patch, not a real fix",
@@ -413,49 +572,127 @@ Respond with STRICT JSON only. No prose before or after. Schema:
   "summary": "One sentence"
 }
 
-Rules:
-- severity "error" = high confidence symptom patch
-- severity "warning" = suspicious, needs human review
-- severity "info" = minor concern
-- If the diff is a genuine real fix, return { "findings": [], "verdict": "real-fix", "summary": "..." }
-- Be ruthless. We are building a product that kills fake fixes.`;
+If the hunk is a genuine real fix, return { "findings": [], "verdict": "real-fix", "summary": "..." }
+Be ruthless. We are building a product that kills fake fixes.`;
 
-    const response = await this._callClaude(apiKey, prompt);
-    const findings = [];
+      // Pre-check estimated cost — if this single call would blow the
+      // cap, fall back to Haiku or stop. This prevents a single oversized
+      // hunk from spending over-budget in one shot.
+      const estimatedInputTokens = estimateTokens(prompt);
+      const estimatedOutputTokens = 512; // assume ~512 tokens of JSON
+      let projectedCost = estimateCostUsd(
+        model,
+        estimatedInputTokens,
+        estimatedOutputTokens
+      );
+      if (ledger.spent + projectedCost > ledger.ceiling * HARD_STOP_RATIO) {
+        // Try Haiku instead — if that also exceeds the cap, skip the hunk.
+        const haikuCost = estimateCostUsd(
+          MODEL_HAIKU,
+          estimatedInputTokens,
+          estimatedOutputTokens
+        );
+        if (ledger.spent + haikuCost > ledger.ceiling * HARD_STOP_RATIO) {
+          ledger.hitCap = true;
+          unverifiedCount++;
+          findings.push({
+            ruleId: 'ai:unverified',
+            file: hunk.file,
+            line: hunk.lineNumber,
+            severity: 'info',
+            title: 'AI verification skipped (cost cap reached)',
+            explanation: `This diff hunk was not sent to Claude because the per-scan AI spend ceiling of $${ledger.ceiling.toFixed(2)} would be exceeded.`,
+            suggestion: 'Rerun with a higher tier if you need AI verification on every hunk.',
+          });
+          continue;
+        }
+        projectedCost = haikuCost;
+      }
 
-    if (response && Array.isArray(response.findings)) {
-      for (const f of response.findings) {
+      let response;
+      try {
+        response = await this._callClaude(
+          apiKey,
+          prompt,
+          useHaiku ? MODEL_HAIKU : model
+        );
+      } catch (err) {
+        // One failed call shouldn't kill the whole engine. Record and continue.
         findings.push({
-          ruleId: `ai:${f.severity || 'warning'}`,
-          file: f.file || 'unknown',
-          line: f.line || 0,
-          severity: ['error', 'warning', 'info'].includes(f.severity) ? f.severity : 'warning',
-          title: f.title || 'AI detected potential symptom patch',
-          explanation: f.explanation || '',
-          suggestion: f.suggestion || '',
+          ruleId: 'ai:call-error',
+          file: hunk.file,
+          line: hunk.lineNumber,
+          severity: 'warning',
+          title: 'Claude call failed for this hunk',
+          explanation: err.message,
+          suggestion: 'Pattern engine results still apply.',
         });
+        // Charge a minimal amount so repeated errors still tick the meter.
+        ledger.spent += estimateCostUsd(model, estimatedInputTokens, 0);
+        ledger.calls += 1;
+        continue;
+      }
+
+      // Record actual cost. If the SDK returned usage, prefer that; else
+      // fall back to our estimate.
+      const usage = response && response._usage;
+      const inputTokens = usage?.input_tokens || estimatedInputTokens;
+      const outputTokens = usage?.output_tokens || estimatedOutputTokens;
+      const actualCost = estimateCostUsd(
+        useHaiku ? MODEL_HAIKU : model,
+        inputTokens,
+        outputTokens
+      );
+      ledger.spent += actualCost;
+      ledger.calls += 1;
+
+      if (response && Array.isArray(response.findings)) {
+        for (const f of response.findings) {
+          findings.push({
+            ruleId: `ai:${f.severity || 'warning'}`,
+            file: f.file || hunk.file,
+            line: f.line || hunk.lineNumber,
+            severity: ['error', 'warning', 'info'].includes(f.severity)
+              ? f.severity
+              : 'warning',
+            title: f.title || 'AI detected potential symptom patch',
+            explanation: f.explanation || '',
+            suggestion: f.suggestion || '',
+          });
+        }
       }
     }
-    if (response && response.summary) {
+
+    if (unverifiedCount > 0) {
       findings.push({
-        ruleId: 'ai:summary',
+        ruleId: 'ai:cap-summary',
         file: '',
         line: 0,
         severity: 'info',
-        title: `AI verdict: ${response.verdict || 'unknown'}`,
-        explanation: response.summary,
+        title: `${unverifiedCount} hunk(s) marked unverified — AI cost cap reached`,
+        explanation: `Cost ledger: $${ledger.spent.toFixed(4)} / $${ledger.ceiling.toFixed(2)} spent across ${ledger.calls} Claude call(s).`,
         snippet: '',
         informational: true,
       });
     }
+
     return findings;
   }
 
-  _callClaude(apiKey, prompt) {
+  /**
+   * Render a parsed hunk back into a diff-style block so the AI sees the
+   * same +/- context lines the pattern engine saw.
+   */
+  _renderHunk(hunk) {
+    const header = `--- ${hunk.file}\n+++ ${hunk.file}\n@@ line ${hunk.lineNumber} @@`;
+    return `${header}\n${hunk.lines.join('\n')}`;
+  }
+
+  _callClaude(apiKey, prompt, model) {
     return new Promise((resolve, reject) => {
       const body = JSON.stringify({
-        model: MODEL,
-        max_tokens: 4096,
+        model: model || MODEL_SONNET,
+        max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       });
 
@@ -485,11 +722,12 @@ Rules:
             }
             const text = response.content?.[0]?.text || '';
             const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              resolve(JSON.parse(jsonMatch[0]));
-            } else {
-              resolve({ findings: [], verdict: 'unknown', summary: text });
-            }
+            const parsed = jsonMatch
+              ? JSON.parse(jsonMatch[0])
+              : { findings: [], verdict: 'unknown', summary: text };
+            // Attach real usage so the cost ledger can use actual tokens.
+            parsed._usage = response.usage || null;
+            resolve(parsed);
           } catch (err) {
             reject(new Error(`Failed to parse AI response: ${err.message}`));
           }
@@ -535,5 +773,8 @@ Rules:
 }
 
 module.exports = FakeFixDetectorModule;
-// Exported for testing
+// Exported for testing and external consumers
 module.exports.PATTERN_RULES = PATTERN_RULES;
+module.exports.COST_CEILING_USD = COST_CEILING_USD;
+module.exports.getCostReport = getCostReport;
+module.exports.resetCostReport = resetCostReport;

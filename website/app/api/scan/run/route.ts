@@ -12,6 +12,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
+import crypto from "crypto";
+import { getDb } from "../../../lib/db";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
@@ -313,6 +315,29 @@ export async function POST(req: NextRequest) {
 
   // Run the scan
   const result = await scanRepo(owner, repo, tier || "quick");
+
+  // Write scan results to database
+  if (sessionId) {
+    try {
+      const sql = getDb();
+      const scanDbId = crypto.randomUUID();
+      const score = result.totalIssues === 0
+        ? 100
+        : Math.max(0, 100 - result.totalIssues * 5);
+      const dbStatus = result.error ? "failed" : "completed";
+      const resultsJson = JSON.stringify(result.modules);
+      const scanTier = tier || "quick";
+      const modulesRun = result.modules.map((m) => m.name);
+      const summaryText = result.error || `${result.modules.length} modules, ${result.totalIssues} issues`;
+      const durationMs = result.duration;
+
+      await sql`INSERT INTO scans (id, session_id, repo_url, tier, status, results, score, duration_ms, modules_run, completed_at, summary)
+        VALUES (${scanDbId}, ${sessionId}, ${repoUrl}, ${scanTier}, ${dbStatus}, ${resultsJson}::jsonb, ${score}, ${durationMs}, ${modulesRun}, NOW(), ${summaryText})
+        ON CONFLICT (id) DO NOTHING`;
+    } catch (dbErr) {
+      console.error("[GateTest] DB write failed (scan/run):", dbErr);
+    }
+  }
 
   // If we have a session ID, update Stripe and capture payment
   if (sessionId && STRIPE_SECRET_KEY) {
