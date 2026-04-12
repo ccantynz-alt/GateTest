@@ -8,7 +8,7 @@ test.describe("Landing Page", () => {
   test("loads and shows hero section", async ({ page }) => {
     await expect(page).toHaveTitle(/GateTest/);
     await expect(
-      page.getByRole("heading", { name: /AI writes fast/ })
+      page.getByRole("heading", { name: /Your code has problems/ })
     ).toBeVisible();
   });
 

@@ -1,63 +1,82 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border glass-strong">
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      scrolled
+        ? "bg-white/92 backdrop-blur-xl border-b border-border shadow-sm"
+        : "bg-transparent border-b border-white/8"
+    }`}>
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
             <span className="text-white font-bold text-sm font-[var(--font-mono)]">G</span>
           </div>
-          <span className="text-xl font-bold tracking-tight">
-            Gate<span className="gradient-text">Test</span>
+          <span className={`text-xl font-bold tracking-tight ${scrolled ? "text-foreground" : "text-white"}`}>
+            Gate<span className="text-teal-400">Test</span>
           </span>
         </a>
 
         <div className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-sm text-muted hover:text-foreground transition-colors">
-            Features
-          </a>
-          <a href="#modules" className="text-sm text-muted hover:text-foreground transition-colors">
-            Modules
-          </a>
-          <a href="#comparison" className="text-sm text-muted hover:text-foreground transition-colors">
-            Compare
-          </a>
-          <a href="#integrations" className="text-sm text-muted hover:text-foreground transition-colors">
-            Integrations
-          </a>
-          <a href="#pricing" className="text-sm text-muted hover:text-foreground transition-colors">
-            Pricing
-          </a>
+          {["Features", "Modules", "Compare", "Integrations", "Pricing"].map((item) => (
+            <a
+              key={item}
+              href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+              className={`text-sm transition-colors ${
+                scrolled
+                  ? "text-muted hover:text-foreground"
+                  : "text-white/50 hover:text-white"
+              }`}
+            >
+              {item}
+            </a>
+          ))}
         </div>
 
         <div className="hidden md:flex items-center gap-4">
           <a
             href="/dashboard"
-            className="text-sm text-muted hover:text-foreground transition-colors"
+            className={`text-sm transition-colors ${
+              scrolled ? "text-muted hover:text-foreground" : "text-white/50 hover:text-white"
+            }`}
           >
             My Scans
           </a>
           <a
             href="/github/setup"
-            className="px-5 py-2.5 text-sm font-medium rounded-lg border border-border hover:border-accent/50 text-foreground transition-colors"
+            className={`px-5 py-2.5 text-sm font-medium rounded-lg border transition-colors ${
+              scrolled
+                ? "border-border text-foreground hover:border-accent/50"
+                : "border-white/15 text-white/70 hover:text-white hover:border-white/30"
+            }`}
           >
             Install GitHub App
           </a>
           <a
             href="#pricing"
-            className="btn-cta px-5 py-2.5 text-sm rounded-lg"
+            className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all ${
+              scrolled
+                ? "btn-cta"
+                : "hero-cta"
+            }`}
           >
             Scan My Repo
           </a>
         </div>
 
         <button
-          className="md:hidden text-muted hover:text-foreground"
+          className={`md:hidden ${scrolled ? "text-muted" : "text-white/60"} hover:text-white`}
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label="Toggle menu"
         >
@@ -72,14 +91,33 @@ export default function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-border glass-strong px-6 py-4 space-y-4">
-          <a href="#features" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Features</a>
-          <a href="#modules" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Modules</a>
-          <a href="#comparison" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Compare</a>
-          <a href="#integrations" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Integrations</a>
-          <a href="#pricing" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>Pricing</a>
-          <a href="/dashboard" className="block text-sm text-muted hover:text-foreground" onClick={() => setMobileOpen(false)}>My Scans</a>
-          <a href="#pricing" className="block btn-cta px-5 py-2.5 text-sm text-center rounded-lg" onClick={() => setMobileOpen(false)}>
+        <div className={`md:hidden border-t px-6 py-4 space-y-4 ${
+          scrolled
+            ? "border-border bg-white/95 backdrop-blur-xl"
+            : "border-white/10 bg-[#0a0a12]/95 backdrop-blur-xl"
+        }`}>
+          {["Features", "Modules", "Compare", "Integrations", "Pricing"].map((item) => (
+            <a
+              key={item}
+              href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+              className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-white/60 hover:text-white"}`}
+              onClick={() => setMobileOpen(false)}
+            >
+              {item}
+            </a>
+          ))}
+          <a
+            href="/dashboard"
+            className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-white/60 hover:text-white"}`}
+            onClick={() => setMobileOpen(false)}
+          >
+            My Scans
+          </a>
+          <a
+            href="#pricing"
+            className={`block px-5 py-2.5 text-sm text-center rounded-lg font-semibold ${scrolled ? "btn-cta" : "hero-cta"}`}
+            onClick={() => setMobileOpen(false)}
+          >
             Scan My Repo
           </a>
         </div>
