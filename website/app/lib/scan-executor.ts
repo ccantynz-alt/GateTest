@@ -10,6 +10,7 @@
  */
 
 import https from "https";
+import { getDb } from "./db";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
@@ -419,8 +420,11 @@ export async function runScanJob(params: {
   paymentIntentId: string;
   repoUrl: string;
   tier: string;
+  scanId?: string;
+  customerEmail?: string;
+  tierPriceUsd?: number;
 }): Promise<{ skipped: boolean; reason?: string; result?: ScanResult }> {
-  const { jobId, paymentIntentId, repoUrl, tier } = params;
+  const { jobId, paymentIntentId, repoUrl, tier, scanId, customerEmail, tierPriceUsd } = params;
 
   if (!STRIPE_SECRET_KEY) {
     return { skipped: true, reason: "stripe_not_configured" };
@@ -519,6 +523,43 @@ export async function runScanJob(params: {
     );
   } catch (err) {
     console.error("[GateTest] Stripe metadata update failed:", err);
+  }
+
+  // Update the database with scan results
+  if (scanId) {
+    try {
+      const sql = getDb();
+      const score = result.totalIssues === 0
+        ? 100
+        : Math.max(0, 100 - result.totalIssues * 5);
+      const dbStatus = result.status === "complete" && !result.error ? "completed" : "failed";
+      const resultsJson = JSON.stringify(result.modules);
+      const modulesRun = result.modules.map((m) => m.name);
+      const summaryText = result.error || `${result.totalModules} modules, ${result.totalIssues} issues`;
+      const durationMs = result.duration;
+
+      await sql`UPDATE scans SET
+        status = ${dbStatus},
+        results = ${resultsJson}::jsonb,
+        score = ${score},
+        duration_ms = ${durationMs},
+        modules_run = ${modulesRun},
+        completed_at = NOW(),
+        started_at = COALESCE(started_at, created_at),
+        summary = ${summaryText}
+      WHERE id = ${scanId}`;
+
+      // Update customer stats
+      if (customerEmail && result.status === "complete" && !result.error) {
+        const spent = tierPriceUsd || 0;
+        await sql`UPDATE customers SET
+          total_scans = total_scans + 1,
+          total_spent_usd = total_spent_usd + ${spent}
+        WHERE email = ${customerEmail}`;
+      }
+    } catch (dbErr) {
+      console.error("[GateTest] DB update failed (scan-executor):", dbErr);
+    }
   }
 
   // Capture on success, cancel on failure. Both are idempotent on Stripe's

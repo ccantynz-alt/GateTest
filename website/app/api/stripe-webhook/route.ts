@@ -23,6 +23,7 @@ import { after } from "next/server";
 import crypto from "crypto";
 import https from "https";
 import { runScanJob } from "../../lib/scan-executor";
+import { getDb } from "../../lib/db";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
@@ -167,6 +168,47 @@ export async function POST(req: NextRequest) {
   }
 
   const jobId = deriveJobId(sessionId);
+  const scanId = crypto.randomUUID();
+
+  // Extract customer email from the checkout session
+  const customerEmail =
+    typeof session.customer_email === "string"
+      ? session.customer_email
+      : (typeof session.customer_details === "object" &&
+          session.customer_details !== null &&
+          typeof (session.customer_details as Record<string, unknown>).email === "string"
+            ? (session.customer_details as Record<string, unknown>).email as string
+            : "");
+
+  // Tier price mapping (cents to USD)
+  const tierPrices: Record<string, number> = {
+    quick: 29, full: 99, scan_fix: 199, nuclear: 399,
+  };
+  const tierPriceUsd = tierPrices[tier] || 0;
+
+  // Write scan + customer records to the database
+  try {
+    const sql = getDb();
+    const stripeCustomerId = typeof session.customer === "string" ? session.customer : null;
+
+    // Upsert customer if we have an email
+    if (customerEmail) {
+      const customerId = crypto.randomUUID();
+      await sql`INSERT INTO customers (id, email, stripe_customer_id)
+        VALUES (${customerId}, ${customerEmail}, ${stripeCustomerId})
+        ON CONFLICT (email) DO UPDATE SET
+          stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, customers.stripe_customer_id)`;
+    }
+
+    // Create scan record
+    const emailOrNull = customerEmail || null;
+    await sql`INSERT INTO scans (id, session_id, payment_intent_id, customer_email, repo_url, tier, status, tier_price_usd)
+      VALUES (${scanId}, ${sessionId}, ${paymentIntentId}, ${emailOrNull}, ${repoUrl}, ${tier}, 'pending', ${tierPriceUsd})
+      ON CONFLICT (id) DO NOTHING`;
+  } catch (dbErr) {
+    // DB write is best-effort — scan still proceeds via Stripe metadata fallback
+    console.error("[GateTest] DB write failed (webhook):", dbErr);
+  }
 
   // Schedule the scan to run AFTER the response is sent. Vercel keeps the
   // invocation alive via waitUntil for up to the function's maxDuration, but
@@ -178,6 +220,9 @@ export async function POST(req: NextRequest) {
         paymentIntentId,
         repoUrl,
         tier,
+        scanId,
+        customerEmail: customerEmail || undefined,
+        tierPriceUsd,
       });
       if (outcome.skipped) {
         console.log(
@@ -201,8 +246,16 @@ export async function POST(req: NextRequest) {
       } catch (cancelErr) {
         console.error("[GateTest] Fallback cancel failed:", cancelErr);
       }
+      // Mark scan as failed in DB
+      try {
+        const sql = getDb();
+        await sql`UPDATE scans SET status = 'failed', completed_at = NOW()
+          WHERE id = ${scanId}`;
+      } catch {
+        // best-effort
+      }
     }
   });
 
-  return NextResponse.json({ received: true, jobId });
+  return NextResponse.json({ received: true, jobId, scanId });
 }

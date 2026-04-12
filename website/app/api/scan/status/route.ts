@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
+import { getDb } from "../../../lib/db";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 
@@ -123,7 +124,78 @@ function buildModuleAnimation(tier: string, startTime: number) {
 export async function GET(req: NextRequest) {
   const scanId = req.nextUrl.searchParams.get("id");
 
-  if (!scanId || !STRIPE_SECRET_KEY) {
+  if (!scanId) {
+    return NextResponse.json({
+      id: scanId, status: "pending", progress: 0, modules: [],
+      totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
+    });
+  }
+
+  // ──────────────────────────────────────────────────
+  // Try database first (new path)
+  // ──────────────────────────────────────────────────
+  try {
+    const sql = getDb();
+
+    // Look up by session_id (the checkout session ID the client has)
+    const rows = await sql`SELECT id, session_id, repo_url, tier, status, score, results,
+      summary, duration_ms, modules_run, created_at, completed_at
+      FROM scans WHERE session_id = ${scanId} LIMIT 1`;
+
+    if (rows.length > 0) {
+      const scan = rows[0] as Record<string, unknown>;
+      const dbStatus = scan.status as string;
+      const results = scan.results as Array<Record<string, unknown>> | null;
+
+      if (dbStatus === "completed" || dbStatus === "failed") {
+        const modules = Array.isArray(results) ? results : [];
+        const totalIssues = modules.reduce(
+          (sum, m) => sum + ((m.issues as number) || 0), 0
+        );
+
+        return NextResponse.json({
+          id: scanId,
+          status: dbStatus === "completed" ? "complete" : "failed",
+          progress: 100,
+          modules,
+          totalModules: modules.length,
+          completedModules: modules.length,
+          totalIssues,
+          totalFixed: 0,
+          repoUrl: scan.repo_url,
+          tier: scan.tier,
+          completedAt: scan.completed_at,
+          duration: scan.duration_ms || 0,
+          score: scan.score || 0,
+          error: dbStatus === "failed" ? (scan.summary || "Scan failed") : null,
+        });
+      }
+
+      // Scan is pending or running — show animation
+      if (dbStatus === "pending" || dbStatus === "running") {
+        const createdAt = scan.created_at
+          ? new Date(scan.created_at as string).getTime()
+          : Date.now();
+        const animation = buildModuleAnimation(
+          (scan.tier as string) || "full",
+          createdAt
+        );
+        return NextResponse.json({
+          id: scanId,
+          ...animation,
+          repoUrl: scan.repo_url,
+          tier: scan.tier,
+        });
+      }
+    }
+  } catch {
+    // DB not available — fall through to Stripe metadata
+  }
+
+  // ──────────────────────────────────────────────────
+  // Fallback: Stripe metadata (for old scans / no DB)
+  // ──────────────────────────────────────────────────
+  if (!STRIPE_SECRET_KEY) {
     return NextResponse.json({
       id: scanId, status: "pending", progress: 0, modules: [],
       totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0,
