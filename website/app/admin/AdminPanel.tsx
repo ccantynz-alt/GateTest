@@ -226,8 +226,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
             {result && !scanning && (
               <div className="space-y-4">
-                <div className={`card p-6 ${totalIssues === 0 ? "border-success" : "border-danger"}`}>
-                  <div className="flex items-center justify-between">
+                <div className={`card p-6 ${totalIssues === 0 ? "border-success" : "border-accent"}`}>
+                  <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold">
                         {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
@@ -237,10 +237,49 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       </p>
                     </div>
                     <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                      totalIssues === 0 ? "bg-green-50 text-success" : "bg-red-50 text-danger"
+                      totalIssues === 0 ? "bg-green-50 text-success" : "bg-amber-50 text-amber-700"
                     }`}>
-                      {totalIssues === 0 ? "PASSED" : "BLOCKED"}
+                      {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
                     </span>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={runScan} className="btn-primary px-4 py-2 text-xs">
+                      Re-scan
+                    </button>
+                    <button
+                      onClick={() => {
+                        const data = JSON.stringify({ repoUrl, tier, timestamp: new Date().toISOString(), ...result }, null, 2);
+                        const blob = new Blob([data], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `gatetest-${repoUrl.split("/").pop()}-${Date.now()}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="btn-secondary px-4 py-2 text-xs"
+                    >
+                      Export JSON
+                    </button>
+                    {totalIssues > 0 && (
+                      <button
+                        onClick={() => {
+                          const failedMods = modules.filter((m) => (m.status as string) === "failed");
+                          const issueText = failedMods.map((m) => {
+                            const details = (m.details as string[]) || [];
+                            return `## ${m.name} (${m.issues} issues)\n${details.map((d) => `- ${d}`).join("\n")}`;
+                          }).join("\n\n");
+                          navigator.clipboard.writeText(issueText);
+                          setError("Issues copied to clipboard");
+                          setTimeout(() => setError(""), 2000);
+                        }}
+                        className="btn-secondary px-4 py-2 text-xs"
+                      >
+                        Copy Issues to Clipboard
+                      </button>
+                    )}
                   </div>
                 </div>
 
