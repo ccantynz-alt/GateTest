@@ -2,6 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 
+interface FixResult {
+  status: string;
+  prUrl?: string;
+  prNumber?: number;
+  filesFixed?: number;
+  issuesFixed?: number;
+  message?: string;
+  error?: string;
+  errors?: string[];
+}
+
 interface AdminPanelProps {
   adminLogin: string;
 }
@@ -53,6 +64,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
+  const [fixing, setFixing] = useState(false);
+  const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers">("scan");
@@ -99,6 +112,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
+    }
+  }
+
+  async function fixIssues() {
+    if (!result || !repoUrl) return;
+    const failedMods = modules.filter((m) => (m.status as string) === "failed");
+    const issues = failedMods.flatMap((m) => {
+      const details = (m.details as string[]) || [];
+      return details.map((d) => {
+        const colonIdx = d.indexOf(":");
+        const file = colonIdx > 0 ? d.slice(0, colonIdx).trim() : "";
+        const issue = colonIdx > 0 ? d.slice(colonIdx + 1).trim() : d;
+        return { file, issue, module: m.name as string };
+      });
+    }).filter((i) => i.file);
+
+    if (issues.length === 0) {
+      setError("No fixable issues found (issues need file paths)");
+      return;
+    }
+
+    setFixing(true);
+    setFixResult(null);
+    setError("");
+
+    try {
+      const res = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl, issues }),
+      });
+      const data = await res.json() as FixResult;
+      setFixResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fix failed");
+    } finally {
+      setFixing(false);
     }
   }
 
@@ -264,24 +314,80 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       Export JSON
                     </button>
                     {totalIssues > 0 && (
-                      <button
-                        onClick={() => {
-                          const failedMods = modules.filter((m) => (m.status as string) === "failed");
-                          const issueText = failedMods.map((m) => {
-                            const details = (m.details as string[]) || [];
-                            return `## ${m.name} (${m.issues} issues)\n${details.map((d) => `- ${d}`).join("\n")}`;
-                          }).join("\n\n");
-                          navigator.clipboard.writeText(issueText);
-                          setError("Issues copied to clipboard");
-                          setTimeout(() => setError(""), 2000);
-                        }}
-                        className="btn-secondary px-4 py-2 text-xs"
-                      >
-                        Copy Issues to Clipboard
-                      </button>
+                      <>
+                        <button
+                          onClick={fixIssues}
+                          disabled={fixing}
+                          className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                          style={{ background: "#059669" }}
+                        >
+                          {fixing ? "AI Fixing..." : `Fix ${totalIssues} Issues (AI + PR)`}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const failedMods = modules.filter((m) => (m.status as string) === "failed");
+                            const issueText = failedMods.map((m) => {
+                              const details = (m.details as string[]) || [];
+                              return `## ${m.name} (${m.issues} issues)\n${details.map((d) => `- ${d}`).join("\n")}`;
+                            }).join("\n\n");
+                            navigator.clipboard.writeText(issueText);
+                            setError("Issues copied to clipboard");
+                            setTimeout(() => setError(""), 2000);
+                          }}
+                          className="btn-secondary px-4 py-2 text-xs"
+                        >
+                          Copy Issues
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
+
+                {/* Fix result */}
+                {fixing && (
+                  <div className="card p-6 text-center">
+                    <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="font-medium">AI is reading your code and generating fixes...</p>
+                    <p className="text-xs text-muted mt-1">This may take 30-60 seconds depending on the number of issues</p>
+                  </div>
+                )}
+
+                {fixResult && (
+                  <div className={`card p-5 ${fixResult.prUrl ? "border-success" : "border-accent"}`}>
+                    {fixResult.prUrl ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-success text-lg">&#10003;</span>
+                          <h3 className="font-bold">Pull Request Created</h3>
+                        </div>
+                        <p className="text-sm text-muted mb-3">
+                          Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files.
+                          Review and merge the PR to apply the fixes.
+                        </p>
+                        <a
+                          href={fixResult.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-primary px-4 py-2 text-xs"
+                          style={{ background: "#059669" }}
+                        >
+                          View PR on GitHub &rarr;
+                        </a>
+                      </>
+                    ) : fixResult.status === "no_fixes" ? (
+                      <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                    ) : (
+                      <>
+                        <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
+                        {fixResult.errors && fixResult.errors.length > 0 && (
+                          <ul className="mt-2 text-xs text-muted space-y-1">
+                            {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {modules.map((mod) => {
                   const status = mod.status as string;
