@@ -200,7 +200,7 @@ BaseModule (abstract)
 
 ### 1. Tests & Build
 
-- [ ] All 100+ tests pass (`node --test tests/*.test.js`)
+- [ ] All 120+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
 - [ ] All 33 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
@@ -433,7 +433,7 @@ GateTest/
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
-├── tests/                  ← 100+ tests (MUST ALL PASS)
+├── tests/                  ← 120+ tests (MUST ALL PASS)
 └── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
     └── app/
         ├── page.tsx                 ← Main page
@@ -471,6 +471,8 @@ GateTest/
 | `src/modules/memory.js` | Surfaces memory, runs FIRST, enriches `config._memory` | Before any module that consumes memory |
 | `src/modules/agentic.js` | AI agent that investigates memory-informed hypotheses | Changing agentic prompts / flow |
 | `src/core/universal-checker.js` | Pattern engine + `LANGUAGE_SPECS` for Python/Go/Rust/Java/Ruby/PHP/C#/Kotlin/Swift | Adding language support, changing detection patterns |
+| `src/core/host-bridge.js` | Abstract `HostBridge` base, bridge registry (`createBridge`/`registerBridge`), canonical commit-status vocabulary, shared PR/MR markdown formatter | Before adding a new host integration or touching cross-host logic |
+| `src/core/github-bridge.js` | Concrete `GitHubBridge` extending `HostBridge` — GitHub-specific REST calls, circuit breaker, retry, JWT auth | Anything GitHub-specific; prefer `HostBridge` for cross-host work |
 | `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
 | `website/app/api/scan/run/route.ts` | The actual scan execution | Changing scan logic |
 | `website/app/scan/status/page.tsx` | Live scan page | Changing scan UX |
@@ -512,7 +514,7 @@ GateTest/
 | 6 | Gluecron.com protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
 | 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | Craig to share Gluecron API docs / deployed URL |
-| 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | Ready to build |
+| 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | DONE (2026-04-14) — `src/core/host-bridge.js` shipped, `GitHubBridge extends HostBridge`, registry + shared markdown formatter + 21 contract tests green. Gluecron bridge can plug in without further refactor once API surface is known. |
 
 ---
 
@@ -563,12 +565,15 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.5.0 — 33 modules (24 core + 9 universal language checkers:
+GateTest v1.6.0 — 33 modules (24 core + 9 universal language checkers:
 Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift), 5 reporters, AI code
 review (memory-enriched, fix-pattern-aware), agentic exploration, codebase
 memory (compounding moat: issue history + fix-pattern database), memory-aware
 auto-fix, fake-fix detector, diff-mode, watch mode, mutation testing, CI
 generation, caching, SARIF/JUnit output, Stripe pay-on-completion, GitHub
-App, legal pages.
+App, legal pages. **Gluecron-ready `HostBridge` abstraction**: every git
+host integration plugs into one contract (canonical commit-status states,
+shared PR/MR markdown, registry-based bridge factory). `GitHubBridge` is
+the first concrete implementation; `GluecronBridge` will be the second.
 
 Date last updated: 2026-04-14
