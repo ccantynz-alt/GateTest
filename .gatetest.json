@@ -1,0 +1,21 @@
+{
+  "modules": {
+    "codeQuality": {
+      "excludePaths": [
+        "bin/",
+        "tests/",
+        "scripts/",
+        "setup.js",
+        "src/reporters/",
+        "src/hooks/",
+        "src/scanners/",
+        "src/ai-loop.js",
+        "src/app-server.js"
+      ]
+    }
+  },
+  "thresholds": {
+    "maxFileLength": 800,
+    "maxFunctionLength": 80
+  }
+}

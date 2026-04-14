@@ -16,11 +16,18 @@ class CodeQualityModule extends BaseModule {
     const projectRoot = config.projectRoot;
     const moduleConfig = config.getModuleConfig('codeQuality');
     const thresholds = config.config.thresholds;
+    const excludePaths = moduleConfig.excludePaths || [];
 
     const sourceFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
 
     for (const file of sourceFiles) {
       const relPath = path.relative(projectRoot, file);
+
+      // Skip files matching excludePaths patterns
+      if (excludePaths.some(pattern => relPath.startsWith(pattern) || relPath.includes(`/${pattern}`))) {
+        continue;
+      }
+
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split('\n');
 

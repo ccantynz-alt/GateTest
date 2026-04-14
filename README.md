@@ -2,10 +2,11 @@
 
 **AI writes fast. GateTest keeps it honest.**
 
-The most advanced QA gate for AI-generated code. 21 test modules scan your entire codebase — security, accessibility, performance, and everything in between. We don't just find bugs. We fix them.
+The most advanced QA gate for AI-generated code. 22 test modules scan your entire codebase — security, accessibility, performance, and everything in between. We don't just find bugs. We fix them.
 
+[![Scanned by GateTest](https://gatetest.io/api/badge?status=passing)](https://gatetest.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Modules](https://img.shields.io/badge/modules-21-brightgreen)]()
+[![Modules](https://img.shields.io/badge/modules-22-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%3E%3D20-green)]()
 
 ---
@@ -15,6 +16,8 @@ The most advanced QA gate for AI-generated code. 21 test modules scan your entir
 Every team using AI coding assistants (Copilot, Claude, Cursor) is duct-taping 8-10 testing tools together. Different configs. Different dashboards. Different billing.
 
 **GateTest replaces them all with one scan, one report, one gate decision: PASS or BLOCKED.**
+
+> **We dogfood this.** GateTest scans itself on every push. Check the [CI workflow](.github/workflows/ci.yml).
 
 | They use | GateTest replaces it with |
 |----------|--------------------------|
@@ -29,7 +32,7 @@ Every team using AI coding assistants (Copilot, Claude, Cursor) is duct-taping 8
 | git-secrets | `gatetest --module secrets` |
 | broken-link-checker | `gatetest --module links` |
 
-Plus 11 more modules they don't have: AI code review, mutation testing, chaos testing, autonomous exploration, live crawling, data integrity, documentation validation, compatibility analysis, integration test detection, CI generation, and SARIF output.
+Plus 12 more modules they don't have: AI code review, **fake-fix detector**, mutation testing, chaos testing, autonomous exploration, live crawling, data integrity, documentation validation, compatibility analysis, integration test detection, CI generation, and SARIF output.
 
 ---
 
@@ -45,7 +48,7 @@ gatetest --init
 # Run quick checks (syntax, lint, secrets, code quality)
 gatetest --suite quick
 
-# Run all 21 modules
+# Run all 22 modules
 gatetest --suite full
 
 # Run with auto-fix (fixes safe issues automatically)
@@ -65,7 +68,7 @@ gatetest --module aiReview
 
 ---
 
-## All 21 Modules
+## All 22 Modules
 
 | Module | What It Does |
 |--------|-------------|
@@ -90,12 +93,13 @@ gatetest --module aiReview
 | **chaos** | Chaos & resilience testing — slow networks, API failures, missing resources |
 | **mutation** | Mutation testing — modifies source code to verify tests actually catch bugs |
 | **aiReview** | AI-powered code review using Claude — finds real bugs, suggests fixes with corrected code |
+| **fakeFixDetector** | Catches symptom patching, disabled tests, stub functions — dual engine (pattern + AI) |
 
 ---
 
 ## Features
 
-- **21 test modules** — More coverage than any single competitor
+- **22 test modules** — More coverage than any single competitor
 - **5 report formats** — Console, JSON, HTML, SARIF (GitHub Security), JUnit XML (CI)
 - **Severity levels** — error (blocks gate), warning (reports), info (informational)
 - **Auto-fix engine** — Modules can automatically repair safe issues
@@ -114,7 +118,7 @@ gatetest --module aiReview
 
 ```
 gatetest                          Run standard checks
-gatetest --suite full             Run every module (21 modules)
+gatetest --suite full             Run every module (22 modules)
 gatetest --suite quick            Fast pre-commit checks
 gatetest --module security        Run a single module
 gatetest --diff                   Only scan git-changed files
@@ -155,7 +159,7 @@ Don't want to run it yourself? We'll scan your repo and deliver a full report.
 | Tier | Price | What You Get |
 |------|-------|-------------|
 | **Quick Scan** | $29 | 4 modules, instant report |
-| **Full Scan** | $99 | All 21 modules, SARIF + JUnit |
+| **Full Scan** | $99 | All 22 modules, SARIF + JUnit |
 | **Scan + Fix** | $199 | Full scan + auto-fix PR delivered to your repo |
 | **Nuclear** | $399 | Every module + mutation testing + live crawl + chaos |
 
