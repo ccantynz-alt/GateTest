@@ -13,53 +13,15 @@
  * 6. Opens a pull request
  * 7. Returns the PR URL
  *
- * Requires: ANTHROPIC_API_KEY, GitHub token (GATETEST_PRIVATE_KEY for app, or GITHUB_TOKEN)
+ * Requires: ANTHROPIC_API_KEY, GitHub auth (either GITHUB_TOKEN PAT, or
+ *           GATETEST_APP_ID + GATETEST_PRIVATE_KEY GitHub App — App is preferred
+ *           because it's already what the webhook uses for commit statuses.)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import https from "https";
-import crypto from "crypto";
+import { githubApi, httpsJsonRequest, resolveGithubToken } from "../../../lib/github-app";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
-const GATETEST_APP_ID = process.env.GATETEST_APP_ID || "";
-
-function httpsRequest(
-  options: https.RequestOptions,
-  body?: string
-): Promise<{ status: number; data: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        try {
-          resolve({ status: res.statusCode || 0, data: JSON.parse(Buffer.concat(chunks).toString()) });
-        } catch {
-          resolve({ status: res.statusCode || 0, data: { raw: Buffer.concat(chunks).toString() } });
-        }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(60000, () => { req.destroy(); reject(new Error("Request timeout")); });
-    if (body) req.write(body);
-    req.end();
-  });
-}
-
-async function githubApi(method: string, path: string, token: string, body?: Record<string, unknown>) {
-  const payload = body ? JSON.stringify(body) : undefined;
-  const headers: Record<string, string> = {
-    "User-Agent": "GateTest/1.2.0",
-    Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${token}`,
-  };
-  if (payload) {
-    headers["Content-Type"] = "application/json";
-    headers["Content-Length"] = String(Buffer.byteLength(payload));
-  }
-  return httpsRequest({ hostname: "api.github.com", port: 443, path, method, headers }, payload);
-}
 
 async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
   const prompt = `You are an expert code fixer. Fix the following issues in this file.
@@ -73,7 +35,12 @@ CURRENT CODE:
 ${fileContent}
 \`\`\`
 
-Return ONLY the complete fixed file content. No explanations. No markdown code fences. Just the corrected code. Every issue listed above must be fixed.`;
+Rules:
+- Return ONLY the complete fixed file content. No explanations. No markdown code fences.
+- Preserve every non-issue line exactly — do not rewrite or reformat unrelated code.
+- Every issue listed above must be fixed at its root cause, not patched over.
+- Never remove functionality to "fix" a warning. Never leave a TODO behind.
+- If a fix would require context you don't have, output the UNCHANGED original file verbatim.`;
 
   const body = JSON.stringify({
     model: "claude-sonnet-4-20250514",
@@ -81,30 +48,94 @@ Return ONLY the complete fixed file content. No explanations. No markdown code f
     messages: [{ role: "user", content: prompt }],
   });
 
-  const res = await httpsRequest({
-    hostname: "api.anthropic.com",
-    port: 443,
-    path: "/v1/messages",
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "Content-Length": String(Buffer.byteLength(body)),
-    },
-  }, body);
+  // Retry up to 3x on 429/5xx with exponential backoff
+  let lastStatus = 0;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+    }
+    const res = await httpsJsonRequest({
+      hostname: "api.anthropic.com",
+      port: 443,
+      path: "/v1/messages",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "Content-Length": String(Buffer.byteLength(body)),
+      },
+    }, body);
 
-  if (res.status !== 200) {
-    throw new Error(`Claude API error: ${res.status}`);
+    lastStatus = res.status;
+    if (res.status === 200) {
+      const content = res.data.content as Array<{ type: string; text: string }>;
+      let fixedCode = content?.[0]?.text || "";
+      // Strip markdown code fences if Claude added them despite instructions
+      fixedCode = fixedCode.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+      return fixedCode;
+    }
+    if (res.status !== 429 && res.status < 500) {
+      // Non-retryable client error (400/401/403)
+      lastErr = JSON.stringify(res.data).slice(0, 200);
+      break;
+    }
   }
+  throw new Error(`Claude API error ${lastStatus}${lastErr ? `: ${lastErr}` : ""}`);
+}
 
-  const content = res.data.content as Array<{ type: string; text: string }>;
-  let fixedCode = content?.[0]?.text || "";
+/**
+ * Validate Claude's fix output before we commit it.
+ * Catches truncation (max_tokens hit), refusals, and obvious garbage.
+ */
+function validateFix(original: string, fixed: string): { ok: boolean; reason?: string } {
+  if (!fixed || fixed.trim().length === 0) {
+    return { ok: false, reason: "empty output" };
+  }
+  if (fixed === original) {
+    return { ok: false, reason: "no changes produced" };
+  }
+  // Truncation guard — Claude hitting max_tokens produces a file that's much shorter than the input.
+  if (original.length > 500 && fixed.length < original.length * 0.4) {
+    return { ok: false, reason: `likely truncation (${fixed.length}/${original.length} chars)` };
+  }
+  // Refusal detection
+  const refusalMarkers = [
+    "I cannot",
+    "I can't",
+    "I'm unable to",
+    "I won't",
+    "As an AI",
+  ];
+  const firstLine = fixed.split("\n", 1)[0] || "";
+  if (refusalMarkers.some((m) => firstLine.startsWith(m))) {
+    return { ok: false, reason: "Claude refused" };
+  }
+  return { ok: true };
+}
 
-  // Strip markdown code fences if Claude added them despite instructions
-  fixedCode = fixedCode.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+// Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
+const FIX_CONCURRENCY = 4;
+// Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
+const MAX_FILE_BYTES = 200 * 1024;
 
-  return fixedCode;
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 interface IssueInput {
@@ -131,11 +162,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "AI not configured (ANTHROPIC_API_KEY)" }, { status: 503 });
   }
 
-  const token = GITHUB_TOKEN;
-  if (!token) {
-    return NextResponse.json({ error: "GitHub access not configured" }, { status: 503 });
-  }
-
   const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
   if (!repoMatch) {
     return NextResponse.json({ error: "Invalid GitHub URL" }, { status: 400 });
@@ -143,6 +169,21 @@ export async function POST(req: NextRequest) {
 
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
+
+  // Resolve GitHub token — prefer PAT, fall back to GitHub App installation token
+  const auth = await resolveGithubToken(owner, repo);
+  if (!auth.token) {
+    return NextResponse.json(
+      {
+        error: auth.error ||
+          "GitHub access not configured — set GITHUB_TOKEN, or install the GateTest GitHub App on this repo",
+        hint: "Install the GitHub App at https://github.com/apps/gatetesthq/installations/new",
+      },
+      { status: 503 }
+    );
+  }
+  const token = auth.token;
+  const authSource = auth.source;
 
   // Group issues by file
   const issuesByFile = new Map<string, string[]>();
@@ -157,37 +198,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No fixable issues (issues must have file paths)" }, { status: 400 });
   }
 
-  const fixes: Array<{ file: string; original: string; fixed: string; issues: string[] }> = [];
+  type Fix = { file: string; original: string; fixed: string; issues: string[] };
+  const fixes: Fix[] = [];
   const errors: string[] = [];
 
-  // For each file with issues, read it, send to Claude, get fix
-  for (const [filePath, fileIssues] of issuesByFile) {
+  // Process files in parallel (capped concurrency) — major UX win over sequential
+  const fileEntries = Array.from(issuesByFile.entries());
+  await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
     try {
-      // Read file from GitHub
-      const fileRes = await githubApi("GET", `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`, token);
-
+      const fileRes = await githubApi(
+        "GET",
+        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`,
+        token
+      );
       if (fileRes.status !== 200 || !fileRes.data.content) {
         errors.push(`Could not read ${filePath}`);
-        continue;
+        return;
       }
-
       const originalContent = Buffer.from(fileRes.data.content as string, "base64").toString("utf-8");
 
-      // Send to Claude for fixing
-      const fixedContent = await askClaude(originalContent, filePath, fileIssues);
-
-      if (fixedContent && fixedContent !== originalContent) {
-        fixes.push({
-          file: filePath,
-          original: originalContent,
-          fixed: fixedContent,
-          issues: fileIssues,
-        });
+      if (originalContent.length > MAX_FILE_BYTES) {
+        errors.push(`Skipped ${filePath}: file too large (${originalContent.length} bytes, limit ${MAX_FILE_BYTES})`);
+        return;
       }
+
+      const fixedContent = await askClaude(originalContent, filePath, fileIssues);
+      const validation = validateFix(originalContent, fixedContent);
+      if (!validation.ok) {
+        errors.push(`Skipped ${filePath}: ${validation.reason}`);
+        return;
+      }
+      fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
     } catch (err) {
       errors.push(`Failed to fix ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
     }
-  }
+  });
 
   if (fixes.length === 0) {
     return NextResponse.json({
@@ -224,15 +269,16 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Commit each fixed file
-    for (const fix of fixes) {
+    // Commit each fixed file (parallel, capped)
+    await mapWithConcurrency(fixes, FIX_CONCURRENCY, async (fix) => {
+      const sha = await getFileSha(owner, repo, fix.file, branchName, token);
       await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, {
         message: `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
         content: Buffer.from(fix.fixed).toString("base64"),
         branch: branchName,
-        sha: await getFileSha(owner, repo, fix.file, branchName, token),
+        sha,
       });
-    }
+    });
 
     // Open PR
     const prBody = `## GateTest Auto-Fix
@@ -274,6 +320,7 @@ ${errors.length > 0 ? `\n### Could Not Fix\n${errors.map((e) => `- ${e}`).join("
       filesFixed: fixes.length,
       issuesFixed: fixes.reduce((sum, f) => sum + f.issues.length, 0),
       fixes: fixes.map((f) => ({ file: f.file, issues: f.issues })),
+      authSource,
       errors,
     });
   } catch (err) {
