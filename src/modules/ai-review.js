@@ -38,6 +38,9 @@ class AiReviewModule extends BaseModule {
     const projectRoot = config.projectRoot;
     this._lastProjectRoot = projectRoot;
     const runnerOptions = config._runnerOptions || {};
+    // Memory context (attached by the memory module when it runs first).
+    // This is the compounding moat: Claude gets smarter context every scan.
+    const memory = config._memory || null;
 
     // Get files to review
     let filesToReview;
@@ -86,8 +89,8 @@ class AiReviewModule extends BaseModule {
     }
 
     try {
-      const review = await this._callClaude(apiKey, fileContents);
-      this._processReview(review, result);
+      const review = await this._callClaude(apiKey, fileContents, memory);
+      this._processReview(review, result, memory);
     } catch (err) {
       result.addCheck('ai-review:error', false, {
         severity: 'warning',
@@ -97,12 +100,50 @@ class AiReviewModule extends BaseModule {
     }
   }
 
-  async _callClaude(apiKey, files) {
+  /**
+   * Build a compact memory-context block the prompt can condition on.
+   * Keeps token usage bounded while giving Claude real codebase context.
+   */
+  _buildMemoryContext(memory) {
+    if (!memory) return '';
+
+    const lines = [];
+    const fp = memory.fingerprint || {};
+    const langs = Object.keys(fp.languages || {}).join(', ') || 'unknown';
+    const frameworks = (fp.frameworks || []).join(', ') || 'none detected';
+    lines.push(`Stack: languages=[${langs}], frameworks=[${frameworks}]`);
+
+    const scanCount = memory.previous?.scans?.totalScans || 0;
+    if (scanCount > 0) lines.push(`Scan history: ${scanCount} previous scan(s)`);
+
+    const recurring = (memory.recurring || []).slice(0, 8);
+    if (recurring.length > 0) {
+      lines.push(`Recurring issues already tracked (do NOT re-flag these — they are known):`);
+      for (const r of recurring) {
+        lines.push(`  - ${r.key} (seen ${r.count}x)`);
+      }
+    }
+
+    const fps = memory.previous?.falsePositives || {};
+    const fpKeys = Object.keys(fps).slice(0, 8);
+    if (fpKeys.length > 0) {
+      lines.push(`Known false positives (never flag these):`);
+      for (const k of fpKeys) lines.push(`  - ${k}`);
+    }
+
+    return lines.length > 0
+      ? `\n## CODEBASE MEMORY\n${lines.join('\n')}\n\nUse this context to:\n- Skip issues already in the recurring list (they're tracked elsewhere).\n- Tailor suggestions to the detected stack.\n- Never suggest fixes that match known false positives.\n`
+      : '';
+  }
+
+  async _callClaude(apiKey, files, memory) {
     const filesText = files.map(f =>
       `--- ${f.path} ---\n${f.content}\n`
     ).join('\n');
 
-    const prompt = `You are a senior code reviewer for GateTest, the most advanced QA system available. Review the following source files and find REAL bugs, security issues, performance problems, and quality concerns.
+    const memoryContext = this._buildMemoryContext(memory);
+
+    const prompt = `You are a senior code reviewer for GateTest, the most advanced QA system available. Review the following source files and find REAL bugs, security issues, performance problems, and quality concerns.${memoryContext}
 
 For each issue found, respond in this exact JSON format:
 {
@@ -193,7 +234,7 @@ ${filesText}`;
     });
   }
 
-  _processReview(review, result) {
+  _processReview(review, result, memory) {
     if (!review || !review.issues) {
       result.addCheck('ai-review:complete', true, {
         severity: 'info',
@@ -212,8 +253,18 @@ ${filesText}`;
       return;
     }
 
-    // Convert AI findings to GateTest checks
+    // Convert AI findings to GateTest checks — but honour memory's
+    // recorded false positives so we don't re-flag dismissed issues.
+    const store = memory?.store;
+    let filtered = 0;
     for (const issue of issues) {
+      if (store) {
+        const key = `ai-review:${issue.category || 'quality'}:${issue.file}:${issue.line || 0}`;
+        if (store.isFalsePositive(key)) {
+          filtered += 1;
+          continue;
+        }
+      }
       const severity = ['error', 'warning', 'info'].includes(issue.severity)
         ? issue.severity : 'warning';
 
@@ -247,9 +298,11 @@ ${filesText}`;
       });
     }
 
+    const reportedCount = issues.length - filtered;
+    const filteredMsg = filtered > 0 ? ` (${filtered} filtered by memory as known false positives)` : '';
     result.addCheck('ai-review:complete', true, {
       severity: 'info',
-      message: `AI found ${issues.length} issue(s) across reviewed files`,
+      message: `AI found ${reportedCount} issue(s) across reviewed files${filteredMsg}`,
     });
   }
 
