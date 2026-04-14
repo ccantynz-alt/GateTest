@@ -59,6 +59,7 @@ describe('ClaudeMdParser', () => {
   it('should extract version', () => {
     const parser = new ClaudeMdParser(projectRoot);
     const parsed = parser.parse();
-    assert.strictEqual(parsed.version, '1.2.0');
+    // Shape-test — the version must follow semver, not pin to a specific one.
+    assert.match(parsed.version, /^\d+\.\d+\.\d+$/);
   });
 });

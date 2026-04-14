@@ -29,6 +29,8 @@ const BUILT_IN_MODULES = {
   mutation: '../modules/mutation.js',
   aiReview: '../modules/ai-review.js',
   fakeFixDetector: '../modules/fake-fix-detector.js',
+  memory: '../modules/memory.js',
+  agentic: '../modules/agentic.js',
 };
 
 class ModuleRegistry {

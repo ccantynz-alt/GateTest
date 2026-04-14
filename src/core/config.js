@@ -40,6 +40,7 @@ const DEFAULT_CONFIG = {
   // Test suite configuration
   suites: {
     quick: [
+      'memory',
       'syntax',
       'lint',
       'secrets',
@@ -47,6 +48,7 @@ const DEFAULT_CONFIG = {
       'fakeFixDetector',
     ],
     standard: [
+      'memory',
       'syntax',
       'lint',
       'secrets',
@@ -56,6 +58,7 @@ const DEFAULT_CONFIG = {
       'fakeFixDetector',
     ],
     full: [
+      'memory',
       'syntax',
       'lint',
       'secrets',
@@ -74,6 +77,7 @@ const DEFAULT_CONFIG = {
       'documentation',
       'mutation',
       'aiReview',
+      'agentic',
       'fakeFixDetector',
     ],
     live: [
@@ -82,6 +86,7 @@ const DEFAULT_CONFIG = {
       'chaos',
     ],
     nuclear: [
+      'memory',
       'syntax',
       'lint',
       'secrets',
@@ -103,6 +108,7 @@ const DEFAULT_CONFIG = {
       'chaos',
       'mutation',
       'aiReview',
+      'agentic',
       'fakeFixDetector',
     ],
   },
