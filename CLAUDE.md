@@ -47,6 +47,52 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ---
 
+## PROTECTED PLATFORMS — PERMANENT INTEGRATIONS (READ THIS EVERY SESSION)
+
+**GateTest protects the following Craig-owned platforms. These integrations are PERMANENT. They must survive every future Claude session. They cannot be removed, weakened, or "simplified" without Craig's explicit authorization.**
+
+| Platform     | Repository                                         | Status     |
+| ------------ | -------------------------------------------------- | ---------- |
+| Crontech.ai  | https://github.com/ccantynz-alt/Crontech           | INTEGRATING |
+| Gluecron.com | https://github.com/ccantynz-alt/Gluecron.com       | INTEGRATING |
+
+### How the integration works
+
+GateTest remains a **standalone subscription product** on gatetest.io. Protected platforms consume the same engine by cloning this repo at CI time — nothing is vendored, forked, or duplicated. Ship a fix here → every protected platform picks it up on the next CI run.
+
+### What lives in THIS repo (`ccantynz-alt/gatetest`)
+
+Under `integrations/`:
+- `integrations/github-actions/gatetest-gate.yml` — drop-in CI workflow
+- `integrations/husky/pre-push`                    — local pre-push hook
+- `integrations/scripts/install.sh`                — one-command installer
+- `integrations/README.md`                         — the integration spec
+
+Guarded by:
+- `tests/integrations.test.js` — fails the suite if any artifact is removed or weakened.
+
+### What lives in a PROTECTED repo (e.g. Crontech, Gluecron)
+
+After running the installer:
+- `.github/workflows/gatetest-gate.yml` — the CI gate
+- `.husky/pre-push`                      — the local gate
+- `.gatetest.json`                       — the protection marker
+
+### Install command (from the protected repo's root)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrations/scripts/install.sh | bash
+```
+
+### Rules for every Claude session
+
+1. Before touching `integrations/`, `tests/integrations.test.js`, or this section — **STOP** and check for Craig's authorization.
+2. If a protected repo is missing its gate, the correct action is to **re-install**, never to remove the marker.
+3. If `tests/integrations.test.js` fails, a previous session broke protection. **Restore it, do not delete the test.**
+4. Adding a new protected platform: update the table above **and** add its repo to the installer docs.
+
+---
+
 ## THE MISSION
 
 Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 22 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
@@ -263,6 +309,10 @@ BaseModule (abstract)
 18. **Never approve something you didn't test end-to-end.**
 19. **Never build an 80s website.** We are AI builders. The output must be stunning.
 20. **Never ask Craig "do you want me to fix this?"** If it's broken, FIX IT.
+21. **Never delete, rename, or weaken `integrations/`** — that directory protects Crontech and Gluecron. See **PROTECTED PLATFORMS**.
+22. **Never delete or weaken `tests/integrations.test.js`** — it is the tripwire that keeps protection intact across sessions.
+23. **Never remove the PROTECTED PLATFORMS section from this file.** It must be read at every session start.
+24. **Never soft-fail the gate** with `continue-on-error: true` on the GateTest step itself.
 
 ---
 
@@ -406,6 +456,10 @@ GateTest/
 | `website/app/api/checkout/route.ts` | Stripe checkout creation | Changing payment flow |
 | `website/app/page.tsx` | How website sections compose | Changing page structure |
 | `website/app/globals.css` | Dark theme, animations | Changing visual style |
+| `integrations/github-actions/gatetest-gate.yml` | CI gate shipped to protected platforms | Any change to protection workflow |
+| `integrations/husky/pre-push` | Local pre-push gate for protected platforms | Any change to local enforcement |
+| `integrations/scripts/install.sh` | One-command installer into a protected repo | Any change to install flow |
+| `tests/integrations.test.js` | Tripwire that prevents silent removal of protection | DO NOT modify without Craig auth |
 
 ---
 
@@ -433,6 +487,9 @@ GateTest/
 | 2 | Website design needs major upgrade — current is basic | HIGH | Craig's next priority |
 | 3 | Stripe test keys not yet swapped in | MEDIUM | Craig action |
 | 4 | GitHub App not yet installed on test repo | MEDIUM | Craig action |
+| 5 | Crontech.ai protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
+| 6 | Gluecron.com protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
+| 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
 
 ---
 
