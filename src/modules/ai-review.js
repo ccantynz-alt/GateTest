@@ -131,8 +131,20 @@ class AiReviewModule extends BaseModule {
       for (const k of fpKeys) lines.push(`  - ${k}`);
     }
 
+    // Fix patterns: tell Claude what GateTest has already auto-fixed here.
+    // This lets Claude suggest the same kind of fix for matching issues
+    // rather than inventing a new approach each scan.
+    const topFixPatterns = memory.topFixPatterns || [];
+    if (topFixPatterns.length > 0) {
+      lines.push(`Known fix patterns (GateTest has auto-fixed these before — prefer matching strategies):`);
+      for (const p of topFixPatterns.slice(0, 5)) {
+        const desc = p.lastDescription ? ` — "${p.lastDescription}"` : '';
+        lines.push(`  - ${p.key} (fixed ${p.count}x)${desc}`);
+      }
+    }
+
     return lines.length > 0
-      ? `\n## CODEBASE MEMORY\n${lines.join('\n')}\n\nUse this context to:\n- Skip issues already in the recurring list (they're tracked elsewhere).\n- Tailor suggestions to the detected stack.\n- Never suggest fixes that match known false positives.\n`
+      ? `\n## CODEBASE MEMORY\n${lines.join('\n')}\n\nUse this context to:\n- Skip issues already in the recurring list (they're tracked elsewhere).\n- Tailor suggestions to the detected stack.\n- Never suggest fixes that match known false positives.\n- When an issue matches a known fix pattern, propose a fix consistent with the prior fix.\n`
       : '';
   }
 

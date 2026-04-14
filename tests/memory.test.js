@@ -109,6 +109,69 @@ describe('MemoryStore', () => {
     assert.strictEqual(res.newIssues, 0);
   });
 
+  it('recordFix stores patterns keyed by module:name with retained examples', () => {
+    const store = new MemoryStore(tmpDir);
+    const first = store.recordFix({
+      checkName: 'python:eval:src/foo.py:10',
+      description: 'Replaced eval() with ast.literal_eval',
+      filesChanged: ['src/foo.py'],
+    });
+    assert.strictEqual(first.patternKey, 'python:eval');
+    assert.strictEqual(first.count, 1);
+
+    const second = store.recordFix({
+      checkName: 'python:eval:src/bar.py:5',
+      description: 'Replaced eval() with a direct call',
+      filesChanged: ['src/bar.py'],
+    });
+    assert.strictEqual(second.count, 2, 'same pattern should accumulate count');
+
+    const db = store.getFixPatterns();
+    assert.ok(db.patterns['python:eval']);
+    assert.strictEqual(db.patterns['python:eval'].examples.length, 2);
+    // Newest example first
+    assert.strictEqual(
+      db.patterns['python:eval'].examples[0].description,
+      'Replaced eval() with a direct call',
+    );
+  });
+
+  it('recordFix caps examples at 5', () => {
+    const store = new MemoryStore(tmpDir);
+    for (let i = 0; i < 8; i += 1) {
+      store.recordFix({
+        checkName: `lint:no-console:src/f${i}.js:1`,
+        description: `Fix ${i}`,
+        filesChanged: [`src/f${i}.js`],
+      });
+    }
+    const pattern = store.getFixPatterns().patterns['lint:no-console'];
+    assert.strictEqual(pattern.count, 8);
+    assert.strictEqual(pattern.examples.length, 5, 'only the last 5 examples are retained');
+  });
+
+  it('recordFix returns null for invalid check names', () => {
+    const store = new MemoryStore(tmpDir);
+    assert.strictEqual(store.recordFix({ checkName: '', description: 'x' }), null);
+    assert.strictEqual(store.recordFix({ checkName: null, description: 'x' }), null);
+  });
+
+  it('getFixFor returns null when no history exists and hit after record', () => {
+    const store = new MemoryStore(tmpDir);
+    assert.strictEqual(store.getFixFor('python:eval:src/foo.py:10'), null);
+
+    store.recordFix({
+      checkName: 'python:eval:src/foo.py:10',
+      description: 'Replaced eval',
+      filesChanged: ['src/foo.py'],
+    });
+
+    const hit = store.getFixFor('python:eval:src/other.py:99');
+    assert.ok(hit, 'historical fix must be reachable by pattern key alone');
+    assert.strictEqual(hit.patternKey, 'python:eval');
+    assert.strictEqual(hit.count, 1);
+  });
+
   it('ingestLatestReport pulls failed checks from a real report file', () => {
     const reportDir = path.join(tmpDir, '.gatetest', 'reports');
     fs.mkdirSync(reportDir, { recursive: true });
@@ -162,6 +225,36 @@ describe('MemoryModule', () => {
     assert.ok(config._memory, 'memory must be attached to config');
     assert.ok(config._memory.store);
     assert.ok(config._memory.fingerprint);
+  });
+
+  it('surfaces recorded fix patterns as info checks and on config._memory', async () => {
+    const { MemoryStore } = require('../src/core/memory');
+    const store = new MemoryStore(tmpDir);
+    store.recordFix({
+      checkName: 'python:eval:src/a.py:1',
+      description: 'Replaced eval with ast.literal_eval',
+      filesChanged: ['src/a.py'],
+    });
+    store.recordFix({
+      checkName: 'python:eval:src/b.py:4',
+      description: 'Replaced eval with direct call',
+      filesChanged: ['src/b.py'],
+    });
+
+    const MemoryModule = require('../src/modules/memory');
+    const mod = new MemoryModule();
+    const result = { checks: [], addCheck(n, p, d) { this.checks.push({ n, p, ...d }); } };
+    const config = { projectRoot: tmpDir };
+    await mod.run(result, config);
+
+    assert.ok(config._memory.topFixPatterns);
+    assert.strictEqual(config._memory.topFixPatterns.length, 1);
+    assert.strictEqual(config._memory.topFixPatterns[0].key, 'python:eval');
+    assert.strictEqual(config._memory.topFixPatterns[0].count, 2);
+
+    const fixCheck = result.checks.find((c) => c.n.startsWith('memory:fix-pattern:'));
+    assert.ok(fixCheck, 'a memory:fix-pattern:* info check must be recorded');
+    assert.strictEqual(fixCheck.severity, 'info');
   });
 
   it('attaches recurring issues to config._memory', async () => {

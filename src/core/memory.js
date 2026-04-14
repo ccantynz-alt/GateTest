@@ -13,6 +13,7 @@
  *   issues.jsonl       — append-only log: one JSON per line per issue ever seen
  *   scans.json         — summary of every scan (timestamp, counts, status)
  *   false-positives.json — { [checkKey]: { reason, dismissedAt } }
+ *   fix-patterns.json  — { version, patterns: { [patternKey]: { count, lastAt, examples } } }
  *
  * Serverless-safe: all state lives on disk inside the scanned repo. The web
  * service can still use this — each serverless invocation clones the repo
@@ -36,6 +37,7 @@ class MemoryStore {
       issues: path.join(this.dir, 'issues.jsonl'),
       scans: path.join(this.dir, 'scans.json'),
       falsePositives: path.join(this.dir, 'false-positives.json'),
+      fixPatterns: path.join(this.dir, 'fix-patterns.json'),
     };
   }
 
@@ -85,7 +87,66 @@ class MemoryStore {
       issues: this._readJsonl(this.files.issues),
       scans: this._readJson(this.files.scans, { totalScans: 0, runs: [] }),
       falsePositives: this._readJson(this.files.falsePositives, {}),
+      fixPatterns: this._readJson(this.files.fixPatterns, { version: 1, patterns: {} }),
     };
+  }
+
+  /**
+   * Derive a stable pattern key from a full check name. Universal-checker
+   * names look like "python:eval:src/foo.py:42" — the first two segments
+   * identify the pattern independently of file/line.
+   */
+  _patternKeyFromCheckName(checkName) {
+    if (!checkName) return null;
+    const parts = String(checkName).split(':');
+    if (parts.length < 2) return parts[0] || null;
+    return `${parts[0]}:${parts[1]}`;
+  }
+
+  /**
+   * Record a fix that was successfully applied by auto-fix. Builds up a
+   * repo-local database of "what has this project fixed before," which
+   * downstream modules (memory summary, aiReview) can surface back to the
+   * user and to Claude.
+   *
+   * Retains at most 5 recent examples per pattern to cap file growth.
+   */
+  recordFix({ checkName, description, filesChanged = [] }) {
+    const patternKey = this._patternKeyFromCheckName(checkName);
+    if (!patternKey) return null;
+    const db = this._readJson(this.files.fixPatterns, { version: 1, patterns: {} });
+    if (!db.patterns[patternKey]) {
+      db.patterns[patternKey] = { count: 0, lastAt: null, examples: [] };
+    }
+    const entry = db.patterns[patternKey];
+    entry.count = (entry.count || 0) + 1;
+    entry.lastAt = new Date().toISOString();
+    entry.examples = [
+      { at: entry.lastAt, checkName, description, filesChanged },
+      ...(entry.examples || []),
+    ].slice(0, 5);
+    this._writeJson(this.files.fixPatterns, db);
+    return { patternKey, count: entry.count };
+  }
+
+  /**
+   * Return the full fix-pattern database.
+   */
+  getFixPatterns() {
+    return this._readJson(this.files.fixPatterns, { version: 1, patterns: {} });
+  }
+
+  /**
+   * Look up a historical fix pattern for a given check name. Returns null
+   * if the pattern has never been fixed in this repo.
+   */
+  getFixFor(checkName) {
+    const patternKey = this._patternKeyFromCheckName(checkName);
+    if (!patternKey) return null;
+    const db = this.getFixPatterns();
+    const entry = db.patterns[patternKey];
+    if (!entry) return null;
+    return { patternKey, ...entry };
   }
 
   /**

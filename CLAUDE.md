@@ -200,7 +200,7 @@ BaseModule (abstract)
 
 ### 1. Tests & Build
 
-- [ ] All 95+ tests pass (`node --test tests/*.test.js`)
+- [ ] All 100+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
 - [ ] All 33 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
@@ -433,7 +433,7 @@ GateTest/
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
-├── tests/                  ← 95+ tests (MUST ALL PASS)
+├── tests/                  ← 100+ tests (MUST ALL PASS)
 └── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
     └── app/
         ├── page.tsx                 ← Main page
@@ -563,11 +563,12 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.4.0 — 33 modules (24 core + 9 universal language checkers:
+GateTest v1.5.0 — 33 modules (24 core + 9 universal language checkers:
 Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift), 5 reporters, AI code
-review (memory-enriched), agentic exploration, codebase memory (compounding
-moat), fake-fix detector, auto-fix, diff-mode, watch mode, mutation testing,
-CI generation, caching, SARIF/JUnit output, Stripe pay-on-completion, GitHub
+review (memory-enriched, fix-pattern-aware), agentic exploration, codebase
+memory (compounding moat: issue history + fix-pattern database), memory-aware
+auto-fix, fake-fix detector, diff-mode, watch mode, mutation testing, CI
+generation, caching, SARIF/JUnit output, Stripe pay-on-completion, GitHub
 App, legal pages.
 
 Date last updated: 2026-04-14

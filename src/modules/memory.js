@@ -66,24 +66,57 @@ class MemoryModule extends BaseModule {
       }
     }
 
-    // 4. Summary line — info only, always present.
-    const summary = this._buildSummary(previous, fingerprint, ingest, recurring);
+    // 4. Surface fix intelligence — patterns GateTest has auto-fixed in
+    //    this repo before. Downstream modules (aiReview, agentic) can
+    //    condition their suggestions on these known-good fixes; the human
+    //    gets a quick reminder of what the gate has quietly handled.
+    const fixPatterns = store.getFixPatterns();
+    const topFixPatterns = this._topFixPatterns(fixPatterns, 5);
+    if (topFixPatterns.length > 0) {
+      for (const p of topFixPatterns) {
+        result.addCheck(`memory:fix-pattern:${p.key}`, true, {
+          severity: 'info',
+          message: `Fix-pattern known: ${p.key} — auto-fixed ${p.count} time(s) in this repo`,
+          suggestion: p.lastDescription
+            ? `Last fix: ${p.lastDescription}`
+            : undefined,
+        });
+      }
+    }
+
+    // 5. Summary line — info only, always present.
+    const summary = this._buildSummary(previous, fingerprint, ingest, recurring, topFixPatterns);
     result.addCheck('memory:summary', true, {
       severity: 'info',
       message: summary,
     });
 
-    // 5. Expose memory to downstream modules. This is the moat:
+    // 6. Expose memory to downstream modules. This is the moat:
     //    agentic modules can condition their exploration on history.
     config._memory = {
       store,
       fingerprint,
       previous,
       recurring,
+      fixPatterns,
+      topFixPatterns,
     };
   }
 
-  _buildSummary(previous, fingerprint, ingest, recurring) {
+  _topFixPatterns(db, limit) {
+    const patterns = (db && db.patterns) || {};
+    return Object.entries(patterns)
+      .map(([key, value]) => ({
+        key,
+        count: value.count || 0,
+        lastAt: value.lastAt || null,
+        lastDescription: value.examples && value.examples[0] ? value.examples[0].description : null,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  }
+
+  _buildSummary(previous, fingerprint, ingest, recurring, topFixPatterns) {
     const scanCount = previous.scans?.totalScans || 0;
     const issueCount = previous.issues?.length || 0;
     const langs = Object.keys(fingerprint.languages || {}).join(', ') || 'none detected';
@@ -94,7 +127,10 @@ class MemoryModule extends BaseModule {
     const recurringMsg = recurring.length > 0
       ? ` ${recurring.length} recurring issue pattern(s) tracked.`
       : '';
-    return `Memory: ${scanCount} scan(s) tracked, ${issueCount} issue(s) in history, languages=[${langs}], frameworks=[${frameworks}].${ingestMsg}${recurringMsg}`;
+    const fixMsg = topFixPatterns && topFixPatterns.length > 0
+      ? ` ${topFixPatterns.length} known fix-pattern(s) from prior auto-fix history.`
+      : '';
+    return `Memory: ${scanCount} scan(s) tracked, ${issueCount} issue(s) in history, languages=[${langs}], frameworks=[${frameworks}].${ingestMsg}${recurringMsg}${fixMsg}`;
   }
 }
 
