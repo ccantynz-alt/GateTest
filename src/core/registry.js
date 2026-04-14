@@ -31,6 +31,15 @@ const BUILT_IN_MODULES = {
   fakeFixDetector: '../modules/fake-fix-detector.js',
   memory: '../modules/memory.js',
   agentic: '../modules/agentic.js',
+  python: '../modules/python.js',
+  go: '../modules/go-lang.js',
+  rust: '../modules/rust-lang.js',
+  java: '../modules/java.js',
+  ruby: '../modules/ruby.js',
+  php: '../modules/php.js',
+  csharp: '../modules/csharp.js',
+  kotlin: '../modules/kotlin.js',
+  swift: '../modules/swift.js',
 };
 
 class ModuleRegistry {
