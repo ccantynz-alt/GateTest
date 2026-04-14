@@ -41,6 +41,7 @@ const BUILT_IN_MODULES = {
   kotlin: '../modules/kotlin.js',
   swift: '../modules/swift.js',
   dependencies: '../modules/dependencies.js',
+  dockerfile: '../modules/dockerfile.js',
 };
 
 class ModuleRegistry {

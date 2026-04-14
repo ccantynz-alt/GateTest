@@ -57,6 +57,7 @@ const DEFAULT_CONFIG = {
       'unitTests',
       'integrationTests',
       'dependencies',
+      'dockerfile',
       'fakeFixDetector',
     ],
     full: [
@@ -78,6 +79,7 @@ const DEFAULT_CONFIG = {
       'dataIntegrity',
       'documentation',
       'dependencies',
+      'dockerfile',
       'mutation',
       'python',
       'go',
@@ -116,6 +118,7 @@ const DEFAULT_CONFIG = {
       'dataIntegrity',
       'documentation',
       'dependencies',
+      'dockerfile',
       'liveCrawler',
       'explorer',
       'chaos',
