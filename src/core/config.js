@@ -257,7 +257,19 @@ class GateTestConfig {
 
   _loadConfig() {
     let fileConfig = {};
-    if (fs.existsSync(this.configPath)) {
+
+    // Priority 1: .gatetest.json at project root (user-facing config)
+    const rootConfigPath = path.join(this.projectRoot, '.gatetest.json');
+    if (fs.existsSync(rootConfigPath)) {
+      try {
+        const raw = fs.readFileSync(rootConfigPath, 'utf-8');
+        fileConfig = JSON.parse(raw);
+      } catch (err) {
+        console.error(`[GateTest] Warning: Failed to parse ${rootConfigPath}: ${err.message}`);
+      }
+    }
+    // Priority 2: .gatetest/config.json (legacy path)
+    else if (fs.existsSync(this.configPath)) {
       try {
         const raw = fs.readFileSync(this.configPath, 'utf-8');
         fileConfig = JSON.parse(raw);
@@ -265,6 +277,7 @@ class GateTestConfig {
         console.error(`[GateTest] Warning: Failed to parse ${this.configPath}: ${err.message}`);
       }
     }
+
     return this._deepMerge(DEFAULT_CONFIG, fileConfig);
   }
 
