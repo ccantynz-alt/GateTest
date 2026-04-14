@@ -47,6 +47,23 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ---
 
+## STRATEGIC DIRECTION — GLUECRON-FIRST (READ THIS EVERY SESSION)
+
+**Gluecron.com is the future git host for Craig's stack.** GitHub is treated as a LEGACY integration, not the long-term target. Every architectural decision from this point forward must pass the question: *does this make the eventual GitHub → Gluecron migration easier or harder?*
+
+Concretely:
+- New cross-host logic belongs behind a **`HostBridge` abstraction**, not inside `github-bridge.js`.
+- `github-bridge.js` is to be treated as one implementation of the bridge, not *the* bridge.
+- A future `gluecron-bridge.js` will implement the same interface.
+- Website copy, CLI help text, and docs should say **"git host"** where possible, not "GitHub."
+- Any new GitHub-specific feature should ship with a `TODO(gluecron)` note identifying what needs a Gluecron equivalent.
+
+**Authorization for this direction:** Granted by Craig — *"we need to integrate with Gluecron rather than putting all our time and effort into GitHub. GitHub is going to be obsolete."*
+
+The `HostBridge` refactor is pre-authorized, but the actual Gluecron bridge implementation must wait until Gluecron's API surface is confirmed (don't build against guesses).
+
+---
+
 ## PROTECTED PLATFORMS — PERMANENT INTEGRATIONS (READ THIS EVERY SESSION)
 
 **GateTest protects the following Craig-owned platforms. These integrations are PERMANENT. They must survive every future Claude session. They cannot be removed, weakened, or "simplified" without Craig's explicit authorization.**
@@ -490,6 +507,8 @@ GateTest/
 | 5 | Crontech.ai protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 6 | Gluecron.com protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
+| 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | Craig to share Gluecron API docs / deployed URL |
+| 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | Ready to build |
 
 ---
 
