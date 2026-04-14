@@ -45,6 +45,7 @@ const DEFAULT_CONFIG = {
       'lint',
       'secrets',
       'codeQuality',
+      'dependencies',
       'fakeFixDetector',
     ],
     standard: [
@@ -55,6 +56,7 @@ const DEFAULT_CONFIG = {
       'codeQuality',
       'unitTests',
       'integrationTests',
+      'dependencies',
       'fakeFixDetector',
     ],
     full: [
@@ -75,6 +77,7 @@ const DEFAULT_CONFIG = {
       'compatibility',
       'dataIntegrity',
       'documentation',
+      'dependencies',
       'mutation',
       'python',
       'go',
@@ -112,6 +115,7 @@ const DEFAULT_CONFIG = {
       'compatibility',
       'dataIntegrity',
       'documentation',
+      'dependencies',
       'liveCrawler',
       'explorer',
       'chaos',

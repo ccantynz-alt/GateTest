@@ -40,6 +40,7 @@ const BUILT_IN_MODULES = {
   csharp: '../modules/csharp.js',
   kotlin: '../modules/kotlin.js',
   swift: '../modules/swift.js',
+  dependencies: '../modules/dependencies.js',
 };
 
 class ModuleRegistry {
