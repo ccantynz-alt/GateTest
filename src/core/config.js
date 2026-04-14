@@ -58,6 +58,7 @@ const DEFAULT_CONFIG = {
       'integrationTests',
       'dependencies',
       'dockerfile',
+      'ciSecurity',
       'fakeFixDetector',
     ],
     full: [
@@ -80,6 +81,7 @@ const DEFAULT_CONFIG = {
       'documentation',
       'dependencies',
       'dockerfile',
+      'ciSecurity',
       'mutation',
       'python',
       'go',
@@ -119,6 +121,7 @@ const DEFAULT_CONFIG = {
       'documentation',
       'dependencies',
       'dockerfile',
+      'ciSecurity',
       'liveCrawler',
       'explorer',
       'chaos',

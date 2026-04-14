@@ -42,6 +42,7 @@ const BUILT_IN_MODULES = {
   swift: '../modules/swift.js',
   dependencies: '../modules/dependencies.js',
   dockerfile: '../modules/dockerfile.js',
+  ciSecurity: '../modules/ci-security.js',
 };
 
 class ModuleRegistry {
