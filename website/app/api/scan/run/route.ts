@@ -8,13 +8,20 @@
  * Returns the scan result in one response. Simple. Fast. Reliable.
  *
  * Also updates Stripe payment intent metadata and captures payment.
+ *
+ * Honesty contract: every module listed in scan-modules/index.ts does real
+ * work. Modules that cannot run return status "skipped" with a reason —
+ * never a fake pass.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 import { isAdminRequest } from "@/app/lib/admin-auth";
+import { resolveGithubToken } from "@/app/lib/github-app";
+import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+const MAX_FILES_TO_READ = 50;
 
 function stripeApi(
   method: string,
@@ -55,7 +62,7 @@ function stripeApi(
 function githubGet(path: string, token?: string): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = {
-      "User-Agent": "GateTest/1.1.0",
+      "User-Agent": "GateTest/1.2.0",
       Accept: "application/vnd.github+json",
     };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -79,23 +86,30 @@ function githubGet(path: string, token?: string): Promise<Record<string, unknown
 
 interface ModuleResult {
   name: string;
-  status: "passed" | "failed" | "warning";
+  status: "passed" | "failed" | "skipped";
   checks: number;
   issues: number;
   duration: number;
   details?: string[];
+  skipped?: string;
 }
 
-async function scanRepo(owner: string, repo: string, tier: string): Promise<{
+interface ScanRepoResult {
   modules: ModuleResult[];
   totalIssues: number;
   duration: number;
+  authSource?: string | null;
   error?: string;
-}> {
-  const startTime = Date.now();
-  const token = process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
+}
 
-  // Get file tree
+async function scanRepo(owner: string, repo: string, tier: string): Promise<ScanRepoResult> {
+  const startTime = Date.now();
+
+  // Resolve GitHub auth: PAT first, GitHub App installation token second.
+  const auth = await resolveGithubToken(owner, repo);
+  const token = auth.token || undefined;
+
+  // Get file tree (authenticated if possible, else try public).
   let tree: { tree?: Array<{ path: string; type: string }> };
   try {
     tree = (await githubGet(`/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, token)) as typeof tree;
@@ -104,190 +118,52 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<{
   }
 
   if (!tree?.tree) {
-    return { modules: [], totalIssues: 0, duration: Date.now() - startTime, error: `Cannot access ${owner}/${repo}` };
+    const hint = auth.error ? ` (${auth.error})` : token ? "" : " — set GITHUB_TOKEN or install the GateTest GitHub App";
+    return {
+      modules: [],
+      totalIssues: 0,
+      duration: Date.now() - startTime,
+      authSource: auth.source,
+      error: `Cannot access ${owner}/${repo}${hint}`,
+    };
   }
 
   const files = tree.tree.filter((f) => f.type === "blob").map((f) => f.path);
-  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb"];
+  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
   const sourceFiles = files.filter(
     (f) => sourceExts.some((ext) => f.endsWith(ext)) &&
       !f.includes("node_modules") && !f.includes(".next") && !f.includes("dist/")
   );
 
-  // Read source files (up to 20)
-  const fileContents: Array<{ path: string; content: string }> = [];
-  for (const filePath of sourceFiles.slice(0, 20)) {
+  // Read source files (up to MAX_FILES_TO_READ) in parallel for speed.
+  const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
     try {
       const data = (await githubGet(
         `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`, token
       )) as { content?: string; encoding?: string };
       if (data.content && data.encoding === "base64") {
-        fileContents.push({ path: filePath, content: Buffer.from(data.content, "base64").toString("utf-8") });
+        return { path: filePath, content: Buffer.from(data.content, "base64").toString("utf-8") };
       }
-    } catch { /* skip */ }
-  }
+      return null;
+    } catch { return null; }
+  });
+  const fileContents: RepoFile[] = (await Promise.all(readPromises)).filter((f): f is RepoFile => f !== null);
 
-  // Only the 13 modules that actually work via GitHub API
-  const moduleNames = tier === "quick"
-    ? ["syntax", "lint", "secrets", "codeQuality"]
-    : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
-       "seo", "links", "compatibility", "dataIntegrity", "documentation",
-       "performance", "aiReview"];
+  // Run the tier through the unified module registry — every module does real work.
+  const { modules, totalIssues } = await runTier(tier === "full" ? "full" : "quick", {
+    owner,
+    repo,
+    files,
+    fileContents,
+    token,
+  });
 
-  const results: ModuleResult[] = [];
-  let totalIssues = 0;
-
-  for (const mod of moduleNames) {
-    const modStart = Date.now();
-    let checks = 0;
-    let issues = 0;
-    const details: string[] = [];
-
-    switch (mod) {
-      case "syntax": {
-        for (const f of fileContents) {
-          checks++;
-          const opens = (f.content.match(/{/g) || []).length;
-          const closes = (f.content.match(/}/g) || []).length;
-          if (Math.abs(opens - closes) > 2) { issues++; details.push(`${f.path}: unbalanced braces`); }
-        }
-        checks += files.filter((f) => f.endsWith(".json")).length;
-        break;
-      }
-      case "lint": {
-        for (const f of fileContents) {
-          checks++;
-          if (f.content.includes("var ")) { issues++; details.push(`${f.path}: uses 'var' instead of let/const`); }
-        }
-        break;
-      }
-      case "secrets": {
-        const patterns = [
-          { re: /['"]sk_live_[a-zA-Z0-9]+['"]/, name: "Stripe live key" },
-          { re: /['"]ghp_[a-zA-Z0-9]+['"]/, name: "GitHub PAT" },
-          { re: /['"]AKIA[A-Z0-9]{16}['"]/, name: "AWS access key" },
-          { re: /password\s*[:=]\s*['"][^'"]{8,}['"]/i, name: "Hardcoded password" },
-          { re: /-----BEGIN.*PRIVATE KEY-----/, name: "Private key" },
-          { re: /(mongodb|postgres|mysql):\/\/[^:\s]+:[^@\s]+@/i, name: "DB connection string" },
-        ];
-        for (const f of fileContents) {
-          checks++;
-          for (const p of patterns) {
-            if (p.re.test(f.content)) { issues++; details.push(`${f.path}: ${p.name}`); break; }
-          }
-        }
-        const sensitive = [".env", ".pem", ".key", "credentials.json"];
-        for (const f of files) {
-          checks++;
-          const base = f.split("/").pop() || "";
-          if (sensitive.includes(base)) { issues++; details.push(`Sensitive file: ${f}`); }
-        }
-        break;
-      }
-      case "codeQuality": {
-        for (const f of fileContents) {
-          if (f.path.includes("test") || f.path.includes("spec")) continue;
-          checks++;
-          if (/console\.(log|debug|info)\(/.test(f.content)) { issues++; details.push(`${f.path}: console.log`); }
-          checks++;
-          if (/\bdebugger\b/.test(f.content)) { issues++; details.push(`${f.path}: debugger statement`); }
-          checks++;
-          if (/\/\/\s*(TODO|FIXME|HACK|XXX)/i.test(f.content)) { issues++; details.push(`${f.path}: TODO/FIXME`); }
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) { issues++; details.push(`${f.path}: eval() usage`); }
-        }
-        break;
-      }
-      case "security": {
-        for (const f of fileContents) {
-          checks++;
-          if (/\.innerHTML\s*=/.test(f.content)) { issues++; details.push(`${f.path}: innerHTML`); }
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) { issues++; details.push(`${f.path}: eval()`); }
-          checks++;
-          if (/child_process.*exec\s*\(/.test(f.content)) { issues++; details.push(`${f.path}: shell exec`); }
-          checks++;
-          if (/document\.write\s*\(/.test(f.content)) { issues++; details.push(`${f.path}: document.write`); }
-        }
-        break;
-      }
-      case "accessibility": {
-        for (const f of fileContents) {
-          if (!f.path.endsWith(".tsx") && !f.path.endsWith(".jsx")) continue;
-          checks++;
-          if (/<img\s(?![^>]*\balt\b)/i.test(f.content)) { issues++; details.push(`${f.path}: img without alt`); }
-          checks++;
-          if (/<input(?![^>]*\b(?:aria-label|id)\b)/i.test(f.content)) { issues++; details.push(`${f.path}: input without label`); }
-          checks++;
-          if (f.content.includes("onClick") && !f.content.includes("onKeyDown")) { issues++; details.push(`${f.path}: onClick without onKeyDown`); }
-        }
-        break;
-      }
-      case "seo": {
-        checks++;
-        if (!files.some((f) => f.includes("layout") || f.includes("_app"))) { issues++; details.push("No layout/meta file"); }
-        checks++;
-        if (!files.some((f) => f === "robots.txt" || f === "public/robots.txt")) { issues++; details.push("No robots.txt"); }
-        break;
-      }
-      case "documentation": {
-        checks++;
-        if (!files.some((f) => f === "README.md")) { issues++; details.push("No README.md"); }
-        checks++;
-        if (!files.some((f) => f === "CHANGELOG.md" || f === "CHANGES.md")) { issues++; details.push("No CHANGELOG"); }
-        checks++;
-        if (!files.some((f) => f === "LICENSE" || f === "LICENSE.md")) { issues++; details.push("No LICENSE"); }
-        break;
-      }
-      case "links": {
-        for (const f of fileContents) {
-          const hrefs = f.content.match(/href=["']([^"']+)["']/g) || [];
-          checks += hrefs.length;
-          for (const h of hrefs) {
-            const val = h.match(/href=["']([^"']+)["']/)?.[1] || "";
-            if (val === "#" || val === "javascript:void(0)") { issues++; details.push(`${f.path}: dead link ${val}`); }
-          }
-        }
-        break;
-      }
-      case "performance": {
-        checks++;
-        const pkg = fileContents.find((f) => f.path === "package.json");
-        if (pkg) {
-          try {
-            const deps = Object.keys(JSON.parse(pkg.content).dependencies || {});
-            if (deps.length > 50) { issues++; details.push(`${deps.length} dependencies — large bundle risk`); }
-          } catch { /* skip */ }
-        }
-        break;
-      }
-      case "compatibility": {
-        checks++;
-        if (!files.some((f) => f === ".browserslistrc") &&
-            !fileContents.some((f) => f.path === "package.json" && f.content.includes("browserslist"))) {
-          issues++;
-          details.push("No browserslist config");
-        }
-        break;
-      }
-      default: {
-        checks = 1;
-        break;
-      }
-    }
-
-    totalIssues += issues;
-    results.push({
-      name: mod,
-      status: issues > 0 ? "failed" : "passed",
-      checks: Math.max(checks, 1),
-      issues,
-      duration: Date.now() - modStart,
-      details: details.length > 0 ? details.slice(0, 5) : undefined,
-    });
-  }
-
-  return { modules: results, totalIssues, duration: Date.now() - startTime };
+  return {
+    modules,
+    totalIssues,
+    duration: Date.now() - startTime,
+    authSource: auth.source,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -376,6 +252,7 @@ export async function POST(req: NextRequest) {
     repoUrl,
     tier,
     admin: isAdmin,
+    authSource: result.authSource,
     error: result.error,
   });
 }
