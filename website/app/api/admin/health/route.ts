@@ -29,6 +29,7 @@ import {
   getAdminUser,
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
+import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
 import { getDb } from "@/app/lib/db";
 import { createAppJwt } from "@/app/lib/github-app";
 import { MODULES, runTier } from "@/app/lib/scan-modules";
@@ -390,16 +391,41 @@ async function checkAuthProviders(): Promise<Check> {
   return { id: "auth", label: "Auth providers", status: "ok", detail: "Admin + customer OAuth both configured" };
 }
 
-export async function GET() {
-  // Admin auth check
-  const adminStatus = getAdminConfig();
-  if (!adminStatus.ok || !adminStatus.config) {
-    return NextResponse.json({ error: "Admin not configured" }, { status: 503 });
-  }
+// Mirrors admin/page.tsx: accept either GitHub OAuth session OR password cookie.
+async function isAuthenticatedAdmin(): Promise<boolean> {
   const store = await cookies();
-  const cookie = store.get(SESSION_COOKIE_NAME)?.value;
-  const login = getAdminUser(cookie, adminStatus.config);
-  if (!login) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Method 1: GitHub OAuth allowlist.
+  const adminStatus = getAdminConfig();
+  if (adminStatus.ok && adminStatus.config) {
+    const sessionCookie = store.get(SESSION_COOKIE_NAME)?.value;
+    if (getAdminUser(sessionCookie, adminStatus.config)) return true;
+  }
+
+  // Method 2: Password-derived cookie (GATETEST_ADMIN_PASSWORD).
+  const adminPassword = process.env.GATETEST_ADMIN_PASSWORD || "";
+  if (adminPassword) {
+    const passwordCookie = store.get(ADMIN_COOKIE_NAME)?.value || "";
+    const expected = crypto
+      .createHmac("sha256", adminPassword)
+      .update("gatetest-admin-v1")
+      .digest("hex");
+    if (
+      passwordCookie &&
+      passwordCookie.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(passwordCookie), Buffer.from(expected))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function GET() {
+  if (!(await isAuthenticatedAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const started = Date.now();
 
