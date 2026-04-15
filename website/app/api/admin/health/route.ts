@@ -302,12 +302,12 @@ async function checkAnthropic(): Promise<Check> {
 async function checkModules(): Promise<Check> {
   const started = Date.now();
   const names = Object.keys(MODULES);
-  if (names.length < 14) {
+  if (names.length < 15) {
     return {
       id: "modules",
       label: "Scan modules",
       status: "fail",
-      detail: `Only ${names.length} modules registered (expected 14)`,
+      detail: `Only ${names.length} modules registered (expected 15)`,
       duration: Date.now() - started,
     };
   }

@@ -33,6 +33,7 @@ import {
   compatibility,
 } from "./web";
 import { aiReview } from "./ai";
+import { dependencyFreshness } from "./dependencies";
 
 export type { ModuleRunner, ModuleContext, RepoFile, ModuleOutput } from "./types";
 export { TIERS } from "./types";
@@ -56,6 +57,7 @@ export const MODULES: Record<string, ModuleRunner> = {
   performance,
   compatibility,
   aiReview,
+  dependencyFreshness,
 };
 
 export interface ModuleResultEnvelope {

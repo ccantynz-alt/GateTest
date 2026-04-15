@@ -40,6 +40,7 @@ const MODULE_LABELS: Record<string, string> = {
   performance: "Performance",
   aiReview: "AI code review",
   fakeFixDetector: "Fake-fix detector",
+  dependencyFreshness: "Dependency freshness",
 };
 
 export default function ScanStatus() {
@@ -76,7 +77,7 @@ export default function ScanStatus() {
       ? ["syntax", "lint", "secrets", "codeQuality"]
       : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
          "seo", "links", "compatibility", "dataIntegrity", "documentation",
-         "performance", "aiReview", "fakeFixDetector"];
+         "performance", "aiReview", "fakeFixDetector", "dependencyFreshness"];
     setAnimModules(names.map((n) => ({ name: n, status: "pending" as const, checks: 0, issues: 0, duration: 0 })));
   }, [params.tier]);
 
