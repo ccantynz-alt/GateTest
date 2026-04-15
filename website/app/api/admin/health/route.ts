@@ -171,19 +171,33 @@ async function checkGithubApp(): Promise<Check> {
     };
   } catch (err) {
     const msg = (err as Error).message || "unknown";
-    // Translate opaque OpenSSL errors into actionable guidance.
+    // Safe diagnostic of what Vercel actually handed us. NEVER prints key material.
+    const raw = process.env.GATETEST_PRIVATE_KEY || "";
+    const diag = {
+      len: raw.length,
+      hasBegin: raw.includes("BEGIN"),
+      hasEnd: raw.includes("END"),
+      hasDashes: raw.includes("-----"),
+      hasLiteralBackslashN: raw.includes("\\n"),
+      realLineCount: (raw.match(/\n/g) || []).length,
+      startsWithDashes: raw.trimStart().startsWith("-----"),
+      looksQuoted:
+        (raw.startsWith('"') && raw.endsWith('"')) ||
+        (raw.startsWith("'") && raw.endsWith("'")),
+      looksBase64: /^[A-Za-z0-9+/=\s]+$/.test(raw) && !raw.includes("BEGIN"),
+    };
     const hint = /DECODER routines/i.test(msg)
-      ? " — private key format rejected by OpenSSL. Re-paste GATETEST_PRIVATE_KEY from the .pem file, preserving newlines."
-      : /does not look like a PEM/i.test(msg)
-      ? ""
-      : /not a valid PEM/i.test(msg)
-      ? ""
+      ? " — OpenSSL rejected the key format."
       : "";
+    const diagStr =
+      `len=${diag.len} begin=${diag.hasBegin} end=${diag.hasEnd} dashes=${diag.hasDashes} ` +
+      `real-newlines=${diag.realLineCount} literal-\\n=${diag.hasLiteralBackslashN} ` +
+      `quoted=${diag.looksQuoted} base64?=${diag.looksBase64}`;
     return {
       id: "github",
       label: "GitHub App auth",
       status: "fail",
-      detail: `JWT mint or API call failed: ${msg}${hint}`,
+      detail: `${msg}${hint} | ${diagStr}`,
       duration: Date.now() - started,
     };
   }
