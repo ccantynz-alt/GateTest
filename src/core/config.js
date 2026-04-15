@@ -67,6 +67,7 @@ const DEFAULT_CONFIG = {
       'asyncIteration',
       'homoglyph',
       'openapiDrift',
+      'prSize',
       'fakeFixDetector',
     ],
     standard: [
@@ -101,6 +102,7 @@ const DEFAULT_CONFIG = {
       'asyncIteration',
       'homoglyph',
       'openapiDrift',
+      'prSize',
       'fakeFixDetector',
     ],
     full: [
@@ -145,6 +147,7 @@ const DEFAULT_CONFIG = {
       'asyncIteration',
       'homoglyph',
       'openapiDrift',
+      'prSize',
       'mutation',
       'python',
       'go',
@@ -206,6 +209,7 @@ const DEFAULT_CONFIG = {
       'asyncIteration',
       'homoglyph',
       'openapiDrift',
+      'prSize',
       'liveCrawler',
       'explorer',
       'chaos',
@@ -320,6 +324,19 @@ const DEFAULT_CONFIG = {
       against: null,
       // `context`: optional string describing the bug being fixed, passed to AI
       context: null,
+    },
+    prSize: {
+      // `against`: optional git ref — if unset, module auto-detects via
+      // staged / working-tree / HEAD~1
+      against: null,
+      maxFilesChangedWarning: 50,
+      maxFilesChangedError: 100,
+      maxLinesChangedWarning: 500,
+      maxLinesChangedError: 1000,
+      maxLinesPerFileWarning: 300,
+      maxLinesPerFileError: 500,
+      maxTopLevelDirs: 3,
+      excludePatterns: [],
     },
     codeQuality: {
       forbiddenPatterns: [

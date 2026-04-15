@@ -64,6 +64,7 @@ const BUILT_IN_MODULES = {
   asyncIteration: '../modules/async-iteration.js',
   homoglyph: '../modules/homoglyph.js',
   openapiDrift: '../modules/openapi-drift.js',
+  prSize: '../modules/pr-size.js',
 };
 
 class ModuleRegistry {
