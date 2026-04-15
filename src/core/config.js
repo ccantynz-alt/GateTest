@@ -73,6 +73,7 @@ const DEFAULT_CONFIG = {
       'datetimeBug',
       'importCycle',
       'moneyFloat',
+      'logPii',
       'fakeFixDetector',
     ],
     standard: [
@@ -113,6 +114,7 @@ const DEFAULT_CONFIG = {
       'datetimeBug',
       'importCycle',
       'moneyFloat',
+      'logPii',
       'fakeFixDetector',
     ],
     full: [
@@ -163,6 +165,7 @@ const DEFAULT_CONFIG = {
       'datetimeBug',
       'importCycle',
       'moneyFloat',
+      'logPii',
       'mutation',
       'python',
       'go',
@@ -230,6 +233,7 @@ const DEFAULT_CONFIG = {
       'datetimeBug',
       'importCycle',
       'moneyFloat',
+      'logPii',
       'liveCrawler',
       'explorer',
       'chaos',

@@ -70,6 +70,7 @@ const BUILT_IN_MODULES = {
   datetimeBug: '../modules/datetime-bug.js',
   importCycle: '../modules/import-cycle.js',
   moneyFloat: '../modules/money-float.js',
+  logPii: '../modules/log-pii.js',
 };
 
 class ModuleRegistry {
