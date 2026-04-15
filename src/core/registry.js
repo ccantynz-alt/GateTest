@@ -61,6 +61,19 @@ const BUILT_IN_MODULES = {
   ssrf: '../modules/ssrf.js',
   hardcodedUrl: '../modules/hardcoded-url.js',
   envVars: '../modules/env-vars.js',
+  asyncIteration: '../modules/async-iteration.js',
+  homoglyph: '../modules/homoglyph.js',
+  openapiDrift: '../modules/openapi-drift.js',
+  prSize: '../modules/pr-size.js',
+  redos: '../modules/redos.js',
+  cronExpression: '../modules/cron-expression.js',
+  datetimeBug: '../modules/datetime-bug.js',
+  importCycle: '../modules/import-cycle.js',
+  moneyFloat: '../modules/money-float.js',
+  logPii: '../modules/log-pii.js',
+  featureFlag: '../modules/feature-flag.js',
+  tlsSecurity: '../modules/tls-security.js',
+  cookieSecurity: '../modules/cookie-security.js',
 };
 
 class ModuleRegistry {
