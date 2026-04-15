@@ -50,6 +50,7 @@ const DEFAULT_CONFIG = {
       'sqlMigrations',
       'terraform',
       'kubernetes',
+      'promptSafety',
       'fakeFixDetector',
     ],
     standard: [
@@ -67,6 +68,7 @@ const DEFAULT_CONFIG = {
       'sqlMigrations',
       'terraform',
       'kubernetes',
+      'promptSafety',
       'fakeFixDetector',
     ],
     full: [
@@ -94,6 +96,7 @@ const DEFAULT_CONFIG = {
       'sqlMigrations',
       'terraform',
       'kubernetes',
+      'promptSafety',
       'mutation',
       'python',
       'go',
@@ -138,6 +141,7 @@ const DEFAULT_CONFIG = {
       'sqlMigrations',
       'terraform',
       'kubernetes',
+      'promptSafety',
       'liveCrawler',
       'explorer',
       'chaos',
