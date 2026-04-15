@@ -44,6 +44,7 @@ const BUILT_IN_MODULES = {
   dockerfile: '../modules/dockerfile.js',
   ciSecurity: '../modules/ci-security.js',
   shell: '../modules/shell.js',
+  sqlMigrations: '../modules/sql-migrations.js',
 };
 
 class ModuleRegistry {

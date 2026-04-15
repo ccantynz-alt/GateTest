@@ -47,6 +47,7 @@ const DEFAULT_CONFIG = {
       'codeQuality',
       'dependencies',
       'shell',
+      'sqlMigrations',
       'fakeFixDetector',
     ],
     standard: [
@@ -61,6 +62,7 @@ const DEFAULT_CONFIG = {
       'dockerfile',
       'ciSecurity',
       'shell',
+      'sqlMigrations',
       'fakeFixDetector',
     ],
     full: [
@@ -85,6 +87,7 @@ const DEFAULT_CONFIG = {
       'dockerfile',
       'ciSecurity',
       'shell',
+      'sqlMigrations',
       'mutation',
       'python',
       'go',
@@ -126,6 +129,7 @@ const DEFAULT_CONFIG = {
       'dockerfile',
       'ciSecurity',
       'shell',
+      'sqlMigrations',
       'liveCrawler',
       'explorer',
       'chaos',
