@@ -112,9 +112,9 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 61 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 62 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 61 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 62 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -202,7 +202,7 @@ BaseModule (abstract)
 
 - [ ] All 200+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 61 modules load (`node bin/gatetest.js --list`)
+- [ ] All 62 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
@@ -261,7 +261,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 61 modules listed in README and CLI help
+- [ ] All 62 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -353,7 +353,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 61 modules load
+3. `node bin/gatetest.js --list` — all 62 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -426,6 +426,7 @@ When something breaks:
 | `safe-regex` (unmaintained since 2021, high FP rate) / ESLint `no-misleading-character-class` (narrow subset only) / `recheck` (accurate but opt-in CI setup) / SonarQube (one rule only) | `gatetest --module redos` |
 | crontab.guru (web-only, not a linter) / actionlint (syntax only, no impossible-date semantics) / node-cron runtime errors (if you're lucky) — nothing unifies validation across GitHub Actions + k8s CronJob + Vercel + source code | `gatetest --module cronExpression` |
 | (no unified tool — ESLint has nothing on naive datetimes; `pylint`/`ruff` flag `datetime.utcnow` in Py 3.12+ but don't cross-reference `datetime.now()` missing tz; `moment-deprecation-handler` is a runtime shim; SonarQube has one Java-only rule on `java.util.Date`; nothing unifies Python naive-datetime + JS 0-vs-1 month + moment legacy at the gate) | `gatetest --module datetimeBug` |
+| `madge --circular` (standalone CLI, separate install, no gate integration) / `eslint-plugin-import/no-cycle` (opt-in, slow, TS-alias-blind) / `dependency-cruiser` (heavy config) / `tsc` catches nothing — nothing gate-native for JS+TS import cycles with suppression markers | `gatetest --module importCycle` |
 | Lighthouse | `gatetest --module performance` |
 | axe/pa11y | `gatetest --module accessibility` |
 | Percy/Chromatic | `gatetest --module visual` |
@@ -439,8 +440,8 @@ Plus 12 more modules they don't have: AI code review, **fake-fix detector (catch
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 61 modules |
-| Scan + Fix | $199 | 61 modules + auto-fix PR |
+| Full Scan | $99 | All 62 modules |
+| Scan + Fix | $199 | 62 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -524,6 +525,7 @@ GateTest/
 | `src/modules/openapi-drift.js` | OpenAPI ↔ code drift detector — walks `openapi.{yaml,yml,json}` / `swagger.*` / `api-spec/*` and builds a (method, path) set. Walks JS/TS source and harvests routes from Express/Connect (`app.get`/`router.post`/etc.), Fastify (`fastify.get` + `fastify.route({ method, url })` object form), Koa + koa-router, Hono, and Next.js App Router (`app/api/**/route.{ts,js}` with exported `GET`/`POST`/`PATCH`/`PUT`/`DELETE`/`OPTIONS`/`HEAD` functions). Normalises Express-style `:id` to OpenAPI-style `{id}` and fuzzy-matches `{id}` ~= `{userId}` so param-name differences don't false-positive. Flags: code route missing from spec (error: `undocumented-route`), spec path with no matching handler (warning: `spec-ghost-route`). Test paths are excluded from code-harvest. Module is a no-op when no spec file is present | Adding new framework route shapes, new spec file conventions, or new method forms |
 | `src/modules/cron-expression.js` | Cron-expression validator — harvests cron strings from `.github/workflows/*.yml` (GitHub Actions `schedule: [{ cron: "..." }]`), Kubernetes `CronJob` `spec.schedule`, `vercel.json` `crons[].schedule`, and source-code call sites: node-cron `cron.schedule('...')`, croner `new Cron('...')`, node-schedule `schedule.scheduleJob('...')`, APScheduler `CronTrigger.from_crontab('...')` (Python), Spring `@Scheduled(cron = "...")` (Java/Kotlin). Validates: field count (5 standard / 6 with seconds / predefined alias — error), per-field value ranges (minute 0-59, hour 0-23, DoM 1-31, month 1-12/JAN-DEC, DoW 0-7/SUN-SAT — error), step/range/list syntax, Quartz extensions (L/W/#), and impossible dates (Feb 30/31, Apr/Jun/Sep/Nov 31 — error, silent-killer). Warns on `* * * * *` every-minute cron and typo aliases (`@weely`). Test paths downgrade error → warning. `# cron-ok` / `// cron-ok` suppresses | Adding new cron harvest sources (Temporal schedules, Celery beat, AWS EventBridge cron), extended syntax (`?`/`L`/`W`/`#`), or alias lists |
 | `src/modules/datetime-bug.js` | Datetime / timezone bug detector — walks JS/TS and Python sources for the five classic clock bugs: Python `datetime.now()` with no `tz=` argument (error: naive datetime — CI and prod use different timezones), Python `datetime.utcnow()` (error: deprecated in 3.12+, still returns naive), JS `new Date(yyyy, 1-12, dd)` (warning: months are 0-indexed — ambiguous between `Feb` bug and `Dec` correct-by-accident), JS `Date.UTC(yyyy, 1-12, dd)` (warning: same 0-vs-1 trap), `moment()` without a `.tz(...)` call on the same line (warning: silently uses local time, library in legacy mode since 2020). Block-comment, line-comment, Python `#` comments and triple-quoted docstrings are stripped before matching. Test paths downgrade error → warning (Python) and warning → info (JS). `// datetime-ok` / `# datetime-ok` on same or preceding line suppresses | Adding new clock-bug shapes (Luxon naive `DateTime.local()`, date-fns `startOfDay` without tz, Java `java.util.Date`, Go `time.Now()` without `Location`), or extending suppression markers |
+| `src/modules/import-cycle.js` | Import-cycle / circular-dependency detector — walks JS/TS sources (`.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts`), builds an import graph from top-level `import ... from './x'`, `export { ... } from './x'`, top-level `require('./x')` (indent-0 only — lazy in-function requires are correctly ignored), resolves relative specifiers through extension-retry and `./x/index.<ext>` fallback, then runs iterative Tarjan's SCC algorithm to find every strongly-connected component of size ≥ 2. Reports: cycle of 2+ files (error: runtime TDZ / undefined-import bug), self-loop (error: file imports itself), summary (info). Skips: type-only imports (`import type` / `export type` / `import { type X }` — erased at build time), bare-package specifiers (`react`, `lodash` — external, cannot form cycles with local files). Test paths downgrade error → warning. `// import-cycle-ok` on the import line suppresses that edge | Adding new import forms (dynamic `import(...)` with string literal, tagged templates), TypeScript path-alias resolution via `tsconfig.json` paths, or new suppression markers |
 | `src/modules/redos.js` | ReDoS / catastrophic-regex detector — walks JS/TS/Python sources and extracts regex patterns from literal form (`/pattern/flags`), constructor form (`new RegExp("...")` / `RegExp("...")`), and Python `re.compile` / `re.match` / `re.search` (both `r"..."` raw and `"..."` regular). Constructor-form patterns are unescaped one level so `"\\d+"` is analysed as `\d+`. Tests for three shape-based rules: nested quantifier where the inner element can match empty or has its own quantifier (error: catastrophic backtracking, `(a+)+`, `(.*)*`, `(?:[abc]+)*`), alternation with overlapping branches inside a quantified group (error: `(a|a)*`, `(\d|\d+)*`), and greedy `.*`/`.+` with unanchored polynomial backtracking (warning). Plus one data-flow rule: `new RegExp(req.*.*)` / `RegExp(userInput)` etc. — user-controlled regex construction (error, CWE-1333 injection). Line / block / Python hash comments are stripped before extraction. Test paths downgrade error → warning. `// redos-ok` on same or preceding line suppresses | Adding new regex-source forms (tagged templates, .sregex), new catastrophic shapes, new taint sources |
 | `src/modules/pr-size.js` | PR-size enforcer — resolves a git diff against a base ref (config.against, or auto-detect via staged / working-tree / HEAD~1), parses `git diff --numstat` output (with fallback to unified-diff bodies, including numstat rename shapes `old => new` and `src/{a => b}/file`) and enforces four independent limits: total files (soft 50 / hard 100 — warning / error), total lines added+removed (soft 500 / hard 1000), per-file lines (soft 300 / hard 500), and top-level directory sprawl (warning at >3, catches mixed-concern PRs). Auto-excludes lockfiles (package-lock, yarn.lock, pnpm-lock, Gemfile.lock, Cargo.lock, poetry.lock, composer.lock, go.sum, mix.lock, flake.lock), build output (`dist/`, `build/`, `out/`, `.next/`, `coverage/`, `node_modules/`, `vendor/`, `target/`, `bin/`), minified/bundled files (`*.min.*`, `*.bundle.*`), snapshot tests (`*.snap`), and source-maps (`*.map`). Summary line always fires (info). No-op outside a git repo or when no diff is available | Adding new exclusion patterns, new thresholds, or a new diff-parse form |
 | `src/modules/homoglyph.js` | Homoglyph / Unicode-lookalike detector — flags bidirectional-override / isolate characters (U+202A..U+202E, U+2066..U+2069) as Trojan Source attack shape (error, CVE-2021-42574), Cyrillic / Greek letters embedded inside otherwise-Latin identifiers (error: supply-chain / code-review bypass vector; covers `а` U+0430, `е` U+0435, `о` U+043E, `р` U+0440, `с` U+0441, `х` U+0445, `у` U+0443, `ѕ` U+0455, Greek `ο` U+03BF, `ρ` U+03C1, etc.), zero-width chars U+200B/U+200C/U+200D/U+2060/U+FEFF mid-file (warning: identifier-shadow vector), and other non-printable control chars (warning). Identifier scan uses a string-and-comment stripper so translation-string contents don't false-positive. Locale paths (`locales/`, `i18n/`, `lang/`, `translations/`, `intl/`, `l10n/`), locale extensions (`.po`/`.pot`/`.xliff`/`.arb`/`.mo`), and doc extensions (`.md`/`.mdx`/`.rst`) are exempt. BOM on the first byte of the first line is allowed | Adding new lookalike letters, locale-path patterns, or control-char allowlist |
@@ -588,7 +590,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 61 modules load — `node bin/gatetest.js --list`
+3. Verify all 62 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -622,7 +624,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.34.0 — 61 modules (24 core + 9 universal language checkers
+GateTest v1.35.0 — 62 modules (24 core + 9 universal language checkers
 for Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift + 7 **infra
 & supply-chain hardening scanners** — dependencies (npm/pip/Pipenv/
 Poetry/go.mod/Cargo/Bundler/Composer/Maven/Gradle), Dockerfile,
@@ -845,7 +847,25 @@ migrate to Luxon / date-fns / Day.js / Temporal). Block-comment,
 line-comment, Python `#` comments and triple-quoted docstrings are
 stripped before matching. Test paths downgrade error → warning
 (Python) and warning → info (JS). `// datetime-ok` / `# datetime-ok`
-on same or preceding line suppresses,
+on same or preceding line suppresses
++ 1 **import-cycle / circular-dependency detector** — the silent
+runtime killer of large JS/TS codebases. Walks all `.js`/`.jsx`/
+`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` sources, builds an import
+graph from top-level `import ... from './x'`, `export { ... } from
+'./x'`, and indent-0 `require('./x')` (lazy in-function requires
+are correctly ignored because they defer resolution to call time,
+which is the standard cycle-break workaround). Resolves relative
+specifiers through extension-retry and `./x/index.<ext>` fallback.
+Runs iterative Tarjan's strongly-connected-component algorithm to
+find every cycle of 2+ files (error: runtime TDZ / undefined-import
+bug — the bug that reproduces randomly depending on test order,
+hot-reload state, module-cache warmth, and is always a refactor to
+fix). Also flags self-loops (file imports itself — always a bug).
+Type-only imports (`import type`, `export type`, `import { type X }`)
+are erased at build time and skipped. Bare-package specifiers
+(`react`, `lodash`) are external and skipped. Test paths downgrade
+error → warning. `// import-cycle-ok` on the import line suppresses
+that specific edge,
 5 reporters,
 AI code review (memory-enriched, fix-pattern-aware), agentic
 exploration, codebase memory (compounding moat: issue history +
@@ -858,4 +878,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-05-06
+Date last updated: 2026-05-07

@@ -71,6 +71,7 @@ const DEFAULT_CONFIG = {
       'redos',
       'cronExpression',
       'datetimeBug',
+      'importCycle',
       'fakeFixDetector',
     ],
     standard: [
@@ -109,6 +110,7 @@ const DEFAULT_CONFIG = {
       'redos',
       'cronExpression',
       'datetimeBug',
+      'importCycle',
       'fakeFixDetector',
     ],
     full: [
@@ -157,6 +159,7 @@ const DEFAULT_CONFIG = {
       'redos',
       'cronExpression',
       'datetimeBug',
+      'importCycle',
       'mutation',
       'python',
       'go',
@@ -222,6 +225,7 @@ const DEFAULT_CONFIG = {
       'redos',
       'cronExpression',
       'datetimeBug',
+      'importCycle',
       'liveCrawler',
       'explorer',
       'chaos',

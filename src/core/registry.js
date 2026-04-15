@@ -68,6 +68,7 @@ const BUILT_IN_MODULES = {
   redos: '../modules/redos.js',
   cronExpression: '../modules/cron-expression.js',
   datetimeBug: '../modules/datetime-bug.js',
+  importCycle: '../modules/import-cycle.js',
 };
 
 class ModuleRegistry {
