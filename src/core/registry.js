@@ -49,6 +49,7 @@ const BUILT_IN_MODULES = {
   kubernetes: '../modules/kubernetes.js',
   promptSafety: '../modules/prompt-safety.js',
   deadCode: '../modules/dead-code.js',
+  secretRotation: '../modules/secret-rotation.js',
 };
 
 class ModuleRegistry {

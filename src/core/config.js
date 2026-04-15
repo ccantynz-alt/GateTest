@@ -52,6 +52,7 @@ const DEFAULT_CONFIG = {
       'kubernetes',
       'promptSafety',
       'deadCode',
+      'secretRotation',
       'fakeFixDetector',
     ],
     standard: [
@@ -71,6 +72,7 @@ const DEFAULT_CONFIG = {
       'kubernetes',
       'promptSafety',
       'deadCode',
+      'secretRotation',
       'fakeFixDetector',
     ],
     full: [
@@ -100,6 +102,7 @@ const DEFAULT_CONFIG = {
       'kubernetes',
       'promptSafety',
       'deadCode',
+      'secretRotation',
       'mutation',
       'python',
       'go',
@@ -146,6 +149,7 @@ const DEFAULT_CONFIG = {
       'kubernetes',
       'promptSafety',
       'deadCode',
+      'secretRotation',
       'liveCrawler',
       'explorer',
       'chaos',
