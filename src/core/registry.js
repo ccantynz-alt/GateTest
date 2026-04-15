@@ -66,6 +66,7 @@ const BUILT_IN_MODULES = {
   openapiDrift: '../modules/openapi-drift.js',
   prSize: '../modules/pr-size.js',
   redos: '../modules/redos.js',
+  cronExpression: '../modules/cron-expression.js',
 };
 
 class ModuleRegistry {

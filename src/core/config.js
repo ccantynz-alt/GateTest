@@ -69,6 +69,7 @@ const DEFAULT_CONFIG = {
       'openapiDrift',
       'prSize',
       'redos',
+      'cronExpression',
       'fakeFixDetector',
     ],
     standard: [
@@ -105,6 +106,7 @@ const DEFAULT_CONFIG = {
       'openapiDrift',
       'prSize',
       'redos',
+      'cronExpression',
       'fakeFixDetector',
     ],
     full: [
@@ -151,6 +153,7 @@ const DEFAULT_CONFIG = {
       'openapiDrift',
       'prSize',
       'redos',
+      'cronExpression',
       'mutation',
       'python',
       'go',
@@ -214,6 +217,7 @@ const DEFAULT_CONFIG = {
       'openapiDrift',
       'prSize',
       'redos',
+      'cronExpression',
       'liveCrawler',
       'explorer',
       'chaos',
