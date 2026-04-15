@@ -55,6 +55,7 @@ const DEFAULT_CONFIG = {
       'secretRotation',
       'webHeaders',
       'typescriptStrictness',
+      'flakyTests',
       'fakeFixDetector',
     ],
     standard: [
@@ -77,6 +78,7 @@ const DEFAULT_CONFIG = {
       'secretRotation',
       'webHeaders',
       'typescriptStrictness',
+      'flakyTests',
       'fakeFixDetector',
     ],
     full: [
@@ -109,6 +111,7 @@ const DEFAULT_CONFIG = {
       'secretRotation',
       'webHeaders',
       'typescriptStrictness',
+      'flakyTests',
       'mutation',
       'python',
       'go',
@@ -158,6 +161,7 @@ const DEFAULT_CONFIG = {
       'secretRotation',
       'webHeaders',
       'typescriptStrictness',
+      'flakyTests',
       'liveCrawler',
       'explorer',
       'chaos',

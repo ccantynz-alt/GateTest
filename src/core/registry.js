@@ -52,6 +52,7 @@ const BUILT_IN_MODULES = {
   secretRotation: '../modules/secret-rotation.js',
   webHeaders: '../modules/web-headers.js',
   typescriptStrictness: '../modules/typescript-strictness.js',
+  flakyTests: '../modules/flaky-tests.js',
 };
 
 class ModuleRegistry {
