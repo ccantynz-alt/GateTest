@@ -50,6 +50,7 @@ const BUILT_IN_MODULES = {
   promptSafety: '../modules/prompt-safety.js',
   deadCode: '../modules/dead-code.js',
   secretRotation: '../modules/secret-rotation.js',
+  webHeaders: '../modules/web-headers.js',
 };
 
 class ModuleRegistry {

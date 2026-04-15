@@ -53,6 +53,7 @@ const DEFAULT_CONFIG = {
       'promptSafety',
       'deadCode',
       'secretRotation',
+      'webHeaders',
       'fakeFixDetector',
     ],
     standard: [
@@ -73,6 +74,7 @@ const DEFAULT_CONFIG = {
       'promptSafety',
       'deadCode',
       'secretRotation',
+      'webHeaders',
       'fakeFixDetector',
     ],
     full: [
@@ -103,6 +105,7 @@ const DEFAULT_CONFIG = {
       'promptSafety',
       'deadCode',
       'secretRotation',
+      'webHeaders',
       'mutation',
       'python',
       'go',
@@ -150,6 +153,7 @@ const DEFAULT_CONFIG = {
       'promptSafety',
       'deadCode',
       'secretRotation',
+      'webHeaders',
       'liveCrawler',
       'explorer',
       'chaos',
