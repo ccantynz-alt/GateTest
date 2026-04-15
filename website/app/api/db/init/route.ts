@@ -91,6 +91,18 @@ export async function POST(req: NextRequest) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`;
 
+    await sql`CREATE TABLE IF NOT EXISTS installations (
+      id BIGSERIAL PRIMARY KEY,
+      host TEXT NOT NULL,
+      installation_id TEXT NOT NULL,
+      customer_email TEXT,
+      customer_login TEXT,
+      setup_action TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (host, installation_id)
+    )`;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_session ON scans(session_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_email ON scans(customer_email)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status)`;
@@ -101,11 +113,13 @@ export async function POST(req: NextRequest) {
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_key ON api_calls(api_key_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_created ON api_calls(created_at)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_idem ON api_calls(idempotency_key)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_installations_host_id ON installations(host, installation_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_installations_customer_email ON installations(customer_email)`;
 
     return NextResponse.json({
       ok: true,
-      tables: ["scans", "customers", "api_keys", "api_calls"],
-      indexes: 10,
+      tables: ["scans", "customers", "api_keys", "api_calls", "installations"],
+      indexes: 12,
       message: "Schema initialized (idempotent — safe to run multiple times)",
     });
   } catch (err) {

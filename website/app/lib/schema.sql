@@ -34,8 +34,22 @@ CREATE TABLE IF NOT EXISTS customers (
   total_spent_usd NUMERIC(10,2) DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS installations (
+  id BIGSERIAL PRIMARY KEY,
+  host TEXT NOT NULL,
+  installation_id TEXT NOT NULL,
+  customer_email TEXT,
+  customer_login TEXT,
+  setup_action TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (host, installation_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_scans_session ON scans(session_id);
 CREATE INDEX IF NOT EXISTS idx_scans_email ON scans(customer_email);
 CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status);
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customers_github ON customers(github_login);
+CREATE INDEX IF NOT EXISTS idx_installations_host_id ON installations(host, installation_id);
+CREATE INDEX IF NOT EXISTS idx_installations_customer_email ON installations(customer_email);
