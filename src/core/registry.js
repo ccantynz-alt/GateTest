@@ -69,6 +69,7 @@ const BUILT_IN_MODULES = {
   cronExpression: '../modules/cron-expression.js',
   datetimeBug: '../modules/datetime-bug.js',
   importCycle: '../modules/import-cycle.js',
+  moneyFloat: '../modules/money-float.js',
 };
 
 class ModuleRegistry {

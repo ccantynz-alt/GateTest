@@ -72,6 +72,7 @@ const DEFAULT_CONFIG = {
       'cronExpression',
       'datetimeBug',
       'importCycle',
+      'moneyFloat',
       'fakeFixDetector',
     ],
     standard: [
@@ -111,6 +112,7 @@ const DEFAULT_CONFIG = {
       'cronExpression',
       'datetimeBug',
       'importCycle',
+      'moneyFloat',
       'fakeFixDetector',
     ],
     full: [
@@ -160,6 +162,7 @@ const DEFAULT_CONFIG = {
       'cronExpression',
       'datetimeBug',
       'importCycle',
+      'moneyFloat',
       'mutation',
       'python',
       'go',
@@ -226,6 +229,7 @@ const DEFAULT_CONFIG = {
       'cronExpression',
       'datetimeBug',
       'importCycle',
+      'moneyFloat',
       'liveCrawler',
       'explorer',
       'chaos',
