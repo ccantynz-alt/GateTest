@@ -45,6 +45,7 @@ const BUILT_IN_MODULES = {
   ciSecurity: '../modules/ci-security.js',
   shell: '../modules/shell.js',
   sqlMigrations: '../modules/sql-migrations.js',
+  terraform: '../modules/terraform.js',
 };
 
 class ModuleRegistry {

@@ -48,6 +48,7 @@ const DEFAULT_CONFIG = {
       'dependencies',
       'shell',
       'sqlMigrations',
+      'terraform',
       'fakeFixDetector',
     ],
     standard: [
@@ -63,6 +64,7 @@ const DEFAULT_CONFIG = {
       'ciSecurity',
       'shell',
       'sqlMigrations',
+      'terraform',
       'fakeFixDetector',
     ],
     full: [
@@ -88,6 +90,7 @@ const DEFAULT_CONFIG = {
       'ciSecurity',
       'shell',
       'sqlMigrations',
+      'terraform',
       'mutation',
       'python',
       'go',
@@ -130,6 +133,7 @@ const DEFAULT_CONFIG = {
       'ciSecurity',
       'shell',
       'sqlMigrations',
+      'terraform',
       'liveCrawler',
       'explorer',
       'chaos',
