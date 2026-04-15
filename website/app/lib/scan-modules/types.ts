@@ -48,5 +48,12 @@ export const TIERS: Record<string, string[]> = {
     "aiReview",
     "fakeFixDetector",
     "dependencyFreshness",
+    "maliciousDeps",
+    "licenses",
+    "iacSecurity",
+    "ciHardening",
+    "migrations",
+    "authFlaws",
+    "flakyTests",
   ],
 };

@@ -34,6 +34,11 @@ import {
 } from "./web";
 import { aiReview } from "./ai";
 import { dependencyFreshness } from "./dependencies";
+import { maliciousDeps, licenses } from "./supply-chain";
+import { iacSecurity, ciHardening } from "./iac";
+import { migrations } from "./migrations";
+import { authFlaws } from "./auth-flaws";
+import { flakyTests } from "./flaky-tests";
 
 export type { ModuleRunner, ModuleContext, RepoFile, ModuleOutput } from "./types";
 export { TIERS } from "./types";
@@ -58,6 +63,13 @@ export const MODULES: Record<string, ModuleRunner> = {
   compatibility,
   aiReview,
   dependencyFreshness,
+  maliciousDeps,
+  licenses,
+  iacSecurity,
+  ciHardening,
+  migrations,
+  authFlaws,
+  flakyTests,
 };
 
 export interface ModuleResultEnvelope {

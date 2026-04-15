@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import https from "https";
+import { postGluecronResult } from "@/app/lib/gluecron-callback";
 
 const APP_ID = process.env.GATETEST_APP_ID;
 const WEBHOOK_SECRET = process.env.GATETEST_WEBHOOK_SECRET;
@@ -385,9 +386,11 @@ async function processWebhook(
 
   if (eventType === "push") {
     const sha = event.after as string;
-    const branch = (event.ref as string).replace("refs/heads/", "");
+    const ref = event.ref as string;
+    const branch = ref.replace("refs/heads/", "");
     const owner = repo.owner.login;
     const name = repo.name;
+    const startedAt = Date.now();
 
     // Set pending
     await githubApi("POST", `/repos/${owner}/${name}/statuses/${sha}`, token, {
@@ -406,6 +409,21 @@ async function processWebhook(
         ? `All clear — ${result.checksPassed} checks passed`
         : `${result.issuesFound} issues found`,
     });
+
+    // Fire-and-forget GlueCron callback. Never blocks the user flow.
+    postGluecronResult({
+      repository: `${owner}/${name}`,
+      sha,
+      ref,
+      status: result.passed ? "passed" : "failed",
+      summary: result.passed
+        ? `${result.checksPassed}/${result.checksTotal} checks passed`
+        : `${result.issuesFound} issues across ${result.failures.length} module(s)`,
+      details: { failures: result.failures, checksPassed: result.checksPassed, checksTotal: result.checksTotal },
+      durationMs: Date.now() - startedAt,
+    }).then((r) => {
+      if (!r.ok && !r.skipped) console.error("[GateTest] GlueCron callback failed:", r.error || r.status);
+    });
   } else if (eventType === "pull_request") {
     const action = event.action as string;
     if (!["opened", "synchronize", "reopened"].includes(action)) return;
@@ -416,6 +434,7 @@ async function processWebhook(
     };
     const owner = repo.owner.login;
     const name = repo.name;
+    const startedAt = Date.now();
 
     // Set pending
     await githubApi(
@@ -452,6 +471,22 @@ async function processWebhook(
           : `${result.issuesFound} issues found`,
       }
     );
+
+    // Fire-and-forget GlueCron callback for PR runs.
+    postGluecronResult({
+      repository: `${owner}/${name}`,
+      sha: pr.head.sha,
+      ref: `refs/heads/${pr.head.ref}`,
+      pullRequestNumber: pr.number,
+      status: result.passed ? "passed" : "failed",
+      summary: result.passed
+        ? `${result.checksPassed}/${result.checksTotal} checks passed`
+        : `${result.issuesFound} issues across ${result.failures.length} module(s)`,
+      details: { failures: result.failures, checksPassed: result.checksPassed, checksTotal: result.checksTotal },
+      durationMs: Date.now() - startedAt,
+    }).then((r) => {
+      if (!r.ok && !r.skipped) console.error("[GateTest] GlueCron callback failed:", r.error || r.status);
+    });
   }
 }
 

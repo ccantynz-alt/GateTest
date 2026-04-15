@@ -141,7 +141,7 @@ export default function ApiDocs() {
                   <td className="px-4 py-2 text-xs">no</td>
                   <td className="px-4 py-2 text-xs text-muted">
                     <code className="font-mono">quick</code> (default, 4 modules) or{" "}
-                    <code className="font-mono">full</code> (14 modules). Key must be
+                    <code className="font-mono">full</code> (22 modules). Key must be
                     entitled.
                   </td>
                 </tr>
