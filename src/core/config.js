@@ -62,6 +62,7 @@ const DEFAULT_CONFIG = {
       'raceCondition',
       'resourceLeak',
       'ssrf',
+      'hardcodedUrl',
       'fakeFixDetector',
     ],
     standard: [
@@ -91,6 +92,7 @@ const DEFAULT_CONFIG = {
       'raceCondition',
       'resourceLeak',
       'ssrf',
+      'hardcodedUrl',
       'fakeFixDetector',
     ],
     full: [
@@ -130,6 +132,7 @@ const DEFAULT_CONFIG = {
       'raceCondition',
       'resourceLeak',
       'ssrf',
+      'hardcodedUrl',
       'mutation',
       'python',
       'go',
@@ -186,6 +189,7 @@ const DEFAULT_CONFIG = {
       'raceCondition',
       'resourceLeak',
       'ssrf',
+      'hardcodedUrl',
       'liveCrawler',
       'explorer',
       'chaos',
