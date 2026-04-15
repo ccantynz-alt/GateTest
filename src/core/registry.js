@@ -62,6 +62,7 @@ const BUILT_IN_MODULES = {
   hardcodedUrl: '../modules/hardcoded-url.js',
   envVars: '../modules/env-vars.js',
   asyncIteration: '../modules/async-iteration.js',
+  homoglyph: '../modules/homoglyph.js',
 };
 
 class ModuleRegistry {

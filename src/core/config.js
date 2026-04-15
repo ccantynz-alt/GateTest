@@ -65,6 +65,7 @@ const DEFAULT_CONFIG = {
       'hardcodedUrl',
       'envVars',
       'asyncIteration',
+      'homoglyph',
       'fakeFixDetector',
     ],
     standard: [
@@ -97,6 +98,7 @@ const DEFAULT_CONFIG = {
       'hardcodedUrl',
       'envVars',
       'asyncIteration',
+      'homoglyph',
       'fakeFixDetector',
     ],
     full: [
@@ -139,6 +141,7 @@ const DEFAULT_CONFIG = {
       'hardcodedUrl',
       'envVars',
       'asyncIteration',
+      'homoglyph',
       'mutation',
       'python',
       'go',
@@ -198,6 +201,7 @@ const DEFAULT_CONFIG = {
       'hardcodedUrl',
       'envVars',
       'asyncIteration',
+      'homoglyph',
       'liveCrawler',
       'explorer',
       'chaos',
