@@ -51,6 +51,7 @@ const DEFAULT_CONFIG = {
       'terraform',
       'kubernetes',
       'promptSafety',
+      'deadCode',
       'fakeFixDetector',
     ],
     standard: [
@@ -69,6 +70,7 @@ const DEFAULT_CONFIG = {
       'terraform',
       'kubernetes',
       'promptSafety',
+      'deadCode',
       'fakeFixDetector',
     ],
     full: [
@@ -97,6 +99,7 @@ const DEFAULT_CONFIG = {
       'terraform',
       'kubernetes',
       'promptSafety',
+      'deadCode',
       'mutation',
       'python',
       'go',
@@ -142,6 +145,7 @@ const DEFAULT_CONFIG = {
       'terraform',
       'kubernetes',
       'promptSafety',
+      'deadCode',
       'liveCrawler',
       'explorer',
       'chaos',
