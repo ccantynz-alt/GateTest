@@ -73,6 +73,7 @@ const BUILT_IN_MODULES = {
   logPii: '../modules/log-pii.js',
   featureFlag: '../modules/feature-flag.js',
   tlsSecurity: '../modules/tls-security.js',
+  cookieSecurity: '../modules/cookie-security.js',
 };
 
 class ModuleRegistry {

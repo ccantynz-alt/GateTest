@@ -76,6 +76,7 @@ const DEFAULT_CONFIG = {
       'logPii',
       'featureFlag',
       'tlsSecurity',
+      'cookieSecurity',
       'fakeFixDetector',
     ],
     standard: [
@@ -119,6 +120,7 @@ const DEFAULT_CONFIG = {
       'logPii',
       'featureFlag',
       'tlsSecurity',
+      'cookieSecurity',
       'fakeFixDetector',
     ],
     full: [
@@ -172,6 +174,7 @@ const DEFAULT_CONFIG = {
       'logPii',
       'featureFlag',
       'tlsSecurity',
+      'cookieSecurity',
       'mutation',
       'python',
       'go',
@@ -242,6 +245,7 @@ const DEFAULT_CONFIG = {
       'logPii',
       'featureFlag',
       'tlsSecurity',
+      'cookieSecurity',
       'liveCrawler',
       'explorer',
       'chaos',
