@@ -54,6 +54,7 @@ const DEFAULT_CONFIG = {
       'deadCode',
       'secretRotation',
       'webHeaders',
+      'typescriptStrictness',
       'fakeFixDetector',
     ],
     standard: [
@@ -75,6 +76,7 @@ const DEFAULT_CONFIG = {
       'deadCode',
       'secretRotation',
       'webHeaders',
+      'typescriptStrictness',
       'fakeFixDetector',
     ],
     full: [
@@ -106,6 +108,7 @@ const DEFAULT_CONFIG = {
       'deadCode',
       'secretRotation',
       'webHeaders',
+      'typescriptStrictness',
       'mutation',
       'python',
       'go',
@@ -154,6 +157,7 @@ const DEFAULT_CONFIG = {
       'deadCode',
       'secretRotation',
       'webHeaders',
+      'typescriptStrictness',
       'liveCrawler',
       'explorer',
       'chaos',

@@ -51,6 +51,7 @@ const BUILT_IN_MODULES = {
   deadCode: '../modules/dead-code.js',
   secretRotation: '../modules/secret-rotation.js',
   webHeaders: '../modules/web-headers.js',
+  typescriptStrictness: '../modules/typescript-strictness.js',
 };
 
 class ModuleRegistry {
