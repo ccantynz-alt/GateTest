@@ -103,6 +103,27 @@ export async function POST(req: NextRequest) {
       UNIQUE (host, installation_id)
     )`;
 
+    // Signal Bus E1 — scan_queue backs the async push-event pipeline from
+    // Gluecron. Rows are INSERTed by /api/events/push and claimed by the
+    // cron-driven consumer at /api/scan/worker/tick. event_id is the
+    // caller-supplied idempotency key.
+    await sql`CREATE TABLE IF NOT EXISTS scan_queue (
+      id BIGSERIAL PRIMARY KEY,
+      event_id TEXT UNIQUE NOT NULL,
+      repository TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      ref TEXT,
+      pull_request_number INT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      attempts INT NOT NULL DEFAULT 0,
+      last_error TEXT,
+      result_json JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
+      next_run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_session ON scans(session_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_email ON scans(customer_email)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status)`;
@@ -115,11 +136,13 @@ export async function POST(req: NextRequest) {
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_idem ON api_calls(idempotency_key)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_installations_host_id ON installations(host, installation_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_installations_customer_email ON installations(customer_email)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_ready ON scan_queue (status, next_run_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_repo_sha ON scan_queue (repository, sha)`;
 
     return NextResponse.json({
       ok: true,
-      tables: ["scans", "customers", "api_keys", "api_calls", "installations"],
-      indexes: 12,
+      tables: ["scans", "customers", "api_keys", "api_calls", "installations", "scan_queue"],
+      indexes: 14,
       message: "Schema initialized (idempotent — safe to run multiple times)",
     });
   } catch (err) {
