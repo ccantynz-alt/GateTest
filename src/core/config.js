@@ -63,6 +63,7 @@ const DEFAULT_CONFIG = {
       'resourceLeak',
       'ssrf',
       'hardcodedUrl',
+      'envVars',
       'fakeFixDetector',
     ],
     standard: [
@@ -93,6 +94,7 @@ const DEFAULT_CONFIG = {
       'resourceLeak',
       'ssrf',
       'hardcodedUrl',
+      'envVars',
       'fakeFixDetector',
     ],
     full: [
@@ -133,6 +135,7 @@ const DEFAULT_CONFIG = {
       'resourceLeak',
       'ssrf',
       'hardcodedUrl',
+      'envVars',
       'mutation',
       'python',
       'go',
@@ -190,6 +193,7 @@ const DEFAULT_CONFIG = {
       'resourceLeak',
       'ssrf',
       'hardcodedUrl',
+      'envVars',
       'liveCrawler',
       'explorer',
       'chaos',

@@ -60,6 +60,7 @@ const BUILT_IN_MODULES = {
   resourceLeak: '../modules/resource-leak.js',
   ssrf: '../modules/ssrf.js',
   hardcodedUrl: '../modules/hardcoded-url.js',
+  envVars: '../modules/env-vars.js',
 };
 
 class ModuleRegistry {
