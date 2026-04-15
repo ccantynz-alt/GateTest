@@ -70,6 +70,7 @@ const DEFAULT_CONFIG = {
       'prSize',
       'redos',
       'cronExpression',
+      'datetimeBug',
       'fakeFixDetector',
     ],
     standard: [
@@ -107,6 +108,7 @@ const DEFAULT_CONFIG = {
       'prSize',
       'redos',
       'cronExpression',
+      'datetimeBug',
       'fakeFixDetector',
     ],
     full: [
@@ -154,6 +156,7 @@ const DEFAULT_CONFIG = {
       'prSize',
       'redos',
       'cronExpression',
+      'datetimeBug',
       'mutation',
       'python',
       'go',
@@ -218,6 +221,7 @@ const DEFAULT_CONFIG = {
       'prSize',
       'redos',
       'cronExpression',
+      'datetimeBug',
       'liveCrawler',
       'explorer',
       'chaos',

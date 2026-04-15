@@ -67,6 +67,7 @@ const BUILT_IN_MODULES = {
   prSize: '../modules/pr-size.js',
   redos: '../modules/redos.js',
   cronExpression: '../modules/cron-expression.js',
+  datetimeBug: '../modules/datetime-bug.js',
 };
 
 class ModuleRegistry {
