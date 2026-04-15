@@ -58,6 +58,7 @@ const DEFAULT_CONFIG = {
       'flakyTests',
       'errorSwallow',
       'nPlusOne',
+      'retryHygiene',
       'fakeFixDetector',
     ],
     standard: [
@@ -83,6 +84,7 @@ const DEFAULT_CONFIG = {
       'flakyTests',
       'errorSwallow',
       'nPlusOne',
+      'retryHygiene',
       'fakeFixDetector',
     ],
     full: [
@@ -118,6 +120,7 @@ const DEFAULT_CONFIG = {
       'flakyTests',
       'errorSwallow',
       'nPlusOne',
+      'retryHygiene',
       'mutation',
       'python',
       'go',
@@ -170,6 +173,7 @@ const DEFAULT_CONFIG = {
       'flakyTests',
       'errorSwallow',
       'nPlusOne',
+      'retryHygiene',
       'liveCrawler',
       'explorer',
       'chaos',

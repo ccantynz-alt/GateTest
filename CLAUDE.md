@@ -112,9 +112,9 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 48 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 49 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 48 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 49 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -202,7 +202,7 @@ BaseModule (abstract)
 
 - [ ] All 200+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 48 modules load (`node bin/gatetest.js --list`)
+- [ ] All 49 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
@@ -261,7 +261,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 48 modules listed in README and CLI help
+- [ ] All 49 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -353,7 +353,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 48 modules load
+3. `node bin/gatetest.js --list` — all 49 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -413,6 +413,7 @@ When something breaks:
 | eslint-plugin-jest-no-focused-tests / eslint-plugin-jest-no-disabled-tests / flaky-test retry plugins | `gatetest --module flakyTests` |
 | eslint `no-empty` / `no-floating-promises` / `handle-callback-err` (fragmented across ESLint rules) | `gatetest --module errorSwallow` |
 | New Relic / Datadog runtime N+1 profiling + prisma-lint-find-many (per-ORM, one-at-a-time) | `gatetest --module nPlusOne` |
+| (no direct equivalent — nobody statically scans for retry-backoff / retry-jitter / unbounded retry loops) | `gatetest --module retryHygiene` |
 | Lighthouse | `gatetest --module performance` |
 | axe/pa11y | `gatetest --module accessibility` |
 | Percy/Chromatic | `gatetest --module visual` |
@@ -426,8 +427,8 @@ Plus 12 more modules they don't have: AI code review, **fake-fix detector (catch
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 48 modules |
-| Scan + Fix | $199 | 48 modules + auto-fix PR |
+| Full Scan | $99 | All 49 modules |
+| Scan + Fix | $199 | 49 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -444,7 +445,7 @@ GateTest/
 ├── src/
 │   ├── index.js            ← Main library entry
 │   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
-│   ├── modules/            ← 48 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector + 1 error-swallow detector + 1 N+1 query detector)
+│   ├── modules/            ← 49 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector + 1 error-swallow detector + 1 N+1 query detector + 1 retry-hygiene scanner)
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
@@ -501,6 +502,7 @@ GateTest/
 | `src/modules/flaky-tests.js` | Flaky-test detector — scans `*.test.*` / `*.spec.*` and files under `tests/`, `__tests__/`, `spec/`. Flags committed `.only` / `fit` / `fdescribe` (error), `.skip` / `xit` / `xtest` (warning, string-aware so diff-fixtures don't false-positive), `.todo` with no issue link (info), `Math.random()` (warning), `Date.now()` / `new Date()` with no `useFakeTimers` in the file (warning), real `fetch`/`axios`/`http.request` calls with no `nock`/`msw`/`vi.mock` (warning), `setTimeout`/`setInterval` without fake timers (warning), `process.env.X = ...` without a matching `afterEach` restore or `delete` (warning), test titles containing "flaky"/"intermittent"/"sometimes" (warning) | Adding new test-framework shapes or mock libraries |
 | `src/modules/error-swallow.js` | Error-swallow detector — walks `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts`. Flags empty `catch {}` blocks (error / warning in tests), catch blocks that only `console.log`/`logger.error` without re-throwing or calling `next(err)` (error), `.catch(() => {})` / `.catch(() => null)` / `.catch(noop)` (error), `process.on('uncaughtException' | 'unhandledRejection')` handlers that neither re-throw nor `process.exit` (warning), Node-callback `(err, ...) => {}` whose body never references `err` (warning), fire-and-forget statement-level calls to promise-returning methods (`.save()`, `.commit()`, `.send()`, `.fetch()`, etc.) with no `await` / `.then(...)` / `.catch(...)` (warning, skipped in test files) | Adding new promise-returning method names or swallow patterns |
 | `src/modules/n-plus-one.js` | N+1 query detector — ORM-agnostic, line-heuristic. Builds a loop-range map (string-aware brace + paren matching) for block-form `for`/`while`/`do` and callback-form `.map`/`.forEach`/`.filter`/`.reduce`/`.some`/`.every`/`.flatMap`. Inside each loop body, looks for `await` (or `.then(`) + a query-shaped call across Prisma (`prisma.<model>.find*/create/update/delete/upsert/count/aggregate/groupBy`, `$queryRaw`), Sequelize (`Model.findOne/findAll/findByPk/...`, `sequelize.query`), TypeORM (`.manager.save/find/...`, `getRepository`, `repo.findOne/findOneBy/...`), Mongoose (`Model.findOne/find/create/updateOne/...`), Knex (`knex(...)`, `db('t').where/select/first`), node-pg/MySQL (`client.query`, `pool.execute`, `db.query`), Drizzle (`db.select().from(...)`). Recognises `await Promise.all(arr.map(async () => ...))` as batched-ok and emits info instead of error | Adding new ORM shapes or loop openers |
+| `src/modules/retry-hygiene.js` | Retry-hygiene scanner — finds retry-shaped loops (`while (...)` / `for (...)` bodies that contain an HTTP call or a literal sleep) across `fetch`/`axios`/`got`/`node-http`/`needle`/`superagent`. Flags `while (true)` / `for (;;)` without a `break` or max-attempts marker (error: unbounded-loop), literal `setTimeout`/`sleep`/`delay`/`new Promise(..setTimeout)` with no `attempt`-based multiplier (warning: no-backoff), literal sleeps with no `Math.random()`/`crypto.randomInt()` jitter (warning: no-jitter), retry blocks referencing 4xx status without a `throw`/`return`/`break` bail-out guard (warning: retry-on-4xx). Recognises `async-retry`/`p-retry`/`retry`/`cockatiel`/`opossum` as library-backed retry and emits info-level `library-ok` | Adding new HTTP clients, retry libraries, or sleep primitives |
 | `src/core/host-bridge.js` | Abstract `HostBridge` base, bridge registry (`createBridge`/`registerBridge`), canonical commit-status vocabulary, shared PR/MR markdown formatter | Before adding a new host integration or touching cross-host logic |
 | `src/core/github-bridge.js` | Concrete `GitHubBridge` extending `HostBridge` — GitHub-specific REST calls, circuit breaker, retry, JWT auth | Anything GitHub-specific; prefer `HostBridge` for cross-host work |
 | `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
@@ -562,7 +564,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 48 modules load — `node bin/gatetest.js --list`
+3. Verify all 49 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -596,7 +598,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.21.0 — 48 modules (24 core + 9 universal language checkers
+GateTest v1.22.0 — 49 modules (24 core + 9 universal language checkers
 for Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift + 7 **infra
 & supply-chain hardening scanners** — dependencies (npm/pip/Pipenv/
 Poetry/go.mod/Cargo/Bundler/Composer/Maven/Gradle), Dockerfile,
@@ -631,7 +633,16 @@ MySQL2, and generic `db`/`orm`/`repo` shapes; understands block-form
 (`for`/`while`/`for..of`/`for..in`) and callback-form (`.map`/
 `.forEach`/`.filter`/`.reduce`) loops; recognises the
 `await Promise.all(arr.map(async () => await db.query(...)))`
-batched-parallel fix shape and records it as info rather than error,
+batched-parallel fix shape and records it as info rather than error
++ 1 **retry-hygiene scanner** — tight retry loops, no backoff,
+unbounded retry across `fetch`/`axios`/`got`/`node-http`/`superagent`.
+Flags `while (true)` / `for (;;)` with an HTTP call and no
+`break`/max-attempts marker (error), constant literal sleeps with no
+`attempt`-based multiplier (warning: no-backoff), constant sleeps
+with no `Math.random()` jitter (warning: no-jitter), and retry
+blocks that reference 4xx status without a `throw`/`return`/`break`
+guard (warning: retry-on-4xx). Recognises `async-retry` / `p-retry` /
+`retry` library use as info-level library-ok,
 5 reporters,
 AI code review (memory-enriched, fix-pattern-aware), agentic
 exploration, codebase memory (compounding moat: issue history +
@@ -644,4 +655,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-23
+Date last updated: 2026-04-24

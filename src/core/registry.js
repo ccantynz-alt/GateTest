@@ -55,6 +55,7 @@ const BUILT_IN_MODULES = {
   flakyTests: '../modules/flaky-tests.js',
   errorSwallow: '../modules/error-swallow.js',
   nPlusOne: '../modules/n-plus-one.js',
+  retryHygiene: '../modules/retry-hygiene.js',
 };
 
 class ModuleRegistry {
