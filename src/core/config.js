@@ -46,6 +46,7 @@ const DEFAULT_CONFIG = {
       'secrets',
       'codeQuality',
       'dependencies',
+      'shell',
       'fakeFixDetector',
     ],
     standard: [
@@ -59,6 +60,7 @@ const DEFAULT_CONFIG = {
       'dependencies',
       'dockerfile',
       'ciSecurity',
+      'shell',
       'fakeFixDetector',
     ],
     full: [
@@ -82,6 +84,7 @@ const DEFAULT_CONFIG = {
       'dependencies',
       'dockerfile',
       'ciSecurity',
+      'shell',
       'mutation',
       'python',
       'go',
@@ -122,6 +125,7 @@ const DEFAULT_CONFIG = {
       'dependencies',
       'dockerfile',
       'ciSecurity',
+      'shell',
       'liveCrawler',
       'explorer',
       'chaos',

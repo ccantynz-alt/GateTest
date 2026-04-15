@@ -43,6 +43,7 @@ const BUILT_IN_MODULES = {
   dependencies: '../modules/dependencies.js',
   dockerfile: '../modules/dockerfile.js',
   ciSecurity: '../modules/ci-security.js',
+  shell: '../modules/shell.js',
 };
 
 class ModuleRegistry {
