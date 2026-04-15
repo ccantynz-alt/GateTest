@@ -46,6 +46,7 @@ const BUILT_IN_MODULES = {
   shell: '../modules/shell.js',
   sqlMigrations: '../modules/sql-migrations.js',
   terraform: '../modules/terraform.js',
+  kubernetes: '../modules/kubernetes.js',
 };
 
 class ModuleRegistry {
