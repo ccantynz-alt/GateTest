@@ -56,6 +56,7 @@ const BUILT_IN_MODULES = {
   errorSwallow: '../modules/error-swallow.js',
   nPlusOne: '../modules/n-plus-one.js',
   retryHygiene: '../modules/retry-hygiene.js',
+  raceCondition: '../modules/race-condition.js',
 };
 
 class ModuleRegistry {

@@ -59,6 +59,7 @@ const DEFAULT_CONFIG = {
       'errorSwallow',
       'nPlusOne',
       'retryHygiene',
+      'raceCondition',
       'fakeFixDetector',
     ],
     standard: [
@@ -85,6 +86,7 @@ const DEFAULT_CONFIG = {
       'errorSwallow',
       'nPlusOne',
       'retryHygiene',
+      'raceCondition',
       'fakeFixDetector',
     ],
     full: [
@@ -121,6 +123,7 @@ const DEFAULT_CONFIG = {
       'errorSwallow',
       'nPlusOne',
       'retryHygiene',
+      'raceCondition',
       'mutation',
       'python',
       'go',
@@ -174,6 +177,7 @@ const DEFAULT_CONFIG = {
       'errorSwallow',
       'nPlusOne',
       'retryHygiene',
+      'raceCondition',
       'liveCrawler',
       'explorer',
       'chaos',
