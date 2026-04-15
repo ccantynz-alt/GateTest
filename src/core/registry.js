@@ -63,6 +63,7 @@ const BUILT_IN_MODULES = {
   envVars: '../modules/env-vars.js',
   asyncIteration: '../modules/async-iteration.js',
   homoglyph: '../modules/homoglyph.js',
+  openapiDrift: '../modules/openapi-drift.js',
 };
 
 class ModuleRegistry {

@@ -66,6 +66,7 @@ const DEFAULT_CONFIG = {
       'envVars',
       'asyncIteration',
       'homoglyph',
+      'openapiDrift',
       'fakeFixDetector',
     ],
     standard: [
@@ -99,6 +100,7 @@ const DEFAULT_CONFIG = {
       'envVars',
       'asyncIteration',
       'homoglyph',
+      'openapiDrift',
       'fakeFixDetector',
     ],
     full: [
@@ -142,6 +144,7 @@ const DEFAULT_CONFIG = {
       'envVars',
       'asyncIteration',
       'homoglyph',
+      'openapiDrift',
       'mutation',
       'python',
       'go',
@@ -202,6 +205,7 @@ const DEFAULT_CONFIG = {
       'envVars',
       'asyncIteration',
       'homoglyph',
+      'openapiDrift',
       'liveCrawler',
       'explorer',
       'chaos',
