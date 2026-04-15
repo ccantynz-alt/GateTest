@@ -271,9 +271,17 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               Signed in as <span className="font-mono">{adminLogin}</span>
             </p>
           </div>
-          <a href="/" className="text-sm text-muted hover:text-foreground">
-            &larr; Back to site
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href="/admin/health"
+              className="text-sm px-3 py-1.5 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors font-medium"
+            >
+              Run Self-Test
+            </a>
+            <a href="/" className="text-sm text-muted hover:text-foreground">
+              &larr; Back to site
+            </a>
+          </div>
         </div>
 
         {/* Stats bar */}

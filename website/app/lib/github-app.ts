@@ -73,10 +73,63 @@ export async function githubApi(
 
 // ── JWT / Installation Token ─────────────────────────
 
-function getPrivateKey(): string {
-  const key = process.env.GATETEST_PRIVATE_KEY || "";
-  if (key.includes("BEGIN")) return key;
-  return key.replace(/\\n/g, "\n");
+/**
+ * Load the GitHub App private key from env, handling every format we've seen:
+ *   - Raw PEM with real newlines (best)
+ *   - PEM with literal "\n" escapes (pasted through a form)
+ *   - PEM wrapped in single or double quotes
+ *   - Windows \r\n line endings
+ *   - Base64-encoded PEM (no BEGIN marker until decoded)
+ *
+ * Returns a canonical PEM string that crypto.createPrivateKey() will accept.
+ * Throws a descriptive error if the key is missing or malformed.
+ */
+export function getPrivateKey(): string {
+  let key = process.env.GATETEST_PRIVATE_KEY || "";
+  if (!key) throw new Error("GATETEST_PRIVATE_KEY is not set");
+
+  // Strip wrapping quotes (single or double) that env-var tooling sometimes adds.
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+
+  // Convert any literal "\n" sequences to real newlines. Safe to run even if
+  // the key already has real newlines — those aren't preceded by a backslash.
+  key = key.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
+
+  // Normalise Windows line endings.
+  key = key.replace(/\r\n/g, "\n");
+
+  // If it's base64 (no BEGIN marker) try a one-shot decode.
+  if (!key.includes("BEGIN")) {
+    try {
+      const decoded = Buffer.from(key, "base64").toString("utf-8");
+      if (decoded.includes("BEGIN")) key = decoded;
+    } catch {
+      // fall through — we'll fail with a clearer error below
+    }
+  }
+
+  if (!key.includes("BEGIN") || !key.includes("END")) {
+    throw new Error(
+      "GATETEST_PRIVATE_KEY does not look like a PEM key (no BEGIN/END markers). " +
+        "Paste the full .pem contents including the BEGIN/END lines."
+    );
+  }
+
+  // Validate by parsing. This turns OpenSSL's opaque "DECODER routines::unsupported"
+  // into a clearer error surface for callers.
+  try {
+    crypto.createPrivateKey({ key, format: "pem" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `GATETEST_PRIVATE_KEY is not a valid PEM (${msg}). ` +
+        "Re-paste the .pem from GitHub — make sure newlines are preserved."
+    );
+  }
+
+  return key;
 }
 
 function base64url(data: Buffer | string): string {
@@ -85,12 +138,14 @@ function base64url(data: Buffer | string): string {
 }
 
 export function createAppJwt(): string {
+  if (!GATETEST_APP_ID) throw new Error("GATETEST_APP_ID is not set");
+  const privateKey = crypto.createPrivateKey({ key: getPrivateKey(), format: "pem" });
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64url(
     JSON.stringify({ iat: now - 60, exp: now + 10 * 60, iss: GATETEST_APP_ID })
   );
-  const signature = crypto.sign("sha256", Buffer.from(`${header}.${payload}`), getPrivateKey());
+  const signature = crypto.sign("sha256", Buffer.from(`${header}.${payload}`), privateKey);
   return `${header}.${payload}.${base64url(signature)}`;
 }
 
@@ -148,10 +203,14 @@ export async function resolveGithubToken(
     const token = await getInstallationToken(installationId);
     return { token, source: "app" };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    const hint = /DECODER routines/i.test(msg)
+      ? " (private key format rejected — re-paste GATETEST_PRIVATE_KEY as a PEM, preserving newlines)"
+      : "";
     return {
       token: null,
       source: null,
-      error: `GitHub App auth failed: ${err instanceof Error ? err.message : "unknown"}`,
+      error: `GitHub App auth failed: ${msg}${hint}`,
     };
   }
 }
