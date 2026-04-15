@@ -64,6 +64,7 @@ const DEFAULT_CONFIG = {
       'ssrf',
       'hardcodedUrl',
       'envVars',
+      'asyncIteration',
       'fakeFixDetector',
     ],
     standard: [
@@ -95,6 +96,7 @@ const DEFAULT_CONFIG = {
       'ssrf',
       'hardcodedUrl',
       'envVars',
+      'asyncIteration',
       'fakeFixDetector',
     ],
     full: [
@@ -136,6 +138,7 @@ const DEFAULT_CONFIG = {
       'ssrf',
       'hardcodedUrl',
       'envVars',
+      'asyncIteration',
       'mutation',
       'python',
       'go',
@@ -194,6 +197,7 @@ const DEFAULT_CONFIG = {
       'ssrf',
       'hardcodedUrl',
       'envVars',
+      'asyncIteration',
       'liveCrawler',
       'explorer',
       'chaos',

@@ -61,6 +61,7 @@ const BUILT_IN_MODULES = {
   ssrf: '../modules/ssrf.js',
   hardcodedUrl: '../modules/hardcoded-url.js',
   envVars: '../modules/env-vars.js',
+  asyncIteration: '../modules/async-iteration.js',
 };
 
 class ModuleRegistry {
