@@ -112,9 +112,9 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 46 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 47 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 46 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 47 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -202,7 +202,7 @@ BaseModule (abstract)
 
 - [ ] All 200+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 46 modules load (`node bin/gatetest.js --list`)
+- [ ] All 47 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
@@ -261,7 +261,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 46 modules listed in README and CLI help
+- [ ] All 47 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -353,7 +353,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 46 modules load
+3. `node bin/gatetest.js --list` — all 47 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -411,6 +411,7 @@ When something breaks:
 | securityheaders.com / Mozilla Observatory / helmet | `gatetest --module webHeaders` |
 | type-coverage / `@typescript-eslint/no-explicit-any` / `tsc --noEmit` strictness audits | `gatetest --module typescriptStrictness` |
 | eslint-plugin-jest-no-focused-tests / eslint-plugin-jest-no-disabled-tests / flaky-test retry plugins | `gatetest --module flakyTests` |
+| eslint `no-empty` / `no-floating-promises` / `handle-callback-err` (fragmented across ESLint rules) | `gatetest --module errorSwallow` |
 | Lighthouse | `gatetest --module performance` |
 | axe/pa11y | `gatetest --module accessibility` |
 | Percy/Chromatic | `gatetest --module visual` |
@@ -424,8 +425,8 @@ Plus 12 more modules they don't have: AI code review, **fake-fix detector (catch
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 46 modules |
-| Scan + Fix | $199 | 46 modules + auto-fix PR |
+| Full Scan | $99 | All 47 modules |
+| Scan + Fix | $199 | 47 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -442,7 +443,7 @@ GateTest/
 ├── src/
 │   ├── index.js            ← Main library entry
 │   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
-│   ├── modules/            ← 46 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector)
+│   ├── modules/            ← 47 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector + 1 error-swallow detector)
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
@@ -497,6 +498,7 @@ GateTest/
 | `src/modules/web-headers.js` | Web headers + CORS — reads next.config.{js,mjs,ts}, vercel.json, netlify.toml, _headers, nginx.conf, and Express/Fastify source. Flags CSP `unsafe-eval` (error) / `unsafe-inline` (warning), wildcard CORS origin + credentials:true (error), HSTS max-age below 180 days, missing CSP / HSTS / X-Frame-Options (or CSP frame-ancestors) / X-Content-Type-Options | Adding server-side header APIs or deploy targets |
 | `src/modules/typescript-strictness.js` | TypeScript strictness — walks `tsconfig.json` / `tsconfig.*.json` (JSONC-aware, string-safe comment stripper), flags `strict: false` (error), `noImplicitAny: false` (error), `skipLibCheck: true` / `strictNullChecks: false` / `strictFunctionTypes: false` (warning); scans `.ts`/`.tsx`/`.mts`/`.cts` sources for `@ts-nocheck` (error), unreasoned `@ts-ignore` / `@ts-expect-error` (warning), exported signatures with `: any`, and `as any` casts. `*.test.ts`/`*.spec.ts` and `*.d.ts` are allowed to use `any`; `tsconfig.test.json` is allowed to relax strictness | Adding new suppression directives or tsconfig flags |
 | `src/modules/flaky-tests.js` | Flaky-test detector — scans `*.test.*` / `*.spec.*` and files under `tests/`, `__tests__/`, `spec/`. Flags committed `.only` / `fit` / `fdescribe` (error), `.skip` / `xit` / `xtest` (warning, string-aware so diff-fixtures don't false-positive), `.todo` with no issue link (info), `Math.random()` (warning), `Date.now()` / `new Date()` with no `useFakeTimers` in the file (warning), real `fetch`/`axios`/`http.request` calls with no `nock`/`msw`/`vi.mock` (warning), `setTimeout`/`setInterval` without fake timers (warning), `process.env.X = ...` without a matching `afterEach` restore or `delete` (warning), test titles containing "flaky"/"intermittent"/"sometimes" (warning) | Adding new test-framework shapes or mock libraries |
+| `src/modules/error-swallow.js` | Error-swallow detector — walks `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts`. Flags empty `catch {}` blocks (error / warning in tests), catch blocks that only `console.log`/`logger.error` without re-throwing or calling `next(err)` (error), `.catch(() => {})` / `.catch(() => null)` / `.catch(noop)` (error), `process.on('uncaughtException' | 'unhandledRejection')` handlers that neither re-throw nor `process.exit` (warning), Node-callback `(err, ...) => {}` whose body never references `err` (warning), fire-and-forget statement-level calls to promise-returning methods (`.save()`, `.commit()`, `.send()`, `.fetch()`, etc.) with no `await` / `.then(...)` / `.catch(...)` (warning, skipped in test files) | Adding new promise-returning method names or swallow patterns |
 | `src/core/host-bridge.js` | Abstract `HostBridge` base, bridge registry (`createBridge`/`registerBridge`), canonical commit-status vocabulary, shared PR/MR markdown formatter | Before adding a new host integration or touching cross-host logic |
 | `src/core/github-bridge.js` | Concrete `GitHubBridge` extending `HostBridge` — GitHub-specific REST calls, circuit breaker, retry, JWT auth | Anything GitHub-specific; prefer `HostBridge` for cross-host work |
 | `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
@@ -558,7 +560,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 46 modules load — `node bin/gatetest.js --list`
+3. Verify all 47 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -592,7 +594,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.19.0 — 46 modules (24 core + 9 universal language checkers
+GateTest v1.20.0 — 47 modules (24 core + 9 universal language checkers
 for Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift + 7 **infra
 & supply-chain hardening scanners** — dependencies (npm/pip/Pipenv/
 Poetry/go.mod/Cargo/Bundler/Composer/Maven/Gradle), Dockerfile,
@@ -615,7 +617,12 @@ Netlify, nginx, Express/Fastify + 1 **TypeScript-strictness scanner**
 unseeded `Math.random()`, real-clock `Date.now()` without fake timers,
 real-HTTP `fetch`/`axios` calls without mock harness, `setTimeout`/
 `setInterval` without fake timers, unrestored `process.env` mutations,
-and self-admitted flaky titles ("sometimes", "intermittent", "flaky")),
+and self-admitted flaky titles ("sometimes", "intermittent", "flaky")
++ 1 **error-swallow detector** — empty `catch {}` blocks, log-and-eat
+catches that don't re-throw, `.catch(() => {})` / `.catch(noop)` on
+Promise chains, silent `process.on('uncaughtException')` handlers,
+Node-callback `(err, ...) =>` that ignores `err`, and fire-and-forget
+calls to `.save()`/`.commit()`/`.send()`/etc. without await or .catch),
 5 reporters,
 AI code review (memory-enriched, fix-pattern-aware), agentic
 exploration, codebase memory (compounding moat: issue history +
@@ -628,4 +635,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-21
+Date last updated: 2026-04-22

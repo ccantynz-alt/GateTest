@@ -56,6 +56,7 @@ const DEFAULT_CONFIG = {
       'webHeaders',
       'typescriptStrictness',
       'flakyTests',
+      'errorSwallow',
       'fakeFixDetector',
     ],
     standard: [
@@ -79,6 +80,7 @@ const DEFAULT_CONFIG = {
       'webHeaders',
       'typescriptStrictness',
       'flakyTests',
+      'errorSwallow',
       'fakeFixDetector',
     ],
     full: [
@@ -112,6 +114,7 @@ const DEFAULT_CONFIG = {
       'webHeaders',
       'typescriptStrictness',
       'flakyTests',
+      'errorSwallow',
       'mutation',
       'python',
       'go',
@@ -162,6 +165,7 @@ const DEFAULT_CONFIG = {
       'webHeaders',
       'typescriptStrictness',
       'flakyTests',
+      'errorSwallow',
       'liveCrawler',
       'explorer',
       'chaos',
