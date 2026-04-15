@@ -1,0 +1,353 @@
+// ============================================================================
+// SCAN-WORKER-TICK TEST — Coverage for website/app/lib/scan-worker.js
+// ============================================================================
+// Verifies the pure helpers behind /api/scan/worker/tick. The route is a thin
+// wrapper that injects real getDb() + runScan() + sendGluecronCallback() into
+// runWorkerTick; this test exercises the orchestration with doubles.
+//
+// Covered paths:
+//   - isAuthorisedTick: admin short-circuit, cron-secret match, mismatch,
+//     missing-secret-lenient mode
+//   - runWorkerTick: idle case (no job), success + callback, scan failure
+//     + retry, dead-letter + error callback, reclaimStuck fires first
+// ============================================================================
+
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const path = require('path');
+
+const {
+  isAuthorisedTick,
+  runWorkerTick,
+} = require(path.resolve(
+  __dirname,
+  '..',
+  'website',
+  'app',
+  'lib',
+  'scan-worker.js'
+));
+
+const { MAX_ATTEMPTS } = require(path.resolve(
+  __dirname,
+  '..',
+  'website',
+  'app',
+  'lib',
+  'scan-queue-store.js'
+));
+
+// ---------------------------------------------------------------------------
+// Doubles
+// ---------------------------------------------------------------------------
+
+function makeQueueStore({
+  reclaimCount = 0,
+  reclaimThrows = null,
+  nextJob = null,
+  claimThrows = null,
+} = {}) {
+  const calls = {
+    reclaimStuck: 0,
+    claimNextJob: 0,
+    markDone: [],
+    markFailed: [],
+  };
+  return {
+    calls,
+    reclaimStuck: async () => {
+      calls.reclaimStuck++;
+      if (reclaimThrows) throw reclaimThrows;
+      return reclaimCount;
+    },
+    claimNextJob: async () => {
+      calls.claimNextJob++;
+      if (claimThrows) throw claimThrows;
+      return nextJob;
+    },
+    markDone: async (id, result, _sql) => {
+      calls.markDone.push({ id, result });
+    },
+    markFailed: async (id, err, willRetry, _sql) => {
+      calls.markFailed.push({ id, err: String(err), willRetry });
+    },
+  };
+}
+
+function makeScanResult(overrides = {}) {
+  return {
+    status: 'complete',
+    modules: [{ name: 'lint', status: 'passed', checks: 10, issues: 0, duration: 100 }],
+    totalModules: 1,
+    completedModules: 1,
+    totalIssues: 0,
+    totalFixed: 0,
+    duration: 1234,
+    ...overrides,
+  };
+}
+
+function makeJob(overrides = {}) {
+  return {
+    id: 42,
+    event_id: 'evt-1',
+    repository: 'alice/webapp',
+    sha: 'a'.repeat(40),
+    ref: 'refs/heads/main',
+    pull_request_number: null,
+    attempts: 1,
+    ...overrides,
+  };
+}
+
+const SQL = () => []; // never actually invoked — queueStore is doubled
+
+// ---------------------------------------------------------------------------
+// isAuthorisedTick
+// ---------------------------------------------------------------------------
+
+describe('isAuthorisedTick', () => {
+  it('returns true when isAdmin is true', () => {
+    assert.strictEqual(
+      isAuthorisedTick({ cronHeader: null, isAdmin: true, env: { CRON_SECRET: 'x' } }),
+      true
+    );
+  });
+
+  it('returns true when cron header matches CRON_SECRET', () => {
+    assert.strictEqual(
+      isAuthorisedTick({
+        cronHeader: 'my-cron-secret',
+        isAdmin: false,
+        env: { CRON_SECRET: 'my-cron-secret' },
+      }),
+      true
+    );
+  });
+
+  it('returns false when cron header does not match', () => {
+    assert.strictEqual(
+      isAuthorisedTick({
+        cronHeader: 'wrong',
+        isAdmin: false,
+        env: { CRON_SECRET: 'right' },
+      }),
+      false
+    );
+  });
+
+  it('returns true when CRON_SECRET is unset (first-deploy / local-dev lenient)', () => {
+    assert.strictEqual(
+      isAuthorisedTick({ cronHeader: null, isAdmin: false, env: {} }),
+      true
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runWorkerTick
+// ---------------------------------------------------------------------------
+
+describe('runWorkerTick — idle', () => {
+  it('returns { ok: true, idle: true } when claimNextJob returns null', async () => {
+    const qs = makeQueueStore({ nextJob: null });
+    const runScan = async () => {
+      throw new Error('runScan must not be called when idle');
+    };
+    const sendCallback = async () => {
+      throw new Error('callback must not be called when idle');
+    };
+
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback,
+    });
+    assert.deepStrictEqual(result, { ok: true, idle: true, reclaimed: 0 });
+    assert.strictEqual(qs.calls.reclaimStuck, 1, 'always reclaims first');
+    assert.strictEqual(qs.calls.claimNextJob, 1);
+  });
+
+  it('still returns when reclaimStuck throws (fail-open)', async () => {
+    const qs = makeQueueStore({
+      nextJob: null,
+      reclaimThrows: new Error('boom'),
+    });
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan: async () => ({}),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.idle, true);
+  });
+});
+
+describe('runWorkerTick — job success', () => {
+  it('calls markDone and fires the callback on successful scan', async () => {
+    const qs = makeQueueStore({ nextJob: makeJob() });
+    let scanArgs = null;
+    const runScan = async (repoUrl, tier) => {
+      scanArgs = { repoUrl, tier };
+      return makeScanResult({ totalIssues: 0 });
+    };
+    const callbackCalls = [];
+    const sendCallback = async (args) => {
+      callbackCalls.push(args);
+      return { sent: true };
+    };
+
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback,
+    });
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.ran, 42);
+    assert.strictEqual(qs.calls.markDone.length, 1);
+    assert.strictEqual(qs.calls.markDone[0].id, 42);
+    assert.strictEqual(qs.calls.markFailed.length, 0);
+
+    // Callback plumbing
+    assert.strictEqual(callbackCalls.length, 1);
+    assert.strictEqual(callbackCalls[0].repository, 'alice/webapp');
+    assert.strictEqual(callbackCalls[0].sha, 'a'.repeat(40));
+    assert.strictEqual(callbackCalls[0].ref, 'refs/heads/main');
+    assert.ok(callbackCalls[0].scanResult);
+
+    // Repo URL reconstruction
+    assert.strictEqual(scanArgs.repoUrl, 'https://github.com/alice/webapp');
+  });
+
+  it('does not crash when sendCallback fails', async () => {
+    const qs = makeQueueStore({ nextJob: makeJob() });
+    const runScan = async () => makeScanResult();
+    const sendCallback = async () => {
+      throw new Error('gluecron down');
+    };
+
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback,
+    });
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.ran, 42);
+  });
+});
+
+describe('runWorkerTick — job failure with retry', () => {
+  it('calls markFailed(willRetry=true) and does NOT send callback when attempts < MAX', async () => {
+    const qs = makeQueueStore({
+      nextJob: makeJob({ id: 7, attempts: 2 }), // 2 < MAX_ATTEMPTS(5)
+    });
+    const runScan = async () =>
+      makeScanResult({ status: 'failed', error: 'GitHub 404' });
+    const callbackCalls = [];
+    const sendCallback = async (args) => {
+      callbackCalls.push(args);
+    };
+
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback,
+    });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.jobId, 7);
+    assert.strictEqual(result.willRetry, true);
+    assert.strictEqual(qs.calls.markFailed.length, 1);
+    assert.strictEqual(qs.calls.markFailed[0].willRetry, true);
+    assert.match(qs.calls.markFailed[0].err, /GitHub 404/);
+    assert.strictEqual(callbackCalls.length, 0, 'no callback on retryable failure');
+  });
+
+  it('catches a throwing runScan and treats it as a failed attempt', async () => {
+    const qs = makeQueueStore({ nextJob: makeJob({ attempts: 1 }) });
+    const runScan = async () => {
+      throw new Error('runScan blew up');
+    };
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback: async () => {},
+    });
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(qs.calls.markFailed.length, 1);
+    assert.match(qs.calls.markFailed[0].err, /runScan blew up/);
+  });
+});
+
+describe('runWorkerTick — dead-letter', () => {
+  it('calls markFailed(willRetry=false) and fires error callback on final attempt', async () => {
+    const qs = makeQueueStore({
+      nextJob: makeJob({ id: 99, attempts: MAX_ATTEMPTS }),
+    });
+    const runScan = async () =>
+      makeScanResult({ status: 'failed', error: 'permanent failure' });
+    const callbackCalls = [];
+    const sendCallback = async (args) => {
+      callbackCalls.push(args);
+    };
+
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan,
+      sendCallback,
+    });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.jobId, 99);
+    assert.strictEqual(result.willRetry, false);
+    assert.strictEqual(qs.calls.markFailed.length, 1);
+    assert.strictEqual(qs.calls.markFailed[0].willRetry, false);
+    assert.strictEqual(callbackCalls.length, 1, 'dead-letter must notify Gluecron');
+    assert.match(callbackCalls[0].scanResult.error, /permanent failure/);
+  });
+});
+
+describe('runWorkerTick — reclaim-stuck path', () => {
+  it('calls reclaimStuck before claimNextJob and reports the count', async () => {
+    const qs = makeQueueStore({ reclaimCount: 3, nextJob: null });
+    const result = await runWorkerTick({
+      sql: SQL,
+      queueStore: qs,
+      runScan: async () => ({}),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.reclaimed, 3);
+    assert.strictEqual(qs.calls.reclaimStuck, 1);
+    assert.strictEqual(qs.calls.claimNextJob, 1);
+  });
+});
+
+describe('runWorkerTick — contract guards', () => {
+  it('returns { ok: false } when sql is missing', async () => {
+    const result = await runWorkerTick({
+      queueStore: makeQueueStore(),
+      runScan: async () => ({}),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.ok, false);
+    assert.match(result.error, /sql/);
+  });
+
+  it('returns { ok: false } when queueStore is missing', async () => {
+    const result = await runWorkerTick({
+      sql: SQL,
+      runScan: async () => ({}),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.ok, false);
+  });
+});
