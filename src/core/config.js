@@ -60,6 +60,7 @@ const DEFAULT_CONFIG = {
       'nPlusOne',
       'retryHygiene',
       'raceCondition',
+      'resourceLeak',
       'fakeFixDetector',
     ],
     standard: [
@@ -87,6 +88,7 @@ const DEFAULT_CONFIG = {
       'nPlusOne',
       'retryHygiene',
       'raceCondition',
+      'resourceLeak',
       'fakeFixDetector',
     ],
     full: [
@@ -124,6 +126,7 @@ const DEFAULT_CONFIG = {
       'nPlusOne',
       'retryHygiene',
       'raceCondition',
+      'resourceLeak',
       'mutation',
       'python',
       'go',
@@ -178,6 +181,7 @@ const DEFAULT_CONFIG = {
       'nPlusOne',
       'retryHygiene',
       'raceCondition',
+      'resourceLeak',
       'liveCrawler',
       'explorer',
       'chaos',

@@ -57,6 +57,7 @@ const BUILT_IN_MODULES = {
   nPlusOne: '../modules/n-plus-one.js',
   retryHygiene: '../modules/retry-hygiene.js',
   raceCondition: '../modules/race-condition.js',
+  resourceLeak: '../modules/resource-leak.js',
 };
 
 class ModuleRegistry {
