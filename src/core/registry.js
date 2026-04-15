@@ -54,6 +54,7 @@ const BUILT_IN_MODULES = {
   typescriptStrictness: '../modules/typescript-strictness.js',
   flakyTests: '../modules/flaky-tests.js',
   errorSwallow: '../modules/error-swallow.js',
+  nPlusOne: '../modules/n-plus-one.js',
 };
 
 class ModuleRegistry {

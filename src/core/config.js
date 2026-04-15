@@ -57,6 +57,7 @@ const DEFAULT_CONFIG = {
       'typescriptStrictness',
       'flakyTests',
       'errorSwallow',
+      'nPlusOne',
       'fakeFixDetector',
     ],
     standard: [
@@ -81,6 +82,7 @@ const DEFAULT_CONFIG = {
       'typescriptStrictness',
       'flakyTests',
       'errorSwallow',
+      'nPlusOne',
       'fakeFixDetector',
     ],
     full: [
@@ -115,6 +117,7 @@ const DEFAULT_CONFIG = {
       'typescriptStrictness',
       'flakyTests',
       'errorSwallow',
+      'nPlusOne',
       'mutation',
       'python',
       'go',
@@ -166,6 +169,7 @@ const DEFAULT_CONFIG = {
       'typescriptStrictness',
       'flakyTests',
       'errorSwallow',
+      'nPlusOne',
       'liveCrawler',
       'explorer',
       'chaos',
