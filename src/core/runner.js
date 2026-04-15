@@ -226,9 +226,16 @@ class GateTestRunner extends EventEmitter {
 
   /**
    * Run auto-fixes for all fixable failed checks.
+   *
+   * Every successful fix is also recorded into the persistent MemoryStore so
+   * future scans see this project's auto-fix history. This is what makes
+   * memory-aware auto-fix a compounding moat: aiReview and agentic can
+   * condition on "GateTest fixed this pattern N times before in this repo"
+   * rather than re-suggesting the same fix in a vacuum.
    */
   async _runAutoFixes() {
     let totalFixed = 0;
+    const memoryStore = this._getMemoryStoreSafe();
     for (const result of this.results) {
       for (const check of result.failedChecks) {
         if (typeof check.autoFix === 'function') {
@@ -239,6 +246,18 @@ class GateTestRunner extends EventEmitter {
               check.autoFixed = true;
               result.addFix(check.name, fixResult.description, fixResult.filesChanged || []);
               totalFixed++;
+
+              if (memoryStore) {
+                try {
+                  memoryStore.recordFix({
+                    checkName: check.name,
+                    description: fixResult.description,
+                    filesChanged: fixResult.filesChanged || [],
+                  });
+                } catch {
+                  // Memory recording must never break an otherwise-good fix
+                }
+              }
             }
           } catch {
             // Fix failed — leave check as failed
@@ -255,6 +274,22 @@ class GateTestRunner extends EventEmitter {
 
     if (totalFixed > 0) {
       this.emit('autofix:complete', { totalFixed });
+    }
+  }
+
+  /**
+   * Best-effort MemoryStore accessor. Runner never hard-depends on memory
+   * being present — if projectRoot or the memory module is missing, fix
+   * recording silently no-ops.
+   */
+  _getMemoryStoreSafe() {
+    try {
+      const projectRoot = this.config && this.config.projectRoot;
+      if (!projectRoot) return null;
+      const { MemoryStore } = require('./memory');
+      return new MemoryStore(projectRoot);
+    } catch {
+      return null;
     }
   }
 
