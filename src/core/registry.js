@@ -72,6 +72,7 @@ const BUILT_IN_MODULES = {
   moneyFloat: '../modules/money-float.js',
   logPii: '../modules/log-pii.js',
   featureFlag: '../modules/feature-flag.js',
+  tlsSecurity: '../modules/tls-security.js',
 };
 
 class ModuleRegistry {

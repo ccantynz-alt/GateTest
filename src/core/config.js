@@ -75,6 +75,7 @@ const DEFAULT_CONFIG = {
       'moneyFloat',
       'logPii',
       'featureFlag',
+      'tlsSecurity',
       'fakeFixDetector',
     ],
     standard: [
@@ -117,6 +118,7 @@ const DEFAULT_CONFIG = {
       'moneyFloat',
       'logPii',
       'featureFlag',
+      'tlsSecurity',
       'fakeFixDetector',
     ],
     full: [
@@ -169,6 +171,7 @@ const DEFAULT_CONFIG = {
       'moneyFloat',
       'logPii',
       'featureFlag',
+      'tlsSecurity',
       'mutation',
       'python',
       'go',
@@ -238,6 +241,7 @@ const DEFAULT_CONFIG = {
       'moneyFloat',
       'logPii',
       'featureFlag',
+      'tlsSecurity',
       'liveCrawler',
       'explorer',
       'chaos',
