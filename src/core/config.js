@@ -74,6 +74,7 @@ const DEFAULT_CONFIG = {
       'importCycle',
       'moneyFloat',
       'logPii',
+      'featureFlag',
       'fakeFixDetector',
     ],
     standard: [
@@ -115,6 +116,7 @@ const DEFAULT_CONFIG = {
       'importCycle',
       'moneyFloat',
       'logPii',
+      'featureFlag',
       'fakeFixDetector',
     ],
     full: [
@@ -166,6 +168,7 @@ const DEFAULT_CONFIG = {
       'importCycle',
       'moneyFloat',
       'logPii',
+      'featureFlag',
       'mutation',
       'python',
       'go',
@@ -234,6 +237,7 @@ const DEFAULT_CONFIG = {
       'importCycle',
       'moneyFloat',
       'logPii',
+      'featureFlag',
       'liveCrawler',
       'explorer',
       'chaos',

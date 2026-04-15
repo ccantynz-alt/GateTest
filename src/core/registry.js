@@ -71,6 +71,7 @@ const BUILT_IN_MODULES = {
   importCycle: '../modules/import-cycle.js',
   moneyFloat: '../modules/money-float.js',
   logPii: '../modules/log-pii.js',
+  featureFlag: '../modules/feature-flag.js',
 };
 
 class ModuleRegistry {
