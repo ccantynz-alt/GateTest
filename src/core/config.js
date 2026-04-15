@@ -68,6 +68,7 @@ const DEFAULT_CONFIG = {
       'homoglyph',
       'openapiDrift',
       'prSize',
+      'redos',
       'fakeFixDetector',
     ],
     standard: [
@@ -103,6 +104,7 @@ const DEFAULT_CONFIG = {
       'homoglyph',
       'openapiDrift',
       'prSize',
+      'redos',
       'fakeFixDetector',
     ],
     full: [
@@ -148,6 +150,7 @@ const DEFAULT_CONFIG = {
       'homoglyph',
       'openapiDrift',
       'prSize',
+      'redos',
       'mutation',
       'python',
       'go',
@@ -210,6 +213,7 @@ const DEFAULT_CONFIG = {
       'homoglyph',
       'openapiDrift',
       'prSize',
+      'redos',
       'liveCrawler',
       'explorer',
       'chaos',

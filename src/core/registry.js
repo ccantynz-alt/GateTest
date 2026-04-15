@@ -65,6 +65,7 @@ const BUILT_IN_MODULES = {
   homoglyph: '../modules/homoglyph.js',
   openapiDrift: '../modules/openapi-drift.js',
   prSize: '../modules/pr-size.js',
+  redos: '../modules/redos.js',
 };
 
 class ModuleRegistry {
