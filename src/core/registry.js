@@ -58,6 +58,7 @@ const BUILT_IN_MODULES = {
   retryHygiene: '../modules/retry-hygiene.js',
   raceCondition: '../modules/race-condition.js',
   resourceLeak: '../modules/resource-leak.js',
+  ssrf: '../modules/ssrf.js',
 };
 
 class ModuleRegistry {

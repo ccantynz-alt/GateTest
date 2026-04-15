@@ -112,9 +112,9 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 51 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 52 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 51 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 52 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -202,7 +202,7 @@ BaseModule (abstract)
 
 - [ ] All 200+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 51 modules load (`node bin/gatetest.js --list`)
+- [ ] All 52 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
@@ -261,7 +261,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 51 modules listed in README and CLI help
+- [ ] All 52 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -353,7 +353,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 51 modules load
+3. `node bin/gatetest.js --list` — all 52 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -416,6 +416,7 @@ When something breaks:
 | (no direct equivalent — nobody statically scans for retry-backoff / retry-jitter / unbounded retry loops) | `gatetest --module retryHygiene` |
 | (no direct equivalent — SonarQube has 2 Java-specific concurrency rules, nobody scans JS/TS) | `gatetest --module raceCondition` |
 | (no direct equivalent — runtime profilers only catch leaks after the process falls over) | `gatetest --module resourceLeak` |
+| Semgrep (narrow per-language rules) / Snyk (function-signature flags only) / SonarQube (one Java rule) | `gatetest --module ssrf` |
 | Lighthouse | `gatetest --module performance` |
 | axe/pa11y | `gatetest --module accessibility` |
 | Percy/Chromatic | `gatetest --module visual` |
@@ -429,8 +430,8 @@ Plus 12 more modules they don't have: AI code review, **fake-fix detector (catch
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 51 modules |
-| Scan + Fix | $199 | 51 modules + auto-fix PR |
+| Full Scan | $99 | All 52 modules |
+| Scan + Fix | $199 | 52 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -447,7 +448,7 @@ GateTest/
 ├── src/
 │   ├── index.js            ← Main library entry
 │   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
-│   ├── modules/            ← 51 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector + 1 error-swallow detector + 1 N+1 query detector + 1 retry-hygiene scanner + 1 race-condition detector + 1 resource-leak detector)
+│   ├── modules/            ← 52 TEST MODULES (24 core + 9 universal language checkers + 1 polyglot dependency scanner + 1 Dockerfile scanner + 1 CI-security scanner + 1 shell-script scanner + 1 SQL-migration safety scanner + 1 Terraform/IaC scanner + 1 Kubernetes manifest scanner + 1 Prompt/LLM-safety scanner + 1 dead-code / unused-export scanner + 1 secret-rotation / key-age scanner + 1 web-headers / CORS scanner + 1 TypeScript-strictness scanner + 1 flaky-test detector + 1 error-swallow detector + 1 N+1 query detector + 1 retry-hygiene scanner + 1 race-condition detector + 1 resource-leak detector + 1 SSRF / URL-validation gap detector)
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
@@ -507,6 +508,7 @@ GateTest/
 | `src/modules/retry-hygiene.js` | Retry-hygiene scanner — finds retry-shaped loops (`while (...)` / `for (...)` bodies that contain an HTTP call or a literal sleep) across `fetch`/`axios`/`got`/`node-http`/`needle`/`superagent`. Flags `while (true)` / `for (;;)` without a `break` or max-attempts marker (error: unbounded-loop), literal `setTimeout`/`sleep`/`delay`/`new Promise(..setTimeout)` with no `attempt`-based multiplier (warning: no-backoff), literal sleeps with no `Math.random()`/`crypto.randomInt()` jitter (warning: no-jitter), retry blocks referencing 4xx status without a `throw`/`return`/`break` bail-out guard (warning: retry-on-4xx). Recognises `async-retry`/`p-retry`/`retry`/`cockatiel`/`opossum` as library-backed retry and emits info-level `library-ok` | Adding new HTTP clients, retry libraries, or sleep primitives |
 | `src/modules/race-condition.js` | Race-condition / check-then-act detector — walks JS/TS sources looking for TOCTOU patterns: `fs.exists*`/`fs.stat`/`fs.access` followed within 15 lines by a destructive fs op (`unlink`/`rm`/`rename`/`chmod`/`chown`/`copyFile`/`truncate`) on the same path expression (error, warning inside test files); `fs.stat` followed by ANY mutating fs op (broader: symlink-race vector). Prisma/Sequelize/Mongoose/TypeORM `findFirst`/`findUnique`/`findOne` followed by `create`/`update`/`upsert`/`save`/`delete` on the same model with no visible `$transaction` / `FOR UPDATE` / `ON CONFLICT` / upsert / `P2002`/`23505`/`ER_DUP_ENTRY` handler (warning: get-or-create lost-update). Argument-matching on the first param of the mutate call avoids cross-function false-positives; idempotent `if (!exists) mkdirSync(.., { recursive: true })` setup is not flagged | Adding new TOCTOU shapes, ORM model surfaces, or tx markers |
 | `src/modules/resource-leak.js` | Resource-leak detector — walks JS/TS and flags unclosed `fs.createReadStream`/`createWriteStream` (error), `fs.open`/`fs.promises.open` file handles (warning), `new WebSocket`/`EventSource`/`ReconnectingWebSocket`, `net.createConnection`/`createServer` (warning). setInterval: bare calls with discarded return value (error) and captured handles that are never `clearInterval(...)`-ed (warning). Recognises `stream.pipeline(x, ...)` / `stream.finished(x, ...)` as cleanup, plus escape paths through `return`/`module.exports`/`export`/property-assignment (`this.timers = ...`) and array push/set/add — so legitimate handle-storage patterns don't false-positive. Block-comment / JSDoc aware | Adding new resource-acquiring APIs or escape-path shapes |
+| `src/modules/ssrf.js` | SSRF / URL-validation gap detector — tracks taint from `req.body`/`req.query`/`req.params`/`req.headers`/`ctx.request`/`event.body` to HTTP client calls (`fetch`/`axios`/`got`/`http.request`/`https.request`/`needle`/`superagent`/`request`/`undici`/`ky`). Flags: inline tainted URLs (error), tainted variables handed to the client without intermediate validation (error), hardcoded metadata-service endpoints (AWS 169.254.169.254, GCP metadata.google.internal, Azure metadata.azure.com, Alibaba 100.100.100.200) (error), suspicious-named variables (`webhookUrl`, `callbackUrl`, `redirectUrl`, `imageUrl`, `targetUrl`, etc.) with no visible validation (warning). Suppresses on `validateUrl`/`isValidUrl`/`allowedHosts.includes`/`new URL(x).hostname` guards. Records info-level `library-ok` for `ssrf-req-filter` / `request-filtering-agent` / `safe-url` / `ssrfcheck` imports | Adding new HTTP clients, taint sources, validators, or cloud metadata endpoints |
 | `src/core/host-bridge.js` | Abstract `HostBridge` base, bridge registry (`createBridge`/`registerBridge`), canonical commit-status vocabulary, shared PR/MR markdown formatter | Before adding a new host integration or touching cross-host logic |
 | `src/core/github-bridge.js` | Concrete `GitHubBridge` extending `HostBridge` — GitHub-specific REST calls, circuit breaker, retry, JWT auth | Anything GitHub-specific; prefer `HostBridge` for cross-host work |
 | `bin/gatetest.js` | CLI flags, help text, watch mode | Adding CLI features |
@@ -568,7 +570,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 51 modules load — `node bin/gatetest.js --list`
+3. Verify all 52 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -602,7 +604,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.24.0 — 51 modules (24 core + 9 universal language checkers
+GateTest v1.25.0 — 52 modules (24 core + 9 universal language checkers
 for Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift + 7 **infra
 & supply-chain hardening scanners** — dependencies (npm/pip/Pipenv/
 Poetry/go.mod/Cargo/Bundler/Composer/Maven/Gradle), Dockerfile,
@@ -669,7 +671,20 @@ are never `clearInterval`-ed (warning). Recognises
 plus escape paths through `return`, `module.exports`/`export`,
 property-assignment (`this.timers = ...`, `obj.handle = ...`) and
 array push/set/add — so legitimate handle-storage patterns don't
-false-positive. JSDoc / block-comment aware,
+false-positive. JSDoc / block-comment aware
++ 1 **SSRF / URL-validation gap detector** — taints `req.body`/
+`req.query`/`req.params`/`req.headers`/`ctx.request`/`event.body`
+sources and flags when tainted values reach `fetch`/`axios`/`got`/
+`http.request`/`needle`/`superagent`/`undici`/`ky` without an
+intermediate validator. Hardcoded cloud-metadata endpoints
+(AWS 169.254.169.254, GCP metadata.google.internal, Azure
+metadata.azure.com, Alibaba 100.100.100.200) are treated as error.
+Suspicious-named vars (`webhookUrl`, `callbackUrl`, `redirectUrl`,
+etc.) warn when handed to a client with no visible validation.
+Suppresses on `validateUrl`/`isValidUrl`/`allowedHosts.includes`/
+URL-hostname allowlist guards. Records info-level `library-ok` for
+`ssrf-req-filter` / `request-filtering-agent` / `safe-url` /
+`ssrfcheck` imports,
 5 reporters,
 AI code review (memory-enriched, fix-pattern-aware), agentic
 exploration, codebase memory (compounding moat: issue history +
@@ -682,4 +697,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-26
+Date last updated: 2026-04-27

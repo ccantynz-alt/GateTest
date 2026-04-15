@@ -61,6 +61,7 @@ const DEFAULT_CONFIG = {
       'retryHygiene',
       'raceCondition',
       'resourceLeak',
+      'ssrf',
       'fakeFixDetector',
     ],
     standard: [
@@ -89,6 +90,7 @@ const DEFAULT_CONFIG = {
       'retryHygiene',
       'raceCondition',
       'resourceLeak',
+      'ssrf',
       'fakeFixDetector',
     ],
     full: [
@@ -127,6 +129,7 @@ const DEFAULT_CONFIG = {
       'retryHygiene',
       'raceCondition',
       'resourceLeak',
+      'ssrf',
       'mutation',
       'python',
       'go',
@@ -182,6 +185,7 @@ const DEFAULT_CONFIG = {
       'retryHygiene',
       'raceCondition',
       'resourceLeak',
+      'ssrf',
       'liveCrawler',
       'explorer',
       'chaos',
