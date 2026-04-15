@@ -1,7 +1,10 @@
 /**
- * Scan executor — shared scan-runner used by both /api/scan/run and the
- * webhook async handler. Mirrors the scan implementation in scan/run/route.ts
- * but exposes it as a reusable async function with idempotent Stripe updates.
+ * Scan executor — shared scan-runner used by the webhook async handler.
+ *
+ * Delegates the actual module execution to the unified module registry in
+ * app/lib/scan-modules — the same code path that /api/scan/run uses. That
+ * way there's exactly one place where modules are defined and honesty
+ * rules (real work or honest skip) are enforced.
  *
  * Idempotency: the caller passes a jobId (derived from the Stripe session id)
  * and we check whether the payment intent metadata already records this job
@@ -11,16 +14,20 @@
 
 import https from "https";
 import { getDb } from "./db";
+import { resolveGithubToken } from "./github-app";
+import { runTier, type RepoFile } from "./scan-modules";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+const MAX_FILES_TO_READ = 50;
 
 export interface ScanModuleResult {
   name: string;
-  status: "passed" | "failed" | "warning";
+  status: "passed" | "failed" | "skipped";
   checks: number;
   issues: number;
   duration: number;
   details?: string[];
+  skipped?: string;
 }
 
 export interface ScanResult {
@@ -31,6 +38,7 @@ export interface ScanResult {
   totalIssues: number;
   totalFixed: number;
   duration: number;
+  authSource?: string | null;
   error?: string;
 }
 
@@ -77,35 +85,30 @@ function stripeApi(
   });
 }
 
-function githubApi(
-  token: string,
+function githubContentsGet(
+  token: string | undefined,
   path: string
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const options: https.RequestOptions = {
-      hostname: "api.github.com",
-      port: 443,
-      path,
-      method: "GET",
-      headers: {
-        "User-Agent": "GateTest/1.2.0",
-        Accept: "application/vnd.github+json",
-      },
+    const headers: Record<string, string> = {
+      "User-Agent": "GateTest/1.2.0",
+      Accept: "application/vnd.github+json",
     };
-    if (token) {
-      (options.headers as Record<string, string>).Authorization = `Bearer ${token}`;
-    }
-    const req = https.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(Buffer.concat(chunks).toString("utf-8")));
-        } catch {
-          resolve({});
-        }
-      });
-    });
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const req = https.request(
+      { hostname: "api.github.com", port: 443, path, method: "GET", headers },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString("utf-8")));
+          } catch {
+            resolve({});
+          }
+        });
+      }
+    );
     req.on("error", reject);
     req.setTimeout(15000, () => {
       req.destroy();
@@ -115,7 +118,7 @@ function githubApi(
   });
 }
 
-function emptyResult(startTime: number, error: string): ScanResult {
+function emptyResult(startTime: number, error: string, authSource?: string | null): ScanResult {
   return {
     status: "failed",
     modules: [],
@@ -124,6 +127,7 @@ function emptyResult(startTime: number, error: string): ScanResult {
     totalIssues: 0,
     totalFixed: 0,
     duration: Date.now() - startTime,
+    authSource: authSource ?? null,
     error,
   };
 }
@@ -144,269 +148,84 @@ export async function runScan(
 
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
-  const token = process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
+
+  const auth = await resolveGithubToken(owner, repo);
+  const token = auth.token || undefined;
 
   let tree: { tree?: Array<{ path: string; type: string }> };
   try {
-    tree = (await githubApi(
+    tree = (await githubContentsGet(
       token,
       `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
     )) as typeof tree;
   } catch {
     try {
-      tree = (await githubApi(
-        "",
+      tree = (await githubContentsGet(
+        undefined,
         `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
       )) as typeof tree;
     } catch (err) {
       return emptyResult(
         startTime,
-        `Cannot access repository ${owner}/${repo}: ${(err as Error).message}`
+        `Cannot access repository ${owner}/${repo}: ${(err as Error).message}`,
+        auth.source
       );
     }
   }
 
   if (!tree?.tree) {
+    const hint = auth.error ? ` (${auth.error})` : token ? "" : " — set GITHUB_TOKEN or install the GateTest GitHub App";
     return emptyResult(
       startTime,
-      `Cannot access repository ${owner}/${repo}. Check if it's public or provide a GitHub token.`
+      `Cannot access repository ${owner}/${repo}${hint}`,
+      auth.source
     );
   }
 
   const files = tree.tree.filter((f) => f.type === "blob").map((f) => f.path);
+  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
   const sourceFiles = files.filter(
     (f) =>
-      (f.endsWith(".ts") ||
-        f.endsWith(".tsx") ||
-        f.endsWith(".js") ||
-        f.endsWith(".jsx") ||
-        f.endsWith(".py") ||
-        f.endsWith(".go")) &&
+      sourceExts.some((ext) => f.endsWith(ext)) &&
       !f.includes("node_modules") &&
       !f.includes(".next") &&
       !f.includes("dist/")
   );
 
-  const moduleNames =
-    tier === "quick"
-      ? ["syntax", "lint", "secrets", "codeQuality"]
-      : [
-          "syntax",
-          "lint",
-          "secrets",
-          "codeQuality",
-          "unitTests",
-          "integrationTests",
-          "e2e",
-          "visual",
-          "accessibility",
-          "performance",
-          "security",
-          "seo",
-          "links",
-          "compatibility",
-          "dataIntegrity",
-          "documentation",
-          "mutation",
-          "aiReview",
-        ];
-
-  const filesToCheck = sourceFiles.slice(0, 20);
-  const fileContents: Array<{ path: string; content: string }> = [];
-
-  for (const filePath of filesToCheck) {
+  // Read file contents in parallel.
+  const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
     try {
-      const fileData = (await githubApi(
+      const data = (await githubContentsGet(
         token,
         `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`
       )) as { content?: string; encoding?: string };
-      if (fileData.content && fileData.encoding === "base64") {
-        fileContents.push({
-          path: filePath,
-          content: Buffer.from(fileData.content, "base64").toString("utf-8"),
-        });
+      if (data.content && data.encoding === "base64") {
+        return { path: filePath, content: Buffer.from(data.content, "base64").toString("utf-8") };
       }
+      return null;
     } catch {
-      // skip unreadable files
+      return null;
     }
-  }
+  });
+  const fileContents: RepoFile[] = (await Promise.all(readPromises)).filter((f): f is RepoFile => f !== null);
 
-  const moduleResults: ScanModuleResult[] = [];
-  let totalIssues = 0;
-
-  for (const moduleName of moduleNames) {
-    const modStart = Date.now();
-    let checks = 0;
-    let issues = 0;
-
-    switch (moduleName) {
-      case "syntax": {
-        for (const f of fileContents) {
-          checks++;
-          const opens = (f.content.match(/{/g) || []).length;
-          const closes = (f.content.match(/}/g) || []).length;
-          if (Math.abs(opens - closes) > 2) issues++;
-        }
-        checks += files.filter((f) => f.endsWith(".json")).length;
-        break;
-      }
-      case "lint": {
-        checks = fileContents.length;
-        for (const f of fileContents) {
-          if (f.content.includes("var ")) issues++;
-        }
-        break;
-      }
-      case "secrets": {
-        const secretPatterns = [
-          /['"]sk_live_[a-zA-Z0-9]+['"]/,
-          /['"]ghp_[a-zA-Z0-9]+['"]/,
-          /['"]AKIA[A-Z0-9]{16}['"]/,
-          /password\s*[:=]\s*['"][^'"]{8,}['"]/i,
-          /-----BEGIN.*PRIVATE KEY-----/,
-          /(mongodb|postgres|mysql):\/\/[^:\s]+:[^@\s]+@/i,
-        ];
-        for (const f of fileContents) {
-          checks++;
-          for (const pattern of secretPatterns) {
-            if (pattern.test(f.content)) {
-              issues++;
-              break;
-            }
-          }
-        }
-        const sensitiveFiles = [".env", ".pem", ".key", "credentials.json"];
-        for (const f of files) {
-          checks++;
-          const basename = f.split("/").pop() || "";
-          if (sensitiveFiles.includes(basename)) issues++;
-        }
-        break;
-      }
-      case "codeQuality": {
-        for (const f of fileContents) {
-          if (f.path.includes("test") || f.path.includes("spec")) continue;
-          checks++;
-          if (/console\.(log|debug|info)\(/.test(f.content)) issues++;
-          checks++;
-          if (/\bdebugger\b/.test(f.content)) issues++;
-          checks++;
-          if (/\/\/\s*(TODO|FIXME|HACK|XXX)/i.test(f.content)) issues++;
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) issues++;
-        }
-        break;
-      }
-      case "security": {
-        for (const f of fileContents) {
-          checks++;
-          if (/\.innerHTML\s*=/.test(f.content)) issues++;
-          checks++;
-          if (/\beval\s*\(/.test(f.content)) issues++;
-          checks++;
-          if (/child_process.*exec\s*\(/.test(f.content)) issues++;
-          checks++;
-          if (/document\.write\s*\(/.test(f.content)) issues++;
-        }
-        break;
-      }
-      case "accessibility": {
-        for (const f of fileContents) {
-          if (!f.path.endsWith(".tsx") && !f.path.endsWith(".jsx")) continue;
-          checks++;
-          if (/<img\s(?![^>]*\balt\b)/i.test(f.content)) issues++;
-          checks++;
-          if (/<input(?![^>]*\b(?:aria-label|id)\b)/i.test(f.content)) issues++;
-          checks++;
-          if (f.content.includes("onClick") && !f.content.includes("onKeyDown"))
-            issues++;
-        }
-        break;
-      }
-      case "seo": {
-        checks++;
-        const hasMetaTitle = files.some(
-          (f) => f.includes("layout") || f.includes("_app")
-        );
-        if (!hasMetaTitle) issues++;
-        checks++;
-        if (!files.some((f) => f === "robots.txt" || f === "public/robots.txt"))
-          issues++;
-        break;
-      }
-      case "documentation": {
-        checks++;
-        if (!files.some((f) => f === "README.md")) issues++;
-        checks++;
-        if (!files.some((f) => f === "CHANGELOG.md" || f === "CHANGES.md"))
-          issues++;
-        checks++;
-        if (!files.some((f) => f === "LICENSE" || f === "LICENSE.md")) issues++;
-        break;
-      }
-      case "links": {
-        for (const f of fileContents) {
-          const linkMatches = f.content.match(/href=["']([^"']+)["']/g) || [];
-          checks += linkMatches.length;
-          for (const link of linkMatches) {
-            const href = link.match(/href=["']([^"']+)["']/)?.[1] || "";
-            if (href === "#" || href === "javascript:void(0)") issues++;
-          }
-        }
-        break;
-      }
-      case "performance": {
-        checks++;
-        const pkgJson = files.find((f) => f === "package.json");
-        if (pkgJson) {
-          const pkg = fileContents.find((f) => f.path === "package.json");
-          if (pkg) {
-            try {
-              const deps = Object.keys(JSON.parse(pkg.content).dependencies || {});
-              if (deps.length > 50) issues++;
-            } catch {
-              // ignore parse errors
-            }
-          }
-        }
-        break;
-      }
-      case "compatibility": {
-        checks++;
-        if (
-          !files.some((f) => f === ".browserslistrc") &&
-          !fileContents.some(
-            (f) => f.path === "package.json" && f.content.includes("browserslist")
-          )
-        ) {
-          issues++;
-        }
-        break;
-      }
-      default: {
-        checks = 1;
-        break;
-      }
-    }
-
-    totalIssues += issues;
-    moduleResults.push({
-      name: moduleName,
-      status: issues > 0 ? "failed" : "passed",
-      checks: Math.max(checks, 1),
-      issues,
-      duration: Date.now() - modStart,
-    });
-  }
+  const { modules, totalIssues } = await runTier(tier === "full" ? "full" : "quick", {
+    owner,
+    repo,
+    files,
+    fileContents,
+    token,
+  });
 
   return {
     status: "complete",
-    modules: moduleResults,
-    totalModules: moduleNames.length,
-    completedModules: moduleNames.length,
+    modules,
+    totalModules: modules.length,
+    completedModules: modules.length,
     totalIssues,
     totalFixed: 0,
     duration: Date.now() - startTime,
+    authSource: auth.source,
   };
 }
 

@@ -4,11 +4,12 @@ import { useEffect, useState, useRef } from "react";
 
 interface ModuleResult {
   name: string;
-  status: "passed" | "failed" | "warning" | "pending" | "running";
+  status: "passed" | "failed" | "skipped" | "pending" | "running";
   checks: number;
   issues: number;
   duration: number;
   details?: string[];
+  skipped?: string;
 }
 
 interface ScanResult {
@@ -38,6 +39,7 @@ const MODULE_LABELS: Record<string, string> = {
   documentation: "Documentation",
   performance: "Performance",
   aiReview: "AI code review",
+  fakeFixDetector: "Fake-fix detector",
 };
 
 export default function ScanStatus() {
@@ -74,7 +76,7 @@ export default function ScanStatus() {
       ? ["syntax", "lint", "secrets", "codeQuality"]
       : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
          "seo", "links", "compatibility", "dataIntegrity", "documentation",
-         "performance", "aiReview"];
+         "performance", "aiReview", "fakeFixDetector"];
     setAnimModules(names.map((n) => ({ name: n, status: "pending" as const, checks: 0, issues: 0, duration: 0 })));
   }, [params.tier]);
 
@@ -201,6 +203,7 @@ export default function ScanStatus() {
                   mod.status === "passed" ? "bg-white border-green-100" :
                   mod.status === "failed" ? "bg-amber-50/50 border-amber-200" :
                   mod.status === "running" ? "bg-amber-50/50 border-amber-200" :
+                  mod.status === "skipped" ? "bg-slate-50 border-slate-200" :
                   "bg-surface-dark border-border opacity-50"
                 } ${mod.status !== "pending" ? "slide-in" : ""}`}>
 
@@ -209,10 +212,12 @@ export default function ScanStatus() {
                   mod.status === "passed" ? "bg-green-100 text-green-600" :
                   mod.status === "failed" ? "bg-amber-100 text-amber-600" :
                   mod.status === "running" ? "bg-amber-100 text-amber-600" :
+                  mod.status === "skipped" ? "bg-slate-100 text-slate-500" :
                   "bg-surface-dark text-muted"
                 }`}>
                   {mod.status === "passed" ? "✓" :
                    mod.status === "failed" ? "!" :
+                   mod.status === "skipped" ? "–" :
                    mod.status === "running" ? <span className="w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" /> :
                    "○"}
                 </div>
@@ -223,6 +228,7 @@ export default function ScanStatus() {
                     mod.status === "passed" ? "text-foreground" :
                     mod.status === "failed" ? "text-amber-700" :
                     mod.status === "running" ? "text-amber-700" :
+                    mod.status === "skipped" ? "text-slate-600" :
                     "text-muted"
                   }`}>{label}</span>
 
@@ -234,6 +240,9 @@ export default function ScanStatus() {
                       ))}
                     </div>
                   )}
+                  {mod.status === "skipped" && mod.skipped && (
+                    <p className="mt-1 text-xs text-slate-500 truncate">{mod.skipped}</p>
+                  )}
                 </div>
 
                 {/* Right side info */}
@@ -243,6 +252,9 @@ export default function ScanStatus() {
                   )}
                   {mod.status === "failed" && (
                     <span className="text-xs font-semibold text-amber-600">{mod.issues} issue{mod.issues > 1 ? "s" : ""}</span>
+                  )}
+                  {mod.status === "skipped" && (
+                    <span className="text-xs font-semibold text-slate-500">SKIPPED</span>
                   )}
                   {mod.status === "running" && (
                     <span className="text-xs text-amber-600 animate-pulse">scanning...</span>

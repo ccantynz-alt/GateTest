@@ -58,6 +58,29 @@ interface DbData {
   note?: string;
 }
 
+interface ApiKeyRow {
+  id: string;
+  key_prefix: string;
+  name: string;
+  customer_email: string | null;
+  tier_allowed: string;
+  rate_limit_per_hour: number;
+  active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  total_calls: number;
+}
+
+interface NewKeyResult {
+  id: string;
+  name: string;
+  prefix: string;
+  tier_allowed: string;
+  rate_limit_per_hour: number;
+  plaintext_key: string;
+}
+
 export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [repoUrl, setRepoUrl] = useState("");
   const [tier, setTier] = useState("quick");
@@ -68,7 +91,14 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers" | "keys">("scan");
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
+  const [keyName, setKeyName] = useState("");
+  const [keyCustomer, setKeyCustomer] = useState("");
+  const [keyTier, setKeyTier] = useState<"quick" | "full">("quick");
+  const [keyRate, setKeyRate] = useState(60);
+  const [newKey, setNewKey] = useState<NewKeyResult | null>(null);
+  const [keyError, setKeyError] = useState("");
 
   const loadDbData = useCallback(async () => {
     try {
@@ -84,9 +114,70 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
   }, []);
 
+  const loadKeys = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/keys");
+      if (res.ok) {
+        const data = await res.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch {
+      // db not ready — surface as empty
+      setApiKeys([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadDbData();
   }, [loadDbData]);
+
+  useEffect(() => {
+    if (activeTab === "keys") loadKeys();
+  }, [activeTab, loadKeys]);
+
+  async function createKey() {
+    setKeyError("");
+    setNewKey(null);
+    if (!keyName.trim()) {
+      setKeyError("Name required");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: keyName.trim(),
+          customer_email: keyCustomer.trim() || undefined,
+          tier_allowed: keyTier,
+          rate_limit_per_hour: keyRate,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setKeyError(data.error || "Failed to create key");
+        return;
+      }
+      setNewKey(data);
+      setKeyName("");
+      setKeyCustomer("");
+      loadKeys();
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Failed to create key");
+    }
+  }
+
+  async function revokeKey(id: string) {
+    if (!confirm(`Revoke key ${id}? This cannot be undone.`)) return;
+    try {
+      await fetch(`/api/admin/keys?revoke=${encodeURIComponent(id)}`, {
+        method: "POST",
+      });
+      loadKeys();
+    } catch {
+      /* ignore — loadKeys will reflect reality */
+    }
+  }
 
   async function runScan() {
     if (!repoUrl.includes("github.com")) {
@@ -180,9 +271,17 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               Signed in as <span className="font-mono">{adminLogin}</span>
             </p>
           </div>
-          <a href="/" className="text-sm text-muted hover:text-foreground">
-            &larr; Back to site
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href="/admin/health"
+              className="text-sm px-3 py-1.5 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors font-medium"
+            >
+              Run Self-Test
+            </a>
+            <a href="/" className="text-sm text-muted hover:text-foreground">
+              &larr; Back to site
+            </a>
+          </div>
         </div>
 
         {/* Stats bar */}
@@ -211,7 +310,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "scans", "customers"] as const).map((tab) => (
+          {(["scan", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -221,7 +320,13 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   : "border-transparent text-muted hover:text-foreground"
               }`}
             >
-              {tab === "scan" ? "Run Scan" : tab === "scans" ? "Recent Scans" : "Customers"}
+              {tab === "scan"
+                ? "Run Scan"
+                : tab === "scans"
+                ? "Recent Scans"
+                : tab === "customers"
+                ? "Customers"
+                : "API Keys"}
             </button>
           ))}
         </div>
@@ -474,6 +579,146 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Tab: API Keys */}
+        {activeTab === "keys" && (
+          <div className="space-y-6">
+            <div className="card p-6">
+              <h2 className="text-lg font-bold mb-1">Issue an API key</h2>
+              <p className="text-xs text-muted mb-4">
+                For external platforms calling <code className="font-mono">POST /api/v1/scan</code>.
+                The plaintext key is shown ONCE after creation — copy it immediately.
+              </p>
+              <div className="grid sm:grid-cols-[1fr,1fr,auto,auto,auto] gap-3">
+                <input
+                  type="text"
+                  value={keyName}
+                  onChange={(e) => setKeyName(e.target.value)}
+                  placeholder="Key name (e.g. Platform A prod)"
+                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                />
+                <input
+                  type="email"
+                  value={keyCustomer}
+                  onChange={(e) => setKeyCustomer(e.target.value)}
+                  placeholder="customer@example.com (optional)"
+                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                />
+                <select
+                  value={keyTier}
+                  onChange={(e) => setKeyTier(e.target.value as "quick" | "full")}
+                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                >
+                  <option value="quick">quick</option>
+                  <option value="full">full</option>
+                </select>
+                <input
+                  type="number"
+                  value={keyRate}
+                  onChange={(e) => setKeyRate(Math.max(1, Number(e.target.value) || 60))}
+                  placeholder="60"
+                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-24"
+                />
+                <button onClick={createKey} className="btn-primary px-6 py-3 text-sm">
+                  Create Key
+                </button>
+              </div>
+              {keyError && <p className="text-danger text-sm mt-3">{keyError}</p>}
+
+              {newKey && (
+                <div className="mt-4 p-4 border-l-4 border-l-green-500 bg-green-50/50 rounded">
+                  <p className="text-sm font-bold text-green-800 mb-1">
+                    Key created — copy it now, it will not be shown again.
+                  </p>
+                  <p className="text-xs text-green-800 mb-2">
+                    <strong>{newKey.name}</strong> · tier {newKey.tier_allowed} ·{" "}
+                    {newKey.rate_limit_per_hour}/hr
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 font-mono text-xs bg-white border border-green-200 rounded px-3 py-2 break-all">
+                      {newKey.plaintext_key}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(newKey.plaintext_key);
+                      }}
+                      className="btn-secondary px-3 py-2 text-xs"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-surface-solid">
+                      <th className="text-left px-4 py-3 font-medium text-muted">Name</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Prefix</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Tier</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Rate/hr</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Calls</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted">Last used</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiKeys === null ? (
+                      <tr>
+                        <td colSpan={8} className="p-6 text-center text-muted">Loading...</td>
+                      </tr>
+                    ) : apiKeys.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-6 text-center text-muted">
+                          No keys issued yet. Create one above.
+                        </td>
+                      </tr>
+                    ) : (
+                      apiKeys.map((k) => (
+                        <tr key={k.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-3">{k.name}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{k.key_prefix}…</td>
+                          <td className="px-4 py-3">{k.tier_allowed}</td>
+                          <td className="px-4 py-3">{k.rate_limit_per_hour}</td>
+                          <td className="px-4 py-3">{k.total_calls}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                              k.active ? "bg-green-50 text-success" : "bg-slate-100 text-slate-500"
+                            }`}>
+                              {k.active ? "active" : "revoked"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted">
+                            {k.last_used_at ? new Date(k.last_used_at).toLocaleString() : "never"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {k.active && (
+                              <button
+                                onClick={() => revokeKey(k.id)}
+                                className="text-xs text-danger hover:underline"
+                              >
+                                revoke
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card p-4 text-xs text-muted">
+              Docs: <a href="/docs/api" className="text-accent hover:underline">/docs/api</a> ·
+              Endpoint: <code className="font-mono">POST /api/v1/scan</code>
+            </div>
           </div>
         )}
 

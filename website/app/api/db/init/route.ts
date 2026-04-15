@@ -64,16 +64,48 @@ export async function POST(req: NextRequest) {
       total_spent_usd NUMERIC(10,2) DEFAULT 0
     )`;
 
+    await sql`CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      key_hash TEXT UNIQUE NOT NULL,
+      key_prefix TEXT NOT NULL,
+      name TEXT NOT NULL,
+      customer_email TEXT,
+      tier_allowed TEXT NOT NULL DEFAULT 'quick',
+      rate_limit_per_hour INTEGER NOT NULL DEFAULT 60,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
+      total_calls INTEGER DEFAULT 0
+    )`;
+
+    await sql`CREATE TABLE IF NOT EXISTS api_calls (
+      id BIGSERIAL PRIMARY KEY,
+      api_key_id TEXT NOT NULL,
+      repo_url TEXT,
+      tier TEXT,
+      status_code INTEGER,
+      issues_found INTEGER,
+      duration_ms INTEGER,
+      idempotency_key TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_session ON scans(session_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_email ON scans(customer_email)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_customers_github ON customers(github_login)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(active)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_key ON api_calls(api_key_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_created ON api_calls(created_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_idem ON api_calls(idempotency_key)`;
 
     return NextResponse.json({
       ok: true,
-      tables: ["scans", "customers"],
-      indexes: 5,
+      tables: ["scans", "customers", "api_keys", "api_calls"],
+      indexes: 10,
       message: "Schema initialized (idempotent — safe to run multiple times)",
     });
   } catch (err) {
