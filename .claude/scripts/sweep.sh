@@ -29,10 +29,29 @@ if ! node --test tests/*.test.js >/tmp/gatetest-sweep-tests.log 2>&1; then
   findings+=$'\n- Tests failing:\n'"$failed"
 fi
 
-# 2. Website build (only if website/ exists and node_modules present — slow, skip otherwise)
+# 2. Website build — serialise with flock so two overlapping sweeps don't
+# collide on .next/ build locks (self-induced "Another next build process is
+# already running" false-positive). If another sweep is mid-build, skip.
 if [ -d website/node_modules ]; then
-  if ! (cd website && npx --no-install next build >/tmp/gatetest-sweep-build.log 2>&1); then
-    errs=$(grep -E "(error|Error)" /tmp/gatetest-sweep-build.log | head -3 | sed 's/^/    /')
+  BUILD_LOCK="/tmp/gatetest-sweep-build.lock"
+  if command -v flock >/dev/null 2>&1; then
+    flock -n "$BUILD_LOCK" -c "cd website && npx --no-install next build" \
+      >/tmp/gatetest-sweep-build.log 2>&1
+    rc=$?
+    # rc=1 means another sweep holds the lock — not a real failure.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+      errs=$(grep -E "(error|Error|⨯)" /tmp/gatetest-sweep-build.log \
+        | grep -v "Another next build process" \
+        | head -3 | sed 's/^/    /')
+      [ -z "$errs" ] && errs=$(tail -5 /tmp/gatetest-sweep-build.log | sed 's/^/    /')
+      findings+=$'\n- Website build failing:\n'"$errs"
+    fi
+  elif ! (cd website && npx --no-install next build) \
+         >/tmp/gatetest-sweep-build.log 2>&1; then
+    errs=$(grep -E "(error|Error|⨯)" /tmp/gatetest-sweep-build.log \
+      | grep -v "Another next build process" \
+      | head -3 | sed 's/^/    /')
+    [ -z "$errs" ] && errs=$(tail -5 /tmp/gatetest-sweep-build.log | sed 's/^/    /')
     findings+=$'\n- Website build failing:\n'"$errs"
   fi
 fi
