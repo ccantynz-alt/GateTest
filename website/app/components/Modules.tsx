@@ -66,41 +66,6 @@ const activeModules = [
   },
 ];
 
-const comingSoonModules = [
-  {
-    name: "Live Browser Testing",
-    description: "Playwright-powered. Opens a real browser, visits every page, clicks every button.",
-  },
-  {
-    name: "Visual Regression",
-    description: "Screenshot comparison between deploys. Catches pixel-level changes automatically.",
-  },
-  {
-    name: "E2E Testing",
-    description: "Full user journey testing. Login flows, checkout flows, form submissions.",
-  },
-  {
-    name: "Auto-Fix PRs",
-    description: "GateTest creates a pull request that fixes the issues it finds. Automatically.",
-  },
-  {
-    name: "Mutation Testing",
-    description: "Modifies your source code to verify your tests actually catch bugs.",
-  },
-  {
-    name: "Chaos Testing",
-    description: "Simulates slow networks, API failures, and missing resources.",
-  },
-  {
-    name: "Live Site Crawler",
-    description: "Crawls your entire live site checking every page for errors.",
-  },
-  {
-    name: "Autonomous Explorer",
-    description: "AI agent that fills forms, clicks buttons, and verifies state changes.",
-  },
-];
-
 export default function Modules() {
   return (
     <section id="modules" className="py-24 px-6 border-t border-border">
@@ -110,15 +75,24 @@ export default function Modules() {
             What We Check
           </span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4 text-foreground">
-            13 modules. <span className="gradient-text">Every scan.</span>
+            67 modules. <span className="gradient-text">Every scan.</span>
           </h2>
           <p className="text-muted text-lg max-w-2xl mx-auto">
             Source code analysis that catches what other tools miss.
             Every module runs on every scan. No configuration needed.
           </p>
+          <p className="text-muted text-sm max-w-2xl mx-auto mt-3">
+            13 core modules shown below &mdash; plus 54 more covering
+            polyglot dependencies, Dockerfile &amp; Kubernetes hygiene,
+            CI security, Terraform, SQL migrations, TLS &amp; cookie
+            config, PII-in-logs, N+1 queries, SSRF, ReDoS, and more.
+          </p>
         </div>
 
-        {/* Active modules */}
+        {/* Active modules — the 13 flagship module cards. The remaining
+            54 modules (infra, supply-chain, language checkers, etc.) are
+            summarised in the subtitle above; see CLAUDE.md for the full
+            list. */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-16">
           {activeModules.map((mod) => (
             <div
@@ -134,36 +108,6 @@ export default function Modules() {
           ))}
         </div>
 
-        {/* Coming Soon */}
-        <div className="text-center mb-8">
-          <span className="text-sm font-semibold text-muted uppercase tracking-wider">
-            Coming Soon
-          </span>
-          <h3 className="text-2xl font-bold mt-3 mb-2 text-foreground">
-            8 more modules in development
-          </h3>
-          <p className="text-muted max-w-xl mx-auto">
-            Live browser testing, visual regression, auto-fix PRs, and more.
-            Powered by real browser automation.
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {comingSoonModules.map((mod) => (
-            <div
-              key={mod.name}
-              className="p-4 rounded-xl border border-dashed border-border bg-surface-dark"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-muted bg-surface-dark border border-border rounded-full px-2 py-0.5">
-                  Soon
-                </span>
-                <h4 className="font-semibold text-sm text-foreground">{mod.name}</h4>
-              </div>
-              <p className="text-xs text-muted leading-relaxed">{mod.description}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );

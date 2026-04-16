@@ -35,7 +35,7 @@ const scanPlans = [
     badge: "Most Popular",
     description:
       "Every module. Security, accessibility, SEO, AI code review, and more.",
-    modules: "All 13 modules",
+    modules: "All 67 modules",
     features: [
       "Everything in Quick Scan",
       "Security (OWASP, XSS, SQLi, Docker)",

@@ -89,7 +89,7 @@ export default async function Image() {
             lineHeight: 1.5,
           }}
         >
-          13 modules scan your entire codebase. Security, accessibility, performance, and AI code review. Pay only when delivered.
+          67 modules scan your entire codebase. Security, accessibility, performance, and AI code review. Pay only when delivered.
         </div>
 
         {/* Bottom bar */}
