@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import FindingsPanel from "@/app/components/FindingsPanel";
 
 interface ModuleResult {
   name: string;
@@ -148,7 +149,7 @@ export default function ScanStatus() {
 
   return (
     <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-3xl mx-auto">
+      <div className={`${isComplete && (scanResult?.totalIssues || 0) > 0 ? "max-w-4xl" : "max-w-3xl"} mx-auto transition-all duration-300`}>
         {/* Header */}
         <div className="text-center mb-8">
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-5 ${
@@ -298,6 +299,11 @@ export default function ScanStatus() {
                 {scanResult?.completedModules} modules scanned in {scanResult?.duration}ms
               </p>
             </div>
+
+            {/* Beautiful findings panel — severity, file:line, filter, search */}
+            {scanResult && scanResult.modules.length > 0 && (
+              <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
+            )}
 
             {/* What's next */}
             {(scanResult?.totalIssues || 0) > 0 && (
