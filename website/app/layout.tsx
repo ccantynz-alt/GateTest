@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PreLaunchBanner from "./components/PreLaunchBanner";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://gatetest.io"),
@@ -110,6 +111,7 @@ export default function RootLayout({
             }),
           }}
         />
+        <PreLaunchBanner />
         {children}
       </body>
     </html>
