@@ -142,10 +142,21 @@ body {
   box-shadow: 0 4px 16px rgba(15, 118, 110, 0.08);
 }
 
-/* === ACCENT TEXT (solid, not gradient) === */
+/* === ACCENT TEXT (subtle gradient shimmer) === */
 
 .gradient-text {
-  color: var(--accent);
+  background: linear-gradient(90deg, #0f766e 0%, #14b8a6 50%, #0f766e 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gradient-shimmer 6s ease-in-out infinite;
+}
+
+@keyframes gradient-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 /* === TERMINAL === */
@@ -338,11 +349,11 @@ body {
 
 .count-up { animation: fade-up 0.3s ease-out; }
 
-/* === DIVIDER === */
+/* === DIVIDER — gradient fade, not flat line === */
 
 .section-divider {
   height: 1px;
-  background: var(--border);
+  background: linear-gradient(90deg, transparent 0%, rgba(15, 118, 110, 0.18) 50%, transparent 100%);
 }
 
 /* === SCROLL === */

@@ -20,7 +20,6 @@ const BUILT_IN_MODULES = {
   seo: '../modules/seo.js',
   links: '../modules/links.js',
   compatibility: '../modules/compatibility.js',
-  codeQuality: '../modules/code-quality.js',
   dataIntegrity: '../modules/data-integrity.js',
   documentation: '../modules/documentation.js',
   liveCrawler: '../modules/live-crawler.js',

@@ -47,8 +47,6 @@ jobs:
         run: node bin/gatetest.js --suite quick --sarif --junit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Advisory for now — does not block merge
-        continue-on-error: true
 
       - name: Upload SARIF to GitHub Security
         if: always()
@@ -87,7 +85,6 @@ jobs:
         run: node bin/gatetest.js --suite full --sarif --junit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - name: Upload SARIF to GitHub Security
         if: always()

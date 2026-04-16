@@ -269,11 +269,13 @@ export async function GET(req: NextRequest) {
 
     // ──────────────────────────────────────────────────
     // PRIORITY 2: Payment cancelled without scan result
+    // Distinguish "session expired before scan could run" (card hold
+    // auto-released, no charge) from "scan ran and failed".
     // ──────────────────────────────────────────────────
     if (piStatus === "canceled") {
       return NextResponse.json({
         id: scanId,
-        status: "failed",
+        status: "expired",
         progress: 0,
         modules: [],
         totalModules: 0,
@@ -281,7 +283,8 @@ export async function GET(req: NextRequest) {
         totalIssues: 0,
         totalFixed: 0,
         repoUrl, tier,
-        error: "Payment cancelled — card hold released",
+        canRetry: true,
+        error: "This checkout session expired before the scan could start. No charge was made — start a new scan to try again.",
       });
     }
 

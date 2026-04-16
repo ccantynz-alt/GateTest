@@ -41,7 +41,7 @@ export default function Hero() {
           </div>
 
           {/* Terminal — belongs here, dark on dark */}
-          <div className="max-w-3xl mx-auto rounded-xl border border-white/10 overflow-hidden shadow-2xl fade-up bg-white/[0.03]">
+          <div className="relative max-w-3xl mx-auto rounded-xl border border-white/10 overflow-hidden shadow-2xl fade-up bg-white/[0.03]">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-white/6">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
               <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
@@ -49,7 +49,8 @@ export default function Hero() {
               <span className="ml-3 text-xs text-white/30 font-[var(--font-mono)]">gatetest --suite full --fix</span>
               <span className="ml-auto text-xs text-emerald-400 font-medium tracking-wider">LIVE</span>
             </div>
-            <div className="p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed">
+            <span className="terminal-scan-line" aria-hidden="true" />
+            <div className="relative p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed">
               <p className="text-emerald-400 font-bold text-xs tracking-wider">GATETEST &mdash; Quality Assurance Gate</p>
               <p className="text-white/30 text-xs">Running full suite: 13 modules</p>
               <p className="mt-3" />
