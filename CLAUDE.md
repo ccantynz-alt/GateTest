@@ -47,6 +47,44 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ---
 
+## ALWAYS-ON MODE — NEVER IDLE (READ THIS EVERY SESSION)
+
+**Idle Claude = lost revenue. Craig's directive:** *"if you're coding and you see something that's broken you fix it, if you think you have an advanced feature that needs adding just add it. We can't have you sitting idle — that's loss of revenue, downtime, loss of coding time."*
+
+### The rule
+
+While working on any task in this repo, if you observe any of the following, **act on it before ending the turn** — do not wait to be asked, do not report and move on:
+
+1. **Broken state** — failing test, failing build, unloaded module, dead link, runtime error, TypeScript error, lint error, broken user flow, dependency drift.
+2. **Bible violations** — anything on the Forbidden List, missing protection artifact, `continue-on-error: true` on the gate, in-memory state on serverless, unhandled error path.
+3. **Obvious missing capability** — a competitor ships a feature we don't have; a module has a known false-positive; an untested module; a `TODO` / `FIXME` left in the code; a Known Issue marked `HIGH` that falls under the pre-authorization.
+4. **Drift from the Bible** — a file changed and this document wasn't updated; a new module added but not registered in the version section; a tier missing a new module name.
+
+### The loop
+
+Every turn ends with the **sweep checklist**:
+- [ ] `node --test tests/*.test.js` — all pass
+- [ ] `cd website && npx next build` — zero errors
+- [ ] `node bin/gatetest.js --list` — all modules load
+- [ ] `grep -rn "TODO\|FIXME" src/ website/app/ --include="*.js" --include="*.ts" --include="*.tsx"` — none left unresolved in code you touched
+- [ ] Known Issues table reviewed — any HIGH item still in the pre-authorization scope gets picked up
+
+If the sweep is red, **fix it before stopping**. The Stop hook enforces this.
+
+### Boundaries
+
+This rule does NOT override **THE BOSS RULE**. The Boss Rule's 9 items still require Craig's explicit authorization — never auto-act on pricing, DNS, Stripe config, production deploys, new dependencies, brand copy, external-API integrations, major architectural changes, or anything touching money/user-data/public comms. When a "broken" thing is one of those, report it to Craig and move on.
+
+**Authorization for this mode:** Granted by Craig — *"if you see something that's broken you fix it... if you think you have an advanced feature that needs adding just add it."*
+
+### The operational floor
+
+- **No "nothing to do" ending.** If the sweep is green and Craig's current ask is satisfied, pick the next HIGH-priority Known Issue that falls under pre-authorization and start it. Only stop when everything pre-authorized is clear.
+- **No "I'll note that for later."** You either do it now (pre-auth) or escalate to Craig now (Boss Rule). There is no third option.
+- **Commit as you go.** A broken-then-fixed state must be captured in a commit, not left in the working tree.
+
+---
+
 ## STRATEGIC DIRECTION — GLUECRON-FIRST (READ THIS EVERY SESSION)
 
 **Gluecron.com is the future git host for Craig's stack.** GitHub is treated as a LEGACY integration, not the long-term target. Every architectural decision from this point forward must pass the question: *does this make the eventual GitHub → Gluecron migration easier or harder?*
