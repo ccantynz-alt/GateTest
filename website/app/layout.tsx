@@ -104,7 +104,7 @@ export default function RootLayout({
                   price: "99.00",
                   priceCurrency: "USD",
                   description:
-                    "All 13 modules including AI code review, security, accessibility, and performance",
+                    "All 67 modules including AI code review, security, accessibility, performance, infrastructure, and supply-chain hardening",
                 },
               ],
             }),
