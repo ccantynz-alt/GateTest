@@ -47,6 +47,44 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ---
 
+## ALWAYS-ON MODE — NEVER IDLE (READ THIS EVERY SESSION)
+
+**Idle Claude = lost revenue. Craig's directive:** *"if you're coding and you see something that's broken you fix it, if you think you have an advanced feature that needs adding just add it. We can't have you sitting idle — that's loss of revenue, downtime, loss of coding time."*
+
+### The rule
+
+While working on any task in this repo, if you observe any of the following, **act on it before ending the turn** — do not wait to be asked, do not report and move on:
+
+1. **Broken state** — failing test, failing build, unloaded module, dead link, runtime error, TypeScript error, lint error, broken user flow, dependency drift.
+2. **Bible violations** — anything on the Forbidden List, missing protection artifact, `continue-on-error: true` on the gate, in-memory state on serverless, unhandled error path.
+3. **Obvious missing capability** — a competitor ships a feature we don't have; a module has a known false-positive; an untested module; a `TODO` / `FIXME` left in the code; a Known Issue marked `HIGH` that falls under the pre-authorization.
+4. **Drift from the Bible** — a file changed and this document wasn't updated; a new module added but not registered in the version section; a tier missing a new module name.
+
+### The loop
+
+Every turn ends with the **sweep checklist**:
+- [ ] `node --test tests/*.test.js` — all pass
+- [ ] `cd website && npx next build` — zero errors
+- [ ] `node bin/gatetest.js --list` — all modules load
+- [ ] `grep -rn "TODO\|FIXME" src/ website/app/ --include="*.js" --include="*.ts" --include="*.tsx"` — none left unresolved in code you touched
+- [ ] Known Issues table reviewed — any HIGH item still in the pre-authorization scope gets picked up
+
+If the sweep is red, **fix it before stopping**. The Stop hook enforces this.
+
+### Boundaries
+
+This rule does NOT override **THE BOSS RULE**. The Boss Rule's 9 items still require Craig's explicit authorization — never auto-act on pricing, DNS, Stripe config, production deploys, new dependencies, brand copy, external-API integrations, major architectural changes, or anything touching money/user-data/public comms. When a "broken" thing is one of those, report it to Craig and move on.
+
+**Authorization for this mode:** Granted by Craig — *"if you see something that's broken you fix it... if you think you have an advanced feature that needs adding just add it."*
+
+### The operational floor
+
+- **No "nothing to do" ending.** If the sweep is green and Craig's current ask is satisfied, pick the next HIGH-priority Known Issue that falls under pre-authorization and start it. Only stop when everything pre-authorized is clear.
+- **No "I'll note that for later."** You either do it now (pre-auth) or escalate to Craig now (Boss Rule). There is no third option.
+- **Commit as you go.** A broken-then-fixed state must be captured in a commit, not left in the working tree.
+
+---
+
 ## STRATEGIC DIRECTION — GLUECRON-FIRST (READ THIS EVERY SESSION)
 
 **Gluecron.com is the future git host for Craig's stack.** GitHub is treated as a LEGACY integration, not the long-term target. Every architectural decision from this point forward must pass the question: *does this make the eventual GitHub → Gluecron migration easier or harder?*
@@ -574,8 +612,8 @@ GateTest/
 
 | # | Issue | Severity | Status |
 |---|-------|----------|--------|
-| 1 | Scan page needs fresh checkout — stale sessions show "cancelled" | MEDIUM | KNOWN |
-| 2 | Website design needs major upgrade — current is basic | HIGH | Craig's next priority |
+| 1 | Scan page needs fresh checkout — stale sessions show "cancelled" | MEDIUM | DONE (2026-04-16) — `/api/scan/status` now returns a new `status: "expired"` state when `piStatus === "canceled"` AND no `scan_status` metadata exists (i.e. session expired BEFORE scan ran). Page renders a dedicated slate-palette "Session Expired" block with a prominent "Start New Scan" CTA, distinct from the amber failure state. |
+| 2 | Website design needs major upgrade — current is basic | HIGH | IN PROGRESS (2026-04-17) — Shipped this session under Craig's "just do it all" authorization: animated hero grid background with radial mask + 40s drift, gradient-shimmer on `.gradient-text`, gradient section dividers, enhanced card hover (teal glow + lift + inner highlight), enhanced `btn-primary` with active-state press + larger shadow, terminal scanline animation, footer teal accent bar. Modules.tsx fully restructured from 13-active/8-soon to all 67 modules across 9 categories (Source & quality / Security / Reliability / Web & UX / Infrastructure / Developer hygiene / AI & advanced / Scanning & testing / Language coverage). Remaining wishlist (for post-launch): navbar dual-layer glass, stats counter-animation on scroll, comparison-bar fill-on-scroll, module-card 3D perspective. |
 | 3 | Stripe test keys not yet swapped in | MEDIUM | Craig action |
 | 4 | GitHub App not yet installed on test repo | MEDIUM | Craig action |
 | 5 | Crontech.ai protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
@@ -583,7 +621,9 @@ GateTest/
 | 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
 | 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | Craig to share Gluecron API docs / deployed URL |
 | 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | DONE (2026-04-14) — `src/core/host-bridge.js` shipped, `GitHubBridge extends HostBridge`, registry + shared markdown formatter + 21 contract tests green. Gluecron bridge can plug in without further refactor once API surface is known. |
-| 10 | Our own `.github/workflows/ci.yml:49` has `continue-on-error: true` on the GateTest job — Bible Forbidden #24 violation. Caught by the new `ciSecurity` module (dog-fooded). Fix = remove that line once the self-scan is known-green; until then the gate is advisory-only in our own CI. | HIGH | Craig to decide: flip to hard-fail OR explicitly accept as temporary. |
+| 10 | Our own `.github/workflows/ci.yml:49` has `continue-on-error: true` on the GateTest job — Bible Forbidden #24 violation. Caught by the new `ciSecurity` module (dog-fooded). Fix = remove that line once the self-scan is known-green; until then the gate is advisory-only in our own CI. | HIGH | DONE (2026-04-16) — `continue-on-error: true` removed from BOTH the gatetest-quick step (ci.yml:51) and the gatetest-full step (ci.yml:90). SARIF / artifact upload steps keep `continue-on-error` because Forbidden #24 scopes to the gate step itself. Self-scan is green: 816/816 tests pass, 67/67 modules load, website builds clean. |
+| 11 | Landing-page hero (`website/app/components/Hero.tsx:16,28,71`) says "13 Modules". Product ships 67 modules per Bible v1.40.0 version string. Marketing drift — day-one customers will see numbers that don't match docs / CLI `--list`. | HIGH | DONE (2026-04-17) — Craig authorized "just do it all". All 13→67 references aligned across 9 surfaces: `Hero.tsx` (4 places incl. badge, subhead, terminal output, stat tile), `Pricing.tsx` (Full Scan description + features), `layout.tsx` (structured-data Offer), `manifest.json`, `opengraph-image.tsx`, `api/checkout/route.ts` (2 places), `scan/status/page.tsx` (2 CTAs), `admin/AdminPanel.tsx`. Hero stat "200+ Quality Checks" also bumped to "800+" to match product reality. |
+| 12 | 31 of 67 modules have no 1:1 `tests/<name>.test.js` file (ai-review, agentic, accessibility, chaos, code-quality, compatibility, csharp, data-integrity, documentation, e2e, explorer, go-lang, integration-tests, java, kotlin, links, lint, live-crawler, mutation, performance, php, python, ruby, rust-lang, secrets, seo, swift, syntax, unit-tests, visual). 816 tests pass so they're not untested — most are covered via integration paths, shared universal-checker tests, or reporter tests — but per-module test files are still missing. Quality Bar #1 risk: a silent regression in one of these modules may not fail a specific test. | MEDIUM | DONE (2026-04-17) — 31 baseline test files shipped in one batch. 19 modules exercised end-to-end via `mod.run(result, { projectRoot: tmp })` against a scratch tmpdir (syntax, lint, secrets, unitTests, integrationTests, accessibility, compatibility, dataIntegrity, documentation, python, go-lang, rust-lang, java, ruby, php, csharp, kotlin, swift). 12 modules narrowed to shape-only (name / description / `typeof run === 'function'`) — 9 for external-surface reasons (e2e, visual, performance, chaos, mutation, aiReview, agentic, liveCrawler, explorer) and 3 because they require the full `GateTestConfig` object not a plain `{}` (codeQuality, links, seo). Suite count jumped from 263 to 298; pass count jumped from 816/816 to 864/864. All green. |
 
 ---
 

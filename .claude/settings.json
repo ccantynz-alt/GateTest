@@ -22,6 +22,21 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/scripts/sweep.sh",
+            "asyncRewake": true,
+            "rewakeSummary": "GateTest never-idle sweep found issues",
+            "rewakeMessage": "ALWAYS-ON MODE sweep (CLAUDE.md): do not end the turn until these are fixed or escalated to Craig under THE BOSS RULE.",
+            "timeout": 300,
+            "description": "GateTest: Never-idle sweep — runs tests, build, module load, TODO check. Wakes model on red (exit 2). 3-rewake loop-guard in sweep.sh."
+          }
+        ]
+      }
     ]
   }
 }
