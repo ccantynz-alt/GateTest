@@ -19,9 +19,16 @@ import https from "https";
 import { isAdminRequest } from "@/app/lib/admin-auth";
 import { resolveGithubToken } from "@/app/lib/github-app";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
+import { runBridgeTier } from "@/app/lib/cli-bridge/run";
+
+// This route runs the full 67-module CLI engine against a materialized
+// /tmp copy of the repo. It MUST be on the Node runtime (fs access) and
+// the Pro-tier 300s budget to accommodate a full scan.
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
-const MAX_FILES_TO_READ = 50;
+const MAX_FILES_TO_READ = 400;
 
 function stripeApi(
   method: string,
@@ -100,6 +107,8 @@ interface ScanRepoResult {
   duration: number;
   authSource?: string | null;
   error?: string;
+  engine?: "cli-bridge" | "ts-fallback";
+  engineError?: string;
 }
 
 async function scanRepo(owner: string, repo: string, tier: string): Promise<ScanRepoResult> {
@@ -149,21 +158,46 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
   });
   const fileContents: RepoFile[] = (await Promise.all(readPromises)).filter((f): f is RepoFile => f !== null);
 
-  // Run the tier through the unified module registry — every module does real work.
-  const { modules, totalIssues } = await runTier(tier === "full" ? "full" : "quick", {
-    owner,
-    repo,
-    files,
-    fileContents,
-    token,
-  });
-
-  return {
-    modules,
-    totalIssues,
-    duration: Date.now() - startTime,
-    authSource: auth.source,
-  };
+  // Primary path: run the real 67-module CLI engine against a materialized
+  // /tmp copy of the repo via the bridge. This is what customers paid for.
+  const bridgeTier = tier === "full" ? "full" : "quick";
+  try {
+    const bridge = await runBridgeTier(bridgeTier, {
+      owner,
+      repo,
+      files,
+      fileContents,
+      token,
+    });
+    return {
+      modules: bridge.modules,
+      totalIssues: bridge.totalIssues,
+      duration: Date.now() - startTime,
+      authSource: auth.source,
+      engine: "cli-bridge",
+    };
+  } catch (bridgeErr) {
+    // Loud, non-silent fallback. If the bridge itself crashes (e.g. /tmp
+    // exhausted, a module constructor throws) we still deliver a result
+    // using the TS-only registry — never a fake pass, never a 500.
+    const msg = bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr);
+    console.error(`[GateTest] CLI bridge FAILED, falling back to TS registry: ${msg}`);
+    const { modules, totalIssues } = await runTier(bridgeTier, {
+      owner,
+      repo,
+      files,
+      fileContents,
+      token,
+    });
+    return {
+      modules,
+      totalIssues,
+      duration: Date.now() - startTime,
+      authSource: auth.source,
+      engine: "ts-fallback",
+      engineError: msg,
+    };
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -253,6 +287,8 @@ export async function POST(req: NextRequest) {
     tier,
     admin: isAdmin,
     authSource: result.authSource,
+    engine: result.engine,
+    engineError: result.engineError,
     error: result.error,
   });
 }

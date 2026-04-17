@@ -14,7 +14,7 @@
  *   3. GitHub App auth (mints a JWT + verifies signing key is valid)
  *   4. Stripe API reachable (hits /v1/balance)
  *   5. Anthropic API reachable (hits /v1/messages with 1-token probe)
- *   6. All 14 scan modules loaded and callable
+ *   6. All 67 CLI-bridge modules registered + capabilities aligned
  *   7. Real scan on a tiny public repo (octocat/Hello-World)
  *
  * This endpoint makes real network calls. Expect 5-10s total runtime.
@@ -34,6 +34,9 @@ import { getDb } from "@/app/lib/db";
 import { createAppJwt } from "@/app/lib/github-app";
 import { MODULES, runTier } from "@/app/lib/scan-modules";
 import type { RepoFile } from "@/app/lib/scan-modules";
+import { ALL_MODULE_NAMES, getModule } from "@/app/lib/cli-bridge/static-registry";
+import { MODULE_CAPABILITIES, isBridgeCompatible } from "@/app/lib/cli-bridge/capabilities";
+import { runBridgeTier } from "@/app/lib/cli-bridge/run";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -287,32 +290,51 @@ async function checkAnthropic(): Promise<Check> {
 
 async function checkModules(): Promise<Check> {
   const started = Date.now();
-  const names = Object.keys(MODULES);
-  if (names.length < 14) {
+  const bridgeNames = ALL_MODULE_NAMES;
+  const tsNames = Object.keys(MODULES);
+  const EXPECTED = 67;
+
+  if (bridgeNames.length !== EXPECTED) {
     return {
       id: "modules",
       label: "Scan modules",
       status: "fail",
-      detail: `Only ${names.length} modules registered (expected 14)`,
+      detail: `Bridge registry has ${bridgeNames.length} modules (expected ${EXPECTED})`,
       duration: Date.now() - started,
     };
   }
-  for (const name of names) {
-    if (typeof MODULES[name] !== "function") {
-      return {
-        id: "modules",
-        label: "Scan modules",
-        status: "fail",
-        detail: `Module "${name}" is not a function`,
-        duration: Date.now() - started,
-      };
-    }
+
+  const capKeys = Object.keys(MODULE_CAPABILITIES);
+  if (capKeys.length !== EXPECTED) {
+    return {
+      id: "modules",
+      label: "Scan modules",
+      status: "fail",
+      detail: `Capability map has ${capKeys.length} entries (expected ${EXPECTED})`,
+      duration: Date.now() - started,
+    };
   }
+
+  const missingCap = bridgeNames.filter((n) => !MODULE_CAPABILITIES[n]);
+  const missingCtor = bridgeNames.filter((n) => !getModule(n));
+  if (missingCap.length > 0 || missingCtor.length > 0) {
+    return {
+      id: "modules",
+      label: "Scan modules",
+      status: "fail",
+      detail: `Bridge drift — missing capability: [${missingCap.join(", ")}], missing constructor: [${missingCtor.join(", ")}]`,
+      duration: Date.now() - started,
+    };
+  }
+
+  const runnable = bridgeNames.filter((n) => isBridgeCompatible(n));
+  const skipped = EXPECTED - runnable.length;
+
   return {
     id: "modules",
     label: "Scan modules",
     status: "ok",
-    detail: `${names.length} modules loaded: ${names.join(", ")}`,
+    detail: `${EXPECTED} bridge modules loaded (${runnable.length} runnable serverless, ${skipped} honestly skipped); ${tsNames.length} TS fallback modules`,
     duration: Date.now() - started,
   };
 }
@@ -320,9 +342,8 @@ async function checkModules(): Promise<Check> {
 async function checkLiveScan(): Promise<Check> {
   const started = Date.now();
   try {
-    // Synthetic in-memory scan: exercise runTier() with fabricated files so we
-    // don't depend on the network. That isolates "modules work" from "GitHub
-    // reachable" (the latter is covered by checkGithubApp).
+    // Exercise the real CLI bridge with fabricated files so we verify the
+    // 67-module engine actually runs in this environment. Network-free.
     const files: string[] = ["README.md", "src/index.ts", "package.json"];
     const fileContents: RepoFile[] = [
       { path: "README.md", content: "# Test\nHello world.\n" },
@@ -335,37 +356,59 @@ async function checkLiveScan(): Promise<Check> {
         content: JSON.stringify({ name: "selftest", version: "0.0.0", dependencies: {} }, null, 2),
       },
     ];
-    const { modules, totalIssues } = await runTier("quick", {
+    const bridge = await runBridgeTier("full", {
       owner: "gatetest",
       repo: "selftest",
       files,
       fileContents,
     });
-    if (modules.length === 0) {
+    if (bridge.modules.length !== 67) {
       return {
         id: "scan",
-        label: "Live scan (in-memory test)",
+        label: "Live scan (CLI bridge)",
         status: "fail",
-        detail: "runTier returned zero modules",
+        detail: `Bridge returned ${bridge.modules.length} envelopes (expected 67)`,
         duration: Date.now() - started,
       };
     }
-    const failed = modules.filter((m) => m.status === "failed" && m.checks === 0).length;
+    const ran = bridge.modules.filter((m) => m.status !== "skipped").length;
+    const failed = bridge.modules.filter((m) => m.status === "failed").length;
     return {
       id: "scan",
-      label: "Live scan (in-memory test)",
+      label: "Live scan (CLI bridge)",
       status: failed > 0 ? "warn" : "ok",
-      detail: `${modules.length} modules ran, ${totalIssues} issue(s) found on fixture${failed > 0 ? `, ${failed} crashed` : ""}`,
+      detail: `67 envelopes (${ran} ran, ${67 - ran} honestly skipped), ${bridge.totalIssues} issue(s) on fixture${failed > 0 ? `, ${failed} module(s) failed` : ""}`,
       duration: Date.now() - started,
     };
   } catch (err) {
-    return {
-      id: "scan",
-      label: "Live scan (in-memory test)",
-      status: "fail",
-      detail: `runTier threw: ${(err as Error).message}`,
-      duration: Date.now() - started,
-    };
+    // Fall back to the TS registry check so the health page still returns.
+    try {
+      const files: string[] = ["README.md"];
+      const fileContents: RepoFile[] = [
+        { path: "README.md", content: "# Test\n" },
+      ];
+      const { modules } = await runTier("quick", {
+        owner: "gatetest",
+        repo: "selftest",
+        files,
+        fileContents,
+      });
+      return {
+        id: "scan",
+        label: "Live scan (CLI bridge)",
+        status: "fail",
+        detail: `Bridge threw: ${(err as Error).message} — TS fallback produced ${modules.length} modules`,
+        duration: Date.now() - started,
+      };
+    } catch (fallbackErr) {
+      return {
+        id: "scan",
+        label: "Live scan (CLI bridge)",
+        status: "fail",
+        detail: `Bridge and fallback both failed: ${(err as Error).message} / ${(fallbackErr as Error).message}`,
+        duration: Date.now() - started,
+      };
+    }
   }
 }
 
