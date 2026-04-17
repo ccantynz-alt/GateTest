@@ -34,6 +34,8 @@ export default function HealthPage() {
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<HealthReport | null>(null);
   const [error, setError] = useState("");
+  const [initingDb, setInitingDb] = useState(false);
+  const [initDbMsg, setInitDbMsg] = useState("");
 
   async function runSelfTest() {
     setRunning(true);
@@ -52,6 +54,25 @@ export default function HealthPage() {
       setError(err instanceof Error ? err.message : "Self-test failed");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function initDb() {
+    setInitingDb(true);
+    setInitDbMsg("");
+    try {
+      const res = await fetch("/api/db/init", { method: "POST", cache: "no-store" });
+      const data = (await res.json()) as { ok?: boolean; tables?: string[]; error?: string };
+      if (!res.ok || !data.ok) {
+        setInitDbMsg(`Init failed: ${data.error || `HTTP ${res.status}`}`);
+        return;
+      }
+      setInitDbMsg(`Created: ${data.tables?.join(", ") || "all tables"}. Re-running self-test…`);
+      await runSelfTest();
+    } catch (err) {
+      setInitDbMsg(err instanceof Error ? err.message : "Init failed");
+    } finally {
+      setInitingDb(false);
     }
   }
 
@@ -185,30 +206,73 @@ export default function HealthPage() {
               running && i === 0 ? <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin block" /> :
               "○";
 
+            const showDbInit = c.id === "db" && c.status === "warn" && /missing tables/i.test(c.detail || "");
+            const showPemHelp =
+              c.id === "github" && c.status === "fail" && /does not look like a PEM|not a valid PEM|DECODER routines/i.test(c.detail || "");
+
             return (
-              <div
-                key={c.id}
-                className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${statusColor}`}
-                style={running && !report ? { animation: `slide-in 0.3s ease-out ${i * 80}ms both` } : undefined}
-              >
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${iconBg}`}>
-                  {icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground">{c.label}</p>
-                  {c.detail && (
-                    <p className={`text-xs mt-0.5 font-mono truncate ${
-                      c.status === "ok" ? "text-green-700" :
-                      c.status === "warn" ? "text-amber-700" :
-                      c.status === "fail" ? "text-red-700" :
-                      "text-muted"
-                    }`}>
-                      {c.detail}
-                    </p>
+              <div key={c.id}>
+                <div
+                  className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${statusColor}`}
+                  style={running && !report ? { animation: `slide-in 0.3s ease-out ${i * 80}ms both` } : undefined}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-base font-bold ${iconBg}`}>
+                    {icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-foreground">{c.label}</p>
+                    {c.detail && (
+                      <p className={`text-xs mt-0.5 font-mono truncate ${
+                        c.status === "ok" ? "text-green-700" :
+                        c.status === "warn" ? "text-amber-700" :
+                        c.status === "fail" ? "text-red-700" :
+                        "text-muted"
+                      }`}>
+                        {c.detail}
+                      </p>
+                    )}
+                  </div>
+                  {typeof c.duration === "number" && (
+                    <span className="text-xs text-muted font-mono shrink-0">{c.duration}ms</span>
                   )}
                 </div>
-                {typeof c.duration === "number" && (
-                  <span className="text-xs text-muted font-mono shrink-0">{c.duration}ms</span>
+
+                {showDbInit && (
+                  <div className="ml-12 mt-2 mb-1 p-3 rounded-lg bg-amber-50/60 border border-amber-200/80">
+                    <p className="text-xs text-amber-800 mb-2">
+                      Schema not yet applied. Safe to run — idempotent, uses <code className="font-mono">IF NOT EXISTS</code>.
+                    </p>
+                    <button
+                      onClick={initDb}
+                      disabled={initingDb}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-60"
+                    >
+                      {initingDb ? "Initializing…" : "Initialize Database"}
+                    </button>
+                    {initDbMsg && (
+                      <p className="text-xs font-mono text-amber-900 mt-2">{initDbMsg}</p>
+                    )}
+                  </div>
+                )}
+
+                {showPemHelp && (
+                  <div className="ml-12 mt-2 mb-1 p-3 rounded-lg bg-red-50/60 border border-red-200/80">
+                    <p className="text-xs text-red-800 font-semibold mb-1">
+                      GATETEST_PRIVATE_KEY format check
+                    </p>
+                    <p className="text-xs text-red-700 mb-2">
+                      The env var is set but does not contain a valid PEM key. Paste the <strong>entire</strong> <code className="font-mono">.pem</code> file from GitHub — including the header and footer lines:
+                    </p>
+                    <pre className="text-[11px] font-mono bg-white/70 border border-red-200 rounded p-2 overflow-x-auto">
+{`-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA... (many lines)
+...
+-----END RSA PRIVATE KEY-----`}
+                    </pre>
+                    <p className="text-[11px] text-red-700 mt-2">
+                      In Vercel: Project &rarr; Settings &rarr; Environment Variables &rarr; <code className="font-mono">GATETEST_PRIVATE_KEY</code>. Paste the full file contents (newlines preserved). The parser already handles escaped <code className="font-mono">\n</code> and base64-wrapped PEMs.
+                    </p>
+                  </div>
                 )}
               </div>
             );
