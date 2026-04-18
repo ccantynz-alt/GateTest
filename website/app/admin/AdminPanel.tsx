@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
 interface FixResult {
   status: string;
@@ -179,31 +180,15 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
   }
 
-  async function runScan() {
+  function runScan() {
     if (!repoUrl.includes("github.com")) {
       setError("Enter a valid GitHub repo URL");
       return;
     }
-
     setScanning(true);
     setResult(null);
+    setFixResult(null);
     setError("");
-
-    try {
-      const res = await fetch("/api/scan/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, tier }),
-      });
-      const data = await res.json();
-      setResult(data);
-      // Refresh DB data after scan
-      loadDbData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
   }
 
   async function fixIssues() {
@@ -372,11 +357,20 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               {error && <p className="text-danger text-sm mt-3">{error}</p>}
             </div>
 
-            {scanning && (
-              <div className="card p-8 text-center">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-muted">Scanning {repoUrl}...</p>
-              </div>
+            {scanning && repoUrl && (
+              <LiveScanTerminal
+                repoUrl={repoUrl}
+                tier={tier}
+                onComplete={(data) => {
+                  setResult(data);
+                  setScanning(false);
+                  loadDbData();
+                }}
+                onError={(err) => {
+                  setError(err);
+                  setScanning(false);
+                }}
+              />
             )}
 
             {result && !scanning && (
