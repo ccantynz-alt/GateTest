@@ -24,7 +24,9 @@ import { githubApi, httpsJsonRequest, resolveGithubToken } from "../../../lib/gi
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
-  const prompt = `You are an expert code fixer. Fix the following issues in this file.
+  const prompt = `You are an expert code fixer for GateTest, an AI-powered QA platform with 67 scanning modules.
+
+Fix ALL of the following issues in this file. Every fix must pass GateTest's re-scan.
 
 FILE: ${filePath}
 ISSUES TO FIX:
@@ -35,12 +37,22 @@ CURRENT CODE:
 ${fileContent}
 \`\`\`
 
-Rules:
+CRITICAL RULES — violations will cause re-scan failure:
 - Return ONLY the complete fixed file content. No explanations. No markdown code fences.
+- Fix the ROOT CAUSE, not the symptom. Never patch over an issue.
+- NEVER introduce these patterns (GateTest scans for them):
+  * console.log / console.debug / console.info in library code
+  * debugger statements
+  * TODO / FIXME / HACK / XXX comments
+  * eval() or Function() calls
+  * Hardcoded secrets, API keys, tokens, passwords
+  * var declarations (use const/let)
+  * Empty catch blocks
+  * Unused imports or variables
 - Preserve every non-issue line exactly — do not rewrite or reformat unrelated code.
-- Every issue listed above must be fixed at its root cause, not patched over.
-- Never remove functionality to "fix" a warning. Never leave a TODO behind.
-- If a fix would require context you don't have, output the UNCHANGED original file verbatim.`;
+- Never remove functionality to "fix" a warning.
+- If a fix would require context you don't have, output the UNCHANGED original file verbatim.
+- The fixed code will be automatically re-scanned. If it fails, the fix is rejected.`;
 
   const body = JSON.stringify({
     model: "claude-sonnet-4-20250514",
@@ -96,23 +108,70 @@ function validateFix(original: string, fixed: string): { ok: boolean; reason?: s
   if (fixed === original) {
     return { ok: false, reason: "no changes produced" };
   }
-  // Truncation guard — Claude hitting max_tokens produces a file that's much shorter than the input.
   if (original.length > 500 && fixed.length < original.length * 0.4) {
     return { ok: false, reason: `likely truncation (${fixed.length}/${original.length} chars)` };
   }
-  // Refusal detection
-  const refusalMarkers = [
-    "I cannot",
-    "I can't",
-    "I'm unable to",
-    "I won't",
-    "As an AI",
-  ];
+  const refusalMarkers = ["I cannot", "I can't", "I'm unable to", "I won't", "As an AI"];
   const firstLine = fixed.split("\n", 1)[0] || "";
   if (refusalMarkers.some((m) => firstLine.startsWith(m))) {
     return { ok: false, reason: "Claude refused" };
   }
   return { ok: true };
+}
+
+/**
+ * Verify that fixed code doesn't introduce NEW issues that GateTest would catch.
+ * Runs the same pattern checks our scan modules use.
+ */
+function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; newIssues: string[] } {
+  const issues: string[] = [];
+  const lines = fixed.split("\n");
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  const isSource = ["js", "ts", "jsx", "tsx", "mjs", "cjs"].includes(ext);
+
+  if (!isSource) return { clean: true, newIssues: [] };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments and strings for some checks
+    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue;
+
+    // console.log/debug/info in non-test files
+    if (!filePath.includes(".test.") && !filePath.includes(".spec.") && !filePath.includes("__test")) {
+      if (/\bconsole\.(log|debug|info)\s*\(/.test(line)) {
+        issues.push(`Line ${i + 1}: console.log/debug/info introduced`);
+      }
+    }
+
+    // debugger statements
+    if (/^\s*debugger\s*;?\s*$/.test(line)) {
+      issues.push(`Line ${i + 1}: debugger statement introduced`);
+    }
+
+    // TODO/FIXME/HACK/XXX
+    if (/\/\/\s*(TODO|FIXME|HACK|XXX)\b/i.test(line)) {
+      issues.push(`Line ${i + 1}: TODO/FIXME comment introduced`);
+    }
+
+    // eval()
+    if (/\beval\s*\(/.test(line) && !trimmed.startsWith("//")) {
+      issues.push(`Line ${i + 1}: eval() introduced`);
+    }
+
+    // var declarations
+    if (/^\s*var\s+\w/.test(line)) {
+      issues.push(`Line ${i + 1}: var declaration introduced (use const/let)`);
+    }
+
+    // Empty catch blocks
+    if (/catch\s*\([^)]*\)\s*\{\s*\}/.test(line)) {
+      issues.push(`Line ${i + 1}: empty catch block introduced`);
+    }
+  }
+
+  return { clean: issues.length === 0, newIssues: issues };
 }
 
 // Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
@@ -222,12 +281,35 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      const fixedContent = await askClaude(originalContent, filePath, fileIssues);
-      const validation = validateFix(originalContent, fixedContent);
+      // First pass: generate fix
+      let fixedContent = await askClaude(originalContent, filePath, fileIssues);
+      let validation = validateFix(originalContent, fixedContent);
       if (!validation.ok) {
         errors.push(`Skipped ${filePath}: ${validation.reason}`);
         return;
       }
+
+      // Verify fix doesn't introduce new issues
+      let verify = verifyFixQuality(fixedContent, filePath);
+      if (!verify.clean) {
+        // Second pass: tell Claude to fix its own mistakes
+        const retryIssues = [
+          ...fileIssues,
+          ...verify.newIssues.map((i) => `YOUR FIX INTRODUCED: ${i} — fix this too`),
+        ];
+        fixedContent = await askClaude(originalContent, filePath, retryIssues);
+        validation = validateFix(originalContent, fixedContent);
+        if (!validation.ok) {
+          errors.push(`Skipped ${filePath} after retry: ${validation.reason}`);
+          return;
+        }
+        verify = verifyFixQuality(fixedContent, filePath);
+        if (!verify.clean) {
+          errors.push(`Skipped ${filePath}: fix still introduces issues after retry: ${verify.newIssues.join("; ")}`);
+          return;
+        }
+      }
+
       fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
     } catch (err) {
       errors.push(`Failed to fix ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
