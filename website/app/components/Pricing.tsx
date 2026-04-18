@@ -55,7 +55,7 @@ const scanPlans = [
 
 const comingSoon = [
   "Auto-fix PRs — GateTest creates a PR that fixes the issues",
-  "Live browser testing — real Playwright-powered page testing",
+  "Live browser testing — real browser-powered page testing",
   "Visual regression — screenshot comparison between deploys",
   "Continuous monitoring — scan on every push, $49/month",
 ];

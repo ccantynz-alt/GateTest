@@ -104,7 +104,7 @@ const categories: ModuleCategory[] = [
     modules: [
       { name: "Unit tests", desc: "Jest, Vitest, Mocha — coverage + passing discovery." },
       { name: "Integration tests", desc: "Cross-module test discovery and execution." },
-      { name: "E2E", desc: "Playwright-powered full-flow testing." },
+      { name: "E2E", desc: "Full-flow browser testing — every click, every form, every state." },
       { name: "Chaos", desc: "Slow networks, API failures, missing resources." },
       { name: "Live crawler", desc: "Real-site crawl — every page, every error." },
       { name: "Autonomous explorer", desc: "AI fills forms, clicks buttons, verifies state changes." },
