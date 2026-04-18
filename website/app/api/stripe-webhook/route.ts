@@ -29,7 +29,11 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 
 function verifyStripeSignature(payload: string, sigHeader: string): boolean {
-  if (!STRIPE_WEBHOOK_SECRET) return true;
+  // FAIL CLOSED — if the webhook secret is missing from env, refuse the
+  // event. Accepting unverified Stripe events = attacker can forge payment
+  // captures. Bible Forbidden #15 + security-audit 2026-04-18.
+  if (!STRIPE_WEBHOOK_SECRET) return false;
+  if (!sigHeader) return false;
 
   const parts = sigHeader.split(",").reduce(
     (acc, part) => {
@@ -40,6 +44,8 @@ function verifyStripeSignature(payload: string, sigHeader: string): boolean {
     },
     { timestamp: "", signatures: [] as string[] }
   );
+
+  if (parts.signatures.length === 0) return false;
 
   const signedPayload = `${parts.timestamp}.${payload}`;
   const expected = crypto
@@ -157,12 +163,14 @@ export async function POST(req: NextRequest) {
 
   if (!tier || !repoUrl || !paymentIntentId || !sessionId) {
     // Ack anyway so Stripe doesn't retry — missing metadata is not a
-    // transient failure we can recover from.
+    // transient failure we can recover from. Log only a prefix of the
+    // session/PI IDs (PII-safe — enough to correlate, not enough to
+    // reconstruct a full Stripe reference).
     console.error("[GateTest] Missing scan metadata on webhook", {
-      sessionId,
-      paymentIntentId,
-      tier,
-      repoUrl,
+      sessionPrefix: sessionId ? sessionId.slice(0, 12) + "..." : null,
+      piPrefix: paymentIntentId ? paymentIntentId.slice(0, 12) + "..." : null,
+      tierPresent: Boolean(tier),
+      repoUrlPresent: Boolean(repoUrl),
     });
     return NextResponse.json({ received: true, note: "missing_metadata" });
   }

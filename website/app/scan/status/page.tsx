@@ -134,7 +134,27 @@ export default function ScanStatus() {
       body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier }),
     })
       .then((res) => res.json())
-      .then((data) => { setScanResult(data); setScanning(false); })
+      .then((data) => {
+        // Normalise any status the UI doesn't render (pending, running,
+        // cancelled, unexpected) into a failed result so the user never
+        // sees a page stuck at 100% with a misleading "Scanning..." header.
+        const knownStates = new Set(["complete", "failed", "expired"]);
+        if (!data || !knownStates.has(data.status)) {
+          setScanResult({
+            status: "failed",
+            modules: data?.modules || [],
+            totalModules: data?.totalModules || 0,
+            completedModules: data?.completedModules || 0,
+            totalIssues: data?.totalIssues || 0,
+            totalFixed: data?.totalFixed || 0,
+            duration: data?.duration || 0,
+            error: data?.error || `Scan returned unexpected state: ${data?.status || "none"}`,
+          });
+        } else {
+          setScanResult(data);
+        }
+        setScanning(false);
+      })
       .catch((err) => {
         setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: err.message });
         setScanning(false);

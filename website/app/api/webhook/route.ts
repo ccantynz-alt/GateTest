@@ -105,7 +105,10 @@ async function getInstallationToken(installationId: number): Promise<string> {
 // ── Signature Verification ──────────────────────────
 
 function verifySignature(payload: string, signature: string | null): boolean {
-  if (!WEBHOOK_SECRET) return true;
+  // FAIL CLOSED — a missing webhook secret in env means ANYONE could forge
+  // events. If the secret is absent we must refuse, not accept. Matches
+  // Bible Forbidden #15 (no silent failure) + security-audit 2026-04-18.
+  if (!WEBHOOK_SECRET) return false;
   if (!signature) return false;
   const expected =
     "sha256=" +
@@ -383,75 +386,97 @@ async function processWebhook(
   const token = await getInstallationToken(installationId);
   const repo = event.repository as { owner: { login: string }; name: string };
 
-  if (eventType === "push") {
-    const sha = event.after as string;
-    const branch = (event.ref as string).replace("refs/heads/", "");
-    const owner = repo.owner.login;
-    const name = repo.name;
+  // Track which SHA we set pending on, so if scan crashes we can force
+  // the status to `failure`. Otherwise the commit stays at pending forever
+  // and the customer sees "Scanning..." that never resolves.
+  let pendingSha: string | null = null;
+  const owner = repo.owner.login;
+  const name = repo.name;
 
-    // Set pending
-    await githubApi("POST", `/repos/${owner}/${name}/statuses/${sha}`, token, {
-      state: "pending",
-      context: "GateTest",
-      description: "Scanning...",
-    });
+  try {
+    if (eventType === "push") {
+      const sha = event.after as string;
+      const branch = (event.ref as string).replace("refs/heads/", "");
+      pendingSha = sha;
 
-    const result = await scanRepo(owner, name, branch, token);
-
-    // Set result
-    await githubApi("POST", `/repos/${owner}/${name}/statuses/${sha}`, token, {
-      state: result.passed ? "success" : "failure",
-      context: "GateTest",
-      description: result.passed
-        ? `All clear — ${result.checksPassed} checks passed`
-        : `${result.issuesFound} issues found`,
-    });
-  } else if (eventType === "pull_request") {
-    const action = event.action as string;
-    if (!["opened", "synchronize", "reopened"].includes(action)) return;
-
-    const pr = event.pull_request as {
-      number: number;
-      head: { sha: string; ref: string };
-    };
-    const owner = repo.owner.login;
-    const name = repo.name;
-
-    // Set pending
-    await githubApi(
-      "POST",
-      `/repos/${owner}/${name}/statuses/${pr.head.sha}`,
-      token,
-      {
+      await githubApi("POST", `/repos/${owner}/${name}/statuses/${sha}`, token, {
         state: "pending",
         context: "GateTest",
         description: "Scanning...",
-      }
-    );
+      });
 
-    const result = await scanRepo(owner, name, pr.head.ref, token);
+      const result = await scanRepo(owner, name, branch, token);
 
-    // Post comment
-    await githubApi(
-      "POST",
-      `/repos/${owner}/${name}/issues/${pr.number}/comments`,
-      token,
-      { body: formatComment(result) }
-    );
-
-    // Set status
-    await githubApi(
-      "POST",
-      `/repos/${owner}/${name}/statuses/${pr.head.sha}`,
-      token,
-      {
+      await githubApi("POST", `/repos/${owner}/${name}/statuses/${sha}`, token, {
         state: result.passed ? "success" : "failure",
         context: "GateTest",
         description: result.passed
           ? `All clear — ${result.checksPassed} checks passed`
           : `${result.issuesFound} issues found`,
+      });
+    } else if (eventType === "pull_request") {
+      const action = event.action as string;
+      if (!["opened", "synchronize", "reopened"].includes(action)) return;
+
+      const pr = event.pull_request as {
+        number: number;
+        head: { sha: string; ref: string };
+      };
+      pendingSha = pr.head.sha;
+
+      await githubApi(
+        "POST",
+        `/repos/${owner}/${name}/statuses/${pr.head.sha}`,
+        token,
+        {
+          state: "pending",
+          context: "GateTest",
+          description: "Scanning...",
+        }
+      );
+
+      const result = await scanRepo(owner, name, pr.head.ref, token);
+
+      await githubApi(
+        "POST",
+        `/repos/${owner}/${name}/issues/${pr.number}/comments`,
+        token,
+        { body: formatComment(result) }
+      );
+
+      await githubApi(
+        "POST",
+        `/repos/${owner}/${name}/statuses/${pr.head.sha}`,
+        token,
+        {
+          state: result.passed ? "success" : "failure",
+          context: "GateTest",
+          description: result.passed
+            ? `All clear — ${result.checksPassed} checks passed`
+            : `${result.issuesFound} issues found`,
+        }
+      );
+    }
+  } catch (err) {
+    // Don't leave the commit at pending — force it to failure so the
+    // customer sees a resolved state and can retry the push.
+    if (pendingSha) {
+      try {
+        await githubApi(
+          "POST",
+          `/repos/${owner}/${name}/statuses/${pendingSha}`,
+          token,
+          {
+            state: "failure",
+            context: "GateTest",
+            description: "Scan failed — please retry or contact support",
+          }
+        );
+      } catch {
+        // If we can't even update the status, surface the original error.
       }
-    );
+    }
+    throw err;
   }
 }
 
