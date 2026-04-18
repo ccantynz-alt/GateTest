@@ -14,6 +14,7 @@ interface LogEntry {
 interface LiveScanTerminalProps {
   repoUrl: string;
   tier: string;
+  sessionId?: string;
   onComplete: (result: Record<string, unknown>) => void;
   onError: (error: string) => void;
 }
@@ -24,7 +25,7 @@ const MODULE_ORDER = [
   "dataIntegrity", "documentation", "performance", "aiReview",
 ];
 
-export default function LiveScanTerminal({ repoUrl, tier, onComplete, onError }: LiveScanTerminalProps) {
+export default function LiveScanTerminal({ repoUrl, tier, sessionId, onComplete, onError }: LiveScanTerminalProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [running, setRunning] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -72,7 +73,7 @@ export default function LiveScanTerminal({ repoUrl, tier, onComplete, onError }:
     fetch("/api/scan/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repoUrl, tier }),
+      body: JSON.stringify({ repoUrl, tier, ...(sessionId ? { sessionId } : {}) }),
     })
       .then((res) => res.json())
       .then((data) => {
