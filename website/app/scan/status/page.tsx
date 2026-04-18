@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import FindingsPanel from "@/app/components/FindingsPanel";
 
 interface ModuleResult {
   name: string;
@@ -13,7 +14,7 @@ interface ModuleResult {
 }
 
 interface ScanResult {
-  status: "complete" | "failed";
+  status: "complete" | "failed" | "expired";
   modules: ModuleResult[];
   totalModules: number;
   completedModules: number;
@@ -23,6 +24,7 @@ interface ScanResult {
   repoUrl?: string;
   tier?: string;
   error?: string;
+  canRetry?: boolean;
 }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -143,23 +145,30 @@ export default function ScanStatus() {
 
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";
+  const isExpired = scanResult?.status === "expired";
+  const isEndState = isComplete || isFailed || isExpired;
   const displayModules = scanResult ? scanResult.modules : animModules;
   const displayProgress = scanResult ? 100 : Math.min(Math.round((animIndex / Math.max(animModules.length, 1)) * 95) + 5, 95);
 
   return (
     <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-3xl mx-auto">
+      <div className={`${isComplete && (scanResult?.totalIssues || 0) > 0 ? "max-w-4xl" : "max-w-3xl"} mx-auto transition-all duration-300`}>
         {/* Header */}
         <div className="text-center mb-8">
           <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-5 ${
             isComplete ? "bg-green-50 border border-green-200 text-green-700" :
+            isExpired ? "bg-slate-50 border border-slate-200 text-slate-700" :
             isFailed ? "bg-amber-50 border border-amber-200 text-amber-700" :
             "bg-amber-50 border border-amber-200 text-amber-700"
           }`}>
             <span className={`w-2 h-2 rounded-full ${
-              isComplete ? "bg-green-500" : isFailed ? "bg-amber-500" : "bg-amber-500 animate-pulse"
+              isComplete ? "bg-green-500" :
+              isExpired ? "bg-slate-400" :
+              isFailed ? "bg-amber-500" : "bg-amber-500 animate-pulse"
             }`} />
-            {isComplete ? "Scan Complete" : isFailed ? "Scan Failed" : "Scanning..."}
+            {isComplete ? "Scan Complete" :
+             isExpired ? "Session Expired" :
+             isFailed ? "Scan Failed" : "Scanning..."}
           </div>
 
           <h1 className="text-3xl sm:text-4xl font-bold mb-3 text-foreground">
@@ -167,7 +176,8 @@ export default function ScanStatus() {
               (scanResult?.totalIssues || 0) === 0
                 ? "All Clear"
                 : `${scanResult?.totalIssues} Issue${(scanResult?.totalIssues || 0) > 1 ? "s" : ""} Found`
-            ) : isFailed ? "Scan Failed" : "Scanning..."}
+            ) : isExpired ? "Session Expired" :
+               isFailed ? "Scan Failed" : "Scanning..."}
           </h1>
 
           {params.repo && (
@@ -299,6 +309,11 @@ export default function ScanStatus() {
               </p>
             </div>
 
+            {/* Beautiful findings panel — severity, file:line, filter, search */}
+            {scanResult && scanResult.modules.length > 0 && (
+              <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
+            )}
+
             {/* What's next */}
             {(scanResult?.totalIssues || 0) > 0 && (
               <div className="p-5 rounded-xl border border-border bg-white">
@@ -354,7 +369,18 @@ export default function ScanStatus() {
           </div>
         )}
 
-        {/* Failed */}
+        {/* Session expired — checkout session cancelled before scan started */}
+        {isExpired && (
+          <div className="text-center">
+            <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 mb-4">
+              <p className="font-bold text-slate-700">{scanResult?.error || "This checkout session expired."}</p>
+              <p className="text-sm text-muted mt-1">No charge was made. Start a new scan when you&apos;re ready.</p>
+            </div>
+            <a href="/#pricing" className="btn-primary px-6 py-3 text-sm">Start New Scan</a>
+          </div>
+        )}
+
+        {/* Failed — scan ran but something went wrong */}
         {isFailed && (
           <div className="text-center">
             <div className="p-5 rounded-xl bg-amber-50 border border-amber-200 mb-4">
@@ -366,7 +392,7 @@ export default function ScanStatus() {
         )}
 
         {/* Scanning notice */}
-        {scanning && (
+        {scanning && !isEndState && (
           <p className="text-center text-xs text-muted mt-4">
             Card held, not charged. Payment captured only after scan delivery.
           </p>
