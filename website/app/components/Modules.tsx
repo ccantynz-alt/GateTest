@@ -156,21 +156,27 @@ export default function Modules() {
             54 modules (infra, supply-chain, language checkers, etc.) are
             summarised in the subtitle above; see CLAUDE.md for the full
             list. */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-16">
-          {activeModules.map((mod) => (
-            <div
-              key={mod.name}
-              className="card p-5"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center font-[var(--font-mono)] font-bold text-accent text-sm mb-3">
-                {mod.icon}
+        {categories.map((cat) => (
+          <div key={cat.name} className="mb-10">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">{cat.name}</h3>
+                <p className="text-sm text-muted">{cat.blurb}</p>
               </div>
               <span className="text-xs font-mono text-muted shrink-0 ml-4">
                 {cat.modules.length} module{cat.modules.length !== 1 ? "s" : ""}
               </span>
             </div>
-          ))}
-        </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {cat.modules.map((mod) => (
+                <div key={mod.name} className="card p-4">
+                  <span className="text-sm font-semibold text-foreground">{mod.name}</span>
+                  <p className="text-xs text-muted mt-1">{mod.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
 
       </div>
     </section>

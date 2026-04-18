@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json(result.body, { status: result.status });
   if (result.headers) {
     for (const [k, v] of Object.entries(result.headers)) {
-      res.headers.set(k, v);
+      res.headers.set(k, v as string);
     }
   }
   return res;
