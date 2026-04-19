@@ -364,7 +364,9 @@ class GluecronBridge extends HostBridge {
     }
     const res = await this._api('GET', '/api/v2/user');
     if (res.statusCode === 200) {
-      return { type: 'user', login: res.data.login, id: res.data.id };
+      // Gluecron v2 returns `username`; support `login` too for forward-compat.
+      const login = res.data.login || res.data.username;
+      return { type: 'user', login, id: res.data.id };
     }
     throw new Error(`[GateTest] Gluecron authentication failed (HTTP ${res.statusCode})`);
   }
