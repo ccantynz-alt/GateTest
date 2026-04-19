@@ -294,6 +294,76 @@ export const links: ModuleRunner = async (ctx: ModuleContext): Promise<ModuleOut
     }
   }
 
+  // LIVE URL VERIFICATION — actually fetch external links and check for 404s.
+  // This is what makes GateTest brutal: we don't just pattern-match, we verify.
+  const allExternalUrls = new Set<string>();
+  for (const f of ctx.fileContents) {
+    const hrefs = Array.from(f.content.matchAll(/href\s*=\s*["'](https?:\/\/[^"']+)["']/gi)).map((m) => m[1]);
+    for (const h of hrefs) {
+      if (h.includes("localhost") || h.includes("127.0.0.1")) continue;
+      allExternalUrls.add(h);
+    }
+    // Also check markdown links
+    const mdLinks = Array.from(f.content.matchAll(/\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g)).map((m) => m[1]);
+    for (const l of mdLinks) {
+      allExternalUrls.add(l);
+    }
+  }
+
+  // Verify up to 50 unique external URLs (cap to stay within Vercel time budget)
+  const urlsToCheck = Array.from(allExternalUrls).slice(0, 50);
+  if (urlsToCheck.length > 0) {
+    const urlResults = await Promise.allSettled(
+      urlsToCheck.map(async (url) => {
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          const res = await fetch(url, {
+            method: "HEAD",
+            signal: controller.signal,
+            redirect: "follow",
+            headers: { "User-Agent": "GateTest/LinkChecker" },
+          });
+          clearTimeout(timeout);
+          return { url, status: res.status, ok: res.ok };
+        } catch (err) {
+          // Try GET if HEAD fails (some servers reject HEAD)
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, {
+              method: "GET",
+              signal: controller.signal,
+              redirect: "follow",
+              headers: { "User-Agent": "GateTest/LinkChecker" },
+            });
+            clearTimeout(timeout);
+            return { url, status: res.status, ok: res.ok };
+          } catch {
+            return { url, status: 0, ok: false, error: (err as Error).message };
+          }
+        }
+      })
+    );
+
+    for (const r of urlResults) {
+      checks++;
+      if (r.status === "fulfilled") {
+        const { url, status, ok } = r.value;
+        if (!ok) {
+          issues++;
+          if (status === 404) {
+            details.push(`error: BROKEN LINK (404): ${url}`);
+          } else if (status === 0) {
+            details.push(`warning: Link unreachable: ${url}`);
+          } else {
+            details.push(`warning: Link returned HTTP ${status}: ${url}`);
+          }
+        }
+      }
+    }
+  }
+
   if (checks === 0) return { checks: 0, issues: 0, details, skipped: "no link-bearing files found" };
   return { checks, issues, details };
 };
