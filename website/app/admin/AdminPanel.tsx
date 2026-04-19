@@ -92,7 +92,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers" | "keys">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "server" | "scans" | "customers" | "keys">("scan");
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
   const [keyName, setKeyName] = useState("");
   const [keyCustomer, setKeyCustomer] = useState("");
@@ -295,7 +295,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "scans", "customers", "keys"] as const).map((tab) => (
+          {(["scan", "server", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -306,7 +306,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               }`}
             >
               {tab === "scan"
-                ? "Run Scan"
+                ? "Repo Scan"
+                : tab === "server"
+                ? "Server Scan"
                 : tab === "scans"
                 ? "Recent Scans"
                 : tab === "customers"
@@ -524,6 +526,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             )}
           </>
+        )}
+
+        {/* Tab: Server Scan */}
+        {activeTab === "server" && (
+          <ServerScanPanel />
         )}
 
         {/* Tab: Recent Scans */}
@@ -755,5 +762,118 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function ServerScanPanel() {
+  const [url, setUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+
+  async function runServerScan() {
+    if (!url) { setError("Enter a URL"); return; }
+    setScanning(true); setResult(null); setError("");
+    try {
+      const res = await fetch("/api/scan/server", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Scan failed"); return; }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally { setScanning(false); }
+  }
+
+  const modules = (result?.modules as Array<Record<string, unknown>>) || [];
+  const totalIssues = (result?.totalIssues as number) || 0;
+
+  return (
+    <>
+      <div className="card p-6 mb-8">
+        <p className="text-sm text-muted mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runServerScan(); }}
+            placeholder="https://example.com"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+          />
+          <button onClick={runServerScan} disabled={scanning} className="btn-primary px-6 py-3 text-sm disabled:opacity-50">
+            {scanning ? "Scanning..." : "Scan Server"}
+          </button>
+        </div>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      </div>
+
+      {scanning && (
+        <div className="card p-8 text-center">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted">Checking SSL, headers, DNS, performance...</p>
+        </div>
+      )}
+
+      {result && !scanning && (
+        <div className="space-y-4">
+          <div className={`card p-6 ${totalIssues === 0 ? "border-l-4 border-l-green-500" : "border-l-4 border-l-amber-500"}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">
+                  {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
+                </h2>
+                <p className="text-sm text-muted">
+                  {result.hostname as string} &middot; {modules.length} modules &middot; {result.duration as number}ms
+                </p>
+              </div>
+              <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
+                totalIssues === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+              }`}>
+                {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
+              </span>
+            </div>
+          </div>
+
+          {modules.map((mod) => {
+            const status = mod.status as string;
+            const details = (mod.details as string[]) || [];
+            return (
+              <div key={mod.name as string} className={`card p-4 ${
+                status === "passed" ? "border-l-4 border-l-green-500" :
+                status === "warning" ? "border-l-4 border-l-amber-500" :
+                "border-l-4 border-l-red-500"
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-sm">{mod.label as string || mod.name as string}</span>
+                  <span className={`text-xs font-bold ${
+                    status === "passed" ? "text-green-600" : status === "warning" ? "text-amber-600" : "text-red-600"
+                  }`}>
+                    {status === "passed" ? "PASS" : status === "warning" ? "WARN" : "FAIL"}
+                  </span>
+                </div>
+                {details.length > 0 && (
+                  <ul className="space-y-1">
+                    {details.map((d, i) => (
+                      <li key={i} className={`text-xs font-mono ${
+                        d.startsWith("error") ? "text-red-600" :
+                        d.startsWith("warning") ? "text-amber-600" :
+                        d.startsWith("pass") ? "text-green-600" :
+                        "text-muted"
+                      }`}>
+                        {d}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
