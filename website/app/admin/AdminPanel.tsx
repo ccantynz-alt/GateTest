@@ -279,63 +279,71 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const stats = dbData?.stats;
 
   return (
-    <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">GateTest Admin</h1>
-            <p className="text-sm text-muted">
-              Signed in as <span className="font-mono">{adminLogin}</span>
-            </p>
-          </div>
+    <div className="min-h-screen bg-[#0a0a12]">
+      {/* Dark command center header */}
+      <div className="border-b border-white/8 px-6 py-5">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
+              <span className="text-white font-bold text-lg font-[var(--font-mono)]">G</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Command Center</h1>
+              <p className="text-xs text-white/40">
+                Signed in as <span className="font-mono text-emerald-400">{adminLogin}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
             <a
               href="/admin/health"
-              className="text-sm px-3 py-1.5 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors font-medium"
+              className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors font-medium"
             >
-              Run Self-Test
+              Self-Test
             </a>
-            <a href="/" className="text-sm text-muted hover:text-foreground">
-              &larr; Back to site
+            <a href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+              &larr; Site
             </a>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-6xl mx-auto px-6 py-6">
         {/* Stats bar */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.total_scans}</p>
-              <p className="text-xs text-muted">Total Scans</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.total_scans}</p>
+              <p className="text-xs text-white/40">Total Scans</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.total_customers}</p>
-              <p className="text-xs text-muted">Customers</p>
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.total_customers}</p>
+              <p className="text-xs text-white/40">Customers</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-emerald-400">
                 ${Number(stats.total_revenue || 0).toFixed(0)}
               </p>
-              <p className="text-xs text-muted">Revenue</p>
+              <p className="text-xs text-white/40">Revenue</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.avg_score || 0}</p>
-              <p className="text-xs text-muted">Avg Score</p>
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.avg_score || 0}</p>
+              <p className="text-xs text-white/40">Avg Score</p>
             </div>
           </div>
         )}
 
-        {/* Tab navigation */}
-        <div className="flex gap-1 mb-6 border-b border-border">
+        {/* Tab navigation — dark themed */}
+        <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto">
           {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab
-                  ? "border-accent text-foreground"
-                  : "border-transparent text-muted hover:text-foreground"
-              } ${tab === "nuclear" ? "font-bold" : ""}`}
+                  ? "border-emerald-400 text-white"
+                  : "border-transparent text-white/40 hover:text-white/70"
+              } ${tab === "nuclear" ? "font-bold text-red-400" : ""}`}
             >
               {tab === "scan"
                 ? "Repo Scan"
