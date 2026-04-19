@@ -31,7 +31,7 @@ import {
 } from "@/app/lib/admin-session";
 import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
 import { getDb } from "@/app/lib/db";
-import { createAppJwt } from "@/app/lib/github-app";
+import { gluecronApi, pingGluecron } from "@/app/lib/gluecron-client";
 import { MODULES, runTier } from "@/app/lib/scan-modules";
 import type { RepoFile } from "@/app/lib/scan-modules";
 
@@ -74,8 +74,15 @@ function httpsPost(options: https.RequestOptions, body: string, timeoutMs = 1500
 }
 
 async function checkEnv(): Promise<Check> {
-  const required = ["DATABASE_URL", "STRIPE_SECRET_KEY", "NEXT_PUBLIC_BASE_URL", "SESSION_SECRET"];
-  const optional = ["GATETEST_APP_ID", "GATETEST_PRIVATE_KEY", "ANTHROPIC_API_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"];
+  const required = [
+    "DATABASE_URL",
+    "STRIPE_SECRET_KEY",
+    "NEXT_PUBLIC_BASE_URL",
+    "SESSION_SECRET",
+    "GLUECRON_BASE_URL",
+    "GLUECRON_API_TOKEN",
+  ];
+  const optional = ["ANTHROPIC_API_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"];
   const missing = required.filter((k) => !process.env[k]);
   const optMissing = optional.filter((k) => !process.env[k]);
   if (missing.length > 0) {
@@ -128,62 +135,67 @@ async function checkDatabase(): Promise<Check> {
   }
 }
 
-async function checkGithubApp(): Promise<Check> {
+async function checkGluecron(): Promise<Check> {
   const started = Date.now();
-  if (!process.env.GATETEST_APP_ID || !process.env.GATETEST_PRIVATE_KEY) {
+  const baseUrl = process.env.GLUECRON_BASE_URL || "";
+  const token = process.env.GLUECRON_API_TOKEN || "";
+  if (!baseUrl) {
     return {
-      id: "github",
-      label: "GitHub App auth",
-      status: "warn",
-      detail: "Not configured — private repos will fail. Set GATETEST_APP_ID + GATETEST_PRIVATE_KEY.",
+      id: "gluecron",
+      label: "Gluecron (git host)",
+      status: "fail",
+      detail: "GLUECRON_BASE_URL not set — cannot reach Gluecron.",
+    };
+  }
+  if (!token) {
+    return {
+      id: "gluecron",
+      label: "Gluecron (git host)",
+      status: "fail",
+      detail: "GLUECRON_API_TOKEN not set — every repo access will 401.",
     };
   }
   try {
-    const jwt = createAppJwt();
-    // Verify by hitting /app endpoint (always available to any valid JWT).
-    const res = await httpsGet({
-      hostname: "api.github.com",
-      port: 443,
-      path: "/app",
-      method: "GET",
-      headers: {
-        "User-Agent": "GateTest-Healthcheck/1.2.0",
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${jwt}`,
-      },
-    }, 10000);
-    if (res.status !== 200) {
+    // Step 1: unauthenticated /api/hooks/ping — proves Gluecron is reachable.
+    const ping = await pingGluecron();
+    if (ping.status !== 200) {
       return {
-        id: "github",
-        label: "GitHub App auth",
+        id: "gluecron",
+        label: "Gluecron (git host)",
         status: "fail",
-        detail: `GitHub rejected JWT (status ${res.status}). Check APP_ID / PRIVATE_KEY.`,
+        detail: `Gluecron ping returned HTTP ${ping.status}.`,
         duration: Date.now() - started,
       };
     }
-    const parsed = JSON.parse(res.body);
+    // Step 2: authenticated /api/v2/user — proves PAT is valid.
+    const userRes = await gluecronApi("GET", "/api/v2/user");
+    if (userRes.status !== 200) {
+      return {
+        id: "gluecron",
+        label: "Gluecron (git host)",
+        status: "fail",
+        detail: `Ping OK but PAT rejected by /api/v2/user (HTTP ${userRes.status}). Check GLUECRON_API_TOKEN scope.`,
+        duration: Date.now() - started,
+      };
+    }
+    const login =
+      (userRes.data as { login?: string; username?: string }).login ||
+      (userRes.data as { login?: string; username?: string }).username ||
+      "user";
     return {
-      id: "github",
-      label: "GitHub App auth",
+      id: "gluecron",
+      label: "Gluecron (git host)",
       status: "ok",
-      detail: `Authenticated as ${parsed.slug || parsed.name || "app"}`,
+      detail: `Reachable + authenticated as ${login}`,
       duration: Date.now() - started,
     };
   } catch (err) {
     const msg = (err as Error).message || "unknown";
-    // Translate opaque OpenSSL errors into actionable guidance.
-    const hint = /DECODER routines/i.test(msg)
-      ? " — private key format rejected by OpenSSL. Re-paste GATETEST_PRIVATE_KEY from the .pem file, preserving newlines."
-      : /does not look like a PEM/i.test(msg)
-      ? ""
-      : /not a valid PEM/i.test(msg)
-      ? ""
-      : "";
     return {
-      id: "github",
-      label: "GitHub App auth",
+      id: "gluecron",
+      label: "Gluecron (git host)",
       status: "fail",
-      detail: `JWT mint or API call failed: ${msg}${hint}`,
+      detail: `Network error: ${msg}`,
       duration: Date.now() - started,
     };
   }
@@ -431,10 +443,10 @@ export async function GET() {
 
   // Run all checks in parallel where they don't conflict. Most are independent
   // network calls so concurrency is safe.
-  const [env, db, github, stripe, anthropic, modules, scan, auth] = await Promise.all([
+  const [env, db, gluecron, stripe, anthropic, modules, scan, auth] = await Promise.all([
     checkEnv(),
     checkDatabase(),
-    checkGithubApp(),
+    checkGluecron(),
     checkStripe(),
     checkAnthropic(),
     checkModules(),
@@ -442,7 +454,7 @@ export async function GET() {
     checkAuthProviders(),
   ]);
 
-  const checks: Check[] = [env, db, github, stripe, anthropic, modules, scan, auth];
+  const checks: Check[] = [env, db, gluecron, stripe, anthropic, modules, scan, auth];
   const ok = checks.filter((c) => c.status === "ok").length;
   const warn = checks.filter((c) => c.status === "warn").length;
   const fail = checks.filter((c) => c.status === "fail").length;

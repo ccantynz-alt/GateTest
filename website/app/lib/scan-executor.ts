@@ -14,7 +14,7 @@
 
 import https from "https";
 import { getDb } from "./db";
-import { resolveGithubToken } from "./github-app";
+import { fetchBlob, fetchTree, resolveRepoAuth } from "./gluecron-client";
 import { runTier, type RepoFile } from "./scan-modules";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
@@ -85,39 +85,6 @@ function stripeApi(
   });
 }
 
-function githubContentsGet(
-  token: string | undefined,
-  path: string
-): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const headers: Record<string, string> = {
-      "User-Agent": "GateTest/1.2.0",
-      Accept: "application/vnd.github+json",
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const req = https.request(
-      { hostname: "api.github.com", port: 443, path, method: "GET", headers },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString("utf-8")));
-          } catch {
-            resolve({});
-          }
-        });
-      }
-    );
-    req.on("error", reject);
-    req.setTimeout(15000, () => {
-      req.destroy();
-      reject(new Error("GitHub request timed out"));
-    });
-    req.end();
-  });
-}
-
 function emptyResult(startTime: number, error: string, authSource?: string | null): ScanResult {
   return {
     status: "failed",
@@ -141,48 +108,40 @@ export async function runScan(
 ): Promise<ScanResult> {
   const startTime = Date.now();
 
-  const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  // Accept Gluecron URLs first; fall back to GitHub URLs so customer-supplied
+  // links work in either form during the migration window.
+  const gluecronMatch = repoUrl.match(/gluecron\.com\/([^/]+)\/([^/?#]+)/);
+  const githubMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  const repoMatch = gluecronMatch || githubMatch;
   if (!repoMatch) {
-    return emptyResult(startTime, "Invalid GitHub repository URL");
+    return emptyResult(startTime, "Invalid repository URL (expected gluecron.com/<owner>/<repo>)");
   }
 
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
 
-  const auth = await resolveGithubToken(owner, repo);
+  const auth = await resolveRepoAuth(owner, repo);
   const token = auth.token || undefined;
 
-  let tree: { tree?: Array<{ path: string; type: string }> };
-  try {
-    tree = (await githubContentsGet(
-      token,
-      `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
-    )) as typeof tree;
-  } catch {
-    try {
-      tree = (await githubContentsGet(
-        undefined,
-        `/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
-      )) as typeof tree;
-    } catch (err) {
-      return emptyResult(
-        startTime,
-        `Cannot access repository ${owner}/${repo}: ${(err as Error).message}`,
-        auth.source
-      );
-    }
-  }
-
-  if (!tree?.tree) {
-    const hint = auth.error ? ` (${auth.error})` : token ? "" : " — set GITHUB_TOKEN or install the GateTest GitHub App";
+  if (!token) {
     return emptyResult(
       startTime,
-      `Cannot access repository ${owner}/${repo}${hint}`,
+      `Cannot access repository ${owner}/${repo}${auth.error ? ` (${auth.error})` : ""}`,
       auth.source
     );
   }
 
-  const files = tree.tree.filter((f) => f.type === "blob").map((f) => f.path);
+  // Gluecron uses a defaultBranch by convention — we fetch the tree at HEAD
+  // and let Gluecron resolve the ref server-side.
+  const files = await fetchTree(owner, repo, "HEAD", token);
+  if (files.length === 0) {
+    return emptyResult(
+      startTime,
+      `Cannot access repository ${owner}/${repo} — empty tree returned`,
+      auth.source
+    );
+  }
+
   const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
   const sourceFiles = files.filter(
     (f) =>
@@ -192,21 +151,20 @@ export async function runScan(
       !f.includes("dist/")
   );
 
-  // Read file contents in parallel.
-  const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
-    try {
-      const data = (await githubContentsGet(
-        token,
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`
-      )) as { content?: string; encoding?: string };
-      if (data.content && data.encoding === "base64") {
-        return { path: filePath, content: Buffer.from(data.content, "base64").toString("utf-8") };
+  // Read file contents in parallel via the Gluecron contents endpoint.
+  const readPromises = sourceFiles
+    .slice(0, MAX_FILES_TO_READ)
+    .map(async (filePath): Promise<RepoFile | null> => {
+      try {
+        const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
+        if (content) {
+          return { path: filePath, content };
+        }
+        return null;
+      } catch {
+        return null;
       }
-      return null;
-    } catch {
-      return null;
-    }
-  });
+    });
   const fileContents: RepoFile[] = (await Promise.all(readPromises)).filter((f): f is RepoFile => f !== null);
 
   const { modules, totalIssues } = await runTier(tier === "full" ? "full" : "quick", {
