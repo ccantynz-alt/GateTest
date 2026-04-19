@@ -177,7 +177,56 @@ function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; ne
 // Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
 const FIX_CONCURRENCY = 4;
 // Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
-const MAX_FILE_BYTES = 200 * 1024;
+const MAX_FILE_BYTES = 400 * 1024;
+
+/**
+ * Ask Claude to generate a NEW file (when it doesn't exist yet).
+ * Used when the issue is "Missing X" and we need to create X.
+ */
+async function askClaudeCreate(filePath: string, context: string[]): Promise<string> {
+  const prompt = `You are an expert developer. Generate the COMPLETE contents of a new file.
+
+FILE TO CREATE: ${filePath}
+CONTEXT / REASON:
+${context.map((c, i) => `${i + 1}. ${c}`).join("\n")}
+
+Rules:
+- Return ONLY the file content. No explanations. No markdown code fences.
+- Generate a production-ready file, not a stub.
+- For .gitignore: include standard Node, env, and secret exclusions.
+- For README.md: include project purpose, installation, usage sections.
+- For .env.example: include common env vars with descriptions.
+- For tsconfig.json: use modern strict settings.
+- Follow whatever format the file extension implies.`;
+
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const res = await httpsJsonRequest({
+    hostname: "api.anthropic.com",
+    port: 443,
+    path: "/v1/messages",
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "Content-Length": String(Buffer.byteLength(body)),
+    },
+  }, body);
+
+  if (res.status !== 200) {
+    throw new Error(`Claude API error ${res.status}`);
+  }
+
+  const content = res.data.content as Array<{ type: string; text: string }>;
+  let newFile = content?.[0]?.text || "";
+  newFile = newFile.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+  return newFile;
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -264,6 +313,22 @@ export async function POST(req: NextRequest) {
   // Process files in parallel (capped concurrency) — major UX win over sequential
   const fileEntries = Array.from(issuesByFile.entries());
   await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
+    // Handle CREATE_FILE issues — the file doesn't exist, generate it from scratch
+    const createIssues = fileIssues.filter((i) => i.startsWith("CREATE_FILE:"));
+    if (createIssues.length > 0) {
+      try {
+        const newContent = await askClaudeCreate(filePath, createIssues.map((i) => i.replace("CREATE_FILE: ", "")));
+        if (newContent && newContent.length > 10) {
+          fixes.push({ file: filePath, original: "", fixed: newContent, issues: fileIssues });
+        } else {
+          errors.push(`Could not generate ${filePath}: empty response`);
+        }
+      } catch (err) {
+        errors.push(`Could not generate ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+      return;
+    }
+
     try {
       const fileRes = await githubApi(
         "GET",
@@ -351,15 +416,21 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Commit each fixed file (parallel, capped)
+    // Commit each fixed file (parallel, capped). New files have no SHA.
     await mapWithConcurrency(fixes, FIX_CONCURRENCY, async (fix) => {
-      const sha = await getFileSha(owner, repo, fix.file, branchName, token);
-      await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, {
-        message: `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
+      const isNewFile = fix.original === "";
+      const payload: Record<string, string> = {
+        message: isNewFile
+          ? `feat: create ${fix.file}`
+          : `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
         content: Buffer.from(fix.fixed).toString("base64"),
         branch: branchName,
-        sha,
-      });
+      };
+      if (!isNewFile) {
+        const sha = await getFileSha(owner, repo, fix.file, branchName, token);
+        if (sha) payload.sha = sha;
+      }
+      await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, payload);
     });
 
     // Open PR with premium report

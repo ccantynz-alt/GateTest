@@ -194,19 +194,48 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   async function fixIssues() {
     if (!result || !repoUrl) return;
     const failedMods = modules.filter((m) => (m.status as string) === "failed");
+
+    // Parse issues aggressively — extract file paths from multiple formats
     const issues = failedMods.flatMap((m) => {
       const details = (m.details as string[]) || [];
       return details.map((d) => {
-        const colonIdx = d.indexOf(":");
-        const file = colonIdx > 0 ? d.slice(0, colonIdx).trim() : "";
-        const issue = colonIdx > 0 ? d.slice(colonIdx + 1).trim() : d;
-        return { file, issue, module: m.name as string };
-      });
-    }).filter((i) => i.file);
+        // Format 1: "path/to/file.js:42: message" or "path/to/file.js: message"
+        let file = "";
+        let issue = d;
+        let line: number | undefined;
 
-    if (issues.length === 0) {
-      setError("No fixable issues found (issues need file paths)");
+        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
+        if (fileLineMatch) {
+          file = fileLineMatch[1];
+          line = Number(fileLineMatch[2]);
+          issue = fileLineMatch[3];
+        } else {
+          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
+        }
+
+        // Format 2: "Missing <filename>" → treat as create-file issue
+        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+        if (!file && missingMatch) {
+          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
+          issue = `CREATE_FILE: ${d}`;
+        }
+
+        return { file, issue, module: m.name as string, line };
+      });
+    });
+
+    const fixable = issues.filter((i) => i.file);
+    const unfixable = issues.filter((i) => !i.file);
+
+    if (fixable.length === 0) {
+      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review (config, infrastructure, or architectural changes).`);
       return;
+    }
+
+    if (unfixable.length > 0) {
+      // eslint-disable-next-line no-console
+      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
     }
 
     setFixing(true);
