@@ -33,6 +33,26 @@ import {
   compatibility,
 } from "./web";
 import { aiReview } from "./ai";
+import {
+  errorSwallow,
+  hardcodedUrl,
+  flakyTests,
+  typescriptStrictness,
+  envVars,
+  deadCode,
+  dependencies,
+  dockerfile,
+  shell,
+  tlsSecurity,
+  cookieSecurity,
+  ssrf,
+  asyncIteration,
+  retryHygiene,
+  nPlusOne,
+  logPii,
+  moneyFloat,
+  importCycle,
+} from "./infra";
 
 export type { ModuleRunner, ModuleContext, RepoFile, ModuleOutput } from "./types";
 export { TIERS } from "./types";
@@ -56,6 +76,24 @@ export const MODULES: Record<string, ModuleRunner> = {
   performance,
   compatibility,
   aiReview,
+  errorSwallow,
+  hardcodedUrl,
+  flakyTests,
+  typescriptStrictness,
+  envVars,
+  deadCode,
+  dependencies,
+  dockerfile,
+  shell,
+  tlsSecurity,
+  cookieSecurity,
+  ssrf,
+  asyncIteration,
+  retryHygiene,
+  nPlusOne,
+  logPii,
+  moneyFloat,
+  importCycle,
 };
 
 export interface ModuleResultEnvelope {

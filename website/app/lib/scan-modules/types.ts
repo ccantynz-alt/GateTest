@@ -33,19 +33,22 @@ export type ModuleRunner = (ctx: ModuleContext) => Promise<ModuleOutput>;
 export const TIERS: Record<string, string[]> = {
   quick: ["syntax", "lint", "secrets", "codeQuality"],
   full: [
-    "syntax",
-    "lint",
-    "secrets",
-    "codeQuality",
-    "security",
-    "accessibility",
-    "seo",
-    "links",
-    "compatibility",
-    "dataIntegrity",
-    "documentation",
-    "performance",
-    "aiReview",
-    "fakeFixDetector",
+    // Core
+    "syntax", "lint", "secrets", "codeQuality",
+    // Security
+    "security", "tlsSecurity", "cookieSecurity", "ssrf", "hardcodedUrl",
+    // Web & UX
+    "accessibility", "seo", "links", "performance", "compatibility",
+    // Reliability
+    "errorSwallow", "flakyTests", "nPlusOne", "retryHygiene",
+    "asyncIteration", "moneyFloat", "importCycle",
+    // Infrastructure
+    "dependencies", "dockerfile", "shell", "envVars",
+    // Developer hygiene
+    "deadCode", "logPii", "typescriptStrictness",
+    // Data & docs
+    "dataIntegrity", "documentation",
+    // AI
+    "aiReview", "fakeFixDetector",
   ],
 };
