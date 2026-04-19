@@ -1,0 +1,57 @@
+# GateTest Infra Scanner — Crontech Vultr production box
+#
+# This spec describes the expected steady-state of Crontech's live server.
+# Run from a trusted control host:
+#
+#   node integrations/infra/scanner.js integrations/infra/example-crontech.spec.yaml
+#
+# Exit 0 = everything is healthy.
+# Exit 1 = at least one check failed — report is emitted to stdout.
+
+host: 45.76.171.37
+ssh_user: deploy
+ssh_key_path: ~/.ssh/gatetest_scanner
+
+services:
+  - name: crontech-web
+    state: active
+  - name: crontech-api
+    state: active
+  - name: caddy
+    state: active
+  - name: postgres
+    state: active
+
+ports: [80, 443, 3000, 3001, 3002, 5432]
+
+paths:
+  - path: /var/log/caddy
+    owner: caddy
+    group: caddy
+    mode: "755"
+  - path: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "644"
+  - path: /var/lib/postgresql
+    owner: postgres
+    group: postgres
+
+certs:
+  - domain: crontech.ai
+    min_days: 14
+  - domain: api.crontech.ai
+    min_days: 14
+
+endpoints:
+  - url: https://crontech.ai/
+    expect_status: 200
+  - url: https://api.crontech.ai/api/health
+    expect_status: 200
+
+disk:
+  path: /
+  min_free_pct: 20
+
+crash_loop:
+  max_restarts_per_hour: 10

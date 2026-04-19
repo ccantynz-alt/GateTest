@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gatetest.io/schema/infra-spec.json",
+  "title": "GateTest Infra Scanner Spec",
+  "description": "Declarative expected-state spec for a live server. The scanner SSHes to the target and verifies each section. Read-only — never modifies the target.",
+  "type": "object",
+  "required": ["host", "ssh_user"],
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "IP or hostname of the target server (SSH + optional TLS probe)."
+    },
+    "ssh_user": {
+      "type": "string",
+      "description": "SSH username. Prefer a dedicated non-root, read-only scanner user."
+    },
+    "ssh_key_path": {
+      "type": "string",
+      "description": "Path to the private key used by the scanner. `~` is expanded to $HOME. Must be 0600."
+    },
+    "ssh_port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "SSH port. Defaults to 22 if omitted."
+    },
+    "services": {
+      "type": "array",
+      "description": "systemd units that MUST be active.",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "state": {
+                "type": "string",
+                "enum": ["active", "inactive", "activating", "failed"],
+                "default": "active"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ports": {
+      "type": "array",
+      "description": "TCP ports that MUST be listening on the target.",
+      "items": {
+        "oneOf": [
+          { "type": "integer", "minimum": 1, "maximum": 65535 },
+          {
+            "type": "object",
+            "required": ["port"],
+            "additionalProperties": false,
+            "properties": {
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "note": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "paths": {
+      "type": "array",
+      "description": "Files or directories that MUST exist with the expected ownership + mode.",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "owner": { "type": "string" },
+          "group": { "type": "string" },
+          "mode": {
+            "type": ["string", "integer"],
+            "description": "Octal permission string e.g. \"755\"."
+          }
+        }
+      }
+    },
+    "certs": {
+      "type": "array",
+      "description": "TLS certificates to probe. Public TLS handshake from wherever the scanner runs.",
+      "items": {
+        "type": "object",
+        "required": ["domain"],
+        "additionalProperties": false,
+        "properties": {
+          "domain": { "type": "string" },
+          "min_days": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 14,
+            "description": "Scanner fails if the cert has fewer days left than this."
+          }
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "description": "HTTP(S) endpoints. Probed from BOTH the target server (via curl over SSH) AND from the scanner's machine, so a broken firewall / reverse proxy gets caught in either direction.",
+      "items": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "expect_status": { "type": "integer", "default": 200 }
+        }
+      }
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "default": "/" },
+        "min_free_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 20
+        }
+      }
+    },
+    "crash_loop": {
+      "type": "object",
+      "description": "Detect silent restart loops via journalctl. `is-active` still reports `active` between restarts, so this is the ONLY way to catch a crash-looping service.",
+      "additionalProperties": false,
+      "properties": {
+        "max_restarts_per_hour": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10
+        }
+      }
+    }
+  }
+}
