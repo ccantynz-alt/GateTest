@@ -79,10 +79,15 @@ async function checkEnv(): Promise<Check> {
     "STRIPE_SECRET_KEY",
     "NEXT_PUBLIC_BASE_URL",
     "SESSION_SECRET",
+  ];
+  // Gluecron is optional until the platform is live. When it is, promote to required.
+  const optional = [
+    "ANTHROPIC_API_KEY",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
     "GLUECRON_BASE_URL",
     "GLUECRON_API_TOKEN",
   ];
-  const optional = ["ANTHROPIC_API_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"];
   const missing = required.filter((k) => !process.env[k]);
   const optMissing = optional.filter((k) => !process.env[k]);
   if (missing.length > 0) {
@@ -143,16 +148,16 @@ async function checkGluecron(): Promise<Check> {
     return {
       id: "gluecron",
       label: "Gluecron (git host)",
-      status: "fail",
-      detail: "GLUECRON_BASE_URL not set — cannot reach Gluecron.",
+      status: "warn",
+      detail: "Gluecron not yet configured (GLUECRON_BASE_URL). Set once Gluecron platform is live.",
     };
   }
   if (!token) {
     return {
       id: "gluecron",
       label: "Gluecron (git host)",
-      status: "fail",
-      detail: "GLUECRON_API_TOKEN not set — every repo access will 401.",
+      status: "warn",
+      detail: "Gluecron token not set (GLUECRON_API_TOKEN). Set once Gluecron platform is live.",
     };
   }
   try {
