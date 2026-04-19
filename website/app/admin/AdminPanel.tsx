@@ -1191,16 +1191,48 @@ function NuclearScanPanel() {
     if (!result) return;
     setFixing(true);
     try {
+      const issueFindings = (result.findings as NuclearFinding[] || [])
+        .filter(f => f.severity === "error" || f.severity === "warning");
+
+      // Try SSH auto-heal first (autonomous fix)
+      const ip = result.resolvedIp as string || "";
+      if (ip && issueFindings.length > 0) {
+        try {
+          const sshRes = await fetch("/api/heal/ssh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              host: ip,
+              hostname: result.hostname,
+              issues: issueFindings.map(f => ({
+                category: f.category,
+                title: f.title,
+                detail: f.detail,
+              })),
+            }),
+          });
+          const sshData = await sshRes.json();
+          if (sshRes.ok && sshData.status !== "failed") {
+            setFixResult(sshData);
+            return;
+          }
+          // SSH failed (no credentials etc.) — fall through to config snippets
+        } catch {
+          // SSH agent not available — fall through
+        }
+      }
+
+      // Fallback: generate config snippets
       const res = await fetch("/api/scan/server-fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           hostname: result.hostname,
-          modules: (result.findings as NuclearFinding[] || []).reduce((acc, f) => {
+          modules: issueFindings.reduce((acc, f) => {
             const cat = f.category.toLowerCase().replace(/[^a-z]/g, "");
             const existing = acc.find((m) => m.name === cat);
             if (existing) { existing.details.push(`${f.severity}: ${f.title} - ${f.detail}`); }
-            else { acc.push({ name: cat, status: f.severity === "error" || f.severity === "warning" ? "failed" : "passed", details: [`${f.severity}: ${f.title} - ${f.detail}`] }); }
+            else { acc.push({ name: cat, status: "failed", details: [`${f.severity}: ${f.title} - ${f.detail}`] }); }
             return acc;
           }, [] as Array<{ name: string; status: string; details: string[] }>),
         }),
@@ -1208,7 +1240,7 @@ function NuclearScanPanel() {
       const data = await res.json();
       setFixResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fix generation failed");
+      setError(err instanceof Error ? err.message : "Fix failed");
     } finally { setFixing(false); }
   }
 
@@ -1303,21 +1335,64 @@ function NuclearScanPanel() {
           {/* Fixes */}
           {fixResult && (
             <div className="card p-5 mb-4 border-l-4 border-l-accent">
-              <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
-              {fixResult.fixes && Object.keys(fixResult.fixes as Record<string, unknown>).length > 0 ? (
+              {/* SSH auto-heal result */}
+              {(fixResult as Record<string, unknown>).actions ? (
                 <>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xl">{(fixResult as Record<string, unknown>).status === "healed" ? "✅" : "⚡"}</span>
+                    <h3 className="font-bold">
+                      {(fixResult as Record<string, unknown>).status === "healed"
+                        ? "Server Healed"
+                        : (fixResult as Record<string, unknown>).status === "partial"
+                          ? "Partially Healed"
+                          : "Heal Attempted"}
+                    </h3>
+                  </div>
                   <p className="text-sm text-muted mb-3">
-                    {(fixResult.totalFixes as number) || 0} fixes across {(fixResult.categories as number) || 0} categories. Copy each to your platform and the issues will be resolved.
+                    {(fixResult as Record<string, unknown>).message as string}
+                  </p>
+                  <div className="space-y-2">
+                    {((fixResult as Record<string, unknown>).actions as Array<{ issue: string; command: string; output: string; status: string }>).map((a, i) => (
+                      <div key={i} className={`rounded-lg border p-3 text-xs ${
+                        a.status === "fixed" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={a.status === "fixed" ? "text-green-600" : "text-red-600"}>
+                            {a.status === "fixed" ? "✓" : "✗"}
+                          </span>
+                          <span className="font-medium">{a.issue}</span>
+                        </div>
+                        <pre className="font-mono text-xs bg-black/5 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (fixResult as Record<string, unknown>).fixes && Object.keys((fixResult as Record<string, unknown>).fixes as Record<string, unknown>).length > 0 ? (
+                <>
+                  <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
+                  <p className="text-sm text-muted mb-3">
+                    {((fixResult as Record<string, unknown>).totalFixes as number) || 0} fixes across {((fixResult as Record<string, unknown>).categories as number) || 0} categories.
                   </p>
                   <details className="text-xs font-mono bg-gray-50 p-3 rounded max-h-96 overflow-auto">
                     <summary className="cursor-pointer font-semibold">View all fix snippets</summary>
-                    <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(fixResult.fixes, null, 2)}</pre>
+                    <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
                   </details>
                 </>
               ) : (
-                <p className="text-sm text-muted">
-                  No ready-to-paste fixes available for these issues. Server-level problems (nginx down, SSH required) can&apos;t be fixed remotely — need manual intervention or an auto-heal agent with SSH access.
-                </p>
+                <div>
+                  <h3 className="font-bold mb-2">⚡ Fix attempted</h3>
+                  <p className="text-sm text-muted">
+                    To enable autonomous server repair, set these in Vercel env vars:
+                  </p>
+                  <ul className="text-xs font-mono text-muted mt-2 space-y-1">
+                    <li>GATETEST_SSH_HOST — server IP (e.g. 45.76.171.37)</li>
+                    <li>GATETEST_SSH_USER — username (default: root)</li>
+                    <li>GATETEST_SSH_PASSWORD — server password</li>
+                  </ul>
+                  <p className="text-xs text-muted mt-2">
+                    Once set, &quot;Fix Everything&quot; will SSH into the server and run fix commands automatically.
+                  </p>
+                </div>
               )}
             </div>
           )}
