@@ -13,4 +13,3 @@ website/.next/
 website/node_modules/
 website/test-results/
 website/playwright-report/
-package-lock.json
