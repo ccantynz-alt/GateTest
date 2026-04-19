@@ -62,13 +62,38 @@ function anthropicHttpsJsonRequest(
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
+  // Enrich broken-link issues with context about what actually exists
+  const enrichedIssues = await Promise.all(issues.map(async (issue) => {
+    const brokenMatch = issue.match(/BROKEN LINK \(404\):\s*(https:\/\/github\.com\/([^/]+)\/([^/]+)\/([^\s]+))/i);
+    if (brokenMatch) {
+      const [, fullUrl, owner, repo, path] = brokenMatch;
+      try {
+        // Check what releases actually exist
+        const relRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+          headers: { "User-Agent": "GateTest", "Accept": "application/vnd.github.v3+json" },
+        });
+        if (relRes.ok) {
+          const releases = await relRes.json() as Array<{ tag_name: string; html_url: string; assets: Array<{ name: string; browser_download_url: string }> }>;
+          if (releases.length > 0) {
+            const latest = releases[0];
+            const assetList = latest.assets.map((a: { name: string; browser_download_url: string }) => `  - ${a.name}: ${a.browser_download_url}`).join("\n");
+            return `${issue}\n\nCONTEXT: This URL 404s. The repo ${owner}/${repo} has ${releases.length} release(s). Latest: ${latest.tag_name} (${latest.html_url}).\nAvailable assets:\n${assetList || "  (no downloadable assets in latest release)"}\n\nFIX: Replace the broken URL with the correct release URL or asset download URL from above.`;
+          } else {
+            return `${issue}\n\nCONTEXT: The repo ${owner}/${repo} has NO releases. The download link cannot work. FIX: Either remove the download button, link to the repo page (https://github.com/${owner}/${repo}), or create a release first.`;
+          }
+        }
+      } catch { /* fall through to original issue */ }
+    }
+    return issue;
+  }));
+
   const prompt = `You are an expert code fixer for GateTest, an AI-powered QA platform with 67 scanning modules.
 
 Fix ALL of the following issues in this file. Every fix must pass GateTest's re-scan.
 
 FILE: ${filePath}
 ISSUES TO FIX:
-${issues.map((i, idx) => `${idx + 1}. ${i}`).join("\n")}
+${enrichedIssues.map((i, idx) => `${idx + 1}. ${i}`).join("\n")}
 
 CURRENT CODE:
 \`\`\`
