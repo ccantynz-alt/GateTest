@@ -139,10 +139,44 @@ export async function POST(req: NextRequest) {
     await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_ready ON scan_queue (status, next_run_at)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_repo_sha ON scan_queue (repository, sha)`;
 
+    // Watchdog: continuously monitored domains/repos
+    await sql`CREATE TABLE IF NOT EXISTS watches (
+      id BIGSERIAL PRIMARY KEY,
+      owner_login TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      interval_minutes INTEGER NOT NULL DEFAULT 15,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      last_checked_at TIMESTAMPTZ,
+      last_status TEXT,
+      last_issue_count INTEGER DEFAULT 0,
+      auto_fix_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (owner_login, target_type, target)
+    )`;
+
+    await sql`CREATE TABLE IF NOT EXISTS heal_history (
+      id BIGSERIAL PRIMARY KEY,
+      watch_id BIGINT REFERENCES watches(id) ON DELETE CASCADE,
+      triggered_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL,
+      before_issue_count INTEGER,
+      after_issue_count INTEGER,
+      pr_url TEXT,
+      details JSONB
+    )`;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_watches_owner ON watches(owner_login)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_watches_enabled_checked ON watches(enabled, last_checked_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_heal_history_watch ON heal_history(watch_id, triggered_at DESC)`;
+
     return NextResponse.json({
       ok: true,
-      tables: ["scans", "customers", "api_keys", "api_calls", "installations", "scan_queue"],
-      indexes: 14,
+      tables: ["scans", "customers", "api_keys", "api_calls", "installations", "scan_queue", "watches", "heal_history"],
+      indexes: 17,
       message: "Schema initialized (idempotent — safe to run multiple times)",
     });
   } catch (err) {

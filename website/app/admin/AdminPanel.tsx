@@ -94,7 +94,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "server" | "scans" | "customers" | "keys">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "server" | "watchdog" | "scans" | "customers" | "keys">("scan");
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
   const [keyName, setKeyName] = useState("");
   const [keyCustomer, setKeyCustomer] = useState("");
@@ -327,7 +327,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "server", "scans", "customers", "keys"] as const).map((tab) => (
+          {(["scan", "server", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -341,6 +341,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 ? "Repo Scan"
                 : tab === "server"
                 ? "Server Scan"
+                : tab === "watchdog"
+                ? "Watchdog"
                 : tab === "scans"
                 ? "Recent Scans"
                 : tab === "customers"

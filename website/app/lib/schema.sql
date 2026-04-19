@@ -53,3 +53,38 @@ CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customers_github ON customers(github_login);
 CREATE INDEX IF NOT EXISTS idx_installations_host_id ON installations(host, installation_id);
 CREATE INDEX IF NOT EXISTS idx_installations_customer_email ON installations(customer_email);
+
+-- Watchdog: continuously monitored domains/repos
+CREATE TABLE IF NOT EXISTS watches (
+  id BIGSERIAL PRIMARY KEY,
+  owner_login TEXT NOT NULL,          -- who owns this watch (admin login or customer email)
+  target_type TEXT NOT NULL,          -- 'server' | 'repo'
+  target TEXT NOT NULL,               -- URL for server, owner/repo for repo
+  interval_minutes INTEGER NOT NULL DEFAULT 15,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  last_checked_at TIMESTAMPTZ,
+  last_status TEXT,                   -- 'healthy' | 'degraded' | 'down' | 'healed'
+  last_issue_count INTEGER DEFAULT 0,
+  auto_fix_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (owner_login, target_type, target)
+);
+
+-- Watchdog: log every heal action taken
+CREATE TABLE IF NOT EXISTS heal_history (
+  id BIGSERIAL PRIMARY KEY,
+  watch_id BIGINT REFERENCES watches(id) ON DELETE CASCADE,
+  triggered_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  action TEXT NOT NULL,               -- 'scan' | 'auto_fix_pr' | 'redeploy' | 'notify'
+  status TEXT NOT NULL,               -- 'success' | 'failed' | 'skipped'
+  before_issue_count INTEGER,
+  after_issue_count INTEGER,
+  pr_url TEXT,
+  details JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_watches_owner ON watches(owner_login);
+CREATE INDEX IF NOT EXISTS idx_watches_enabled_checked ON watches(enabled, last_checked_at);
+CREATE INDEX IF NOT EXISTS idx_heal_history_watch ON heal_history(watch_id, triggered_at DESC);
