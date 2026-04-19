@@ -22,7 +22,7 @@ interface HealthReport {
 const EXPECTED: Array<{ id: string; label: string }> = [
   { id: "env", label: "Environment variables" },
   { id: "db", label: "Database (Neon Postgres)" },
-  { id: "github", label: "GitHub App auth" },
+  { id: "github", label: "Git host auth" },
   { id: "stripe", label: "Stripe API" },
   { id: "anthropic", label: "Anthropic API (Claude)" },
   { id: "modules", label: "Scan modules" },
@@ -34,15 +34,15 @@ const EXPECTED: Array<{ id: string; label: string }> = [
 const SUGGESTIONS: Record<string, Record<string, string>> = {
   env: {
     fail: "Set the missing environment variables in your Vercel dashboard → Settings → Environment Variables. Required: STRIPE_SECRET_KEY, NEXT_PUBLIC_BASE_URL, DATABASE_URL, SESSION_SECRET.",
-    warn: "Optional variables improve functionality. Set GATETEST_APP_ID + GATETEST_PRIVATE_KEY for GitHub App. Set ANTHROPIC_API_KEY for AI review.",
+    warn: "Optional variables improve functionality. Set GLUECRON_BASE_URL + GLUECRON_API_TOKEN for git host access. Set ANTHROPIC_API_KEY for AI review.",
   },
   db: {
     fail: "Check DATABASE_URL in Vercel env vars. If the database exists but tables are missing, visit /api/db/init to create them.",
     warn: "Database connected but some tables missing. POST to /api/db/init to create the required tables (scans, customers, api_keys, api_calls, installations, scan_queue).",
   },
   github: {
-    fail: "GitHub App auth failed. Verify GATETEST_APP_ID matches your GitHub App ID, and GATETEST_PRIVATE_KEY contains the full .pem contents with newlines preserved.",
-    warn: "GitHub App not configured. Register an app at github.com/settings/apps → set GATETEST_APP_ID + GATETEST_PRIVATE_KEY in Vercel.",
+    fail: "Git host auth failed. Verify GLUECRON_BASE_URL and GLUECRON_API_TOKEN are set correctly, or check GATETEST_APP_ID + GATETEST_PRIVATE_KEY for GitHub fallback.",
+    warn: "Git host not configured. Set GLUECRON_BASE_URL + GLUECRON_API_TOKEN for Gluecron, or GATETEST_APP_ID + GATETEST_PRIVATE_KEY for GitHub.",
   },
   stripe: {
     fail: "Stripe API rejected the key. Check STRIPE_SECRET_KEY in Vercel. Test keys start with sk_test_, live keys with sk_live_. Currently pre-launch: use sk_test_ until ready.",
