@@ -90,6 +90,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
+  const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"scan" | "server" | "scans" | "customers" | "keys">("scan");
@@ -468,10 +470,68 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                         >
                           Copy Issues
                         </button>
+                        <button
+                          onClick={async () => {
+                            setGuidanceLoading(true);
+                            setGuidance(null);
+                            const failedModulesLocal = modules.filter((m) => (m.status as string) === "failed");
+                            const allIssues = failedModulesLocal.flatMap((m) => {
+                              const details = (m.details as string[]) || [];
+                              return details.map((d) => ({ module: m.name as string, detail: d }));
+                            });
+                            try {
+                              const res = await fetch("/api/scan/guidance", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ issues: allIssues }),
+                              });
+                              const data = await res.json();
+                              setGuidance(data.guidance || []);
+                            } catch {
+                              setError("Could not generate guidance");
+                            } finally {
+                              setGuidanceLoading(false);
+                            }
+                          }}
+                          disabled={guidanceLoading}
+                          className="btn-secondary px-4 py-2 text-xs disabled:opacity-50"
+                        >
+                          {guidanceLoading ? "Generating..." : "Manual Fix Guide"}
+                        </button>
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Manual guidance for unfixable issues */}
+                {guidance && guidance.length > 0 && (
+                  <div className="card p-5 mt-4 border-l-4 border-l-accent">
+                    <h3 className="font-bold mb-3">Step-by-step fix guide ({guidance.length} issues)</h3>
+                    <div className="space-y-4">
+                      {guidance.map((g, i) => (
+                        <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
+                            <h4 className="font-semibold text-sm">{g.title}</h4>
+                          </div>
+                          <p className="text-xs text-muted mb-3">{g.why}</p>
+                          <ol className="text-sm space-y-1 list-decimal list-inside">
+                            {g.steps.map((s, j) => (
+                              <li key={j} className="text-foreground">{s}</li>
+                            ))}
+                          </ol>
+                          {g.commands && g.commands.length > 0 && (
+                            <div className="mt-3 space-y-1">
+                              {g.commands.map((cmd, j) => (
+                                <pre key={j} className="bg-[#0a0a12] text-emerald-400 text-xs font-mono p-2 rounded overflow-x-auto">{cmd}</pre>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Fix result */}
                 {fixing && (
