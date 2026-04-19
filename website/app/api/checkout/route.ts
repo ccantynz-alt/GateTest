@@ -169,8 +169,14 @@ export async function POST(req: NextRequest) {
       sessionId: session.id,
     });
   } catch (err) {
+    // Never leak Stripe API internals / stack traces to the browser.
+    // Log server-side with full context; return a generic user-facing message.
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[GateTest] Checkout failed:", message);
+    return NextResponse.json(
+      { error: "Checkout failed. Please try again or contact support." },
+      { status: 500 }
+    );
   }
   */
 }

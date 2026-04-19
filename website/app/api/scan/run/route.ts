@@ -202,6 +202,49 @@ export async function POST(req: NextRequest) {
   // Stripe interaction entirely. Admin scans never create or capture charges.
   const isAdmin = isAdminRequest(req);
 
+  // ── Idempotency guard ─────────────────────────────────────────────
+  // /api/scan/run can be invoked multiple times for the same session
+  // (browser refresh, back-button, network retry, client re-render,
+  // or a concurrent stripe-webhook after() invocation). Without this
+  // check a second call would re-run the scan AND re-capture — in
+  // the worst case double-charging or overwriting a valid result.
+  // The Stripe metadata's `scan_status` is the canonical replay marker.
+  if (!isAdmin && sessionId && STRIPE_SECRET_KEY) {
+    try {
+      const existing = (await stripeApi(
+        "GET",
+        `/v1/checkout/sessions/${sessionId}`
+      )) as { payment_intent?: string };
+      if (existing.payment_intent) {
+        const pi = (await stripeApi(
+          "GET",
+          `/v1/payment_intents/${existing.payment_intent}`
+        )) as { metadata?: Record<string, string>; status?: string };
+        const prevStatus = pi.metadata?.scan_status;
+        if (prevStatus === "complete" || prevStatus === "failed") {
+          // Already processed — return the cached state derived from
+          // metadata rather than re-running the scan or re-capturing.
+          return NextResponse.json({
+            status: prevStatus,
+            modules: [],
+            totalModules: Number(pi.metadata?.total_modules || 0),
+            completedModules: Number(pi.metadata?.total_modules || 0),
+            totalIssues: Number(pi.metadata?.total_issues || 0),
+            totalFixed: 0,
+            duration: Number(pi.metadata?.scan_duration || 0),
+            repoUrl,
+            tier,
+            cached: true,
+          });
+        }
+      }
+    } catch (err) {
+      // Don't block a scan on an idempotency-check lookup failure — log
+      // and fall through to the normal scan path.
+      console.error("[GateTest] Idempotency check failed:", err);
+    }
+  }
+
   // Run the scan
   const result = await scanRepo(owner, repo, tier || "quick");
 

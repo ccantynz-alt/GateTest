@@ -128,7 +128,38 @@ export default function ScanStatus() {
 
     if (!params.repo) return;
     scanTriggered.current = true;
-    // LiveScanTerminal component handles the actual API call and streams output
+
+    fetch("/api/scan/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        // Normalise any status the UI doesn't render (pending, running,
+        // cancelled, unexpected) into a failed result so the user never
+        // sees a page stuck at 100% with a misleading "Scanning..." header.
+        const knownStates = new Set(["complete", "failed", "expired"]);
+        if (!data || !knownStates.has(data.status)) {
+          setScanResult({
+            status: "failed",
+            modules: data?.modules || [],
+            totalModules: data?.totalModules || 0,
+            completedModules: data?.completedModules || 0,
+            totalIssues: data?.totalIssues || 0,
+            totalFixed: data?.totalFixed || 0,
+            duration: data?.duration || 0,
+            error: data?.error || `Scan returned unexpected state: ${data?.status || "none"}`,
+          });
+        } else {
+          setScanResult(data);
+        }
+        setScanning(false);
+      })
+      .catch((err) => {
+        setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: err.message });
+        setScanning(false);
+      });
   }, [params]);
 
   const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
