@@ -190,6 +190,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     setScanning(true);
     setResult(null);
     setFixResult(null);
+    setGuidance(null);
     setError("");
   }
 
@@ -398,6 +399,37 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   setResult(data);
                   setScanning(false);
                   loadDbData();
+                  // Auto-fix: if issues found, automatically trigger fix
+                  const issues = (data.totalIssues as number) || 0;
+                  if (issues > 0) {
+                    const mods = (data.modules as Array<Record<string, unknown>>) || [];
+                    const failed = mods.filter((m) => (m.status as string) === "failed");
+                    const fixable = failed.flatMap((m) => {
+                      const details = (m.details as string[]) || [];
+                      return details.map((d) => {
+                        const fMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8})(?::(\d+))?(?:\s*[-—:]\s*|\s+)(.+)$/);
+                        if (fMatch) return { file: fMatch[1], issue: fMatch[3], module: m.name as string };
+                        const fOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+                        if (fOnly) return { file: fOnly[1], issue: fOnly[2], module: m.name as string };
+                        const missing = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+                        if (missing) return { file: missing[1], issue: `CREATE_FILE: ${d}`, module: m.name as string };
+                        return { file: "", issue: d, module: m.name as string };
+                      });
+                    }).filter((i) => i.file);
+
+                    if (fixable.length > 0) {
+                      setFixing(true);
+                      fetch("/api/scan/fix", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ repoUrl, issues: fixable }),
+                      })
+                        .then((r) => r.json())
+                        .then((d) => setFixResult(d as FixResult))
+                        .catch((e) => setError(e instanceof Error ? e.message : "Fix failed"))
+                        .finally(() => setFixing(false));
+                    }
+                  }
                 }}
                 onError={(err) => {
                   setError(err);
@@ -447,14 +479,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     </button>
                     {totalIssues > 0 && (
                       <>
-                        <button
-                          onClick={fixIssues}
-                          disabled={fixing}
-                          className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
-                          style={{ background: "#059669" }}
-                        >
-                          {fixing ? "AI Fixing..." : `Fix ${totalIssues} Issues (AI + PR)`}
-                        </button>
+                        {!fixResult && !fixing && (
+                          <button
+                            onClick={fixIssues}
+                            disabled={fixing}
+                            className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                            style={{ background: "#059669" }}
+                          >
+                            Re-fix {totalIssues} Issues (AI + PR)
+                          </button>
+                        )}
+                        {fixing && (
+                          <span className="text-xs text-accent font-medium animate-pulse">AI fixing issues automatically...</span>
+                        )}
                         <button
                           onClick={() => {
                             const failedMods = modules.filter((m) => (m.status as string) === "failed");
@@ -506,7 +543,16 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 {/* Manual guidance for unfixable issues */}
                 {guidance && guidance.length > 0 && (
                   <div className="card p-5 mt-4 border-l-4 border-l-accent">
-                    <h3 className="font-bold mb-3">Step-by-step fix guide ({guidance.length} issues)</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold">Step-by-step fix guide ({guidance.length} issues)</h3>
+                      <button
+                        onClick={() => setGuidance(null)}
+                        className="text-muted hover:text-foreground text-lg px-2"
+                        aria-label="Close guide"
+                      >
+                        &times;
+                      </button>
+                    </div>
                     <div className="space-y-4">
                       {guidance.map((g, i) => (
                         <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
