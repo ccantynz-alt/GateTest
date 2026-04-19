@@ -17,5 +17,82 @@
   "thresholds": {
     "maxFileLength": 800,
     "maxFunctionLength": 80
+  },
+  "triggers": {
+    "pullRequest": {
+      "enabled": true,
+      "branchPatterns": [
+        "main",
+        "master",
+        "claude/*",
+        "claude/**",
+        "gatetest/*",
+        "gatetest/**"
+      ],
+      "reason": "Every PR opened from agent branch prefixes (claude/*, gatetest/*) must be auto-scanned. GateTest dogfoods itself — the scanner repo eats its own food."
+    },
+    "push": {
+      "enabled": true,
+      "branchPatterns": ["main", "master"]
+    },
+    "schedule": [
+      {
+        "name": "empire-smoke",
+        "cron": "*/5 * * * *",
+        "command": "node integrations/smoke/empire-smoke.ts",
+        "reason": "Runs the cross-repo smoke harness every 5 minutes against the Crontech / Gluecron / GateTest deployments. Owned by agent 6 — allowMissing is true until the harness file lands.",
+        "severity": "error",
+        "timeoutSeconds": 180,
+        "allowMissing": true
+      }
+    ]
+  },
+  "rules": {
+    "schemaRegressionGate": {
+      "enabled": true,
+      "severity": "error",
+      "when": {
+        "pathsChanged": [
+          "src/**/*.ts",
+          "src/**/*.js",
+          "src/scanners/**",
+          "src/reporters/**",
+          "**/schema.ts",
+          "**/*.types.ts",
+          "**/types/**/*.ts"
+        ]
+      },
+      "command": "npm run typecheck --if-present",
+      "scope": "dependents",
+      "reason": "When exported scanner / reporter types move, re-typecheck every dependent module so integrators don't break silently."
+    },
+    "secretLeak": {
+      "enabled": true,
+      "severity": "error",
+      "scanEveryPR": true,
+      "patterns": [
+        "\\.env(\\..+)?$",
+        "\\.env\\.local$",
+        "\\.env\\.production$",
+        ".*\\.pem$",
+        ".*\\.key$",
+        "(^|/)id_rsa$",
+        "(^|/)id_ed25519$",
+        "(^|/)\\.pgpass$",
+        "(^|/)credentials\\.json$",
+        "(^|/)service-account.*\\.json$"
+      ],
+      "contentPatterns": [
+        "AKIA[0-9A-Z]{16}",
+        "ghp_[A-Za-z0-9]{36,}",
+        "gho_[A-Za-z0-9]{36,}",
+        "github_pat_[A-Za-z0-9_]{80,}",
+        "sk-ant-[A-Za-z0-9_-]{40,}",
+        "sk-[A-Za-z0-9]{40,}",
+        "xox[baprs]-[A-Za-z0-9-]{10,}",
+        "-----BEGIN (RSA |OPENSSH |EC |DSA |PGP )?PRIVATE KEY-----"
+      ],
+      "reason": "Verify .env / *.pem / id_rsa / hardcoded tokens don't slip through."
+    }
   }
 }
