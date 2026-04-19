@@ -94,7 +94,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "server" | "watchdog" | "scans" | "customers" | "keys">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "server" | "nuclear" | "watchdog" | "scans" | "customers" | "keys">("scan");
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
   const [keyName, setKeyName] = useState("");
   const [keyCustomer, setKeyCustomer] = useState("");
@@ -327,7 +327,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "server", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
+          {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -335,12 +335,14 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 activeTab === tab
                   ? "border-accent text-foreground"
                   : "border-transparent text-muted hover:text-foreground"
-              }`}
+              } ${tab === "nuclear" ? "font-bold" : ""}`}
             >
               {tab === "scan"
                 ? "Repo Scan"
                 : tab === "server"
                 ? "Server Scan"
+                : tab === "nuclear"
+                ? "☢ Nuclear Scan"
                 : tab === "watchdog"
                 ? "Watchdog"
                 : tab === "scans"
@@ -693,6 +695,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: Server Scan */}
         {activeTab === "server" && (
           <ServerScanPanel />
+        )}
+
+        {/* Tab: Nuclear Scan */}
+        {activeTab === "nuclear" && (
+          <NuclearScanPanel />
         )}
 
         {/* Tab: Recent Scans */}
@@ -1135,6 +1142,205 @@ function ServerScanPanel() {
             );
           })}
         </div>
+      )}
+    </>
+  );
+}
+
+interface NuclearFinding {
+  category: string;
+  severity: "error" | "warning" | "info" | "pass";
+  title: string;
+  detail: string;
+}
+
+function NuclearScanPanel() {
+  const [url, setUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  const [fixResult, setFixResult] = useState<Record<string, unknown> | null>(null);
+
+  async function runNuclear() {
+    if (!url) { setError("Enter a URL"); return; }
+    setScanning(true); setResult(null); setError(""); setFixResult(null);
+    try {
+      const res = await fetch("/api/scan/nuclear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Scan failed"); return; }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally { setScanning(false); }
+  }
+
+  async function fixEverything() {
+    if (!result) return;
+    setFixing(true);
+    try {
+      const res = await fetch("/api/scan/server-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostname: result.hostname,
+          modules: (result.findings as NuclearFinding[] || []).reduce((acc, f) => {
+            const cat = f.category.toLowerCase().replace(/[^a-z]/g, "");
+            const existing = acc.find((m) => m.name === cat);
+            if (existing) { existing.details.push(`${f.severity}: ${f.title} - ${f.detail}`); }
+            else { acc.push({ name: cat, status: f.severity === "error" || f.severity === "warning" ? "failed" : "passed", details: [`${f.severity}: ${f.title} - ${f.detail}`] }); }
+            return acc;
+          }, [] as Array<{ name: string; status: string; details: string[] }>),
+        }),
+      });
+      const data = await res.json();
+      setFixResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fix generation failed");
+    } finally { setFixing(false); }
+  }
+
+  const findings = (result?.findings as NuclearFinding[]) || [];
+  const summary = result?.summary as { errors: number; warnings: number; passes: number; total: number } | undefined;
+  const diagnosis = (result?.diagnosis as string[]) || [];
+
+  return (
+    <>
+      <div className="card p-6 mb-6 border-l-4 border-l-red-500">
+        <div className="flex items-start gap-3 mb-3">
+          <span className="text-2xl">☢</span>
+          <div>
+            <h3 className="font-bold text-lg">Nuclear Scan</h3>
+            <p className="text-sm text-muted">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runNuclear(); }}
+            placeholder="https://crontech.ai"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+          />
+          <button
+            onClick={runNuclear}
+            disabled={scanning}
+            className="btn-primary px-6 py-3 text-sm font-bold disabled:opacity-50"
+            style={{ background: "#dc2626" }}
+          >
+            {scanning ? "Nuking..." : "☢ Nuclear Scan"}
+          </button>
+        </div>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      </div>
+
+      {scanning && (
+        <div className="card p-8 text-center">
+          <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="font-bold">Running full-stack diagnosis...</p>
+          <p className="text-xs text-muted mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
+        </div>
+      )}
+
+      {result && !scanning && (
+        <>
+          {/* Diagnosis */}
+          <div className="card p-6 mb-4 border-l-4 border-l-red-500">
+            <h3 className="font-bold mb-3">Diagnosis</h3>
+            {diagnosis.map((d, i) => (
+              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-700 font-bold" : d.startsWith("FIX") ? "text-accent font-medium" : "text-foreground"}`}>
+                {d}
+              </p>
+            ))}
+            <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+              <div className="p-2 bg-red-50 rounded">
+                <div className="text-2xl font-bold text-red-700">{summary?.errors ?? 0}</div>
+                <div className="text-xs text-muted">Errors</div>
+              </div>
+              <div className="p-2 bg-amber-50 rounded">
+                <div className="text-2xl font-bold text-amber-700">{summary?.warnings ?? 0}</div>
+                <div className="text-xs text-muted">Warnings</div>
+              </div>
+              <div className="p-2 bg-green-50 rounded">
+                <div className="text-2xl font-bold text-green-700">{summary?.passes ?? 0}</div>
+                <div className="text-xs text-muted">Passes</div>
+              </div>
+              <div className="p-2 bg-gray-50 rounded">
+                <div className="text-2xl font-bold">{summary?.total ?? 0}</div>
+                <div className="text-xs text-muted">Total Checks</div>
+              </div>
+            </div>
+            {(summary?.errors ?? 0) + (summary?.warnings ?? 0) > 0 && (
+              <div className="mt-5">
+                <button
+                  onClick={fixEverything}
+                  disabled={fixing}
+                  className="btn-primary w-full py-4 text-base font-bold disabled:opacity-50"
+                  style={{ background: "#059669" }}
+                >
+                  {fixing ? "Generating fix plan..." : "⚡ Fix Everything Automatically"}
+                </button>
+                <p className="text-xs text-muted text-center mt-2">
+                  Generates ready-to-apply fixes for every issue found. Code fixes go to a PR; config fixes produce Vercel/Nginx/DNS snippets.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fixes */}
+          {fixResult && (
+            <div className="card p-5 mb-4 border-l-4 border-l-accent">
+              <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
+              {fixResult.fixes && Object.keys(fixResult.fixes as Record<string, unknown>).length > 0 ? (
+                <>
+                  <p className="text-sm text-muted mb-3">
+                    {(fixResult.totalFixes as number) || 0} fixes across {(fixResult.categories as number) || 0} categories. Copy each to your platform and the issues will be resolved.
+                  </p>
+                  <details className="text-xs font-mono bg-gray-50 p-3 rounded max-h-96 overflow-auto">
+                    <summary className="cursor-pointer font-semibold">View all fix snippets</summary>
+                    <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(fixResult.fixes, null, 2)}</pre>
+                  </details>
+                </>
+              ) : (
+                <p className="text-sm text-muted">
+                  No ready-to-paste fixes available for these issues. Server-level problems (nginx down, SSH required) can&apos;t be fixed remotely — need manual intervention or an auto-heal agent with SSH access.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Findings by category */}
+          {(() => {
+            const byCategory = findings.reduce((acc: Record<string, NuclearFinding[]>, f) => {
+              (acc[f.category] = acc[f.category] || []).push(f);
+              return acc;
+            }, {});
+            return Object.entries(byCategory).map(([cat, items]) => (
+              <div key={cat} className="card p-4 mb-3">
+                <h4 className="font-bold text-sm mb-2">{cat}</h4>
+                <div className="space-y-1">
+                  {items.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className={`font-bold shrink-0 w-16 ${
+                        f.severity === "error" ? "text-red-600" :
+                        f.severity === "warning" ? "text-amber-600" :
+                        f.severity === "pass" ? "text-green-600" :
+                        "text-muted"
+                      }`}>{f.severity.toUpperCase()}</span>
+                      <span className="font-medium shrink-0 min-w-[140px]">{f.title}</span>
+                      <span className="text-muted">{f.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
+        </>
       )}
     </>
   );
