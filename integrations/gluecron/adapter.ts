@@ -168,7 +168,10 @@ export class GluecronAdapter {
     }
     const treeRes = await this.client.getTreeRecursive(owner, repo, name);
     const tree = treeRes.data;
-    const sha = tree.sha ?? tree.tree?.[0]?.sha ?? null;
+    const sha = tree.sha ?? null;
+    if (!sha) {
+      throw new Error('Unable to determine default branch: no fallback available. Ensure GET /repos/:owner/:repo returns default_branch.');
+    }
     return { name, sha };
   }
 
