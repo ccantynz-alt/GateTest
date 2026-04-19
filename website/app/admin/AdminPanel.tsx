@@ -790,15 +790,25 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   );
 }
 
+interface ServerFix {
+  platform: string;
+  title: string;
+  code: string;
+  instructions: string;
+}
+
 function ServerScanPanel() {
   const [url, setUrl] = useState("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
+  const [generatingFixes, setGeneratingFixes] = useState(false);
+  const [fixes, setFixes] = useState<Record<string, ServerFix[]> | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   async function runServerScan() {
     if (!url) { setError("Enter a URL"); return; }
-    setScanning(true); setResult(null); setError("");
+    setScanning(true); setResult(null); setError(""); setFixes(null);
     try {
       const res = await fetch("/api/scan/server", {
         method: "POST",
@@ -811,6 +821,28 @@ function ServerScanPanel() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally { setScanning(false); }
+  }
+
+  async function generateFixes() {
+    if (!result) return;
+    setGeneratingFixes(true);
+    try {
+      const res = await fetch("/api/scan/server-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname: result.hostname, modules: result.modules }),
+      });
+      const data = await res.json();
+      setFixes(data.fixes || {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate fixes");
+    } finally { setGeneratingFixes(false); }
+  }
+
+  function copyCode(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 1500);
   }
 
   const modules = (result?.modules as Array<Record<string, unknown>>) || [];
@@ -861,7 +893,75 @@ function ServerScanPanel() {
                 {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
               </span>
             </div>
+            {totalIssues > 0 && (
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={generateFixes}
+                  disabled={generatingFixes}
+                  className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                  style={{ background: "#059669" }}
+                >
+                  {generatingFixes ? "Generating..." : `Generate Fixes`}
+                </button>
+                <button
+                  onClick={runServerScan}
+                  className="btn-secondary px-4 py-2 text-xs"
+                >
+                  Re-scan
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Generated fixes — ready-to-paste configs */}
+          {fixes && Object.keys(fixes).length > 0 && (
+            <div className="card p-5 border-l-4 border-l-accent">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-accent text-lg">⚡</span>
+                <h3 className="font-bold">Ready-to-paste fixes</h3>
+              </div>
+              <div className="space-y-5">
+                {Object.entries(fixes).map(([category, fixList]) => (
+                  <div key={category}>
+                    <h4 className="font-semibold text-sm text-foreground mb-2">{category}</h4>
+                    <div className="space-y-3">
+                      {fixList.map((f, idx) => {
+                        const id = `${category}-${idx}`;
+                        return (
+                          <div key={id} className="rounded-lg border border-border bg-gray-50 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-border">
+                              <div>
+                                <div className="text-xs font-bold text-foreground">{f.platform}</div>
+                                <div className="text-xs text-muted">{f.title}</div>
+                              </div>
+                              <button
+                                onClick={() => copyCode(f.code, id)}
+                                className="btn-secondary px-3 py-1 text-xs"
+                              >
+                                {copiedCode === id ? "Copied!" : "Copy"}
+                              </button>
+                            </div>
+                            <pre className="p-3 text-xs font-mono text-foreground overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                            <p className="px-3 py-2 bg-amber-50 text-xs text-amber-800 border-t border-amber-100">
+                              {f.instructions}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {fixes && Object.keys(fixes).length === 0 && (
+            <div className="card p-5 border-l-4 border-l-amber-500">
+              <p className="text-sm text-muted">
+                No automated fixes available for these specific issues. They require manual review or infrastructure access.
+              </p>
+            </div>
+          )}
 
           {modules.map((mod) => {
             const status = mod.status as string;
