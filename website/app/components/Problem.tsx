@@ -1,7 +1,7 @@
 export default function Problem() {
   const tools = [
     { name: "Jest", category: "Unit Tests" },
-    { name: "Playwright", category: "E2E" },
+    { name: "Cypress", category: "E2E" },
     { name: "ESLint", category: "Linting" },
     { name: "Snyk", category: "Security" },
     { name: "Lighthouse", category: "Performance" },

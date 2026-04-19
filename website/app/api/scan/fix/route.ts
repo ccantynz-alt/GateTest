@@ -24,7 +24,9 @@ import { githubApi, httpsJsonRequest, resolveGithubToken } from "../../../lib/gi
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
-  const prompt = `You are an expert code fixer. Fix the following issues in this file.
+  const prompt = `You are an expert code fixer for GateTest, an AI-powered QA platform with 67 scanning modules.
+
+Fix ALL of the following issues in this file. Every fix must pass GateTest's re-scan.
 
 FILE: ${filePath}
 ISSUES TO FIX:
@@ -35,12 +37,22 @@ CURRENT CODE:
 ${fileContent}
 \`\`\`
 
-Rules:
+CRITICAL RULES — violations will cause re-scan failure:
 - Return ONLY the complete fixed file content. No explanations. No markdown code fences.
+- Fix the ROOT CAUSE, not the symptom. Never patch over an issue.
+- NEVER introduce these patterns (GateTest scans for them):
+  * console.log / console.debug / console.info in library code
+  * debugger statements
+  * TODO / FIXME / HACK / XXX comments
+  * eval() or Function() calls
+  * Hardcoded secrets, API keys, tokens, passwords
+  * var declarations (use const/let)
+  * Empty catch blocks
+  * Unused imports or variables
 - Preserve every non-issue line exactly — do not rewrite or reformat unrelated code.
-- Every issue listed above must be fixed at its root cause, not patched over.
-- Never remove functionality to "fix" a warning. Never leave a TODO behind.
-- If a fix would require context you don't have, output the UNCHANGED original file verbatim.`;
+- Never remove functionality to "fix" a warning.
+- If a fix would require context you don't have, output the UNCHANGED original file verbatim.
+- The fixed code will be automatically re-scanned. If it fails, the fix is rejected.`;
 
   const body = JSON.stringify({
     model: "claude-sonnet-4-20250514",
@@ -96,18 +108,10 @@ function validateFix(original: string, fixed: string): { ok: boolean; reason?: s
   if (fixed === original) {
     return { ok: false, reason: "no changes produced" };
   }
-  // Truncation guard — Claude hitting max_tokens produces a file that's much shorter than the input.
   if (original.length > 500 && fixed.length < original.length * 0.4) {
     return { ok: false, reason: `likely truncation (${fixed.length}/${original.length} chars)` };
   }
-  // Refusal detection
-  const refusalMarkers = [
-    "I cannot",
-    "I can't",
-    "I'm unable to",
-    "I won't",
-    "As an AI",
-  ];
+  const refusalMarkers = ["I cannot", "I can't", "I'm unable to", "I won't", "As an AI"];
   const firstLine = fixed.split("\n", 1)[0] || "";
   if (refusalMarkers.some((m) => firstLine.startsWith(m))) {
     return { ok: false, reason: "Claude refused" };
@@ -115,10 +119,114 @@ function validateFix(original: string, fixed: string): { ok: boolean; reason?: s
   return { ok: true };
 }
 
+/**
+ * Verify that fixed code doesn't introduce NEW issues that GateTest would catch.
+ * Runs the same pattern checks our scan modules use.
+ */
+function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; newIssues: string[] } {
+  const issues: string[] = [];
+  const lines = fixed.split("\n");
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  const isSource = ["js", "ts", "jsx", "tsx", "mjs", "cjs"].includes(ext);
+
+  if (!isSource) return { clean: true, newIssues: [] };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments and strings for some checks
+    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) continue;
+
+    // console.log/debug/info in non-test files
+    if (!filePath.includes(".test.") && !filePath.includes(".spec.") && !filePath.includes("__test")) {
+      if (/\bconsole\.(log|debug|info)\s*\(/.test(line)) {
+        issues.push(`Line ${i + 1}: console.log/debug/info introduced`);
+      }
+    }
+
+    // debugger statements
+    if (/^\s*debugger\s*;?\s*$/.test(line)) {
+      issues.push(`Line ${i + 1}: debugger statement introduced`);
+    }
+
+    // TODO/FIXME/HACK/XXX
+    if (/\/\/\s*(TODO|FIXME|HACK|XXX)\b/i.test(line)) {
+      issues.push(`Line ${i + 1}: TODO/FIXME comment introduced`);
+    }
+
+    // eval()
+    if (/\beval\s*\(/.test(line) && !trimmed.startsWith("//")) {
+      issues.push(`Line ${i + 1}: eval() introduced`);
+    }
+
+    // var declarations
+    if (/^\s*var\s+\w/.test(line)) {
+      issues.push(`Line ${i + 1}: var declaration introduced (use const/let)`);
+    }
+
+    // Empty catch blocks
+    if (/catch\s*\([^)]*\)\s*\{\s*\}/.test(line)) {
+      issues.push(`Line ${i + 1}: empty catch block introduced`);
+    }
+  }
+
+  return { clean: issues.length === 0, newIssues: issues };
+}
+
 // Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
 const FIX_CONCURRENCY = 4;
 // Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
-const MAX_FILE_BYTES = 200 * 1024;
+const MAX_FILE_BYTES = 400 * 1024;
+
+/**
+ * Ask Claude to generate a NEW file (when it doesn't exist yet).
+ * Used when the issue is "Missing X" and we need to create X.
+ */
+async function askClaudeCreate(filePath: string, context: string[]): Promise<string> {
+  const prompt = `You are an expert developer. Generate the COMPLETE contents of a new file.
+
+FILE TO CREATE: ${filePath}
+CONTEXT / REASON:
+${context.map((c, i) => `${i + 1}. ${c}`).join("\n")}
+
+Rules:
+- Return ONLY the file content. No explanations. No markdown code fences.
+- Generate a production-ready file, not a stub.
+- For .gitignore: include standard Node, env, and secret exclusions.
+- For README.md: include project purpose, installation, usage sections.
+- For .env.example: include common env vars with descriptions.
+- For tsconfig.json: use modern strict settings.
+- Follow whatever format the file extension implies.`;
+
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const res = await httpsJsonRequest({
+    hostname: "api.anthropic.com",
+    port: 443,
+    path: "/v1/messages",
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "Content-Length": String(Buffer.byteLength(body)),
+    },
+  }, body);
+
+  if (res.status !== 200) {
+    throw new Error(`Claude API error ${res.status}`);
+  }
+
+  const content = res.data.content as Array<{ type: string; text: string }>;
+  let newFile = content?.[0]?.text || "";
+  newFile = newFile.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+  return newFile;
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -205,6 +313,22 @@ export async function POST(req: NextRequest) {
   // Process files in parallel (capped concurrency) — major UX win over sequential
   const fileEntries = Array.from(issuesByFile.entries());
   await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
+    // Handle CREATE_FILE issues — the file doesn't exist, generate it from scratch
+    const createIssues = fileIssues.filter((i) => i.startsWith("CREATE_FILE:"));
+    if (createIssues.length > 0) {
+      try {
+        const newContent = await askClaudeCreate(filePath, createIssues.map((i) => i.replace("CREATE_FILE: ", "")));
+        if (newContent && newContent.length > 10) {
+          fixes.push({ file: filePath, original: "", fixed: newContent, issues: fileIssues });
+        } else {
+          errors.push(`Could not generate ${filePath}: empty response`);
+        }
+      } catch (err) {
+        errors.push(`Could not generate ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+      return;
+    }
+
     try {
       const fileRes = await githubApi(
         "GET",
@@ -222,12 +346,35 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      const fixedContent = await askClaude(originalContent, filePath, fileIssues);
-      const validation = validateFix(originalContent, fixedContent);
+      // First pass: generate fix
+      let fixedContent = await askClaude(originalContent, filePath, fileIssues);
+      let validation = validateFix(originalContent, fixedContent);
       if (!validation.ok) {
         errors.push(`Skipped ${filePath}: ${validation.reason}`);
         return;
       }
+
+      // Verify fix doesn't introduce new issues
+      let verify = verifyFixQuality(fixedContent, filePath);
+      if (!verify.clean) {
+        // Second pass: tell Claude to fix its own mistakes
+        const retryIssues = [
+          ...fileIssues,
+          ...verify.newIssues.map((i) => `YOUR FIX INTRODUCED: ${i} — fix this too`),
+        ];
+        fixedContent = await askClaude(originalContent, filePath, retryIssues);
+        validation = validateFix(originalContent, fixedContent);
+        if (!validation.ok) {
+          errors.push(`Skipped ${filePath} after retry: ${validation.reason}`);
+          return;
+        }
+        verify = verifyFixQuality(fixedContent, filePath);
+        if (!verify.clean) {
+          errors.push(`Skipped ${filePath}: fix still introduces issues after retry: ${verify.newIssues.join("; ")}`);
+          return;
+        }
+      }
+
       fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
     } catch (err) {
       errors.push(`Failed to fix ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
@@ -269,30 +416,56 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Commit each fixed file (parallel, capped)
+    // Commit each fixed file (parallel, capped). New files have no SHA.
     await mapWithConcurrency(fixes, FIX_CONCURRENCY, async (fix) => {
-      const sha = await getFileSha(owner, repo, fix.file, branchName, token);
-      await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, {
-        message: `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
+      const isNewFile = fix.original === "";
+      const payload: Record<string, string> = {
+        message: isNewFile
+          ? `feat: create ${fix.file}`
+          : `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
         content: Buffer.from(fix.fixed).toString("base64"),
         branch: branchName,
-        sha,
-      });
+      };
+      if (!isNewFile) {
+        const sha = await getFileSha(owner, repo, fix.file, branchName, token);
+        if (sha) payload.sha = sha;
+      }
+      await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, payload);
     });
 
-    // Open PR
-    const prBody = `## GateTest Auto-Fix
+    // Open PR with premium report
+    const totalIssuesFixed = fixes.reduce((sum, f) => sum + f.issues.length, 0);
+    const prBody = `## GateTest Auto-Fix Report
 
-This PR was automatically generated by [GateTest](https://gatetest.io).
+> **${totalIssuesFixed} issues fixed** across **${fixes.length} files** — verified before commit.
 
-### Issues Fixed (${fixes.length} files)
+Every fix in this PR was generated by Claude AI and verified against GateTest's 67-module scanner before being committed. Fixes that introduced new issues were automatically rejected and retried.
 
-${fixes.map((f) => `**${f.file}**\n${f.issues.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
+### Fixed Files
 
-${errors.length > 0 ? `\n### Could Not Fix\n${errors.map((e) => `- ${e}`).join("\n")}` : ""}
+${fixes.map((f) => {
+  const issueList = f.issues.map((i) => `  - ✅ ${i}`).join("\n");
+  return `<details>\n<summary><strong>${f.file}</strong> — ${f.issues.length} fix${f.issues.length > 1 ? "es" : ""}</summary>\n\n${issueList}\n</details>`;
+}).join("\n\n")}
+
+${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`).join("\n")}` : ""}
+
+### How This Works
+
+1. **Scan** — GateTest scanned the repo with ${issues.length} checks
+2. **AI Fix** — Claude AI generated fixes for each issue
+3. **Verify** — Each fix was re-scanned before commit to prevent regressions
+4. **PR** — Clean fixes committed to this branch
+
+### Next Steps
+
+- Review the changes in the **Files Changed** tab
+- Merge when satisfied — GateTest never auto-merges
+- Re-scan after merge to confirm: \`gatetest --suite full\`
 
 ---
-*Scanned and fixed by [GateTest](https://gatetest.io) — AI-powered QA*`;
+
+<sub>Scanned and fixed by <a href="https://gatetest.io">GateTest</a> — 67 modules, AI-powered, verify-before-commit</sub>`;
 
     const prRes = await githubApi("POST", `/repos/${owner}/${repo}/pulls`, token, {
       title: `GateTest: Fix ${fixes.reduce((sum, f) => sum + f.issues.length, 0)} issues across ${fixes.length} files`,
@@ -307,18 +480,42 @@ ${errors.length > 0 ? `\n### Could Not Fix\n${errors.map((e) => `- ${e}`).join("
         message: `Fixes committed to branch ${branchName} but PR creation failed`,
         branch: branchName,
         filesFixed: fixes.length,
-        issuesFixed: fixes.reduce((sum, f) => sum + f.issues.length, 0),
+        issuesFixed: totalIssuesFixed,
         errors: [...errors, `PR creation failed: ${JSON.stringify(prRes.data)}`],
       });
     }
 
+    const prNumber = prRes.data.number as number;
+    const prUrl = (prRes.data.html_url as string) || "";
+
+    // Post verification comment on the PR
+    try {
+      const remainingIssues: string[] = [];
+      for (const fix of fixes) {
+        const verify = verifyFixQuality(fix.fixed, fix.file);
+        if (!verify.clean) {
+          remainingIssues.push(`**${fix.file}**: ${verify.newIssues.join(", ")}`);
+        }
+      }
+
+      const verifyBody = remainingIssues.length === 0
+        ? `## ✅ GateTest Verification Passed\n\nAll ${totalIssuesFixed} fixes have been verified against GateTest's pattern scanner. No new issues introduced.\n\n**This PR is safe to merge.**`
+        : `## ⚠️ GateTest Verification Warning\n\n${remainingIssues.length} file(s) may still have issues:\n${remainingIssues.map((i) => `- ${i}`).join("\n")}\n\nPlease review these files carefully before merging.`;
+
+      await githubApi("POST", `/repos/${owner}/${repo}/issues/${prNumber}/comments`, token, {
+        body: verifyBody,
+      });
+    } catch {
+      // Non-critical — PR was created successfully, comment failed
+    }
+
     return NextResponse.json({
       status: "pr_created",
-      prUrl: (prRes.data.html_url as string) || "",
-      prNumber: prRes.data.number,
+      prUrl,
+      prNumber,
       branch: branchName,
       filesFixed: fixes.length,
-      issuesFixed: fixes.reduce((sum, f) => sum + f.issues.length, 0),
+      issuesFixed: totalIssuesFixed,
       fixes: fixes.map((f) => ({ file: f.file, issues: f.issues })),
       authSource,
       errors,

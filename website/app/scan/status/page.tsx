@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import FindingsPanel from "@/app/components/FindingsPanel";
+import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
 interface ModuleResult {
   name: string;
@@ -222,6 +223,34 @@ export default function ScanStatus() {
               }} />
           </div>
         </div>
+
+        {/* Live terminal — visible during scan */}
+        {scanning && params.repo && (
+          <div className="mb-8">
+            <LiveScanTerminal
+              repoUrl={params.repo}
+              tier={params.tier}
+              sessionId={params.id}
+              onComplete={(data) => {
+                setScanResult(data as unknown as ScanResult);
+                setScanning(false);
+              }}
+              onError={(err) => {
+                setScanResult({
+                  status: "failed",
+                  modules: [],
+                  totalModules: 0,
+                  completedModules: 0,
+                  totalIssues: 0,
+                  totalFixed: 0,
+                  duration: 0,
+                  error: err,
+                });
+                setScanning(false);
+              }}
+            />
+          </div>
+        )}
 
         {/* Module list — clean cards, not terminal */}
         <div className="space-y-2 mb-8">

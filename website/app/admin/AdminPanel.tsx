@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
 interface FixResult {
   status: string;
@@ -89,9 +90,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
+  const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers" | "keys">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "server" | "scans" | "customers" | "keys">("scan");
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
   const [keyName, setKeyName] = useState("");
   const [keyCustomer, setKeyCustomer] = useState("");
@@ -179,49 +182,62 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
   }
 
-  async function runScan() {
+  function runScan() {
     if (!repoUrl.includes("github.com")) {
       setError("Enter a valid GitHub repo URL");
       return;
     }
-
     setScanning(true);
     setResult(null);
+    setFixResult(null);
     setError("");
-
-    try {
-      const res = await fetch("/api/scan/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, tier }),
-      });
-      const data = await res.json();
-      setResult(data);
-      // Refresh DB data after scan
-      loadDbData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
   }
 
   async function fixIssues() {
     if (!result || !repoUrl) return;
     const failedMods = modules.filter((m) => (m.status as string) === "failed");
+
+    // Parse issues aggressively — extract file paths from multiple formats
     const issues = failedMods.flatMap((m) => {
       const details = (m.details as string[]) || [];
       return details.map((d) => {
-        const colonIdx = d.indexOf(":");
-        const file = colonIdx > 0 ? d.slice(0, colonIdx).trim() : "";
-        const issue = colonIdx > 0 ? d.slice(colonIdx + 1).trim() : d;
-        return { file, issue, module: m.name as string };
-      });
-    }).filter((i) => i.file);
+        // Format 1: "path/to/file.js:42: message" or "path/to/file.js: message"
+        let file = "";
+        let issue = d;
+        let line: number | undefined;
 
-    if (issues.length === 0) {
-      setError("No fixable issues found (issues need file paths)");
+        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
+        if (fileLineMatch) {
+          file = fileLineMatch[1];
+          line = Number(fileLineMatch[2]);
+          issue = fileLineMatch[3];
+        } else {
+          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
+        }
+
+        // Format 2: "Missing <filename>" → treat as create-file issue
+        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+        if (!file && missingMatch) {
+          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
+          issue = `CREATE_FILE: ${d}`;
+        }
+
+        return { file, issue, module: m.name as string, line };
+      });
+    });
+
+    const fixable = issues.filter((i) => i.file);
+    const unfixable = issues.filter((i) => !i.file);
+
+    if (fixable.length === 0) {
+      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review (config, infrastructure, or architectural changes).`);
       return;
+    }
+
+    if (unfixable.length > 0) {
+      // eslint-disable-next-line no-console
+      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
     }
 
     setFixing(true);
@@ -310,7 +326,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab navigation */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "scans", "customers", "keys"] as const).map((tab) => (
+          {(["scan", "server", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -321,7 +337,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               }`}
             >
               {tab === "scan"
-                ? "Run Scan"
+                ? "Repo Scan"
+                : tab === "server"
+                ? "Server Scan"
                 : tab === "scans"
                 ? "Recent Scans"
                 : tab === "customers"
@@ -372,11 +390,20 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               {error && <p className="text-danger text-sm mt-3">{error}</p>}
             </div>
 
-            {scanning && (
-              <div className="card p-8 text-center">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-muted">Scanning {repoUrl}...</p>
-              </div>
+            {scanning && repoUrl && (
+              <LiveScanTerminal
+                repoUrl={repoUrl}
+                tier={tier}
+                onComplete={(data) => {
+                  setResult(data);
+                  setScanning(false);
+                  loadDbData();
+                }}
+                onError={(err) => {
+                  setError(err);
+                  setScanning(false);
+                }}
+              />
             )}
 
             {result && !scanning && (
@@ -443,10 +470,68 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                         >
                           Copy Issues
                         </button>
+                        <button
+                          onClick={async () => {
+                            setGuidanceLoading(true);
+                            setGuidance(null);
+                            const failedModulesLocal = modules.filter((m) => (m.status as string) === "failed");
+                            const allIssues = failedModulesLocal.flatMap((m) => {
+                              const details = (m.details as string[]) || [];
+                              return details.map((d) => ({ module: m.name as string, detail: d }));
+                            });
+                            try {
+                              const res = await fetch("/api/scan/guidance", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ issues: allIssues }),
+                              });
+                              const data = await res.json();
+                              setGuidance(data.guidance || []);
+                            } catch {
+                              setError("Could not generate guidance");
+                            } finally {
+                              setGuidanceLoading(false);
+                            }
+                          }}
+                          disabled={guidanceLoading}
+                          className="btn-secondary px-4 py-2 text-xs disabled:opacity-50"
+                        >
+                          {guidanceLoading ? "Generating..." : "Manual Fix Guide"}
+                        </button>
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Manual guidance for unfixable issues */}
+                {guidance && guidance.length > 0 && (
+                  <div className="card p-5 mt-4 border-l-4 border-l-accent">
+                    <h3 className="font-bold mb-3">Step-by-step fix guide ({guidance.length} issues)</h3>
+                    <div className="space-y-4">
+                      {guidance.map((g, i) => (
+                        <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
+                            <h4 className="font-semibold text-sm">{g.title}</h4>
+                          </div>
+                          <p className="text-xs text-muted mb-3">{g.why}</p>
+                          <ol className="text-sm space-y-1 list-decimal list-inside">
+                            {g.steps.map((s, j) => (
+                              <li key={j} className="text-foreground">{s}</li>
+                            ))}
+                          </ol>
+                          {g.commands && g.commands.length > 0 && (
+                            <div className="mt-3 space-y-1">
+                              {g.commands.map((cmd, j) => (
+                                <pre key={j} className="bg-[#0a0a12] text-emerald-400 text-xs font-mono p-2 rounded overflow-x-auto">{cmd}</pre>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Fix result */}
                 {fixing && (
@@ -466,18 +551,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           <h3 className="font-bold">Pull Request Created</h3>
                         </div>
                         <p className="text-sm text-muted mb-3">
-                          Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files.
-                          Review and merge the PR to apply the fixes.
+                          Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
+                          {totalIssues > (fixResult.issuesFixed || 0) && (
+                            <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
+                          )}.
                         </p>
-                        <a
-                          href={fixResult.prUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-primary px-4 py-2 text-xs"
-                          style={{ background: "#059669" }}
-                        >
-                          View PR on GitHub &rarr;
-                        </a>
+                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                          <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={fixResult.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary px-4 py-2 text-xs"
+                            style={{ background: "#059669" }}
+                          >
+                            View PR on GitHub &rarr;
+                          </a>
+                          {fixResult.prUrl && (
+                            <button
+                              onClick={() => {
+                                // Scan the fix branch to verify
+                                const prUrl = fixResult.prUrl || "";
+                                const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+                                if (match) {
+                                  window.open(
+                                    `${prUrl}/files`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="btn-secondary px-4 py-2 text-xs"
+                            >
+                              View Changes
+                            </button>
+                          )}
+                        </div>
                       </>
                     ) : fixResult.status === "no_fixes" ? (
                       <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
@@ -530,6 +640,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             )}
           </>
+        )}
+
+        {/* Tab: Server Scan */}
+        {activeTab === "server" && (
+          <ServerScanPanel />
         )}
 
         {/* Tab: Recent Scans */}
@@ -761,5 +876,218 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+interface ServerFix {
+  platform: string;
+  title: string;
+  code: string;
+  instructions: string;
+}
+
+function ServerScanPanel() {
+  const [url, setUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  const [generatingFixes, setGeneratingFixes] = useState(false);
+  const [fixes, setFixes] = useState<Record<string, ServerFix[]> | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  async function runServerScan() {
+    if (!url) { setError("Enter a URL"); return; }
+    setScanning(true); setResult(null); setError(""); setFixes(null);
+    try {
+      const res = await fetch("/api/scan/server", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Scan failed"); return; }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally { setScanning(false); }
+  }
+
+  async function generateFixes() {
+    if (!result) return;
+    setGeneratingFixes(true);
+    try {
+      const res = await fetch("/api/scan/server-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname: result.hostname, modules: result.modules }),
+      });
+      const data = await res.json();
+      setFixes(data.fixes || {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate fixes");
+    } finally { setGeneratingFixes(false); }
+  }
+
+  function copyCode(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 1500);
+  }
+
+  const modules = (result?.modules as Array<Record<string, unknown>>) || [];
+  const totalIssues = (result?.totalIssues as number) || 0;
+
+  return (
+    <>
+      <div className="card p-6 mb-8">
+        <p className="text-sm text-muted mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runServerScan(); }}
+            placeholder="https://example.com"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+          />
+          <button onClick={runServerScan} disabled={scanning} className="btn-primary px-6 py-3 text-sm disabled:opacity-50">
+            {scanning ? "Scanning..." : "Scan Server"}
+          </button>
+        </div>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      </div>
+
+      {scanning && (
+        <div className="card p-8 text-center">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted">Checking SSL, headers, DNS, performance...</p>
+        </div>
+      )}
+
+      {result && !scanning && (
+        <div className="space-y-4">
+          <div className={`card p-6 ${totalIssues === 0 ? "border-l-4 border-l-green-500" : "border-l-4 border-l-amber-500"}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">
+                  {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
+                </h2>
+                <p className="text-sm text-muted">
+                  {result.hostname as string} &middot; {modules.length} modules &middot; {result.duration as number}ms
+                </p>
+              </div>
+              <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
+                totalIssues === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+              }`}>
+                {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
+              </span>
+            </div>
+            {totalIssues > 0 && (
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={generateFixes}
+                  disabled={generatingFixes}
+                  className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                  style={{ background: "#059669" }}
+                >
+                  {generatingFixes ? "Generating..." : `Generate Fixes`}
+                </button>
+                <button
+                  onClick={runServerScan}
+                  className="btn-secondary px-4 py-2 text-xs"
+                >
+                  Re-scan
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Generated fixes — ready-to-paste configs */}
+          {fixes && Object.keys(fixes).length > 0 && (
+            <div className="card p-5 border-l-4 border-l-accent">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-accent text-lg">⚡</span>
+                <h3 className="font-bold">Ready-to-paste fixes</h3>
+              </div>
+              <div className="space-y-5">
+                {Object.entries(fixes).map(([category, fixList]) => (
+                  <div key={category}>
+                    <h4 className="font-semibold text-sm text-foreground mb-2">{category}</h4>
+                    <div className="space-y-3">
+                      {fixList.map((f, idx) => {
+                        const id = `${category}-${idx}`;
+                        return (
+                          <div key={id} className="rounded-lg border border-border bg-gray-50 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-border">
+                              <div>
+                                <div className="text-xs font-bold text-foreground">{f.platform}</div>
+                                <div className="text-xs text-muted">{f.title}</div>
+                              </div>
+                              <button
+                                onClick={() => copyCode(f.code, id)}
+                                className="btn-secondary px-3 py-1 text-xs"
+                              >
+                                {copiedCode === id ? "Copied!" : "Copy"}
+                              </button>
+                            </div>
+                            <pre className="p-3 text-xs font-mono text-foreground overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                            <p className="px-3 py-2 bg-amber-50 text-xs text-amber-800 border-t border-amber-100">
+                              {f.instructions}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {fixes && Object.keys(fixes).length === 0 && (
+            <div className="card p-5 border-l-4 border-l-amber-500">
+              <p className="text-sm text-muted">
+                No automated fixes available for these specific issues. They require manual review or infrastructure access.
+              </p>
+            </div>
+          )}
+
+          {modules.map((mod) => {
+            const status = mod.status as string;
+            const details = (mod.details as string[]) || [];
+            return (
+              <div key={mod.name as string} className={`card p-4 ${
+                status === "passed" ? "border-l-4 border-l-green-500" :
+                status === "warning" ? "border-l-4 border-l-amber-500" :
+                "border-l-4 border-l-red-500"
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-sm">{mod.label as string || mod.name as string}</span>
+                  <span className={`text-xs font-bold ${
+                    status === "passed" ? "text-green-600" : status === "warning" ? "text-amber-600" : "text-red-600"
+                  }`}>
+                    {status === "passed" ? "PASS" : status === "warning" ? "WARN" : "FAIL"}
+                  </span>
+                </div>
+                {details.length > 0 && (
+                  <ul className="space-y-1">
+                    {details.map((d, i) => (
+                      <li key={i} className={`text-xs font-mono ${
+                        d.startsWith("error") ? "text-red-600" :
+                        d.startsWith("warning") ? "text-amber-600" :
+                        d.startsWith("pass") ? "text-green-600" :
+                        "text-muted"
+                      }`}>
+                        {d}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }

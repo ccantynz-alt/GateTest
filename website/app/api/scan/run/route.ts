@@ -19,6 +19,9 @@ import https from "https";
 import { isAdminRequest } from "@/app/lib/admin-auth";
 import { resolveGithubToken } from "@/app/lib/github-app";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
+// Wire contract reference: Gluecron.com/GATETEST_HOOK.md — each repo keeps its
+// own copy per the HTTP-only coupling rule.
+import { sendGluecronCallback } from "@/app/lib/gluecron-callback";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const MAX_FILES_TO_READ = 50;
@@ -167,14 +170,21 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
 }
 
 export async function POST(req: NextRequest) {
-  let input: { sessionId?: string; repoUrl?: string; tier?: string };
+  let input: {
+    sessionId?: string;
+    repoUrl?: string;
+    tier?: string;
+    source?: string;
+    sha?: string;
+    ref?: string;
+  };
   try {
     input = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { sessionId, repoUrl, tier } = input;
+  const { sessionId, repoUrl, tier, source, sha, ref } = input;
 
   if (!repoUrl) {
     return NextResponse.json({ error: "Missing repo URL" }, { status: 400 });
@@ -281,6 +291,26 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error("[GateTest] Stripe update failed:", err);
+    }
+  }
+
+  // Async scan-result callback to Gluecron. Fires only when the inbound
+  // request was originated by Gluecron (source === "gluecron") AND both
+  // env vars are configured. Failure here MUST NOT break the sync response.
+  if (
+    source === "gluecron" &&
+    process.env.GLUECRON_CALLBACK_URL &&
+    process.env.GLUECRON_CALLBACK_SECRET
+  ) {
+    try {
+      await sendGluecronCallback({
+        repository: `${owner}/${repo}`,
+        sha: sha || "",
+        ref,
+        scanResult: result,
+      });
+    } catch (err) {
+      console.error("[GateTest] Gluecron callback failed:", err);
     }
   }
 

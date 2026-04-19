@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PreLaunchBanner from "./components/PreLaunchBanner";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://gatetest.io"),
@@ -104,12 +105,13 @@ export default function RootLayout({
                   price: "99.00",
                   priceCurrency: "USD",
                   description:
-                    "All 67 modules including AI code review, security, accessibility, performance, infrastructure, and supply-chain hardening",
+                    "All 67 modules including AI code review, security, accessibility, and performance",
                 },
               ],
             }),
           }}
         />
+        <PreLaunchBanner />
         {children}
       </body>
     </html>

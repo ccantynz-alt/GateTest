@@ -38,7 +38,7 @@ const TIERS: Record<string, ScanTier> = {
     name: "Full Scan",
     priceInCents: 9900,
     modules: "all-67",
-    description: "All 67 modules — security, accessibility, SEO, AI review, infrastructure, supply chain, language coverage",
+    description: "All 67 modules — security, accessibility, SEO, AI review, and more",
   },
 };
 
@@ -89,6 +89,18 @@ function stripeRequest(
 }
 
 export async function POST(req: NextRequest) {
+  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
+  return NextResponse.json(
+    {
+      status: "pre-launch",
+      message:
+        "Scan purchases are not yet available. Join the waitlist at gatetest.io for launch notifications.",
+    },
+    { status: 503 }
+  );
+
+  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
+  /*
   if (!STRIPE_SECRET_KEY) {
     return NextResponse.json(
       { error: "Payments not configured yet" },
@@ -166,6 +178,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+  */
 }
 
 // GET — return available tiers

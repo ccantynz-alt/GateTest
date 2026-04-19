@@ -45,6 +45,7 @@ const HELP = `
     --help, -h         Show this help message
     --version, -v      Show version
 
+    --server <url>     Scan a live server: SSL, headers, DNS, performance
     --crawl <url>      Crawl a live website and test every page
     --crawl-loop <url> Crawl, report failures, wait for fixes, repeat until clean
     --crawl-max <n>    Max pages to crawl (default: 100)
@@ -56,6 +57,7 @@ const HELP = `
     gatetest --module security        Security scan only
     gatetest --module visual          Visual regression only
     gatetest --suite quick            Fast pre-commit checks
+    gatetest --server https://gatetest.ai    Scan server SSL, headers, DNS
     gatetest --crawl https://zoobicon.com   Crawl and test live site
     gatetest --crawl-loop https://zoobicon.com  Continuous test-fix loop
 
@@ -223,6 +225,31 @@ async function main() {
     return;
   }
 
+  // Server scan — check SSL, headers, DNS, performance on a live URL
+  if (args.server) {
+    const ServerScanner = require('../src/scanners/server-scanner');
+    const scanner = new ServerScanner();
+    const url = args.server.startsWith('http') ? args.server : `https://${args.server}`;
+    console.log(`\n  GATETEST — Server Scan\n  Target: ${url}\n`);
+
+    try {
+      const result = await scanner.scan(url);
+      for (const mod of result.modules) {
+        const icon = mod.status === 'passed' ? '\x1b[32m✓\x1b[0m' : mod.status === 'warning' ? '\x1b[33m!\x1b[0m' : '\x1b[31m✗\x1b[0m';
+        console.log(`  ${icon} ${mod.label || mod.name} — ${mod.checks} checks, ${mod.issues} issues`);
+        for (const d of (mod.details || [])) {
+          const color = d.startsWith('error') ? '\x1b[31m' : d.startsWith('warning') ? '\x1b[33m' : d.startsWith('pass') ? '\x1b[32m' : '\x1b[90m';
+          console.log(`      ${color}${d}\x1b[0m`);
+        }
+      }
+      console.log(`\n  ${result.totalIssues === 0 ? '\x1b[32mSERVER: CLEAN\x1b[0m' : `\x1b[33mSERVER: ${result.totalIssues} ISSUES\x1b[0m`} — ${result.totalChecks} checks, ${result.duration}ms\n`);
+      process.exit(result.totalIssues === 0 ? 0 : 1);
+    } catch (err) {
+      console.error(`\n  \x1b[31mError: ${err.message}\x1b[0m\n`);
+      process.exit(1);
+    }
+  }
+
   // Run tests
   let summary;
   if (args.module) {
@@ -257,6 +284,7 @@ function parseArgs(argv) {
     else if (arg === '--suite' && argv[i + 1]) args.suite = argv[++i];
     else if (arg === '--module' && argv[i + 1]) args.module = argv[++i];
     else if (arg === '--project' && argv[i + 1]) args.project = argv[++i];
+    else if (arg === '--server' && argv[i + 1]) args.server = argv[++i];
     else if (arg === '--crawl' && argv[i + 1]) args.crawl = argv[++i];
     else if (arg === '--crawl-loop' && argv[i + 1]) args.crawlLoop = argv[++i];
     else if (arg === '--crawl-max' && argv[i + 1]) args.crawlMax = parseInt(argv[++i]);

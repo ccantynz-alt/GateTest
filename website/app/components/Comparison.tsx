@@ -1,5 +1,4 @@
 const competitors = [
-  { name: "Playwright", categories: 1, scope: "Browser E2E only" },
   { name: "Cypress", categories: 1, scope: "Browser E2E only" },
   { name: "Jest", categories: 1, scope: "Unit tests only" },
   { name: "ESLint", categories: 1, scope: "Linting only" },

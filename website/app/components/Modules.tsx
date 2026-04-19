@@ -104,7 +104,7 @@ const categories: ModuleCategory[] = [
     modules: [
       { name: "Unit tests", desc: "Jest, Vitest, Mocha — coverage + passing discovery." },
       { name: "Integration tests", desc: "Cross-module test discovery and execution." },
-      { name: "E2E", desc: "Playwright-powered full-flow testing." },
+      { name: "E2E", desc: "Full-flow browser testing — every click, every form, every state." },
       { name: "Chaos", desc: "Slow networks, API failures, missing resources." },
       { name: "Live crawler", desc: "Real-site crawl — every page, every error." },
       { name: "Autonomous explorer", desc: "AI fills forms, clicks buttons, verifies state changes." },
@@ -128,13 +128,6 @@ const categories: ModuleCategory[] = [
   },
 ];
 
-const roadmap = [
-  "Auto-fix PRs — GateTest opens a PR with the diff that fixes every finding",
-  "Continuous monitoring dashboard — scan on every push, $49 / month",
-  "Custom rules engine — write your own patterns, drop into any suite",
-  "Self-hosted runner — for repos that can't leave the perimeter",
-];
-
 export default function Modules() {
   return (
     <section id="modules" className="py-24 px-6 border-t border-border">
@@ -151,14 +144,24 @@ export default function Modules() {
             and 9 language backends. Every module runs on every Full Scan. No
             configuration needed.
           </p>
+          <p className="text-muted text-sm max-w-2xl mx-auto mt-3">
+            13 core modules shown below &mdash; plus 54 more covering
+            polyglot dependencies, Dockerfile &amp; Kubernetes hygiene,
+            CI security, Terraform, SQL migrations, TLS &amp; cookie
+            config, PII-in-logs, N+1 queries, SSRF, ReDoS, and more.
+          </p>
         </div>
 
+        {/* Active modules — the 13 flagship module cards. The remaining
+            54 modules (infra, supply-chain, language checkers, etc.) are
+            summarised in the subtitle above; see CLAUDE.md for the full
+            list. */}
         {categories.map((cat) => (
-          <div key={cat.name} className="mb-14">
-            <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-border/60">
+          <div key={cat.name} className="mb-10">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-xl font-bold text-foreground">{cat.name}</h3>
-                <p className="text-sm text-muted mt-0.5">{cat.blurb}</p>
+                <h3 className="text-lg font-bold text-foreground">{cat.name}</h3>
+                <p className="text-sm text-muted">{cat.blurb}</p>
               </div>
               <span className="text-xs font-mono text-muted shrink-0 ml-4">
                 {cat.modules.length} module{cat.modules.length !== 1 ? "s" : ""}
@@ -166,38 +169,15 @@ export default function Modules() {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {cat.modules.map((mod) => (
-                <div
-                  key={mod.name}
-                  className="p-4 rounded-xl border border-border bg-white hover:border-accent/40 hover:shadow-sm transition-all"
-                >
-                  <h4 className="font-semibold text-foreground text-sm mb-1">
-                    {mod.name}
-                  </h4>
-                  <p className="text-xs text-muted leading-relaxed">{mod.desc}</p>
+                <div key={mod.name} className="card p-4">
+                  <span className="text-sm font-semibold text-foreground">{mod.name}</span>
+                  <p className="text-xs text-muted mt-1">{mod.desc}</p>
                 </div>
               ))}
             </div>
           </div>
         ))}
 
-        {/* Roadmap */}
-        <div className="mt-20 p-6 rounded-2xl border border-dashed border-border bg-surface-dark">
-          <div className="flex items-baseline justify-between mb-4">
-            <h3 className="text-lg font-bold text-foreground">Roadmap</h3>
-            <span className="text-xs font-mono text-muted">Next wave</span>
-          </div>
-          <ul className="space-y-2">
-            {roadmap.map((item) => (
-              <li
-                key={item}
-                className="flex items-start gap-3 text-sm text-muted leading-relaxed"
-              >
-                <span className="text-accent shrink-0 mt-0.5">→</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </section>
   );
