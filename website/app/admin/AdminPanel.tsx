@@ -462,18 +462,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           <h3 className="font-bold">Pull Request Created</h3>
                         </div>
                         <p className="text-sm text-muted mb-3">
-                          Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files.
-                          Review and merge the PR to apply the fixes.
+                          Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
+                          {totalIssues > (fixResult.issuesFixed || 0) && (
+                            <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
+                          )}.
                         </p>
-                        <a
-                          href={fixResult.prUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-primary px-4 py-2 text-xs"
-                          style={{ background: "#059669" }}
-                        >
-                          View PR on GitHub &rarr;
-                        </a>
+                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                          <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={fixResult.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary px-4 py-2 text-xs"
+                            style={{ background: "#059669" }}
+                          >
+                            View PR on GitHub &rarr;
+                          </a>
+                          {fixResult.prUrl && (
+                            <button
+                              onClick={() => {
+                                // Scan the fix branch to verify
+                                const prUrl = fixResult.prUrl || "";
+                                const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+                                if (match) {
+                                  window.open(
+                                    `${prUrl}/files`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="btn-secondary px-4 py-2 text-xs"
+                            >
+                              View Changes
+                            </button>
+                          )}
+                        </div>
                       </>
                     ) : fixResult.status === "no_fixes" ? (
                       <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
