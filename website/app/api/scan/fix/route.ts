@@ -19,7 +19,45 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { githubApi, httpsJsonRequest, resolveGithubToken } from "../../../lib/github-app";
+import https from "https";
+import {
+  createBranch,
+  fetchFileSha,
+  gluecronApi,
+  openPullRequest,
+  postPrComment,
+  resolveRepoAuth,
+  upsertFile,
+} from "../../../lib/gluecron-client";
+
+// Local helper for Anthropic calls — we no longer reuse the github-app's
+// httpsJsonRequest (it was coupled to the GitHub hostname).
+function anthropicHttpsJsonRequest(
+  options: https.RequestOptions,
+  body?: string
+): Promise<{ status: number; data: Record<string, unknown> }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString();
+        try {
+          resolve({ status: res.statusCode || 0, data: JSON.parse(raw) });
+        } catch {
+          resolve({ status: res.statusCode || 0, data: { raw } });
+        }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(60000, () => {
+      req.destroy();
+      reject(new Error("Request timeout"));
+    });
+    if (body) req.write(body);
+    req.end();
+  });
+}
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
@@ -67,7 +105,7 @@ CRITICAL RULES — violations will cause re-scan failure:
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
     }
-    const res = await httpsJsonRequest({
+    const res = await anthropicHttpsJsonRequest({
       hostname: "api.anthropic.com",
       port: 443,
       path: "/v1/messages",
@@ -205,7 +243,7 @@ Rules:
     messages: [{ role: "user", content: prompt }],
   });
 
-  const res = await httpsJsonRequest({
+  const res = await anthropicHttpsJsonRequest({
     hostname: "api.anthropic.com",
     port: 443,
     path: "/v1/messages",
@@ -270,22 +308,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "AI not configured (ANTHROPIC_API_KEY)" }, { status: 503 });
   }
 
-  const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  // Accept gluecron.com URLs first; fall back to github.com for links
+  // still in customer bookmarks during the migration window.
+  const gluecronMatch = repoUrl.match(/gluecron\.com\/([^/]+)\/([^/?#]+)/);
+  const githubMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  const repoMatch = gluecronMatch || githubMatch;
   if (!repoMatch) {
-    return NextResponse.json({ error: "Invalid GitHub URL" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid repo URL (expected gluecron.com/<owner>/<repo>)" }, { status: 400 });
   }
 
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
 
-  // Resolve GitHub token — prefer PAT, fall back to GitHub App installation token
-  const auth = await resolveGithubToken(owner, repo);
+  // Resolve Gluecron PAT and confirm repo access with a probe request.
+  const auth = await resolveRepoAuth(owner, repo);
   if (!auth.token) {
     return NextResponse.json(
       {
-        error: auth.error ||
-          "GitHub access not configured — set GITHUB_TOKEN, or install the GateTest GitHub App on this repo",
-        hint: "Install the GitHub App at https://github.com/apps/gatetesthq/installations/new",
+        error:
+          auth.error ||
+          "Gluecron access not configured — set GLUECRON_API_TOKEN (PAT, scope 'repo')",
+        hint: "Generate a PAT at https://gluecron.com/settings/tokens and set GLUECRON_API_TOKEN.",
       },
       { status: 503 }
     );
@@ -330,10 +373,12 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const fileRes = await githubApi(
+      const fileRes = await gluecronApi(
         "GET",
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`,
-        token
+        `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}?encoding=base64`
       );
       if (fileRes.status !== 200 || !fileRes.data.content) {
         errors.push(`Could not read ${filePath}`);
@@ -391,27 +436,37 @@ export async function POST(req: NextRequest) {
 
   // Create a branch, commit fixes, open PR
   try {
-    // Get default branch SHA
-    const repoRes = await githubApi("GET", `/repos/${owner}/${repo}`, token);
-    const defaultBranch = (repoRes.data.default_branch as string) || "main";
+    // Get default branch + its tip SHA from Gluecron's repo endpoint.
+    const repoRes = await gluecronApi(
+      "GET",
+      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+    );
+    const defaultBranch =
+      ((repoRes.data.defaultBranch as string) ||
+        (repoRes.data.default_branch as string) ||
+        "main");
 
-    const refRes = await githubApi("GET", `/repos/${owner}/${repo}/git/ref/heads/${defaultBranch}`, token);
-    const baseSha = (refRes.data.object as Record<string, string>)?.sha;
+    // Pull the tree metadata for the default branch — Gluecron includes the
+    // branch-tip sha on the tree response per the wire contract.
+    const treeMeta = await gluecronApi(
+      "GET",
+      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(defaultBranch)}?recursive=1`
+    );
+    const baseSha =
+      (treeMeta.data.sha as string | undefined) ||
+      ((treeMeta.data as { tree?: Array<{ sha?: string }> }).tree?.[0]?.sha);
 
     if (!baseSha) {
-      return NextResponse.json({ error: "Could not get base branch SHA" }, { status: 500 });
+      return NextResponse.json({ error: "Could not get base branch SHA from Gluecron" }, { status: 500 });
     }
 
-    // Create branch
+    // Create branch via Gluecron.
     const branchName = `gatetest/auto-fix-${Date.now()}`;
-    const branchRes = await githubApi("POST", `/repos/${owner}/${repo}/git/refs`, token, {
-      ref: `refs/heads/${branchName}`,
-      sha: baseSha,
-    });
+    const branchRes = await createBranch(owner, repo, branchName, baseSha, token);
 
     if (branchRes.status !== 201) {
       return NextResponse.json({
-        error: "Could not create branch — check GitHub token permissions",
+        error: "Could not create branch — check Gluecron token permissions",
         details: branchRes.data,
       }, { status: 500 });
     }
@@ -419,18 +474,13 @@ export async function POST(req: NextRequest) {
     // Commit each fixed file (parallel, capped). New files have no SHA.
     await mapWithConcurrency(fixes, FIX_CONCURRENCY, async (fix) => {
       const isNewFile = fix.original === "";
-      const payload: Record<string, string> = {
-        message: isNewFile
-          ? `feat: create ${fix.file}`
-          : `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`,
-        content: Buffer.from(fix.fixed).toString("base64"),
-        branch: branchName,
-      };
-      if (!isNewFile) {
-        const sha = await getFileSha(owner, repo, fix.file, branchName, token);
-        if (sha) payload.sha = sha;
-      }
-      await githubApi("PUT", `/repos/${owner}/${repo}/contents/${encodeURIComponent(fix.file)}`, token, payload);
+      const message = isNewFile
+        ? `feat: create ${fix.file}`
+        : `fix: ${fix.issues[0]}${fix.issues.length > 1 ? ` (+${fix.issues.length - 1} more)` : ""}`;
+      const existingSha = isNewFile
+        ? ""
+        : await fetchFileSha(owner, repo, fix.file, branchName, token);
+      await upsertFile(owner, repo, fix.file, fix.fixed, message, branchName, existingSha, token);
     });
 
     // Open PR with premium report
@@ -467,12 +517,18 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
 
 <sub>Scanned and fixed by <a href="https://gatetest.io">GateTest</a> — 67 modules, AI-powered, verify-before-commit</sub>`;
 
-    const prRes = await githubApi("POST", `/repos/${owner}/${repo}/pulls`, token, {
-      title: `GateTest: Fix ${fixes.reduce((sum, f) => sum + f.issues.length, 0)} issues across ${fixes.length} files`,
-      body: prBody,
-      head: branchName,
-      base: defaultBranch,
-    });
+    // Open the PR. NOTE: Gluecron uses `headBranch` / `baseBranch` (NOT
+    // GitHub's `head` / `base`) — our openPullRequest helper handles the
+    // translation for us.
+    const prRes = await openPullRequest(
+      owner,
+      repo,
+      `GateTest: Fix ${fixes.reduce((sum, f) => sum + f.issues.length, 0)} issues across ${fixes.length} files`,
+      prBody,
+      branchName,
+      defaultBranch,
+      token
+    );
 
     if (prRes.status !== 201) {
       return NextResponse.json({
@@ -502,9 +558,7 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
         ? `## ✅ GateTest Verification Passed\n\nAll ${totalIssuesFixed} fixes have been verified against GateTest's pattern scanner. No new issues introduced.\n\n**This PR is safe to merge.**`
         : `## ⚠️ GateTest Verification Warning\n\n${remainingIssues.length} file(s) may still have issues:\n${remainingIssues.map((i) => `- ${i}`).join("\n")}\n\nPlease review these files carefully before merging.`;
 
-      await githubApi("POST", `/repos/${owner}/${repo}/issues/${prNumber}/comments`, token, {
-        body: verifyBody,
-      });
+      await postPrComment(owner, repo, prNumber, verifyBody, token);
     } catch {
       // Non-critical — PR was created successfully, comment failed
     }
@@ -530,7 +584,3 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
   }
 }
 
-async function getFileSha(owner: string, repo: string, path: string, branch: string, token: string): Promise<string> {
-  const res = await githubApi("GET", `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, token);
-  return (res.data.sha as string) || "";
-}

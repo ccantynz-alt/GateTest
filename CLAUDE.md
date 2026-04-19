@@ -600,9 +600,8 @@ GateTest/
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe client key |
 | `NEXT_PUBLIC_BASE_URL` | https://gatetest.io |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing |
-| `GATETEST_APP_ID` | GitHub App ID |
-| `GATETEST_PRIVATE_KEY` | GitHub App .pem contents |
-| `GATETEST_WEBHOOK_SECRET` | GitHub webhook secret |
+| `GLUECRON_BASE_URL` | Gluecron deployment URL (default https://gluecron.com) |
+| `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |
 | `ANTHROPIC_API_KEY` | Claude API for AI review |
 | `GATETEST_ADMIN_PASSWORD` | Admin console password for `/admin` (bypasses Stripe) |
 
@@ -619,7 +618,7 @@ GateTest/
 | 5 | Crontech.ai protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 6 | Gluecron.com protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
-| 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | Craig to share Gluecron API docs / deployed URL |
+| 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | DONE (2026-04-19) — GluecronBridge shipped, website callers swapped off GitHub App. `src/core/gluecron-bridge.js` implements the HostBridge contract; `website/app/lib/gluecron-client.ts` replaces `github-app.ts` in scan/run, scan/fix, scan-executor, and admin/health. `/api/webhook` now returns 410 Gone (push events land at `/api/events/push`). Env migrated to `GLUECRON_BASE_URL` + `GLUECRON_API_TOKEN`. `src/core/github-bridge.js` kept as a sibling implementation per the HostBridge architecture. |
 | 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | DONE (2026-04-14) — `src/core/host-bridge.js` shipped, `GitHubBridge extends HostBridge`, registry + shared markdown formatter + 21 contract tests green. Gluecron bridge can plug in without further refactor once API surface is known. |
 | 10 | Our own `.github/workflows/ci.yml:49` has `continue-on-error: true` on the GateTest job — Bible Forbidden #24 violation. Caught by the new `ciSecurity` module (dog-fooded). Fix = remove that line once the self-scan is known-green; until then the gate is advisory-only in our own CI. | HIGH | DONE (2026-04-16) — `continue-on-error: true` removed from BOTH the gatetest-quick step (ci.yml:51) and the gatetest-full step (ci.yml:90). SARIF / artifact upload steps keep `continue-on-error` because Forbidden #24 scopes to the gate step itself. Self-scan is green: 816/816 tests pass, 67/67 modules load, website builds clean. |
 | 11 | Landing-page hero (`website/app/components/Hero.tsx:16,28,71`) says "13 Modules". Product ships 67 modules per Bible v1.40.0 version string. Marketing drift — day-one customers will see numbers that don't match docs / CLI `--list`. | HIGH | DONE (2026-04-17) — Craig authorized "just do it all". All 13→67 references aligned across 9 surfaces: `Hero.tsx` (4 places incl. badge, subhead, terminal output, stat tile), `Pricing.tsx` (Full Scan description + features), `layout.tsx` (structured-data Offer), `manifest.json`, `opengraph-image.tsx`, `api/checkout/route.ts` (2 places), `scan/status/page.tsx` (2 CTAs), `admin/AdminPanel.tsx`. Hero stat "200+ Quality Checks" also bumped to "800+" to match product reality. |

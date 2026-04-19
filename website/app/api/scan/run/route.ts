@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 import { isAdminRequest } from "@/app/lib/admin-auth";
-import { resolveGithubToken } from "@/app/lib/github-app";
+import { fetchBlob, fetchTree, resolveRepoAuth } from "@/app/lib/gluecron-client";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 // Wire contract reference: Gluecron.com/GATETEST_HOOK.md — each repo keeps its
 // own copy per the HTTP-only coupling rule.
@@ -62,31 +62,6 @@ function stripeApi(
   });
 }
 
-function githubGet(path: string, token?: string): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const headers: Record<string, string> = {
-      "User-Agent": "GateTest/1.2.0",
-      Accept: "application/vnd.github+json",
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const req = https.request(
-      { hostname: "api.github.com", port: 443, path, method: "GET", headers },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf-8"))); }
-          catch { resolve({}); }
-        });
-      }
-    );
-    req.on("error", reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error("GitHub timeout")); });
-    req.end();
-  });
-}
-
 interface ModuleResult {
   name: string;
   status: "passed" | "failed" | "skipped";
@@ -108,30 +83,33 @@ interface ScanRepoResult {
 async function scanRepo(owner: string, repo: string, tier: string): Promise<ScanRepoResult> {
   const startTime = Date.now();
 
-  // Resolve GitHub auth: PAT first, GitHub App installation token second.
-  const auth = await resolveGithubToken(owner, repo);
+  // Resolve Gluecron auth. Gluecron is PAT-only; resolveRepoAuth pings
+  // the repo endpoint to confirm the token has access before we attempt
+  // the tree fetch.
+  const auth = await resolveRepoAuth(owner, repo);
   const token = auth.token || undefined;
 
-  // Get file tree (authenticated if possible, else try public).
-  let tree: { tree?: Array<{ path: string; type: string }> };
-  try {
-    tree = (await githubGet(`/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, token)) as typeof tree;
-  } catch {
-    tree = (await githubGet(`/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`)) as typeof tree;
-  }
-
-  if (!tree?.tree) {
-    const hint = auth.error ? ` (${auth.error})` : token ? "" : " — set GITHUB_TOKEN or install the GateTest GitHub App";
+  if (!token) {
     return {
       modules: [],
       totalIssues: 0,
       duration: Date.now() - startTime,
       authSource: auth.source,
-      error: `Cannot access ${owner}/${repo}${hint}`,
+      error: `Cannot access ${owner}/${repo}${auth.error ? ` (${auth.error})` : ""}`,
     };
   }
 
-  const files = tree.tree.filter((f) => f.type === "blob").map((f) => f.path);
+  const files = await fetchTree(owner, repo, "HEAD", token);
+  if (files.length === 0) {
+    return {
+      modules: [],
+      totalIssues: 0,
+      duration: Date.now() - startTime,
+      authSource: auth.source,
+      error: `Cannot access ${owner}/${repo} — empty tree`,
+    };
+  }
+
   const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
   const sourceFiles = files.filter(
     (f) => sourceExts.some((ext) => f.endsWith(ext)) &&
@@ -141,11 +119,9 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
   // Read source files (up to MAX_FILES_TO_READ) in parallel for speed.
   const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
     try {
-      const data = (await githubGet(
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}`, token
-      )) as { content?: string; encoding?: string };
-      if (data.content && data.encoding === "base64") {
-        return { path: filePath, content: Buffer.from(data.content, "base64").toString("utf-8") };
+      const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
+      if (content) {
+        return { path: filePath, content };
       }
       return null;
     } catch { return null; }
@@ -190,9 +166,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing repo URL" }, { status: 400 });
   }
 
-  const repoMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  // Accept gluecron.com URLs first; fall back to github.com for URLs
+  // still in customer bookmarks during the migration window.
+  const gluecronMatch = repoUrl.match(/gluecron\.com\/([^/]+)\/([^/?#]+)/);
+  const githubMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/?#]+)/);
+  const repoMatch = gluecronMatch || githubMatch;
   if (!repoMatch) {
-    return NextResponse.json({ error: "Invalid GitHub URL" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid repo URL (expected gluecron.com/<owner>/<repo>)" }, { status: 400 });
   }
 
   const owner = repoMatch[1];
