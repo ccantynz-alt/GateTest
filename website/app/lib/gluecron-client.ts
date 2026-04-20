@@ -120,7 +120,7 @@ export async function gluecronApi(
 // access. Returns a shape compatible with TokenResolution so call sites
 // can swap with minimal diffs.
 
-export type GluecronAuthSource = "gluecron";
+export type GluecronAuthSource = "gluecron" | "github-pat" | "none";
 
 export interface GluecronTokenResolution {
   token: string | null;
@@ -142,51 +142,36 @@ export async function resolveRepoAuth(
   owner: string,
   repo: string
 ): Promise<GluecronTokenResolution> {
-  const token = getToken();
-  if (!token) {
-    return {
-      token: null,
-      source: "gluecron",
-      error:
-        "GLUECRON_API_TOKEN is not set. Generate a PAT at https://gluecron.com/settings/tokens and add GLUECRON_API_TOKEN to the env.",
-    };
+  // Try Gluecron first
+  const glcToken = getToken();
+  if (glcToken) {
+    try {
+      const res = await gluecronApi(
+        "GET",
+        `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+      );
+      if (res.status === 200) {
+        return { token: glcToken, source: "gluecron" };
+      }
+    } catch {
+      // Gluecron unreachable — fall through to GitHub
+    }
   }
 
-  try {
-    const res = await gluecronApi(
-      "GET",
-      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
-    );
-    if (res.status === 200) {
-      return { token, source: "gluecron" };
-    }
-    if (res.status === 401 || res.status === 403) {
-      return {
-        token: null,
-        source: "gluecron",
-        error: `Gluecron rejected token for ${owner}/${repo} (HTTP ${res.status}). Check scope (needs 'repo').`,
-      };
-    }
-    if (res.status === 404) {
-      return {
-        token: null,
-        source: "gluecron",
-        error: `Gluecron repo ${owner}/${repo} not found or token cannot see it (HTTP 404).`,
-      };
-    }
-    return {
-      token: null,
-      source: "gluecron",
-      error: `Gluecron access probe failed for ${owner}/${repo} (HTTP ${res.status}).`,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    return {
-      token: null,
-      source: "gluecron",
-      error: `Gluecron access probe threw: ${msg}`,
-    };
+  // Fallback to GitHub PAT (works while Gluecron is offline or during migration)
+  const githubToken = process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
+  if (githubToken) {
+    return { token: githubToken, source: "github-pat" };
   }
+
+  // No auth available
+  return {
+    token: null,
+    source: "none",
+    error: glcToken
+      ? `Gluecron could not access ${owner}/${repo}. Set GITHUB_TOKEN as fallback.`
+      : "No git host token configured. Set GLUECRON_API_TOKEN or GITHUB_TOKEN.",
+  };
 }
 
 // ── High-level helpers ─────────────────────────────────
@@ -209,8 +194,23 @@ export async function fetchTree(
   owner: string,
   repo: string,
   ref: string,
-  _token: string
+  token: string
 ): Promise<string[]> {
+  // GitHub fallback: if token looks like a GitHub PAT or starts with ghp_/gho_
+  const isGitHub = !getToken() || token.startsWith("ghp_") || token.startsWith("gho_") || token === (process.env.GITHUB_TOKEN || "") || token === (process.env.GATETEST_GITHUB_TOKEN || "");
+  if (isGitHub && token) {
+    try {
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`,
+        { headers: { Authorization: `Bearer ${token}`, "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" } }
+      );
+      if (ghRes.ok) {
+        const ghData = await ghRes.json() as { tree?: Array<{ path: string; type: string }> };
+        return (ghData.tree || []).filter((f) => f.type === "blob").map((f) => f.path);
+      }
+    } catch { /* fall through to gluecron */ }
+  }
+
   const res = await gluecronApi(
     "GET",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(ref)}?recursive=1`
@@ -238,14 +238,31 @@ interface GluecronContentsResponse {
 export async function fetchBlob(
   owner: string,
   repo: string,
-  path: string,
+  filePath: string,
   ref: string,
-  _token: string
+  token: string
 ): Promise<string> {
+  // GitHub fallback
+  const isGitHub = !getToken() || token.startsWith("ghp_") || token.startsWith("gho_") || token === (process.env.GITHUB_TOKEN || "") || token === (process.env.GATETEST_GITHUB_TOKEN || "");
+  if (isGitHub && token) {
+    try {
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`,
+        { headers: { Authorization: `Bearer ${token}`, "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" } }
+      );
+      if (ghRes.ok) {
+        const ghData = await ghRes.json() as { content?: string; encoding?: string };
+        if (ghData.content && ghData.encoding === "base64") {
+          return Buffer.from(ghData.content, "base64").toString("utf-8");
+        }
+      }
+    } catch { /* fall through to gluecron */ }
+  }
+
   const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
   const res = await gluecronApi(
     "GET",
-    `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path
+    `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath
       .split("/")
       .map(encodeURIComponent)
       .join("/")}${qs}`
