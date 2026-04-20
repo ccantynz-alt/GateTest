@@ -19,7 +19,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import https from "https";
 import {
   createBranch,
   fetchFileSha,
@@ -30,33 +29,23 @@ import {
   upsertFile,
 } from "../../../lib/gluecron-client";
 
-// Local helper for Anthropic calls — we no longer reuse the github-app's
-// httpsJsonRequest (it was coupled to the GitHub hostname).
-function anthropicHttpsJsonRequest(
-  options: https.RequestOptions,
-  body?: string
-): Promise<{ status: number; data: Record<string, unknown> }> {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        const raw = Buffer.concat(chunks).toString();
-        try {
-          resolve({ status: res.statusCode || 0, data: JSON.parse(raw) });
-        } catch {
-          resolve({ status: res.statusCode || 0, data: { raw } });
-        }
-      });
-    });
-    req.on("error", reject);
-    req.setTimeout(60000, () => {
-      req.destroy();
-      reject(new Error("Request timeout"));
-    });
-    if (body) req.write(body);
-    req.end();
+// Use fetch() for Anthropic — more robust TLS handling than raw https.request.
+// The native https module was throwing "SSL alert number 80" (TLS internal_error)
+// on Vercel's Node runtime; fetch() uses undici which handles the handshake cleanly.
+async function anthropicCall(body: string): Promise<{ status: number; data: Record<string, unknown> }> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "anthropic-version": "2023-06-01",
+      "x-api-key": ANTHROPIC_API_KEY,
+    },
+    body,
   });
+  const text = await res.text();
+  let data: Record<string, unknown>;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  return { status: res.status, data };
 }
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -130,18 +119,7 @@ CRITICAL RULES — violations will cause re-scan failure:
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
     }
-    const res = await anthropicHttpsJsonRequest({
-      hostname: "api.anthropic.com",
-      port: 443,
-      path: "/v1/messages",
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "Content-Length": String(Buffer.byteLength(body)),
-      },
-    }, body);
+    const res = await anthropicCall(body);
 
     lastStatus = res.status;
     if (res.status === 200) {
@@ -268,18 +246,7 @@ Rules:
     messages: [{ role: "user", content: prompt }],
   });
 
-  const res = await anthropicHttpsJsonRequest({
-    hostname: "api.anthropic.com",
-    port: 443,
-    path: "/v1/messages",
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "x-api-key": ANTHROPIC_API_KEY,
-      "Content-Length": String(Buffer.byteLength(body)),
-    },
-  }, body);
+  const res = await anthropicCall(body);
 
   if (res.status !== 200) {
     throw new Error(`Claude API error ${res.status}`);
