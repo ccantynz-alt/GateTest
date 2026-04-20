@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import FindingsPanel from "@/app/components/FindingsPanel";
+import SiblingProducts from "@/app/components/SiblingProducts";
 
 interface ModuleSummary {
   name: string;
@@ -184,17 +185,20 @@ export default function Dashboard() {
 
         {/* Empty state */}
         {scans.length === 0 && (
-          <div className="card p-12 text-center">
-            <p className="text-lg font-bold mb-2">No scans yet</p>
-            <p className="text-muted text-sm mb-6">
-              Run your first scan to see results here.
-            </p>
-            <a
-              href="/#pricing"
-              className="btn-primary px-6 py-3 text-sm inline-block"
-            >
-              Scan Your First Repo
-            </a>
+          <div className="space-y-6">
+            <div className="card p-12 text-center">
+              <p className="text-lg font-bold mb-2">No scans yet</p>
+              <p className="text-muted text-sm mb-6">
+                Run your first scan to see results here.
+              </p>
+              <a
+                href="/#pricing"
+                className="btn-primary px-6 py-3 text-sm inline-block"
+              >
+                Scan Your First Repo
+              </a>
+            </div>
+            <SiblingProducts />
           </div>
         )}
 
