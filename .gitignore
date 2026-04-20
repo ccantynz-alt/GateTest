@@ -1,7 +1,5 @@
 node_modules/
-.gatetest/reports/
-.gatetest/screenshots/
-.gatetest/baselines/
+.gatetest/
 coverage/
 dist/
 .env
