@@ -29,26 +29,111 @@ import {
   upsertFile,
 } from "../../../lib/gluecron-client";
 
-// Use fetch() for Anthropic — more robust TLS handling than raw https.request.
-// The native https module was throwing "SSL alert number 80" (TLS internal_error)
-// on Vercel's Node runtime; fetch() uses undici which handles the handshake cleanly.
-async function anthropicCall(body: string): Promise<{ status: number; data: Record<string, unknown> }> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
-      "x-api-key": ANTHROPIC_API_KEY,
-    },
-    body,
-  });
-  const text = await res.text();
-  let data: Record<string, unknown>;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  return { status: res.status, data };
-}
+// Vercel Pro allows up to 300s. Fix runs 44 issues across ~10 files, each file
+// needs a Claude call + GitHub read + commit. 300s gives headroom for retries
+// without pushing browser into connection-reset territory.
+export const maxDuration = 300;
+export const runtime = "nodejs";
+
+// Hard time budget (ms). We STOP accepting new files at 80% of maxDuration so
+// commits + PR creation have time to run. Worst case we ship a partial fix PR
+// with what we managed to complete.
+const TIME_BUDGET_MS = 240_000;
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+
+// Retryable network error shapes — the TLS / connection-level failures that
+// throw BEFORE an HTTP response is ever produced. Notably includes EPROTO
+// "SSL alert number 80" which hits hard when undici's keep-alive pool gets
+// poisoned by a single bad socket and subsequent parallel writes inherit the
+// failure. Retry with a fresh request (and jitter) to sidestep the pool.
+function isRetryableNetworkError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: string; cause?: { code?: string } }).code
+    || (err as { cause?: { code?: string } }).cause?.code
+    || "";
+  const retryableCodes = [
+    "EPROTO", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT",
+    "EAI_AGAIN", "ENOTFOUND", "EPIPE", "EHOSTUNREACH",
+    "UND_ERR_SOCKET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT",
+    "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE",
+  ];
+  if (retryableCodes.includes(code)) return true;
+  // Match text shapes too — undici sometimes surfaces them in the message
+  if (/EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|TLS/i.test(msg)) {
+    return true;
+  }
+  return false;
+}
+
+async function anthropicCall(body: string): Promise<{ status: number; data: Record<string, unknown> }> {
+  const controller = new AbortController();
+  // Anthropic max_tokens=8192 at sonnet speeds rarely exceeds 30s. 45s is a
+  // safe per-request ceiling that leaves room for retries inside the 300s
+  // function budget and won't let a single stuck request monopolise.
+  const timer = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "connection": "close",
+      },
+      body,
+      signal: controller.signal,
+      // Don't reuse stale keep-alive sockets from the undici pool — one bad
+      // TLS socket poisons every parallel request otherwise.
+      keepalive: false,
+    });
+    const text = await res.text();
+    let data: Record<string, unknown>;
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    return { status: res.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Retry wrapper — handles both HTTP-status retries (429/5xx) and raw network
+// errors (EPROTO, ECONNRESET, TLS handshake). Jittered exponential backoff so
+// parallel retries don't synchronise and re-overwhelm the remote.
+async function anthropicCallWithRetry(body: string, maxAttempts = 3): Promise<{ status: number; data: Record<string, unknown> }> {
+  let lastError: unknown = null;
+  let lastResponse: { status: number; data: Record<string, unknown> } | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      const base = 400 * Math.pow(2, attempt - 1); // 400, 800 (tight — we're racing the Vercel clock)
+      const jitter = Math.floor(Math.random() * 300);
+      await new Promise((r) => setTimeout(r, base + jitter));
+    }
+    try {
+      const res = await anthropicCall(body);
+      // Success
+      if (res.status === 200) return res;
+      // Non-retryable client error — stop immediately
+      if (res.status !== 429 && res.status < 500) {
+        return res;
+      }
+      // Retryable HTTP status (429 / 5xx) — continue loop
+      lastResponse = res;
+    } catch (err) {
+      if (!isRetryableNetworkError(err)) {
+        // Unknown non-transient error — don't burn all retries on it
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastError instanceof Error
+    ? new Error(`Anthropic API unreachable after ${maxAttempts} attempts: ${lastError.message}`)
+    : new Error(`Anthropic API unreachable after ${maxAttempts} attempts`);
+}
 
 async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
   // Enrich broken-link issues with context about what actually exists
@@ -112,30 +197,16 @@ CRITICAL RULES — violations will cause re-scan failure:
     messages: [{ role: "user", content: prompt }],
   });
 
-  // Retry up to 3x on 429/5xx with exponential backoff
-  let lastStatus = 0;
-  let lastErr = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
-    }
-    const res = await anthropicCall(body);
-
-    lastStatus = res.status;
-    if (res.status === 200) {
-      const content = res.data.content as Array<{ type: string; text: string }>;
-      let fixedCode = content?.[0]?.text || "";
-      // Strip markdown code fences if Claude added them despite instructions
-      fixedCode = fixedCode.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
-      return fixedCode;
-    }
-    if (res.status !== 429 && res.status < 500) {
-      // Non-retryable client error (400/401/403)
-      lastErr = JSON.stringify(res.data).slice(0, 200);
-      break;
-    }
+  const res = await anthropicCallWithRetry(body);
+  if (res.status === 200) {
+    const content = res.data.content as Array<{ type: string; text: string }>;
+    let fixedCode = content?.[0]?.text || "";
+    // Strip markdown code fences if Claude added them despite instructions
+    fixedCode = fixedCode.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "");
+    return fixedCode;
   }
-  throw new Error(`Claude API error ${lastStatus}${lastErr ? `: ${lastErr}` : ""}`);
+  const errSnippet = JSON.stringify(res.data).slice(0, 200);
+  throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
 }
 
 /**
@@ -216,7 +287,10 @@ function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; ne
 }
 
 // Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
-const FIX_CONCURRENCY = 4;
+// Dropped from 4 → 2 after prod hit cascading EPROTO / TLS alert 80 failures under
+// heavy undici keep-alive pressure. Two parallel requests + keepalive:false on each
+// keeps fresh sockets without pool-poisoning a whole batch when one goes bad.
+const FIX_CONCURRENCY = 2;
 // Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
 const MAX_FILE_BYTES = 400 * 1024;
 
@@ -246,10 +320,11 @@ Rules:
     messages: [{ role: "user", content: prompt }],
   });
 
-  const res = await anthropicCall(body);
+  const res = await anthropicCallWithRetry(body);
 
   if (res.status !== 200) {
-    throw new Error(`Claude API error ${res.status}`);
+    const errSnippet = JSON.stringify(res.data).slice(0, 200);
+    throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
   }
 
   const content = res.data.content as Array<{ type: string; text: string }>;
@@ -345,9 +420,19 @@ export async function POST(req: NextRequest) {
   const fixes: Fix[] = [];
   const errors: string[] = [];
 
+  // Time budget — start the clock so per-file workers can bail early if the
+  // remaining budget won't fit another Claude round-trip + retries.
+  const startedAt = Date.now();
+  const budgetExceeded = () => Date.now() - startedAt > TIME_BUDGET_MS;
+  let skippedForBudget = 0;
+
   // Process files in parallel (capped concurrency) — major UX win over sequential
   const fileEntries = Array.from(issuesByFile.entries());
   await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
+    if (budgetExceeded()) {
+      skippedForBudget += 1;
+      return;
+    }
     // Handle CREATE_FILE issues — the file doesn't exist, generate it from scratch
     const createIssues = fileIssues.filter((i) => i.startsWith("CREATE_FILE:"));
     if (createIssues.length > 0) {
@@ -414,15 +499,28 @@ export async function POST(req: NextRequest) {
 
       fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
     } catch (err) {
-      errors.push(`Failed to fix ${filePath}: ${err instanceof Error ? err.message : "unknown"}`);
+      const raw = err instanceof Error ? err.message : "unknown";
+      // Collapse noisy TLS / network errors into something a human can act on.
+      let clean = raw;
+      if (/EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|unreachable/i.test(raw)) {
+        clean = `Claude API network error after retries — try again in a minute (${raw.slice(0, 80)})`;
+      }
+      errors.push(`Failed to fix ${filePath}: ${clean}`);
     }
   });
+
+  if (skippedForBudget > 0) {
+    errors.push(`Skipped ${skippedForBudget} file${skippedForBudget > 1 ? "s" : ""} — function time budget exhausted. Re-run fix to process the remainder.`);
+  }
 
   if (fixes.length === 0) {
     return NextResponse.json({
       status: "no_fixes",
-      message: "No fixes could be generated",
+      message: skippedForBudget > 0
+        ? `All ${skippedForBudget} files skipped — function time budget exhausted before Claude could finish. Try again — the second run will typically complete since results cache and retries kick in faster.`
+        : "No fixes could be generated",
       errors,
+      skippedForBudget,
     });
   }
 

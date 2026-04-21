@@ -211,10 +211,17 @@ export async function POST(req: NextRequest) {
 
   const unmatched = issues.filter((_, i) => !matched.has(i));
 
-  // Connect via SSH — use require() to avoid Turbopack static analysis.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Client } = require("ssh2") as { Client: new () => any };
+  // Connect via SSH — fully dynamic to avoid Turbopack static analysis + TS module check.
+  let Client: new () => any;
+  try {
+    const modName = "ssh2";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Client = require(modName).Client;
+  } catch {
+    return NextResponse.json({
+      error: "ssh2 module not installed. Run: npm install ssh2",
+    }, { status: 503 });
+  }
   const conn = new Client();
   const connectConfig: Record<string, unknown> = {
     host,
