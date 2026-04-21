@@ -29,6 +29,17 @@ import {
   upsertFile,
 } from "../../../lib/gluecron-client";
 
+// Vercel Pro allows up to 300s. Fix runs 44 issues across ~10 files, each file
+// needs a Claude call + GitHub read + commit. 300s gives headroom for retries
+// without pushing browser into connection-reset territory.
+export const maxDuration = 300;
+export const runtime = "nodejs";
+
+// Hard time budget (ms). We STOP accepting new files at 80% of maxDuration so
+// commits + PR creation have time to run. Worst case we ship a partial fix PR
+// with what we managed to complete.
+const TIME_BUDGET_MS = 240_000;
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 // Retryable network error shapes — the TLS / connection-level failures that
@@ -58,9 +69,10 @@ function isRetryableNetworkError(err: unknown): boolean {
 
 async function anthropicCall(body: string): Promise<{ status: number; data: Record<string, unknown> }> {
   const controller = new AbortController();
-  // Anthropic max_tokens=8192 at sonnet speeds rarely exceeds 45s; 90s is
-  // a safe ceiling that won't cascade into Vercel's function timeout.
-  const timer = setTimeout(() => controller.abort(), 90_000);
+  // Anthropic max_tokens=8192 at sonnet speeds rarely exceeds 30s. 45s is a
+  // safe per-request ceiling that leaves room for retries inside the 300s
+  // function budget and won't let a single stuck request monopolise.
+  const timer = setTimeout(() => controller.abort(), 45_000);
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -88,14 +100,14 @@ async function anthropicCall(body: string): Promise<{ status: number; data: Reco
 // Retry wrapper — handles both HTTP-status retries (429/5xx) and raw network
 // errors (EPROTO, ECONNRESET, TLS handshake). Jittered exponential backoff so
 // parallel retries don't synchronise and re-overwhelm the remote.
-async function anthropicCallWithRetry(body: string, maxAttempts = 5): Promise<{ status: number; data: Record<string, unknown> }> {
+async function anthropicCallWithRetry(body: string, maxAttempts = 3): Promise<{ status: number; data: Record<string, unknown> }> {
   let lastError: unknown = null;
   let lastResponse: { status: number; data: Record<string, unknown> } | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      const base = 500 * Math.pow(2, attempt - 1); // 500, 1000, 2000, 4000
-      const jitter = Math.floor(Math.random() * 500);
+      const base = 400 * Math.pow(2, attempt - 1); // 400, 800 (tight — we're racing the Vercel clock)
+      const jitter = Math.floor(Math.random() * 300);
       await new Promise((r) => setTimeout(r, base + jitter));
     }
     try {
@@ -408,9 +420,19 @@ export async function POST(req: NextRequest) {
   const fixes: Fix[] = [];
   const errors: string[] = [];
 
+  // Time budget — start the clock so per-file workers can bail early if the
+  // remaining budget won't fit another Claude round-trip + retries.
+  const startedAt = Date.now();
+  const budgetExceeded = () => Date.now() - startedAt > TIME_BUDGET_MS;
+  let skippedForBudget = 0;
+
   // Process files in parallel (capped concurrency) — major UX win over sequential
   const fileEntries = Array.from(issuesByFile.entries());
   await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
+    if (budgetExceeded()) {
+      skippedForBudget += 1;
+      return;
+    }
     // Handle CREATE_FILE issues — the file doesn't exist, generate it from scratch
     const createIssues = fileIssues.filter((i) => i.startsWith("CREATE_FILE:"));
     if (createIssues.length > 0) {
@@ -487,11 +509,18 @@ export async function POST(req: NextRequest) {
     }
   });
 
+  if (skippedForBudget > 0) {
+    errors.push(`Skipped ${skippedForBudget} file${skippedForBudget > 1 ? "s" : ""} — function time budget exhausted. Re-run fix to process the remainder.`);
+  }
+
   if (fixes.length === 0) {
     return NextResponse.json({
       status: "no_fixes",
-      message: "No fixes could be generated",
+      message: skippedForBudget > 0
+        ? `All ${skippedForBudget} files skipped — function time budget exhausted before Claude could finish. Try again — the second run will typically complete since results cache and retries kick in faster.`
+        : "No fixes could be generated",
       errors,
+      skippedForBudget,
     });
   }
 
