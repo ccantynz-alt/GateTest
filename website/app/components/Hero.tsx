@@ -70,16 +70,19 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats — counter-animated on scroll, premium hover */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-14 max-w-2xl mx-auto fade-up stagger">
             {[
               { value: "67", label: "Test Modules" },
-              { value: "200+", label: "Individual Checks" },
+              { value: "800+", label: "Individual Checks" },
               { value: "$0", label: "If Scan Fails" },
               { value: "0", label: "Tolerance for Bugs" },
             ].map((stat) => (
-              <div key={stat.label} className="text-center p-4 rounded-xl bg-white/5 border border-white/8">
-                <div className="text-3xl font-bold text-white">{stat.value}</div>
+              <div key={stat.label} className="group relative text-center p-4 rounded-xl bg-white/5 border border-white/8 transition-all hover:bg-white/[0.08] hover:border-teal-400/30 hover:-translate-y-0.5 overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-400/0 to-transparent group-hover:via-teal-400/50 transition-all" aria-hidden="true" />
+                <div className="text-3xl font-bold text-white tracking-tight">
+                  <CountUp value={stat.value} />
+                </div>
                 <div className="text-sm text-white/40 mt-1">{stat.label}</div>
               </div>
             ))}

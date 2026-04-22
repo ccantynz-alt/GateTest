@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+import CountUp from "@/app/components/CountUp";
 
 interface FailedFile {
   file: string;
@@ -313,87 +314,115 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const stats = dbData?.stats;
 
   return (
-    <div className="min-h-screen bg-[#0a0a12]">
-      {/* Dark command center header */}
-      <div className="border-b border-white/8 px-6 py-5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-              <span className="text-white font-bold text-lg font-[var(--font-mono)]">G</span>
+    <div className="min-h-screen bg-[#0a0a12] relative">
+      {/* Ambient glow — top of page */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-gradient-to-b from-teal-500/10 to-transparent rounded-full blur-[100px] pointer-events-none" aria-hidden="true" />
+
+      {/* Premium header with gradient accent bar */}
+      <div className="relative border-b border-white/8 backdrop-blur-xl bg-[#0a0a12]/80 sticky top-0 z-30">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" aria-hidden="true" />
+        <div className="px-6 py-5">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <span className="text-white font-bold text-lg font-[var(--font-mono)]">G</span>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0a0a12]">
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold text-white tracking-tight">Command Center</h1>
+                  <span className="text-[10px] font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">LIVE</span>
+                </div>
+                <p className="text-xs text-white/40 mt-0.5">
+                  Signed in as <span className="font-mono text-emerald-400 font-semibold">{adminLogin}</span> &middot; All tiers unlocked
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Command Center</h1>
-              <p className="text-xs text-white/40">
-                Signed in as <span className="font-mono text-emerald-400">{adminLogin}</span>
-              </p>
+            <div className="flex items-center gap-3">
+              <a
+                href="/admin/health"
+                className="group text-xs px-3.5 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40 transition-all font-semibold flex items-center gap-1.5"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 group-hover:animate-pulse" />
+                Self-Test
+              </a>
+              <a href="/" className="text-xs text-white/40 hover:text-white/80 transition-colors font-medium">
+                &larr; Site
+              </a>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="/admin/health"
-              className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors font-medium"
-            >
-              Self-Test
-            </a>
-            <a href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
-              &larr; Site
-            </a>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-6">
-        {/* Stats bar */}
+        {/* Stats bar — premium cards with gradient border on hover + counter-animation */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.total_scans}</p>
-              <p className="text-xs text-white/40">Total Scans</p>
-            </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.total_customers}</p>
-              <p className="text-xs text-white/40">Customers</p>
-            </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-400">
-                ${Number(stats.total_revenue || 0).toFixed(0)}
-              </p>
-              <p className="text-xs text-white/40">Revenue</p>
-            </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.avg_score || 0}</p>
-              <p className="text-xs text-white/40">Avg Score</p>
-            </div>
+            {[
+              { value: `${stats.total_scans}`, label: "Total Scans", accent: "white" },
+              { value: `${stats.total_customers}`, label: "Customers", accent: "white" },
+              { value: `$${Number(stats.total_revenue || 0).toFixed(0)}`, label: "Revenue", accent: "emerald" },
+              { value: `${stats.avg_score || 0}`, label: "Avg Score", accent: "white" },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="group relative rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center overflow-hidden transition-all hover:border-emerald-400/30 hover:bg-white/[0.06] hover:-translate-y-0.5"
+              >
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/0 to-transparent group-hover:via-emerald-400/40 transition-all" aria-hidden="true" />
+                <p className={`text-2xl font-bold tracking-tight ${stat.accent === "emerald" ? "text-emerald-400" : "text-white"}`}>
+                  <CountUp value={stat.value} />
+                </p>
+                <p className="text-xs text-white/40 mt-1">{stat.label}</p>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Tab navigation — dark themed */}
-        <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto">
-          {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab
-                  ? "border-emerald-400 text-white"
-                  : "border-transparent text-white/40 hover:text-white/70"
-              } ${tab === "nuclear" ? "font-bold text-red-400" : ""}`}
-            >
-              {tab === "scan"
-                ? "Repo Scan"
-                : tab === "server"
-                ? "Server Scan"
-                : tab === "nuclear"
-                ? "☢ Nuclear Scan"
-                : tab === "watchdog"
-                ? "Watchdog"
-                : tab === "scans"
-                ? "Recent Scans"
-                : tab === "customers"
-                ? "Customers"
-                : "API Keys"}
-            </button>
-          ))}
+        {/* Tab navigation — dark themed, premium active indicator */}
+        <div className="relative flex gap-1 mb-6 border-b border-white/10 overflow-x-auto">
+          {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => {
+            const isActive = activeTab === tab;
+            const isNuclear = tab === "nuclear";
+            const label = tab === "scan"
+              ? "Repo Scan"
+              : tab === "server"
+              ? "Server Scan"
+              : tab === "nuclear"
+              ? "☢ Nuclear"
+              : tab === "watchdog"
+              ? "Watchdog"
+              : tab === "scans"
+              ? "Recent Scans"
+              : tab === "customers"
+              ? "Customers"
+              : "API Keys";
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`relative px-4 py-3 text-sm font-semibold transition-all whitespace-nowrap group ${
+                  isActive
+                    ? isNuclear ? "text-red-400" : "text-white"
+                    : isNuclear ? "text-red-400/60 hover:text-red-400" : "text-white/40 hover:text-white/80"
+                }`}
+              >
+                {label}
+                {/* Active indicator — glowing bottom border */}
+                {isActive && (
+                  <span
+                    className={`absolute bottom-0 left-2 right-2 h-0.5 rounded-full ${isNuclear ? "bg-red-400" : "bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400"} shadow-[0_0_8px_rgba(52,211,153,0.5)]`}
+                    aria-hidden="true"
+                  />
+                )}
+                {/* Hover glow (inactive only) */}
+                {!isActive && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-white/0 group-hover:bg-white/20 transition-all" aria-hidden="true" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* DB init notice */}
@@ -406,35 +435,54 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
           </div>
         )}
 
-        {/* Tab: Run Scan */}
+        {/* Tab: Run Scan — dark premium form */}
         {activeTab === "scan" && (
           <>
-            <div className="card p-6 mb-8">
+            <div className="relative rounded-2xl bg-white/[0.03] border border-white/8 p-6 mb-8 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent" aria-hidden="true" />
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-white">Scan a Repository</h2>
+                  <p className="text-xs text-white/40 mt-0.5">Admin bypass — all tiers, no Stripe</p>
+                </div>
+                <span className="text-[10px] font-semibold tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">OWNER MODE</span>
+              </div>
               <div className="grid sm:grid-cols-[1fr,auto,auto] gap-3">
                 <input
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-full"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] text-white placeholder:text-white/30 text-sm w-full font-[var(--font-mono)] focus:outline-none focus:border-emerald-400/60 focus:bg-white/[0.06] transition-all"
                 />
                 <select
                   value={tier}
                   onChange={(e) => setTier(e.target.value)}
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] text-white text-sm font-medium focus:outline-none focus:border-emerald-400/60 transition-all cursor-pointer"
                 >
-                  <option value="quick">Quick (4 modules)</option>
-                  <option value="full">Full (67 modules)</option>
+                  <option value="quick" className="bg-[#0a0a12]">Quick &middot; 4 modules</option>
+                  <option value="full" className="bg-[#0a0a12]">Full &middot; 67 modules</option>
+                  <option value="fix" className="bg-[#0a0a12]">Scan + Fix &middot; 67 modules + PR</option>
+                  <option value="nuclear" className="bg-[#0a0a12]">☢ Nuclear &middot; Everything</option>
                 </select>
                 <button
                   onClick={runScan}
                   disabled={scanning}
-                  className="btn-primary px-6 py-3 text-sm disabled:opacity-50"
+                  className="px-6 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition-all whitespace-nowrap"
                 >
-                  {scanning ? "Scanning..." : "Run Scan"}
+                  {scanning ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Scanning...
+                    </span>
+                  ) : "Run Scan"}
                 </button>
               </div>
-              {error && <p className="text-danger text-sm mt-3">{error}</p>}
+              {error && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <p className="text-red-400 text-xs font-medium">{error}</p>
+                </div>
+              )}
             </div>
 
             {scanning && repoUrl && (

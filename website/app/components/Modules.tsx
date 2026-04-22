@@ -169,7 +169,7 @@ export default function Modules() {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {cat.modules.map((mod) => (
-                <div key={mod.name} className="card p-4">
+                <div key={mod.name} className="card module-card-3d p-4">
                   <span className="text-sm font-semibold text-foreground">{mod.name}</span>
                   <p className="text-xs text-muted mt-1">{mod.desc}</p>
                 </div>

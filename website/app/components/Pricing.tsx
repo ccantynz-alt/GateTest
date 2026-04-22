@@ -99,7 +99,7 @@ export default function Pricing() {
           {scanPlans.map((plan) => (
             <div
               key={plan.name}
-              className={`rounded-2xl p-6 transition-all flex flex-col ${
+              className={`rounded-2xl p-6 flex flex-col pricing-card ${
                 plan.highlight
                   ? "card-highlight"
                   : "card"
