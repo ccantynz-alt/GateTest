@@ -100,14 +100,18 @@ async function anthropicCall(body: string): Promise<{ status: number; data: Reco
 // Retry wrapper — handles both HTTP-status retries (429/5xx) and raw network
 // errors (EPROTO, ECONNRESET, TLS handshake). Jittered exponential backoff so
 // parallel retries don't synchronise and re-overwhelm the remote.
-async function anthropicCallWithRetry(body: string, maxAttempts = 3): Promise<{ status: number; data: Record<string, unknown> }> {
+//
+// 6 attempts with backoff 1s, 2s, 4s, 8s, 16s (+jitter) — total ceiling ~32s
+// per file. Bumped from 3 after prod observed cascading SSL alert 80 failures
+// where Anthropic needed more time than 1.5s of retries allowed.
+async function anthropicCallWithRetry(body: string, maxAttempts = 6): Promise<{ status: number; data: Record<string, unknown> }> {
   let lastError: unknown = null;
   let lastResponse: { status: number; data: Record<string, unknown> } | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      const base = 400 * Math.pow(2, attempt - 1); // 400, 800 (tight — we're racing the Vercel clock)
-      const jitter = Math.floor(Math.random() * 300);
+      const base = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s, 8s, 16s
+      const jitter = Math.floor(Math.random() * 500);
       await new Promise((r) => setTimeout(r, base + jitter));
     }
     try {
@@ -351,6 +355,54 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+// Shared mutable state for adaptive concurrency — when Anthropic starts rejecting
+// with SSL alerts, parallel requests just poison each other. Drop to serial and
+// let the retry backoff do the work, rather than burning the whole budget in
+// parallel failures.
+interface AdaptiveState {
+  consecutiveNetworkErrors: number;
+  activeConcurrency: number;
+  haltRun: boolean;
+}
+
+async function mapWithAdaptiveConcurrency<T, R>(
+  items: T[],
+  initialLimit: number,
+  fn: (item: T, state: AdaptiveState) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  const state: AdaptiveState = {
+    consecutiveNetworkErrors: 0,
+    activeConcurrency: initialLimit,
+    haltRun: false,
+  };
+  let cursor = 0;
+  let activeWorkers = 0;
+
+  async function worker() {
+    activeWorkers++;
+    while (cursor < items.length && !state.haltRun) {
+      // Respect dynamic throttling — if another worker dropped concurrency
+      // below our count, this worker exits until only `activeConcurrency`
+      // remain.
+      if (activeWorkers > state.activeConcurrency) {
+        activeWorkers--;
+        return;
+      }
+      const idx = cursor++;
+      results[idx] = await fn(items[idx], state);
+    }
+    activeWorkers--;
+  }
+
+  const workers = Array.from(
+    { length: Math.min(initialLimit, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 interface IssueInput {
   file: string;
   issue: string;
@@ -425,11 +477,15 @@ export async function POST(req: NextRequest) {
   const startedAt = Date.now();
   const budgetExceeded = () => Date.now() - startedAt > TIME_BUDGET_MS;
   let skippedForBudget = 0;
+  // Files that failed specifically due to Anthropic network/TLS errors — the UI
+  // surfaces these as a "Retry Failed" list since they're usually transient and
+  // re-running the same payload works without re-running the whole scan.
+  const failedFiles: Array<{ file: string; issues: string[]; reason: string }> = [];
 
   // Process files in parallel (capped concurrency) — major UX win over sequential
   const fileEntries = Array.from(issuesByFile.entries());
-  await mapWithConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues]) => {
-    if (budgetExceeded()) {
+  await mapWithAdaptiveConcurrency(fileEntries, FIX_CONCURRENCY, async ([filePath, fileIssues], state) => {
+    if (budgetExceeded() || state.haltRun) {
       skippedForBudget += 1;
       return;
     }
@@ -498,14 +554,30 @@ export async function POST(req: NextRequest) {
       }
 
       fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
+      // Reset the rolling network-error counter on any success — only sustained
+      // failure across multiple files should drop concurrency.
+      state.consecutiveNetworkErrors = 0;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "unknown";
-      // Collapse noisy TLS / network errors into something a human can act on.
-      let clean = raw;
-      if (/EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|unreachable/i.test(raw)) {
-        clean = `Claude API network error after retries — try again in a minute (${raw.slice(0, 80)})`;
+      const isNetworkErr = /EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|unreachable/i.test(raw);
+
+      if (isNetworkErr) {
+        state.consecutiveNetworkErrors += 1;
+        // After 3 consecutive API network errors, drop concurrency to 1 — parallel
+        // requests against a degraded Anthropic endpoint just poison each other.
+        if (state.consecutiveNetworkErrors === 3 && state.activeConcurrency > 1) {
+          state.activeConcurrency = 1;
+        }
+        // After 8 consecutive failures, halt the run — Anthropic is down, keep
+        // remaining files as a retryable queue so the UI can resume later.
+        if (state.consecutiveNetworkErrors >= 8) {
+          state.haltRun = true;
+        }
+        failedFiles.push({ file: filePath, issues: fileIssues, reason: "api-unavailable" });
+        errors.push(`${filePath}: Anthropic API temporarily unavailable — queued for retry`);
+      } else {
+        errors.push(`Failed to fix ${filePath}: ${raw}`);
       }
-      errors.push(`Failed to fix ${filePath}: ${clean}`);
     }
   });
 
@@ -514,13 +586,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (fixes.length === 0) {
+    const apiDegraded = failedFiles.length > 0 && failedFiles.length === fileEntries.length;
     return NextResponse.json({
-      status: "no_fixes",
-      message: skippedForBudget > 0
+      status: apiDegraded ? "api_unavailable" : "no_fixes",
+      message: apiDegraded
+        ? `Anthropic API is temporarily degraded — every file failed with a network/TLS error. All ${failedFiles.length} files are queued for retry. Click "Retry Failed" in 1-2 minutes; if the problem persists, Anthropic is likely having an incident (check status.anthropic.com).`
+        : skippedForBudget > 0
         ? `All ${skippedForBudget} files skipped — function time budget exhausted before Claude could finish. Try again — the second run will typically complete since results cache and retries kick in faster.`
         : "No fixes could be generated",
       errors,
       skippedForBudget,
+      failedFiles,
     });
   }
 
@@ -663,6 +739,7 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
       fixes: fixes.map((f) => ({ file: f.file, issues: f.issues })),
       authSource,
       errors,
+      failedFiles,
     });
   } catch (err) {
     return NextResponse.json({
