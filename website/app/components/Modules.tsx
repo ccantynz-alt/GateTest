@@ -64,6 +64,51 @@ const activeModules = [
     description: "Claude AI reads your code and finds real bugs — not patterns, actual understanding.",
     icon: "AI",
   },
+  {
+    name: "Fake-Fix Detector",
+    description: "Catches AI-generated symptom patches — skipped tests, swallowed errors, dead code.",
+    icon: "FF",
+  },
+  {
+    name: "Dependency Freshness",
+    description: "CVE scan + staleness check on every package.json dependency via OSV.dev + npm.",
+    icon: "DF",
+  },
+  {
+    name: "Supply Chain",
+    description: "Typosquat detection against top npm packages. Lifecycle script audit for malicious payloads.",
+    icon: "SC",
+  },
+  {
+    name: "License Compliance",
+    description: "Per-dependency license lookup. Flags GPL, AGPL, SSPL — copyleft risks for SaaS.",
+    icon: "LC",
+  },
+  {
+    name: "IaC Security",
+    description: "Dockerfiles, Kubernetes manifests, Terraform — :latest tags, privileged mode, 0.0.0.0/0.",
+    icon: "IC",
+  },
+  {
+    name: "CI/CD Hardening",
+    description: "GitHub Actions audit — unpinned actions, pull_request_target, missing permissions.",
+    icon: "CI",
+  },
+  {
+    name: "Migration Safety",
+    description: "SQL migration files — DROP COLUMN, non-concurrent indexes, DELETE without WHERE.",
+    icon: "MS",
+  },
+  {
+    name: "Auth Flaws",
+    description: "JWT alg:none, bcrypt rounds < 10, httpOnly:false, hardcoded session secrets.",
+    icon: "AF",
+  },
+  {
+    name: "Flaky Tests",
+    description: "Catches .only/.skip leaks, setTimeout in tests, Math.random without seeds, missing await.",
+    icon: "FT",
+  },
 ];
 
 const comingSoonModules = [
@@ -76,28 +121,12 @@ const comingSoonModules = [
     description: "Screenshot comparison between deploys. Catches pixel-level changes automatically.",
   },
   {
-    name: "E2E Testing",
-    description: "Full user journey testing. Login flows, checkout flows, form submissions.",
-  },
-  {
     name: "Auto-Fix PRs",
     description: "GateTest creates a pull request that fixes the issues it finds. Automatically.",
   },
   {
     name: "Mutation Testing",
     description: "Modifies your source code to verify your tests actually catch bugs.",
-  },
-  {
-    name: "Chaos Testing",
-    description: "Simulates slow networks, API failures, and missing resources.",
-  },
-  {
-    name: "Live Site Crawler",
-    description: "Crawls your entire live site checking every page for errors.",
-  },
-  {
-    name: "Autonomous Explorer",
-    description: "AI agent that fills forms, clicks buttons, and verifies state changes.",
   },
 ];
 
@@ -110,7 +139,7 @@ export default function Modules() {
             What We Check
           </span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4 text-foreground">
-            13 modules. <span className="gradient-text">Every scan.</span>
+            22 modules. <span className="gradient-text">Every scan.</span>
           </h2>
           <p className="text-muted text-lg max-w-2xl mx-auto">
             Source code analysis that catches what other tools miss.
@@ -140,10 +169,10 @@ export default function Modules() {
             Coming Soon
           </span>
           <h3 className="text-2xl font-bold mt-3 mb-2 text-foreground">
-            8 more modules in development
+            More modules in development
           </h3>
           <p className="text-muted max-w-xl mx-auto">
-            Live browser testing, visual regression, auto-fix PRs, and more.
+            Live browser testing, visual regression, auto-fix PRs, and mutation testing.
             Powered by real browser automation.
           </p>
         </div>

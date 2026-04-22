@@ -319,7 +319,7 @@ export default function ScanStatus() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   {params.tier === "quick" && (
                     <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                      Run Full Scan — All 13 Modules
+                      Run Full Scan — All 22 Modules
                     </a>
                   )}
                   <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
@@ -333,7 +333,7 @@ export default function ScanStatus() {
               <div className="p-5 rounded-xl border border-border bg-white text-center">
                 <p className="text-sm text-muted mb-4">
                   {params.tier === "quick"
-                    ? "Passed the Quick Scan. Want to go deeper with all 13 modules?"
+                    ? "Passed the Quick Scan. Want to go deeper with all 22 modules?"
                     : "Clean across all modules."}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
