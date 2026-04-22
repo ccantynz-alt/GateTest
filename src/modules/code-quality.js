@@ -30,9 +30,13 @@ class CodeQualityModule extends BaseModule {
 
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split('\n');
+      // Neutralised version for pattern checks — block comments, strings, and
+      // regex literals replaced with spaces so the line numbers still line up,
+      // but content inside those contexts can't trigger forbidden-pattern hits.
+      const neutralisedLines = this._neutraliseContent(content).split('\n');
 
       // Check forbidden patterns
-      this._checkForbiddenPatterns(file, relPath, content, lines, moduleConfig, result);
+      this._checkForbiddenPatterns(file, relPath, content, lines, neutralisedLines, moduleConfig, result);
 
       // Check function length
       this._checkFunctionLength(relPath, lines, thresholds.maxFunctionLength, result);
@@ -59,13 +63,167 @@ class CodeQualityModule extends BaseModule {
     }
   }
 
-  _checkForbiddenPatterns(absPath, relPath, content, lines, moduleConfig, result) {
+  /**
+   * Neutralise entire file content — replace strings, template literals, regex
+   * literals, line comments, and block comments with spaces. Line numbers and
+   * character offsets are preserved, so pattern matches against the neutralised
+   * version map 1:1 to original line numbers. Handles MULTI-LINE block comments.
+   */
+  _neutraliseContent(content) {
+    let out = "";
+    let i = 0;
+    const n = content.length;
+    let state = "code"; // code | str | tpl | regex | lineCmt | blockCmt
+    let stringChar = "";
+    let tplDepth = 0;
+
+    while (i < n) {
+      const c = content[i];
+      const next = content[i + 1];
+
+      if (state === "blockCmt") {
+        if (c === "*" && next === "/") { state = "code"; out += "  "; i += 2; continue; }
+        out += c === "\n" ? "\n" : " ";
+        i++;
+        continue;
+      }
+      if (state === "lineCmt") {
+        if (c === "\n") { state = "code"; out += "\n"; i++; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+      if (state === "str") {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === stringChar) { state = "code"; out += c; i++; continue; }
+        if (c === "\n") { state = "code"; out += "\n"; i++; continue; } // unterminated
+        out += " ";
+        i++;
+        continue;
+      }
+      if (state === "tpl") {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === "`") { state = "code"; out += c; i++; continue; }
+        if (c === "$" && next === "{") { tplDepth++; out += "  "; i += 2; continue; }
+        if (c === "}" && tplDepth > 0) { tplDepth--; out += " "; i++; continue; }
+        if (tplDepth > 0) { out += c; i++; continue; }
+        out += c === "\n" ? "\n" : " ";
+        i++;
+        continue;
+      }
+      if (state === "regex") {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === "/") { state = "code"; out += c; i++; continue; }
+        if (c === "\n") { state = "code"; out += "\n"; i++; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+
+      // state === "code"
+      if (c === "/" && next === "/") { state = "lineCmt"; out += "  "; i += 2; continue; }
+      if (c === "/" && next === "*") { state = "blockCmt"; out += "  "; i += 2; continue; }
+      if (c === '"' || c === "'") { state = "str"; stringChar = c; out += c; i++; continue; }
+      if (c === "`") { state = "tpl"; tplDepth = 0; out += c; i++; continue; }
+      if (c === "/" && next !== "/" && next !== "*") {
+        const prev = out.replace(/\s+$/, "").slice(-1);
+        const isRegexContext = !prev || /[=(,:;!?&|{[]/.test(prev) ||
+          out.trim().endsWith("return") || out.trim().endsWith("typeof");
+        if (isRegexContext) { state = "regex"; out += c; i++; continue; }
+      }
+      out += c;
+      i++;
+    }
+    return out;
+  }
+
+  /**
+   * Legacy single-line neutraliser — kept for backward compat in tests.
+   * Does NOT handle multi-line block comments; use _neutraliseContent for that.
+   */
+  _stripContextFromLine(line) {
+    let out = "";
+    let i = 0;
+    const n = line.length;
+    let inString = false;
+    let stringChar = "";
+    let inTemplate = false;
+    let templateDepth = 0;
+    let inRegex = false;
+    let inBlockComment = false;
+
+    while (i < n) {
+      const c = line[i];
+      const next = line[i + 1];
+
+      if (inBlockComment) {
+        if (c === "*" && next === "/") { inBlockComment = false; out += "  "; i += 2; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+      if (inString) {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === stringChar) { inString = false; stringChar = ""; out += c; i++; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+      if (inTemplate) {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === "`") { inTemplate = false; out += c; i++; continue; }
+        if (c === "$" && next === "{") { templateDepth++; out += "  "; i += 2; continue; }
+        if (c === "}" && templateDepth > 0) { templateDepth--; out += " "; i++; continue; }
+        if (templateDepth > 0) { out += c; i++; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+      if (inRegex) {
+        if (c === "\\" && i + 1 < n) { out += "  "; i += 2; continue; }
+        if (c === "/") { inRegex = false; out += c; i++; continue; }
+        out += " ";
+        i++;
+        continue;
+      }
+
+      // Line comment — everything after // is stripped
+      if (c === "/" && next === "/") {
+        out += " ".repeat(n - i);
+        break;
+      }
+      // Block comment open
+      if (c === "/" && next === "*") { inBlockComment = true; out += "  "; i += 2; continue; }
+      // String open
+      if (c === '"' || c === "'") { inString = true; stringChar = c; out += c; i++; continue; }
+      // Template open
+      if (c === "`") { inTemplate = true; out += c; i++; continue; }
+      // Regex literal: heuristic — preceded by = ( , : ; ! ? & | { [ return
+      if (c === "/" && next !== "/" && next !== "*") {
+        const prev = out.replace(/\s+$/, "").slice(-1);
+        const isRegexContext = !prev || /[=(,:;!?&|{[]/.test(prev) ||
+          out.trim().endsWith("return") || out.trim().endsWith("typeof");
+        if (isRegexContext) { inRegex = true; out += c; i++; continue; }
+      }
+      out += c;
+      i++;
+    }
+    return out;
+  }
+
+  _checkForbiddenPatterns(absPath, relPath, content, lines, neutralisedLines, moduleConfig, result) {
     const patterns = moduleConfig.forbiddenPatterns || [];
     for (const { pattern, message } of patterns) {
       const regex = new RegExp(pattern.source, pattern.flags);
       for (let i = 0; i < lines.length; i++) {
+        // Use the file-level neutralised view — strings, template literals,
+        // regex literals, line comments, AND multi-line block comments have
+        // been replaced with spaces while preserving line numbers. Prevents
+        // false positives on forbidden patterns that appear inside JSDoc
+        // blocks or pattern-list string literals in scanner modules.
+        const neutralised = neutralisedLines[i] ?? this._stripContextFromLine(lines[i]);
         regex.lastIndex = 0;
-        if (regex.test(lines[i])) {
+        if (regex.test(neutralised)) {
           const lineNum = i;
           result.addCheck(`quality:${message}:${relPath}:${i + 1}`, false, {
             file: relPath,
@@ -170,6 +328,9 @@ class CodeQualityModule extends BaseModule {
   }
   /**
    * Auto-fix: remove a single line from a file (e.g. console.log, debugger).
+   * Re-neutralises the file and re-verifies the line still contains real code
+   * matching the forbidden pattern — refuses to delete if the hit has moved
+   * into a string/comment since the scan (file-edited-between-scan-and-fix).
    */
   _removeLineFromFile(absPath, lineIndex, relPath, patternName) {
     try {
@@ -177,6 +338,16 @@ class CodeQualityModule extends BaseModule {
       const lines = content.split('\n');
       if (lineIndex < 0 || lineIndex >= lines.length) {
         return { fixed: false };
+      }
+      const neutralisedLines = this._neutraliseContent(content).split('\n');
+      const neutralisedLine = neutralisedLines[lineIndex] || '';
+      // Safety: if the neutralised view of the line is whitespace-only, the
+      // original content is entirely string/comment and must not be deleted.
+      if (!neutralisedLine.trim()) {
+        return {
+          fixed: false,
+          description: `Skipped ${relPath}:${lineIndex + 1} — line is inside a string/comment`,
+        };
       }
       lines.splice(lineIndex, 1);
       fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
