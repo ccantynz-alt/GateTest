@@ -148,6 +148,64 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ---
 
+## THE ACTION DIRECTIVE — WE FIX, WE DON'T JUST ADVISE (READ THIS EVERY SESSION)
+
+**GateTest is NOT an advisor. GateTest is an actor.** Craig's directive — *"It may be finding problems but it's not fixing them... if it's something that GateTest can't do because it needs human intervention then there should be instructions telling the customer what to do to fix it."*
+
+The baseline for every customer-facing output:
+
+1. **If it can be auto-fixed, auto-fix it.** Generate the patch, open the PR, capture the payment. No "here's what's wrong" without "here's the fix."
+2. **If auto-fix needs human intervention (DNS change, infrastructure, API key rotation, credential reset, hosting config, payment-gateway setup), ship a complete, copy-pasteable runbook.** Provider-specific. Command-by-command. Screenshot-worthy. Never a vague "talk to your DevOps team."
+3. **If remediation needs an external integration we don't have yet (DNS provider API, host control panel, Stripe/Cloudflare/Vercel OAuth), surface the integration as the next action and escalate to Craig for authorization.** Don't quietly leave it unfixable.
+4. **"Advisory mode" is a Bible violation.** Any code path where GateTest finds a problem and stops there — no fix, no remediation, no escalation — is broken. Fix it.
+
+**The test:** after every scan, every finding has one of three states — **FIXED** (PR open), **REMEDY PROVIDED** (customer sees exactly what to click / type / paste), or **ESCALATED** (Craig has a named authorization request). No finding ends in limbo.
+
+**NEVER BLOCK THE LOOP — GateTest is a looping repair tool.** Craig's directive — *"The gate Test is a looping repair tool so there shouldn't be any reason for it to be blocked by anything otherwise it just won't work."* If one issue fails to auto-fix, the loop continues on every remaining issue. If the AI provider is unreachable, we fall back to deterministic remediation (static per-module runbooks). If GitHub auth is missing, we surface the patch inline with copy-paste instructions instead of aborting. If a file is too large for the fix window, we split it or emit a guided diff — we never stop. Partial success is always better than a stalled queue. Any code path that aborts the entire batch on a single failure is a Bible violation; convert it to continue-with-error-captured.
+
+**Authorization for this directive:** Granted by Craig — *"we need to switch on our AI intelligence... customers developers whoever should be incredibly blown away by what this app can do."*
+
+---
+
+## THE PLATFORM-CONNECTOR DIRECTIVE — REACH EVERY SURFACE A REPAIR NEEDS
+
+**GateTest is an AI-native repair tool. It must reach every platform a repair requires.** Craig's directive — *"we need AI intelligence to make sure this tool can access every platform that it needs to in order to repair. That's its job."*
+
+This means GateTest is not limited to files in a git repo. A real repair may require:
+- **Git hosts** — GitHub, Gluecron (existing `HostBridge` abstraction)
+- **DNS providers** — Cloudflare, Route 53, Namecheap, GoDaddy, Google Domains, Porkbun, DNSimple
+- **App hosts / CDNs** — Vercel, Netlify, Cloudflare Pages, AWS CloudFront, Fastly
+- **Cloud providers** — AWS, GCP, Azure, DigitalOcean, Linode
+- **Payment gateways** — Stripe, Paddle, PayPal (config audit, NOT money movement)
+- **Auth / identity** — Auth0, Clerk, Supabase, Firebase
+- **Email / deliverability** — SendGrid, Postmark, Resend, Mailgun, Amazon SES
+- **Observability** — Sentry, Datadog, New Relic, Honeycomb
+
+### The architecture
+
+Every external surface is reached through a **`PlatformConnector`** (analogous to `HostBridge` for git hosts):
+
+```
+PlatformConnector (abstract)
+  ├── listIssues(scope) → Finding[]
+  ├── remedy(finding) → RemediationPlan
+  ├── apply(plan, credentials) → PlanResult   # only with customer consent
+  └── capabilities() → { canAutoFix, needsOAuth, docsUrl }
+```
+
+Concrete implementations (`CloudflareConnector`, `VercelConnector`, etc.) live under `src/connectors/` and are registered the same way bridges are. **Until a connector is wired, its remedy output is still shipped** — as a deterministic, copy-paste runbook — so the loop never blocks.
+
+### Rules for building connectors
+
+1. **Scaffolding is pre-authorized.** The `PlatformConnector` abstraction, registry, deterministic remediation per-provider, and connector stubs can be built without asking.
+2. **Live API integration requires Craig per-provider.** Each `apply()` implementation that hits a real third-party API needs explicit authorization — credentials, OAuth app registration, scopes, webhook URLs. This is Boss Rule #7.
+3. **No secret/credential handling before Craig signs off on the storage model.** We don't persist a customer's Cloudflare API token until the encryption-at-rest + rotation story is approved. Until then, `apply()` runs against a credential provided at call time and is not persisted.
+4. **Every connector ships with a runbook path, not just an API path.** A customer without OAuth gets identical quality of guidance — a clickable, screenshot-worthy, step-by-step fix they can execute manually.
+
+**Authorization for this directive:** Granted by Craig — *"we need AI intelligence to make sure this tool can access every platform that it needs to in order to repair. That's its job."* Scaffolding pre-authorized; per-provider live integration remains Boss Rule #7.
+
+---
+
 ## THE MISSION
 
 Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 64 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
@@ -368,6 +426,7 @@ BaseModule (abstract)
 22. **Never delete or weaken `tests/integrations.test.js`** — it is the tripwire that keeps protection intact across sessions.
 23. **Never remove the PROTECTED PLATFORMS section from this file.** It must be read at every session start.
 24. **Never soft-fail the gate** with `continue-on-error: true` on the GateTest step itself.
+25. **Never block the repair loop.** GateTest is a looping repair tool. One failed fix must not abort the batch; a missing integration must fall back to static remediation; an unauthorised provider must surface copy-paste instructions. Abort-on-first-error is a Bible violation.
 
 ---
 
