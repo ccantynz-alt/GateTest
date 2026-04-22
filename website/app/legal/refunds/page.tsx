@@ -93,7 +93,7 @@ export default function Refunds() {
               days, depending on your bank or card issuer. Some institutions may show the hold
               for up to fourteen (14) days before it clears. We have no control over this clearing
               timeline; if the hold persists beyond fourteen (14) days, contact your card issuer
-              and, if needed, email hello@gatetest.io so we can confirm the authorisation was not
+              and, if needed, email hello@gatetest.ai so we can confirm the authorisation was not
               captured.
             </p>
           </section>
@@ -117,7 +117,7 @@ export default function Refunds() {
             <p className="mt-2">
               <strong>What counts as &quot;delivered&quot;.</strong> The Service is delivered when
               a scan run completes and a scan report is made available to you through any of the
-              following channels: the web UI at gatetest.io, the dashboard or scan-status page, an
+              following channels: the web UI at gatetest.ai, the dashboard or scan-status page, an
               email containing the report or a link to it, a pull-request comment or commit-status
               check on your repository, or an API response. The scan report, analysis results, and
               any auto-fix pull requests constitute the delivered service.
@@ -156,8 +156,8 @@ export default function Refunds() {
             <p className="mt-2">
               Refund requests must be submitted within <strong>7 days</strong> of the scan delivery date
               to{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>{" "}
               with your scan ID or Stripe receipt. We will review and respond within 3 business days.
             </p>
@@ -191,7 +191,7 @@ export default function Refunds() {
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>
                 <strong>Cancel anytime.</strong> You may cancel at any time, through your account
-                settings or by emailing hello@gatetest.io. We intend to offer a cancellation flow
+                settings or by emailing hello@gatetest.ai. We intend to offer a cancellation flow
                 at least as easy as the sign-up flow.
               </li>
               <li>
@@ -245,8 +245,8 @@ export default function Refunds() {
             <p>
               <strong>8.1 Contact us first.</strong> If you believe a charge is incorrect, please
               contact{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>{" "}
               before filing a chargeback with your bank or card issuer. We resolve most billing
               issues within one (1) business day and we can typically issue a refund or credit
@@ -291,8 +291,8 @@ export default function Refunds() {
             <h2 className="text-lg font-semibold text-foreground mb-2">10. Contact</h2>
             <p>
               For billing questions, refund requests, or payment disputes:{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>
             </p>
           </section>
@@ -300,7 +300,7 @@ export default function Refunds() {
 
         <div className="mt-12">
           <a href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-            &larr; Back to gatetest.io
+            &larr; Back to gatetest.ai
           </a>
         </div>
       </div>

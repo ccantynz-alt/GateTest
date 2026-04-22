@@ -30,7 +30,7 @@ If issues found → Triggers Claude to fix → Retests → Loop
 | **When** | When you tell it to | Automatically on every push |
 | **How** | `node gatetest-scan.js` | Watches GitHub webhooks |
 | **Cost** | Free forever | Free tier + paid plans |
-| **Domain** | gatetest.io | gatecode.io / gatecode.dev |
+| **Domain** | gatetest.ai | gatecode.io / gatecode.dev |
 
 ## GateCode Features (To Build)
 

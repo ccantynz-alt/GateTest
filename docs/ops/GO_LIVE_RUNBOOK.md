@@ -33,29 +33,29 @@ most of it waiting for DNS and SSL.
 
 ## Step 2 — Point DNS
 
-In your DNS provider (Cloudflare, Namecheap, Route 53 — wherever `gatetest.io`
+In your DNS provider (Cloudflare, Namecheap, Route 53 — wherever `gatetest.ai`
 lives):
 
 1. Add a CNAME record:
-   - **Name:** `gatetest.io` (or `@` depending on provider)
+   - **Name:** `gatetest.ai` (or `@` depending on provider)
    - **Target:** `cname.vercel-dns.com`
    - **TTL:** default / automatic
 2. Add a second CNAME record:
    - **Name:** `www`
    - **Target:** `cname.vercel-dns.com`
-3. If your provider does not allow CNAME on the apex (`gatetest.io`), use an
+3. If your provider does not allow CNAME on the apex (`gatetest.ai`), use an
    ALIAS/ANAME record instead with the same target. Cloudflare handles this
    automatically with "CNAME flattening."
 
 Back in Vercel:
 
 4. Open the GateTest project → **Settings → Domains**.
-5. Add `gatetest.io`. Vercel will verify the DNS and show "Valid Configuration."
-6. Add `www.gatetest.io` and set it to redirect to `gatetest.io` (apex).
+5. Add `gatetest.ai`. Vercel will verify the DNS and show "Valid Configuration."
+6. Add `www.gatetest.ai` and set it to redirect to `gatetest.ai` (apex).
 7. Wait ~5 minutes for SSL to provision. The padlock in Vercel's domain list
    goes from grey to green when it's ready.
 
-**Done signal:** `https://gatetest.io` loads with a valid SSL cert. No browser
+**Done signal:** `https://gatetest.ai` loads with a valid SSL cert. No browser
 warnings.
 
 ---
@@ -72,7 +72,7 @@ take effect.
 |---|------|-----------------|------------------|
 | 1 | `STRIPE_SECRET_KEY` | [stripe.com/dashboard/apikeys](https://dashboard.stripe.com/apikeys) — use **test** key for now | `sk_test_51...` |
 | 2 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Same dashboard, publishable key | `pk_test_51...` |
-| 3 | `NEXT_PUBLIC_BASE_URL` | You set this | `https://gatetest.io` |
+| 3 | `NEXT_PUBLIC_BASE_URL` | You set this | `https://gatetest.ai` |
 | 4 | `STRIPE_WEBHOOK_SECRET` | Filled in after **Step 6** — leave blank for now or use a placeholder | `whsec_...` |
 | 5 | `GATETEST_APP_ID` | From GitHub App settings after **Step 5** | `123456` (6-ish digit integer) |
 | 6 | `GATETEST_PRIVATE_KEY` | Paste entire contents of the `.pem` file downloaded in **Step 5**. Keep the `-----BEGIN…` / `-----END…` lines and all newlines intact. In Vercel, use the multi-line text field. | `-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----` |
@@ -107,10 +107,10 @@ Production.
 4. Paste that value into the Vercel `DATABASE_URL` env var (Step 3, row 10).
 5. Redeploy the Vercel project so it picks up `DATABASE_URL`.
 6. Initialize the schema:
-   - Visit `https://gatetest.io/api/db/init`, **OR**
-   - Log into `https://gatetest.io/admin` (Step 7) and click **Initialize
+   - Visit `https://gatetest.ai/api/db/init`, **OR**
+   - Log into `https://gatetest.ai/admin` (Step 7) and click **Initialize
      database** in the admin panel.
-7. Visit `https://gatetest.io/admin/health` — the **Database** row should turn
+7. Visit `https://gatetest.ai/admin/health` — the **Database** row should turn
    green.
 
 **Done signal:** `/admin/health` shows Database = green with a table count of
@@ -124,9 +124,9 @@ at least 3.
    GitHub App**.
 2. Fill in:
    - **GitHub App name:** `GateTestHQ`
-   - **Homepage URL:** `https://gatetest.io`
+   - **Homepage URL:** `https://gatetest.ai`
    - **Webhook → Active:** checked
-   - **Webhook URL:** `https://gatetest.io/api/webhook`
+   - **Webhook URL:** `https://gatetest.ai/api/webhook`
    - **Webhook secret:** paste the same value you set for
      `GATETEST_WEBHOOK_SECRET` in Step 3
 3. **Repository permissions:**
@@ -160,7 +160,7 @@ non-zero installation count.
 
 1. Go to [dashboard.stripe.com](https://dashboard.stripe.com) → **Developers →
    Webhooks → Add endpoint**.
-2. **Endpoint URL:** `https://gatetest.io/api/stripe-webhook`
+2. **Endpoint URL:** `https://gatetest.ai/api/stripe-webhook`
 3. **Events to send:** click **Select events** and tick:
    - `checkout.session.completed`
    - `payment_intent.succeeded`
@@ -178,7 +178,7 @@ non-zero installation count.
 
 ## Step 7 — Run the admin health check
 
-1. Visit `https://gatetest.io/admin`.
+1. Visit `https://gatetest.ai/admin`.
 2. Log in with `GATETEST_ADMIN_PASSWORD` (Step 3, row 9).
 3. Click **Run Full Self-Test**.
 4. The panel runs 8 checks: Environment, Database, Stripe, GitHub App,
@@ -209,7 +209,7 @@ branch you just pulled.
    `{ error: "Pre-launch — checkout disabled" }` with status 503). The original
    Stripe-session flow is preserved directly below it in comments; uncomment it.
 3. **`website/app/components/Pricing.tsx`** — the CTA buttons currently have
-   `href="mailto:founders@gatetest.io"`. Change them back to calling
+   `href="mailto:founders@gatetest.ai"`. Change them back to calling
    `handleCheckout(tier)` on click. Commit `c238b2d` in git log shows the exact
    shape of the original handler — use that as your reference.
 4. **Delete `tests/prelaunch-checkout-disabled.test.js`** — it asserts that
@@ -220,7 +220,7 @@ branch you just pulled.
    ```
 6. Push. Vercel auto-deploys from `main` (~2 min).
 
-**Done signal:** `https://gatetest.io` no longer shows the yellow pre-launch
+**Done signal:** `https://gatetest.ai` no longer shows the yellow pre-launch
 banner. Clicking a pricing CTA now opens a Stripe Checkout page (not an email
 client).
 
@@ -228,7 +228,7 @@ client).
 
 ## Step 9 — First end-to-end test
 
-1. Open `https://gatetest.io` in an incognito window.
+1. Open `https://gatetest.ai` in an incognito window.
 2. Click **Quick Scan — $29**.
 3. On the Stripe Checkout page, use the test card:
    - **Card:** `4242 4242 4242 4242`
@@ -278,6 +278,6 @@ payment is green in Stripe.
 | Scan page infinite loop | Known Issue #1 — stale checkout session | Start a fresh checkout session (new incognito window). |
 | GitHub API `503` | Circuit breaker engaged | Visit `/admin/health` → GitHub row. Click **Reset circuit breaker**. Wait 60s. Retry. |
 | Stripe webhook 400s | `STRIPE_WEBHOOK_SECRET` mismatch | Re-copy from Stripe dashboard (test vs. live are different secrets), paste, redeploy. |
-| DNS "Invalid Configuration" in Vercel | Record not propagated yet | Wait 10 more min. Check with `dig gatetest.io` — should return Vercel IP. |
+| DNS "Invalid Configuration" in Vercel | Record not propagated yet | Wait 10 more min. Check with `dig gatetest.ai` — should return Vercel IP. |
 | Admin login fails | Wrong `GATETEST_ADMIN_PASSWORD` or trailing whitespace | Re-set the env var (watch for spaces), redeploy. |
 | `GATETEST_PRIVATE_KEY` errors on app startup | Newlines got collapsed | Re-paste the `.pem` into Vercel; use the multi-line input, not a single-line paste. |

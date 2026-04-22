@@ -9,10 +9,10 @@ Fill in these fields:
 | Field | Value |
 |-------|-------|
 | **GitHub App name** | `GateTest` |
-| **Homepage URL** | `https://gatetest.io` |
-| **Callback URL** | `https://gatetest.io/api/github/callback` |
-| **Setup URL** | `https://gatetest.io/github/installed` |
-| **Webhook URL** | `https://gatetest.io/api/webhook` |
+| **Homepage URL** | `https://gatetest.ai` |
+| **Callback URL** | `https://gatetest.ai/api/github/callback` |
+| **Setup URL** | `https://gatetest.ai/github/installed` |
+| **Webhook URL** | `https://gatetest.ai/api/webhook` |
 | **Webhook secret** | Generate a strong random string (save it!) |
 
 ### Permissions needed:
@@ -78,7 +78,7 @@ On the app settings page:
 2. Fill in:
    - **Short description**: "20 test modules scan your code on every push. Security, accessibility, performance, and more."
    - **Full description**: Use the marketing copy from MARKETING.md
-   - **Pricing**: Free (we charge via gatetest.io, not GitHub)
+   - **Pricing**: Free (we charge via gatetest.ai, not GitHub)
    - **Categories**: Code quality, Security, Testing
 3. Submit for review
 
@@ -88,10 +88,10 @@ On the app settings page:
 
 | URL | Purpose |
 |-----|---------|
-| `https://gatetest.io/github/setup` | "Install GateTest" landing page |
-| `https://gatetest.io/github/installed` | Post-install success page |
-| `https://gatetest.io/api/github/callback` | GitHub redirects here after install |
-| `https://gatetest.io/api/webhook` | Receives push/PR events from GitHub |
+| `https://gatetest.ai/github/setup` | "Install GateTest" landing page |
+| `https://gatetest.ai/github/installed` | Post-install success page |
+| `https://gatetest.ai/api/github/callback` | GitHub redirects here after install |
+| `https://gatetest.ai/api/webhook` | Receives push/PR events from GitHub |
 
 ---
 
@@ -99,6 +99,6 @@ On the app settings page:
 
 Verify the webhook is working:
 ```
-curl https://gatetest.io/api/webhook
+curl https://gatetest.ai/api/webhook
 # Should return: {"status":"ok","app":"GateTest","configured":true}
 ```

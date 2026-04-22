@@ -129,7 +129,7 @@ async function createCheckoutSession({ input, env, fetchImpl }) {
     return { ok: false, status: validation.status, error: validation.error };
   }
 
-  const baseUrl = env.NEXT_PUBLIC_BASE_URL || 'https://gatetest.io';
+  const baseUrl = env.NEXT_PUBLIC_BASE_URL || 'https://gatetest.ai';
   const params = buildStripeCheckoutParams({
     tier: validation.tier,
     tierKey: validation.tierKey,

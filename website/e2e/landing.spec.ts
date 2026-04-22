@@ -66,7 +66,7 @@ test.describe("Landing Page", () => {
 
   test("footer has contact email", async ({ page }) => {
     await expect(
-      page.locator('a[href="mailto:hello@gatetest.io"]')
+      page.locator('a[href="mailto:hello@gatetest.ai"]')
     ).toBeVisible();
   });
 });
@@ -108,7 +108,7 @@ test.describe("SEO & Meta Tags", () => {
     );
     await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
       "content",
-      "https://gatetest.io"
+      "https://gatetest.ai"
     );
     await expect(page.locator('meta[property="og:type"]')).toHaveAttribute(
       "content",

@@ -27,7 +27,7 @@ export default function Terms() {
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">1. Agreement to Terms</h2>
             <p>
-              By accessing or using GateTest (&quot;Service&quot;), including the website at gatetest.io,
+              By accessing or using GateTest (&quot;Service&quot;), including the website at gatetest.ai,
               the GateTest GitHub App, the GateTest CLI tool, and any associated APIs, you
               (&quot;Customer&quot;, &quot;you&quot;, &quot;your&quot;) agree to be bound by these Terms
               of Service (&quot;Terms&quot;). If you do not agree to these Terms, do not use the Service.
@@ -409,7 +409,7 @@ export default function Terms() {
             </p>
             <p className="mt-2">
               <strong>12.4 Your right to terminate.</strong> You may terminate your account at any
-              time by contacting us at hello@gatetest.io or through in-app controls where provided.
+              time by contacting us at hello@gatetest.ai or through in-app controls where provided.
               Active Stripe holds will be released and no further charges will be made. Fees paid
               for completed scans are non-refundable except as set out in the Refund Policy.
             </p>
@@ -540,7 +540,7 @@ export default function Terms() {
             </p>
             <p>
               <strong>19.1 Informal resolution first.</strong> Before initiating any formal dispute
-              process, you agree to contact us at hello@gatetest.io with a written description of
+              process, you agree to contact us at hello@gatetest.ai with a written description of
               your concern, your account details, and the outcome you are seeking. We intend to
               acknowledge within three (3) business days and respond substantively within ten (10)
               business days. Both parties agree to attempt in good faith to resolve the dispute
@@ -594,9 +594,9 @@ export default function Terms() {
               <strong>19.6 Thirty-day opt-out.</strong> You have the right to opt out of this
               Section 19 (Binding Individual Arbitration and Class-Action Waiver) by sending a
               signed written opt-out notice, postmarked within thirty (30) days of the date you
-              first accepted these Terms, to: GateTest — Arbitration Opt-Out, c/o hello@gatetest.io
+              first accepted these Terms, to: GateTest — Arbitration Opt-Out, c/o hello@gatetest.ai
               (postal address to be confirmed in final Terms), OR by emailing
-              hello@gatetest.io with the subject line &quot;Arbitration Opt-Out&quot;, your full
+              hello@gatetest.ai with the subject line &quot;Arbitration Opt-Out&quot;, your full
               name, your email address on file, and a clear statement that you are opting out.
               Opting out does not affect any other provision of these Terms and does not deprive
               you of access to the Service. If you opt out, disputes will be resolved exclusively
@@ -791,7 +791,7 @@ export default function Terms() {
               You consent to receive notices electronically at the email address associated with
               your account and via banners, in-app messages, or similar prominent notices on the
               Service. Electronic notices satisfy any legal requirement that a notice be in
-              writing. Notices to GateTest must be sent to hello@gatetest.io and are effective on
+              writing. Notices to GateTest must be sent to hello@gatetest.ai and are effective on
               acknowledgement of receipt.
             </p>
           </section>
@@ -812,8 +812,8 @@ export default function Terms() {
             <h2 className="text-lg font-semibold text-foreground mb-2">29. Contact</h2>
             <p>
               For questions about these Terms, contact us at{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>.
             </p>
           </section>
@@ -821,7 +821,7 @@ export default function Terms() {
 
         <div className="mt-12">
           <a href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-            &larr; Back to gatetest.io
+            &larr; Back to gatetest.ai
           </a>
         </div>
       </div>

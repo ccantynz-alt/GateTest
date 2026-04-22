@@ -3,6 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
+interface FailedFile {
+  file: string;
+  issues: string[];
+  reason: string;
+}
+
 interface FixResult {
   status: string;
   prUrl?: string;
@@ -12,6 +18,7 @@ interface FixResult {
   message?: string;
   error?: string;
   errors?: string[];
+  failedFiles?: FailedFile[];
 }
 
 interface AdminPanelProps {
@@ -255,6 +262,33 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       setFixResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fix failed");
+    } finally {
+      setFixing(false);
+    }
+  }
+
+  async function retryFailedFiles() {
+    if (!fixResult?.failedFiles?.length || !repoUrl) return;
+    // Replay the exact file-level issues that hit the API-unavailable path.
+    // Each failedFile's `issues[]` entry is the same shape the first submission
+    // used (free-form strings), so we re-pack them with the file pointer for
+    // the fix route.
+    const issues = fixResult.failedFiles.flatMap((ff) =>
+      ff.issues.map((i) => ({ file: ff.file, issue: i, module: "retry" })),
+    );
+
+    setFixing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl, issues }),
+      });
+      const data = await res.json() as FixResult;
+      setFixResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
     } finally {
       setFixing(false);
     }
@@ -647,8 +681,41 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           )}
                         </div>
                       </>
+                    ) : fixResult.status === "api_unavailable" ? (
+                      <>
+                        <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
+                        <p className="text-sm text-muted mt-1">{fixResult.message}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-muted">
+                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
+                        )}
+                      </>
                     ) : fixResult.status === "no_fixes" ? (
-                      <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                      <>
+                        <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-muted">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <>
                         <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
@@ -656,6 +723,20 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           <ul className="mt-2 text-xs text-muted space-y-1">
                             {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
                           </ul>
+                        )}
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-border">
+                            <p className="text-xs text-muted">
+                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-secondary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
                         )}
                       </>
                     )}

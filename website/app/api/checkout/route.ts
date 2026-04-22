@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
 
 interface ScanTier {
   name: string;
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     {
       status: "pre-launch",
       message:
-        "Scan purchases are not yet available. Join the waitlist at gatetest.io for launch notifications.",
+        "Scan purchases are not yet available. Join the waitlist at gatetest.ai for launch notifications.",
     },
     { status: 503 }
   );

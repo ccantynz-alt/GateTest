@@ -6,7 +6,7 @@
  * against the currently-signed-in customer (if any), then redirect to the
  * success page.
  *
- * URL: https://gatetest.io/api/github/callback?installation_id=123&setup_action=install
+ * URL: https://gatetest.ai/api/github/callback?installation_id=123&setup_action=install
  *
  * Persistence: Neon Postgres `installations` table via
  * `website/app/lib/installation-store.js`. Per the Bible, installation_id is

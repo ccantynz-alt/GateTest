@@ -4,7 +4,7 @@
 
 The most advanced QA gate for AI-generated code. 22 test modules scan your entire codebase — security, accessibility, performance, and everything in between. We don't just find bugs. We fix them.
 
-[![Scanned by GateTest](https://gatetest.io/api/badge?status=passing)](https://gatetest.io)
+[![Scanned by GateTest](https://gatetest.ai/api/badge?status=passing)](https://gatetest.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Modules](https://img.shields.io/badge/modules-22-brightgreen)]()
 [![Node](https://img.shields.io/badge/node-%3E%3D20-green)]()
@@ -143,7 +143,7 @@ gatetest --validate               Validate CLAUDE.md file
 
 Install GateTest as a GitHub App to automatically scan every push and PR:
 
-1. Visit [gatetest.io/github/setup](https://gatetest.io/github/setup)
+1. Visit [gatetest.ai/github/setup](https://gatetest.ai/github/setup)
 2. Click "Install GateTest on GitHub"
 3. Select your repos
 4. Every push and PR gets scanned automatically
@@ -165,7 +165,7 @@ Don't want to run it yourself? We'll scan your repo and deliver a full report.
 
 **Pay only when the scan completes.** Card hold released if scan fails. Zero risk.
 
-Visit [gatetest.io](https://gatetest.io) to get started.
+Visit [gatetest.ai](https://gatetest.ai) to get started.
 
 ---
 
