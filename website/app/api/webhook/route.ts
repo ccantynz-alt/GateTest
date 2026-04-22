@@ -1,61 +1,92 @@
 /**
- * GitHub webhook endpoint — DEPRECATED (410 Gone).
+ * GitHub App webhook endpoint — dual-host ingress (Phase 1).
  *
- * GateTest has migrated off the GitHub App integration and now receives
- * push / PR events from Gluecron via the Signal Bus endpoint at
- * `/api/events/push`. This route exists only to return a clear 410 for
- * any stale webhook deliveries GitHub may still attempt — closing the
- * attack surface that the old handler represented (Bible Forbidden #15,
- * Known Issue #8 resolution).
+ * GateTest is dual-host as of 2026-04-22: push / PR events can arrive
+ * from Gluecron (via the Signal Bus at /api/events/push) OR from a
+ * GitHub App webhook (this path). Both paths enqueue into the shared
+ * `scan_queue` — downstream scan execution is host-agnostic because
+ * `gluecron-client.ts` falls back to the GitHub REST API when a GitHub
+ * PAT is configured.
  *
- * All GitHub App auth code, JWT minting, and repo-scan logic has been
- * removed from this file. The scan path lives at `/api/scan/run`; the
- * event ingress lives at `/api/events/push`.
+ * This replaces the 410 Gone placeholder that was in place during the
+ * Gluecron-only migration (Known Issue #8, 2026-04-19 → 2026-04-22).
+ * The Bible's strategic direction remains Gluecron-first long-term, but
+ * GitHub is the distribution channel NOW — turning it off before
+ * Gluecron has paying customers was a commercial misstep.
+ *
+ * TODO(phase-2): Post commit-status + PR comment back to GitHub after the
+ * scan completes. The worker currently calls the Gluecron callback only;
+ * a GitHub-host branch needs GitHubBridge in src/core/github-bridge.js.
+ *
+ * Wire contract: see website/app/lib/github-events.js for the full
+ * contract, HMAC format, and event-handling rules. Unit tests live at
+ * tests/github-events.test.js.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getDb } from "@/app/lib/db";
 
-const GONE_BODY = {
-  error: "Endpoint deprecated",
-  message:
-    "GateTest no longer accepts GitHub webhooks. Push / PR events now land at /api/events/push via Gluecron. " +
-    "If you are seeing this, uninstall the legacy GitHub App at https://github.com/settings/installations and " +
-    "install GateTest on Gluecron instead.",
-  migration: {
-    newEndpoint: "/api/events/push",
-    host: "gluecron",
-    since: "2026-04-19",
-  },
-} as const;
+// CommonJS interop — helpers are .js using require-style exports.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const githubEvents = require("@/app/lib/github-events");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const queueStore = require("@/app/lib/scan-queue-store");
 
-// Every HTTP verb that GitHub's delivery agent might retry with — all
-// return 410 so the delivery is marked failed and GitHub eventually
-// disables the hook on their side.
-export async function POST() {
-  return NextResponse.json(GONE_BODY, { status: 410 });
+export async function POST(req: NextRequest) {
+  let rawBody: string;
+  try {
+    rawBody = await req.text();
+  } catch {
+    return NextResponse.json({ error: "malformed: cannot read body" }, { status: 400 });
+  }
+
+  const eventType = req.headers.get("x-github-event");
+  const delivery = req.headers.get("x-github-delivery");
+  const signatureHeader = req.headers.get("x-hub-signature-256");
+
+  let sql;
+  try {
+    sql = getDb();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "database not configured";
+    return NextResponse.json({ error: msg }, { status: 503 });
+  }
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (req.nextUrl.origin ? req.nextUrl.origin : "");
+
+  const result = await githubEvents.processGitHubEvent({
+    rawBody,
+    eventType,
+    delivery,
+    signatureHeader,
+    env: process.env,
+    sql,
+    queueStore,
+    fetchImpl: typeof fetch === "function" ? fetch : undefined,
+    baseUrl,
+  });
+
+  if (result.body === null) {
+    return new NextResponse(null, {
+      status: result.status,
+      headers: result.headers,
+    });
+  }
+  return NextResponse.json(result.body, {
+    status: result.status,
+    headers: result.headers,
+  });
 }
 
-export async function PUT() {
-  return NextResponse.json(GONE_BODY, { status: 410 });
-}
-
-export async function PATCH() {
-  return NextResponse.json(GONE_BODY, { status: 410 });
-}
-
-export async function DELETE() {
-  return NextResponse.json(GONE_BODY, { status: 410 });
-}
-
-// Keep a GET health shim so ops dashboards that probed the old webhook
-// endpoint see an explicit deprecation rather than a 404 mystery.
+// GET health shim — lets ops dashboards confirm the webhook is live.
 export async function GET() {
   return NextResponse.json({
-    status: "gone",
+    status: "ok",
     app: "GateTest",
-    deprecated: true,
-    replacement: "/api/events/push",
-    message:
-      "This endpoint has been deprecated as part of the Gluecron migration. See /api/events/push.",
-  }, { status: 410 });
+    mode: "dual-host",
+    hosts: ["github", "gluecron"],
+    events: "/api/webhook (github) | /api/events/push (gluecron)",
+  });
 }

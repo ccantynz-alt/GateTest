@@ -85,20 +85,21 @@ This rule does NOT override **THE BOSS RULE**. The Boss Rule's 9 items still req
 
 ---
 
-## STRATEGIC DIRECTION — GLUECRON-FIRST (READ THIS EVERY SESSION)
+## STRATEGIC DIRECTION — DUAL-HOST, GLUECRON-LONG-TERM (READ THIS EVERY SESSION)
 
-**Gluecron.com is the future git host for Craig's stack.** GitHub is treated as a LEGACY integration, not the long-term target. Every architectural decision from this point forward must pass the question: *does this make the eventual GitHub → Gluecron migration easier or harder?*
+**Gluecron.com is the future git host for Craig's stack — but GitHub is the distribution channel NOW.** Since 2026-04-22 GateTest is DUAL-HOST: push / PR events arrive from either GitHub App webhooks (`/api/webhook`) or Gluecron's Signal Bus (`/api/events/push`), both landing in the same `scan_queue`. Shutting off GitHub before Gluecron had paying customers was a commercial misstep; the webhook is alive again and will stay alive until Gluecron reaches revenue parity.
+
+The long-term direction is still Gluecron-first — the `HostBridge` abstraction exists so the migration can happen once the customer base follows. Every architectural decision must still pass: *does this make the eventual GitHub → Gluecron migration easier or harder?*
 
 Concretely:
 - New cross-host logic belongs behind a **`HostBridge` abstraction**, not inside `github-bridge.js`.
-- `github-bridge.js` is to be treated as one implementation of the bridge, not *the* bridge.
-- A future `gluecron-bridge.js` will implement the same interface.
+- `github-bridge.js` and `gluecron-bridge.js` are both concrete implementations of the same interface — neither is "the" bridge.
 - Website copy, CLI help text, and docs should say **"git host"** where possible, not "GitHub."
-- Any new GitHub-specific feature should ship with a `TODO(gluecron)` note identifying what needs a Gluecron equivalent.
+- New host-specific features should ship with equivalents for the other host (or a `TODO(host-parity)` note identifying the gap).
 
-**Authorization for this direction:** Granted by Craig — *"we need to integrate with Gluecron rather than putting all our time and effort into GitHub. GitHub is going to be obsolete."*
+**Authorization for this direction:** Originally granted by Craig — *"we need to integrate with Gluecron rather than putting all our time and effort into GitHub. GitHub is going to be obsolete."* Dual-host revival authorized by Craig 2026-04-22 — *"how do we get the product in front of people how do they even know it's there"* → GitHub Marketplace is the distribution channel; the webhook must be live for that to work.
 
-The `HostBridge` refactor is pre-authorized, but the actual Gluecron bridge implementation must wait until Gluecron's API surface is confirmed (don't build against guesses).
+The `HostBridge` refactor is pre-authorized, and both bridges (GitHub + Gluecron) are pre-authorized as first-class. Host-specific billing integrations (GitHub Marketplace subscriptions, Gluecron's Signal Bus, etc.) still require Craig's authorization per the Boss Rule.
 
 ---
 
@@ -618,7 +619,7 @@ GateTest/
 | 5 | Crontech.ai protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 6 | Gluecron.com protection — workflow shipped in `integrations/`, needs `install.sh` run from that repo | HIGH | Craig action (or expand MCP scope) |
 | 7 | MCP GitHub scope currently restricted to `ccantynz-alt/gatetest` — blocks pushing protection into Crontech/Gluecron directly. Expand to owner-wide scope. | HIGH | Craig action — see `.claude/` config |
-| 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | DONE (2026-04-19) — GluecronBridge shipped, website callers swapped off GitHub App. `src/core/gluecron-bridge.js` implements the HostBridge contract; `website/app/lib/gluecron-client.ts` replaces `github-app.ts` in scan/run, scan/fix, scan-executor, and admin/health. `/api/webhook` now returns 410 Gone (push events land at `/api/events/push`). Env migrated to `GLUECRON_BASE_URL` + `GLUECRON_API_TOKEN`. `src/core/github-bridge.js` kept as a sibling implementation per the HostBridge architecture. |
+| 8 | Gluecron-first direction ratified in the Bible — still need Gluecron's API surface (endpoints, auth, webhook model) before the `HostBridge` refactor can ship a `GluecronBridge`. | HIGH | DONE (2026-04-19) — GluecronBridge shipped, website callers swapped off GitHub App. `src/core/gluecron-bridge.js` implements the HostBridge contract; `website/app/lib/gluecron-client.ts` replaces `github-app.ts` in scan/run, scan/fix, scan-executor, and admin/health. Env migrated to `GLUECRON_BASE_URL` + `GLUECRON_API_TOKEN`. `src/core/github-bridge.js` kept as a sibling implementation per the HostBridge architecture. **REVERSED 2026-04-22 on the `/api/webhook` sub-clause** — see Known Issue #27 (dual-host revival). The Gluecron migration as a whole stands; only the GitHub webhook shutdown was premature. |
 | 9 | `HostBridge` abstraction not yet extracted from `src/core/github-bridge.js`. Pre-authorized. Safe to do in parallel with getting Gluecron answers. | MEDIUM | DONE (2026-04-14) — `src/core/host-bridge.js` shipped, `GitHubBridge extends HostBridge`, registry + shared markdown formatter + 21 contract tests green. Gluecron bridge can plug in without further refactor once API surface is known. |
 | 10 | Our own `.github/workflows/ci.yml:49` has `continue-on-error: true` on the GateTest job — Bible Forbidden #24 violation. Caught by the new `ciSecurity` module (dog-fooded). Fix = remove that line once the self-scan is known-green; until then the gate is advisory-only in our own CI. | HIGH | DONE (2026-04-16) — `continue-on-error: true` removed from BOTH the gatetest-quick step (ci.yml:51) and the gatetest-full step (ci.yml:90). SARIF / artifact upload steps keep `continue-on-error` because Forbidden #24 scopes to the gate step itself. Self-scan is green: 816/816 tests pass, 67/67 modules load, website builds clean. |
 | 11 | Landing-page hero (`website/app/components/Hero.tsx:16,28,71`) says "13 Modules". Product ships 67 modules per Bible v1.40.0 version string. Marketing drift — day-one customers will see numbers that don't match docs / CLI `--list`. | HIGH | DONE (2026-04-17) — Craig authorized "just do it all". All 13→67 references aligned across 9 surfaces: `Hero.tsx` (4 places incl. badge, subhead, terminal output, stat tile), `Pricing.tsx` (Full Scan description + features), `layout.tsx` (structured-data Offer), `manifest.json`, `opengraph-image.tsx`, `api/checkout/route.ts` (2 places), `scan/status/page.tsx` (2 CTAs), `admin/AdminPanel.tsx`. Hero stat "200+ Quality Checks" also bumped to "800+" to match product reality. |
@@ -637,6 +638,9 @@ GateTest/
 | 24 | **GitHub file-tree fetch is unbounded** on `?recursive=1` — monorepos with 100k+ files will exhaust Vercel's per-function budget. | MEDIUM | Post-launch — add pagination / file-count ceiling / graceful degradation message when a repo is too large. |
 | 25 | **Rate-limit wait cap** in `github-bridge.js:138` only waits if backoff < 120s. GitHub resets can be 60 minutes out, meaning we skip the wait and hammer 429. | MEDIUM | Post-launch — queue and respect longer resets, or refuse scans during the cool-down window. |
 | 26 | **No `vercel.json` maxDuration** for `/api/scan/run` — full scan targets <60s but no hard cap is pinned at the platform layer. If a scan hangs it'll be killed mid-way at Vercel's plan-default. | MEDIUM | Craig action — pin `maxDuration: 300` once deployment plan is confirmed (Boss Rule #5 / deployment config). |
+| 27 | **Dual-host revival (Phase 1 shipped)** — `/api/webhook` no longer 410s; it accepts GitHub App push / pull_request events, HMAC-verifies `X-Hub-Signature-256` against `GITHUB_WEBHOOK_SECRET` (fail-closed, Forbidden #15), and enqueues into the shared `scan_queue` via `scan-queue-store.enqueueScan` — same path as Gluecron's Signal Bus. Uses `X-GitHub-Delivery` as the idempotency `eventId`. `gluecron-client.ts` already has GitHub PAT fallback so scans actually run. Helpers in `website/app/lib/github-events.js`, 23 unit tests in `tests/github-events.test.js`. Strategic direction updated from "Gluecron-first" to "dual-host, Gluecron-long-term". | HIGH | DONE (2026-04-22) — Phase 1 shipped. Phase 2 queued as Issue #28. |
+| 28 | **Dual-host Phase 2: GitHub commit-status + PR comment callback** — worker currently calls Gluecron's callback only. GitHub-host scans run and are stored, but the customer's PR page shows no feedback. Needs `scan-worker.js` to branch on event origin (detect via repository↔installation lookup or add a `host` column to `scan_queue`) and call `GitHubBridge.postCommitStatus` + `GitHubBridge.postPullRequestComment` for GitHub-hosted jobs. Without this, GitHub Marketplace listing has no visible product loop. | HIGH | Pre-authorized — proceed on next session. |
+| 29 | **GitHub Marketplace listing itself** — distribution channel. Requires Craig's action: create Marketplace listing in GitHub App settings, upload logo/screenshots, choose free-tier-with-upsell model, approval workflow (~2-3 weeks). Out of scope for code agents; listing copy can be drafted in the repo for Craig's review. | HIGH | Craig action (Boss Rule #8 — public-facing comms). |
 
 ---
 
