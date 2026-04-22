@@ -156,6 +156,6 @@ export async function GET() {
     endpoint: "POST /api/v1/scan",
     auth: "Authorization: Bearer gt_live_... OR X-API-Key",
     body: { repo_url: "https://github.com/owner/repo", tier: "quick | full" },
-    docs: "https://gatetest.io/docs/api",
+    docs: "https://gatetest.ai/docs/api",
   });
 }

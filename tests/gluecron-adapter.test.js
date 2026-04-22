@@ -241,7 +241,7 @@ describe('GluecronBridge — v2 wire contract', () => {
     const sha = 'c'.repeat(40);
     const out = await bridge.setCommitStatus('o', 'r', sha, 'success', 'All green', {
       context: 'gatetest',
-      targetUrl: 'https://gatetest.io/runs/1',
+      targetUrl: 'https://gatetest.ai/runs/1',
     });
     assert.strictEqual(out.state, 'success');
     const r = lastRequest();
@@ -250,7 +250,7 @@ describe('GluecronBridge — v2 wire contract', () => {
     assert.strictEqual(r.body.state, 'success');
     assert.strictEqual(r.body.description, 'All green');
     assert.strictEqual(r.body.context, 'gatetest');
-    assert.strictEqual(r.body.target_url, 'https://gatetest.io/runs/1');
+    assert.strictEqual(r.body.target_url, 'https://gatetest.ai/runs/1');
   });
 
   it('setCommitStatus() rejects invalid states', async () => {

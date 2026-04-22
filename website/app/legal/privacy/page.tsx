@@ -32,7 +32,7 @@ export default function Privacy() {
             <h2 className="text-lg font-semibold text-foreground mb-2">1. Who We Are</h2>
             <p>
               GateTest (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the website
-              gatetest.io and provides automated code quality scanning services. This Privacy
+              gatetest.ai and provides automated code quality scanning services. This Privacy
               Policy explains what personal data we collect, how we use it, how we protect it, and
               your rights regarding your data. It applies to all users of our website, GitHub App,
               CLI tool, and paid scanning services.
@@ -40,8 +40,8 @@ export default function Privacy() {
             <p className="mt-2">
               <strong>Contact for privacy matters.</strong> For any question, complaint, or
               request relating to this Policy or your personal data, contact us at{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>.
               We intend to respond substantively within thirty (30) days, and sooner where required
               by applicable law.
@@ -229,7 +229,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">7. Data Security</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li>All connections to gatetest.io are encrypted via TLS 1.2+ (HTTPS)</li>
+              <li>All connections to gatetest.ai are encrypted via TLS 1.2+ (HTTPS)</li>
               <li>Payment processing is handled entirely by Stripe (PCI-DSS Level 1 compliant)</li>
               <li>Repository access uses GitHub&apos;s authenticated API with time-limited installation tokens</li>
               <li>Minimal permissions requested — read-only for contents, write only for PR comments and commit statuses</li>
@@ -327,8 +327,8 @@ export default function Privacy() {
             </ul>
             <p className="mt-2">
               <strong>How to exercise a right.</strong> Email{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>{" "}
               with a clear description of the right you wish to exercise and the account email
               or identifier we should use to locate your data. We may ask for reasonable
@@ -392,7 +392,7 @@ export default function Privacy() {
             </ul>
             <p className="mt-2">
               You may request a copy of the transfer mechanism we rely on for your data by
-              emailing hello@gatetest.io.
+              emailing hello@gatetest.ai.
             </p>
           </section>
 
@@ -427,7 +427,7 @@ export default function Privacy() {
               If we become aware that we have inadvertently collected personal data from a child
               below the applicable threshold without verifiable parental or guardian consent, we
               will delete that data as soon as reasonably practicable. A parent or guardian who
-              believes a child has provided data to us should contact hello@gatetest.io.
+              believes a child has provided data to us should contact hello@gatetest.ai.
             </p>
           </section>
 
@@ -614,7 +614,7 @@ export default function Privacy() {
             </ul>
             <p className="mt-2">
               <strong>Required Art. 13 disclosures:</strong> the controller is GateTest (contact:
-              hello@gatetest.io); the recipients are the sub-processors listed in Section 11;
+              hello@gatetest.ai); the recipients are the sub-processors listed in Section 11;
               your data may be transferred internationally under the safeguards in Section 9; the
               retention periods are in Section 6; you have the rights in Section 8 plus the right
               to lodge a complaint with a supervisory authority; where we rely on legitimate
@@ -657,7 +657,7 @@ export default function Privacy() {
               </li>
             </ul>
             <p className="mt-2">
-              To exercise a CCPA / CPRA right, email hello@gatetest.io with the subject line
+              To exercise a CCPA / CPRA right, email hello@gatetest.ai with the subject line
               &quot;CCPA Request&quot;. We will verify your identity before acting. An authorised
               agent may submit a request on your behalf with your signed permission.
             </p>
@@ -667,7 +667,7 @@ export default function Privacy() {
               privacy laws have rights substantially similar to those described for California
               above (right to access, correct, delete, opt out of targeted advertising and sale).
               We do not engage in targeted advertising or the sale of personal information as
-              defined in these laws. To exercise a right, email hello@gatetest.io.
+              defined in these laws. To exercise a right, email hello@gatetest.ai.
             </p>
             <p className="mt-2">
               <strong>13.4 New Zealand (Privacy Act 2020).</strong> If you are in New Zealand, this
@@ -680,7 +680,7 @@ export default function Privacy() {
               <strong>13.5 Data Processing Agreement (DPA).</strong> Business customers who
               require a formal Data Processing Agreement, a Data Protection Addendum, Standard
               Contractual Clauses, or a sub-processor disclosure may request one by contacting
-              hello@gatetest.io. Where we act as processor for your end-user personal data, we
+              hello@gatetest.ai. Where we act as processor for your end-user personal data, we
               intend to offer a DPA incorporating GDPR Article 28 obligations and the EU-approved
               SCCs.
             </p>
@@ -725,8 +725,8 @@ export default function Privacy() {
             <h2 className="text-lg font-semibold text-foreground mb-2">17. Contact</h2>
             <p>
               For privacy questions, data requests, or concerns, contact us at{" "}
-              <a href="mailto:hello@gatetest.io" className="text-accent-light hover:underline">
-                hello@gatetest.io
+              <a href="mailto:hello@gatetest.ai" className="text-accent-light hover:underline">
+                hello@gatetest.ai
               </a>.
             </p>
           </section>
@@ -734,7 +734,7 @@ export default function Privacy() {
 
         <div className="mt-12">
           <a href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-            &larr; Back to gatetest.io
+            &larr; Back to gatetest.ai
           </a>
         </div>
       </div>

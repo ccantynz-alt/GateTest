@@ -116,7 +116,7 @@ export default function GitHubSetup() {
             href="/"
             className="text-sm text-muted hover:text-foreground transition-colors"
           >
-            &larr; Back to gatetest.io
+            &larr; Back to gatetest.ai
           </a>
         </div>
       </div>

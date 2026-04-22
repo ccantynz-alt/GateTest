@@ -34,7 +34,7 @@ The following actions require **explicit authorization from Craig BEFORE executi
 1. **Major architectural changes** — swapping frameworks, changing core stack
 2. **New dependencies not already approved** — we don't add bloat
 3. **Pricing changes** — any modification to plans, tiers, or billing logic
-4. **Domain or DNS changes** — anything touching gatetest.io
+4. **Domain or DNS changes** — anything touching gatetest.ai
 5. **Production deployments** — first-time deploy and any rollback
 6. **Stripe configuration** — webhook URLs, price IDs, plan structures
 7. **External API integrations** — adding new third-party services
@@ -113,7 +113,7 @@ The `HostBridge` refactor is pre-authorized, but the actual Gluecron bridge impl
 
 ### How the integration works
 
-GateTest remains a **standalone subscription product** on gatetest.io. Protected platforms consume the same engine by cloning this repo at CI time — nothing is vendored, forked, or duplicated. Ship a fix here → every protected platform picks it up on the next CI run.
+GateTest remains a **standalone subscription product** on gatetest.ai. Protected platforms consume the same engine by cloning this repo at CI time — nothing is vendored, forked, or duplicated. Ship a fix here → every protected platform picks it up on the next CI run.
 
 ### What lives in THIS repo (`ccantynz-alt/gatetest`)
 
@@ -177,7 +177,7 @@ Every tool here was chosen because it is the **best in its class right now.** If
 | **Framework** | Next.js 16 (App Router) | Latest, fastest, Vercel-native |
 | **Styling** | Tailwind CSS 4 | Utility-first, dark theme, zero unused CSS |
 | **Hosting** | Vercel | Auto-deploy from main, serverless |
-| **Domain** | gatetest.io | Secured |
+| **Domain** | gatetest.ai | Secured |
 
 ### Payments
 | Layer | Choice | Why |
@@ -320,7 +320,7 @@ BaseModule (abstract)
 
 - [ ] Meta title and description set
 - [ ] Open Graph tags set
-- [ ] Canonical URL set to gatetest.io
+- [ ] Canonical URL set to gatetest.ai
 - [ ] Structured data valid
 
 ### 12. Deployment
@@ -336,7 +336,7 @@ BaseModule (abstract)
 - [ ] GitHub App installed and posting commit statuses
 - [ ] Legal pages accessible from footer
 - [ ] Stripe webhook endpoint configured
-- [ ] Email forwarding set up for hello@gatetest.io
+- [ ] Email forwarding set up for hello@gatetest.ai
 
 ---
 
@@ -506,7 +506,7 @@ GateTest/
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
 ├── tests/                  ← 200+ tests (MUST ALL PASS)
-└── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
+└── website/                ← gatetest.ai (Next.js 16 + Tailwind 4)
     └── app/
         ├── page.tsx                 ← Main page
         ├── layout.tsx               ← Root layout
@@ -598,7 +598,7 @@ GateTest/
 |----------|---------|
 | `STRIPE_SECRET_KEY` | Stripe API (sk_live_... or sk_test_...) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe client key |
-| `NEXT_PUBLIC_BASE_URL` | https://gatetest.io |
+| `NEXT_PUBLIC_BASE_URL` | https://gatetest.ai |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing |
 | `GLUECRON_BASE_URL` | Gluecron deployment URL (default https://gluecron.com) |
 | `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |

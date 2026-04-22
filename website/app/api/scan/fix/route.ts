@@ -605,7 +605,7 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
 
 ---
 
-<sub>Scanned and fixed by <a href="https://gatetest.io">GateTest</a> — 67 modules, AI-powered, verify-before-commit</sub>`;
+<sub>Scanned and fixed by <a href="https://gatetest.ai">GateTest</a> — 67 modules, AI-powered, verify-before-commit</sub>`;
 
     // Open the PR. NOTE: Gluecron uses `headBranch` / `baseBranch` (NOT
     // GitHub's `head` / `base`) — our openPullRequest helper handles the

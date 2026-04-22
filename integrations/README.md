@@ -8,7 +8,7 @@ renamed, or weakened by any future session. See the root `CLAUDE.md` →
 
 ## What this is
 
-GateTest is sold as a **standalone subscription product** on gatetest.io.
+GateTest is sold as a **standalone subscription product** on gatetest.ai.
 This directory contains drop-in artifacts so the same engine can also protect
 Craig's internal platforms **without making GateTest non-standalone.**
 
@@ -49,7 +49,7 @@ That installs three things:
 ┌────────────────────────────────┐        ┌──────────────────────────┐
 │  gatetest (this repo)          │        │  Crontech / Gluecron     │
 │  - sold as subscription        │        │  - consumes GateTest     │
-│  - product on gatetest.io      │        │  - no code copied in     │
+│  - product on gatetest.ai      │        │  - no code copied in     │
 │  - zero deps, clones in CI     │◄───────┤  - updates automatically │
 └────────────────────────────────┘        └──────────────────────────┘
 ```

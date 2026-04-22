@@ -5,7 +5,7 @@
 // `<input id="repo-url" />` block, and swap the `<a>` CTAs back to the
 // `<button onClick={handleCheckout}>` shape.
 const WAITLIST_HREF =
-  "mailto:hello@gatetest.io?subject=GateTest%20waitlist&body=Please%20add%20me%20to%20the%20GateTest%20launch%20waitlist.";
+  "mailto:hello@gatetest.ai?subject=GateTest%20waitlist&body=Please%20add%20me%20to%20the%20GateTest%20launch%20waitlist.";
 
 const scanPlans = [
   {

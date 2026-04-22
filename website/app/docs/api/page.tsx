@@ -6,7 +6,7 @@ export const metadata: Metadata = {
     "GateTest public API v1 — scan any GitHub repo programmatically. Bearer auth, JSON response, idempotency support.",
 };
 
-const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
+const curlQuick = `curl -X POST https://gatetest.ai/api/v1/scan \\
   -H "Authorization: Bearer gt_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -14,7 +14,7 @@ const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
     "tier": "quick"
   }'`;
 
-const curlFullIdem = `curl -X POST https://gatetest.io/api/v1/scan \\
+const curlFullIdem = `curl -X POST https://gatetest.ai/api/v1/scan \\
   -H "Authorization: Bearer gt_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: scan-20260415-build-847" \\
@@ -62,7 +62,7 @@ const responseExample = `{
 
 const nodeExample = `import fetch from "node-fetch";
 
-const res = await fetch("https://gatetest.io/api/v1/scan", {
+const res = await fetch("https://gatetest.ai/api/v1/scan", {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.GATETEST_API_KEY}\`,
@@ -103,7 +103,7 @@ export default function ApiDocs() {
             the admin console. Only the hash is stored — keep the plaintext safe.
           </p>
           <div className="card p-4 text-xs text-muted">
-            Request a key: email <a className="text-accent hover:underline" href="mailto:hello@gatetest.io">hello@gatetest.io</a>
+            Request a key: email <a className="text-accent hover:underline" href="mailto:hello@gatetest.ai">hello@gatetest.ai</a>
             {" "}with your platform name and expected scan volume.
           </div>
         </section>
@@ -268,7 +268,7 @@ export default function ApiDocs() {
         </section>
 
         <div className="text-xs text-muted border-t border-border pt-6">
-          Support: <a className="text-accent hover:underline" href="mailto:hello@gatetest.io">hello@gatetest.io</a> ·{" "}
+          Support: <a className="text-accent hover:underline" href="mailto:hello@gatetest.ai">hello@gatetest.ai</a> ·{" "}
           <a className="text-accent hover:underline" href="/legal/terms">Terms</a> ·{" "}
           <a className="text-accent hover:underline" href="/legal/privacy">Privacy</a>
         </div>

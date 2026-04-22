@@ -249,7 +249,7 @@ describe('processPushEvent', () => {
       sql: SQL,
       queueStore,
       fetchImpl,
-      baseUrl: 'https://gatetest.io',
+      baseUrl: 'https://gatetest.ai',
     });
 
     assert.strictEqual(result.status, 202);
@@ -264,7 +264,7 @@ describe('processPushEvent', () => {
     assert.strictEqual(fetchImpl.calls.length, 1);
     assert.strictEqual(
       fetchImpl.calls[0].url,
-      'https://gatetest.io/api/scan/worker/tick'
+      'https://gatetest.ai/api/scan/worker/tick'
     );
     assert.strictEqual(
       fetchImpl.calls[0].init.headers['X-Vercel-Cron-Secret'],
@@ -286,7 +286,7 @@ describe('processPushEvent', () => {
       sql: SQL,
       queueStore,
       fetchImpl,
-      baseUrl: 'https://gatetest.io',
+      baseUrl: 'https://gatetest.ai',
     });
 
     assert.strictEqual(result.status, 200);

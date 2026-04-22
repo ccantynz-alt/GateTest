@@ -30,7 +30,7 @@ const ROUTE_PATH = path.resolve(
 );
 
 const PRE_LAUNCH_MESSAGE =
-  'Scan purchases are not yet available. Join the waitlist at gatetest.io for launch notifications.';
+  'Scan purchases are not yet available. Join the waitlist at gatetest.ai for launch notifications.';
 
 function loadRouteSource() {
   return fs.readFileSync(ROUTE_PATH, 'utf-8');

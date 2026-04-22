@@ -103,7 +103,7 @@ export default async function Image() {
             fontSize: 18,
           }}
         >
-          <span>gatetest.io</span>
+          <span>gatetest.ai</span>
           <span>From $29/scan</span>
           <span>Pay on completion</span>
         </div>

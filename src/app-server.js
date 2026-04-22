@@ -311,7 +311,7 @@ function formatPrComment(result) {
     }
   }
 
-  return `${status}\n\n${summary}${failureList}${issueDetails}\n\n---\n*Scanned by [GateTest](https://gatetest.io) — the QA gate for AI-generated code*`;
+  return `${status}\n\n${summary}${failureList}${issueDetails}\n\n---\n*Scanned by [GateTest](https://gatetest.ai) — the QA gate for AI-generated code*`;
 }
 
 // ============================================================
@@ -391,7 +391,7 @@ if (!APP_ID) {
 ║                                                          ║
 ║  2. Fill in:                                             ║
 ║     Name:        GateTest                                ║
-║     Homepage:    https://gatetest.io                     ║
+║     Homepage:    https://gatetest.ai                     ║
 ║     Webhook URL: https://your-server.com/webhook         ║
 ║     Secret:      (generate one, save it)                 ║
 ║                                                          ║

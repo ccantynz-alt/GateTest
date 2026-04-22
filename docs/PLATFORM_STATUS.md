@@ -18,7 +18,7 @@ Returns JSON:
   "siblings": {
     "crontech": "https://crontech.ai/api/platform-status",
     "gluecron": "https://gluecron.com/api/platform-status",
-    "gatetest": "https://gatetest.io/api/platform-status"
+    "gatetest": "https://gatetest.ai/api/platform-status"
   }
 }
 ```
