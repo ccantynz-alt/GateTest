@@ -461,9 +461,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   className="px-4 py-3 rounded-xl border border-white/10 bg-white/[0.04] text-white text-sm font-medium focus:outline-none focus:border-emerald-400/60 transition-all cursor-pointer"
                 >
                   <option value="quick" className="bg-[#0a0a12]">Quick &middot; 4 modules</option>
-                  <option value="full" className="bg-[#0a0a12]">Full &middot; 67 modules</option>
-                  <option value="fix" className="bg-[#0a0a12]">Scan + Fix &middot; 67 modules + PR</option>
-                  <option value="nuclear" className="bg-[#0a0a12]">☢ Nuclear &middot; Everything</option>
+                  <option value="full" className="bg-[#0a0a12]">Full &middot; 67 modules + auto-fix</option>
                 </select>
                 <button
                   onClick={runScan}
