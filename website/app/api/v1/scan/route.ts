@@ -4,22 +4,14 @@
  * POST /api/v1/scan
  *   Auth:     Authorization: Bearer gt_live_...   (or X-API-Key header)
  *   Headers:  Idempotency-Key: <unique-string>    (optional, 24h dedupe)
- *   Body:     { repo_url: string, tier: "quick" | "full" }
+ *
+ *   Mode A — GitHub repo:
+ *     Body:   { repo_url: string, tier: "quick" | "full" }
+ *
+ *   Mode B — Direct file upload (no GitHub required):
+ *     Body:   { files: [{ path: string, content: string }], tier: "quick" | "full", project?: string }
+ *
  *   Returns:  { status, modules[], totalIssues, totalModules, duration, ... }
- *
- * No Stripe. No cookies. API customers are pre-authorized by their key, which
- * records tier_allowed and rate_limit_per_hour. Honest module contract is
- * enforced via the shared runTier() registry.
- *
- * Rate limit: rolling 1-hour window, counted from api_calls table.
- *
- * Edge cases handled:
- *   - Missing/invalid key      → 401 with descriptive error
- *   - Revoked key              → 403
- *   - Rate-limited             → 429 with Retry-After hint
- *   - Tier not allowed on key  → 403
- *   - Malformed repo URL       → 400
- *   - Idempotent replay        → returns cached envelope (no re-scan)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,7 +21,7 @@ import {
   findIdempotentCall,
   recordApiCall,
 } from "@/app/lib/api-key";
-import { runScan } from "@/app/lib/scan-executor";
+import { runScan, runScanDirect } from "@/app/lib/scan-executor";
 
 const ALLOWED_TIERS = new Set(["quick", "full"]);
 
@@ -46,7 +38,13 @@ export async function POST(req: NextRequest) {
   const key = auth.key;
 
   // ── 2. Parse body ────────────────────────────────
-  let body: { repo_url?: string; repoUrl?: string; tier?: string };
+  let body: {
+    repo_url?: string;
+    repoUrl?: string;
+    files?: Array<{ path: string; content: string }>;
+    project?: string;
+    tier?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -55,25 +53,51 @@ export async function POST(req: NextRequest) {
   }
 
   const repoUrl = (body.repo_url || body.repoUrl || "").trim();
+  const directFiles = body.files;
+  const project = (body.project || "").trim();
   const tier = (body.tier || "quick").trim();
+  const isDirectMode = Array.isArray(directFiles) && directFiles.length > 0;
 
-  if (!repoUrl) {
+  if (!repoUrl && !isDirectMode) {
     await recordApiCall({ apiKeyId: key.id, statusCode: 400, durationMs: Date.now() - started });
-    return problem(400, "Missing repo_url");
+    return problem(400, "Provide either repo_url (GitHub) or files[] (direct upload)");
   }
-  if (!/github\.com\/[^/]+\/[^/?#]+/.test(repoUrl)) {
+  if (repoUrl && !isDirectMode && !/github\.com\/[^/]+\/[^/?#]+/.test(repoUrl)) {
     await recordApiCall({ apiKeyId: key.id, repoUrl, statusCode: 400, durationMs: Date.now() - started });
     return problem(400, "repo_url must be a github.com URL");
   }
+  if (isDirectMode) {
+    const MAX_DIRECT_FILES = 100;
+    const MAX_FILE_SIZE = 500 * 1024;
+    if (directFiles.length > MAX_DIRECT_FILES) {
+      await recordApiCall({ apiKeyId: key.id, statusCode: 400, durationMs: Date.now() - started });
+      return problem(400, `Too many files (max ${MAX_DIRECT_FILES})`);
+    }
+    for (const f of directFiles) {
+      if (!f.path || typeof f.path !== "string") {
+        await recordApiCall({ apiKeyId: key.id, statusCode: 400, durationMs: Date.now() - started });
+        return problem(400, "Each file must have a path (string)");
+      }
+      if (typeof f.content !== "string") {
+        await recordApiCall({ apiKeyId: key.id, statusCode: 400, durationMs: Date.now() - started });
+        return problem(400, `File ${f.path}: content must be a string`);
+      }
+      if (f.content.length > MAX_FILE_SIZE) {
+        await recordApiCall({ apiKeyId: key.id, statusCode: 400, durationMs: Date.now() - started });
+        return problem(400, `File ${f.path}: exceeds ${MAX_FILE_SIZE} byte limit`);
+      }
+    }
+  }
   if (!ALLOWED_TIERS.has(tier)) {
-    await recordApiCall({ apiKeyId: key.id, repoUrl, tier, statusCode: 400, durationMs: Date.now() - started });
+    await recordApiCall({ apiKeyId: key.id, repoUrl: repoUrl || project, tier, statusCode: 400, durationMs: Date.now() - started });
     return problem(400, `tier must be one of: ${[...ALLOWED_TIERS].join(", ")}`);
   }
 
+  const scanLabel = isDirectMode ? (project || "direct-upload") : repoUrl;
+
   // ── 3. Tier entitlement check ────────────────────
-  // tier_allowed = "quick" only allows quick. "full" allows both.
   if (key.tier_allowed === "quick" && tier === "full") {
-    await recordApiCall({ apiKeyId: key.id, repoUrl, tier, statusCode: 403, durationMs: Date.now() - started });
+    await recordApiCall({ apiKeyId: key.id, repoUrl: scanLabel, tier, statusCode: 403, durationMs: Date.now() - started });
     return problem(403, "Your API key is not entitled to tier=full. Contact support to upgrade.");
   }
 
@@ -104,17 +128,21 @@ export async function POST(req: NextRequest) {
       rate_limit_per_hour: key.rate_limit_per_hour,
     });
     res.headers.set("Retry-After", "300");
-    await recordApiCall({ apiKeyId: key.id, repoUrl, tier, statusCode: rate.status, durationMs: Date.now() - started, idempotencyKey });
+    await recordApiCall({ apiKeyId: key.id, repoUrl: scanLabel, tier, statusCode: rate.status, durationMs: Date.now() - started, idempotencyKey });
     return res;
   }
 
   // ── 6. Run the scan ──────────────────────────────
   let result;
   try {
-    result = await runScan(repoUrl, tier);
+    if (isDirectMode) {
+      result = await runScanDirect(directFiles, tier, project || undefined);
+    } else {
+      result = await runScan(repoUrl, tier);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown error";
-    await recordApiCall({ apiKeyId: key.id, repoUrl, tier, statusCode: 500, durationMs: Date.now() - started, idempotencyKey });
+    await recordApiCall({ apiKeyId: key.id, repoUrl: scanLabel, tier, statusCode: 500, durationMs: Date.now() - started, idempotencyKey });
     return problem(500, `Scan crashed: ${msg}`);
   }
 
@@ -122,7 +150,7 @@ export async function POST(req: NextRequest) {
 
   await recordApiCall({
     apiKeyId: key.id,
-    repoUrl,
+    repoUrl: scanLabel,
     tier,
     statusCode,
     issuesFound: result.totalIssues,
@@ -133,7 +161,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       status: result.error ? "failed" : "complete",
-      repo_url: repoUrl,
+      ...(isDirectMode ? { project: project || "direct-upload", mode: "direct" } : { repo_url: repoUrl }),
       tier,
       modules: result.modules,
       totalModules: result.modules.length,
@@ -155,7 +183,18 @@ export async function GET() {
   return NextResponse.json({
     endpoint: "POST /api/v1/scan",
     auth: "Authorization: Bearer gt_live_... OR X-API-Key",
-    body: { repo_url: "https://github.com/owner/repo", tier: "quick | full" },
+    modes: {
+      github: {
+        body: { repo_url: "https://github.com/owner/repo", tier: "quick | full" },
+      },
+      direct: {
+        body: {
+          files: [{ path: "src/index.ts", content: "..." }],
+          tier: "quick | full",
+          project: "my-project (optional label)",
+        },
+      },
+    },
     docs: "https://gatetest.io/docs/api",
   });
 }

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "API Reference — GateTest",
   description:
-    "GateTest public API v1 — scan any GitHub repo programmatically. Bearer auth, JSON response, idempotency support.",
+    "GateTest public API v1 — scan any repo or upload files directly. Bearer auth, JSON response, idempotency support.",
 };
 
 const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
@@ -12,6 +12,18 @@ const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
   -d '{
     "repo_url": "https://github.com/owner/repo",
     "tier": "quick"
+  }'`;
+
+const curlDirect = `curl -X POST https://gatetest.io/api/v1/scan \\
+  -H "Authorization: Bearer gt_live_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "files": [
+      { "path": "src/index.ts", "content": "import express..." },
+      { "path": "src/auth.ts", "content": "const secret = ..." }
+    ],
+    "tier": "full",
+    "project": "zoobicon"
   }'`;
 
 const curlFullIdem = `curl -X POST https://gatetest.io/api/v1/scan \\
@@ -52,8 +64,8 @@ const responseExample = `{
       "skipped": "ANTHROPIC_API_KEY not set — AI review skipped"
     }
   ],
-  "totalModules": 14,
-  "completedModules": 14,
+  "totalModules": 22,
+  "completedModules": 22,
   "totalIssues": 1,
   "duration": 8421,
   "authSource": "app",
@@ -111,10 +123,11 @@ export default function ApiDocs() {
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-3">POST /api/v1/scan</h2>
           <p className="text-muted mb-4">
-            Runs a scan synchronously and returns the full result. Typical latency:
-            5–15 s for <code className="font-mono text-sm">quick</code>, 20–60 s for{" "}
-            <code className="font-mono text-sm">full</code>. The request blocks until the
-            scan finishes.
+            Two input modes: provide a <code className="font-mono text-sm">repo_url</code>{" "}
+            (GitHub) or upload <code className="font-mono text-sm">files[]</code> directly
+            (any platform — no GitHub required). Same 22 modules, same response format.
+            Typical latency: 5–15 s for <code className="font-mono text-sm">quick</code>,
+            20–60 s for <code className="font-mono text-sm">full</code>.
           </p>
 
           <h3 className="text-lg font-semibold mb-2">Request body</h3>
@@ -132,8 +145,20 @@ export default function ApiDocs() {
                 <tr className="border-b border-border">
                   <td className="px-4 py-2 font-mono text-xs">repo_url</td>
                   <td className="px-4 py-2 text-xs">string</td>
-                  <td className="px-4 py-2 text-xs">yes</td>
-                  <td className="px-4 py-2 text-xs text-muted">github.com URL</td>
+                  <td className="px-4 py-2 text-xs">mode A</td>
+                  <td className="px-4 py-2 text-xs text-muted">github.com URL — GateTest reads the repo via API</td>
+                </tr>
+                <tr className="border-b border-border">
+                  <td className="px-4 py-2 font-mono text-xs">files</td>
+                  <td className="px-4 py-2 text-xs">{`{path, content}[]`}</td>
+                  <td className="px-4 py-2 text-xs">mode B</td>
+                  <td className="px-4 py-2 text-xs text-muted">Direct upload — send file contents inline (max 100 files, 500 KB each)</td>
+                </tr>
+                <tr className="border-b border-border">
+                  <td className="px-4 py-2 font-mono text-xs">project</td>
+                  <td className="px-4 py-2 text-xs">string</td>
+                  <td className="px-4 py-2 text-xs">no</td>
+                  <td className="px-4 py-2 text-xs text-muted">Label for direct uploads (e.g. &quot;zoobicon&quot;)</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-2 font-mono text-xs">tier</td>
@@ -149,8 +174,15 @@ export default function ApiDocs() {
             </table>
           </div>
 
-          <h3 className="text-lg font-semibold mb-2">Quick scan</h3>
+          <h3 className="text-lg font-semibold mb-2">Mode A — GitHub repo</h3>
           <pre className="card p-4 text-xs font-mono overflow-x-auto mb-6">{curlQuick}</pre>
+
+          <h3 className="text-lg font-semibold mb-2">Mode B — Direct file upload</h3>
+          <p className="text-muted text-sm mb-3">
+            No GitHub required. Send file paths and contents inline — works for any
+            platform, any language, any framework.
+          </p>
+          <pre className="card p-4 text-xs font-mono overflow-x-auto mb-6">{curlDirect}</pre>
 
           <h3 className="text-lg font-semibold mb-2">Full scan with idempotency</h3>
           <p className="text-muted text-sm mb-3">
