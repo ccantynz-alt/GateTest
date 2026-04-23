@@ -25,7 +25,12 @@ class BaseModule {
     const path = require('path');
     const files = [];
 
-    const defaultExcludes = ['node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage'];
+    const defaultExcludes = [
+      'node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage',
+      '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
+      '__pycache__', '.pytest_cache', 'target', 'vendor', '.cargo',
+      'out', 'public/build', '.cache', '.parcel-cache',
+    ];
     const allExcludes = [...defaultExcludes, ...excludes];
 
     const walk = (dir) => {

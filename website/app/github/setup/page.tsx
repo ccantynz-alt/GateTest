@@ -59,7 +59,7 @@ export default function GitHubSetup() {
             {
               step: "2",
               title: "Push code or open a PR",
-              desc: "GateTest automatically scans with 20 quality modules.",
+              desc: "GateTest automatically scans with 67 quality modules.",
             },
             {
               step: "3",
@@ -116,7 +116,7 @@ export default function GitHubSetup() {
             href="/"
             className="text-sm text-muted hover:text-foreground transition-colors"
           >
-            &larr; Back to gatetest.io
+            &larr; Back to gatetest.ai
           </a>
         </div>
       </div>

@@ -15,6 +15,19 @@ const { HtmlReporter } = require('./reporters/html-reporter');
 const { SarifReporter } = require('./reporters/sarif-reporter');
 const { JunitReporter } = require('./reporters/junit-reporter');
 const { GateTestCache } = require('./core/cache');
+const {
+  HostBridge,
+  NotImplemented,
+  CANONICAL_COMMIT_STATES,
+  registerBridge,
+  createBridge,
+  listBridges,
+} = require('./core/host-bridge');
+// Importing github-bridge registers the 'github' bridge in the HostBridge
+// registry so callers of createBridge('github', ...) get a concrete
+// implementation without needing to import it manually.
+// TODO(gluecron): when GluecronBridge ships, require it here too.
+const { GitHubBridge } = require('./core/github-bridge');
 
 class GateTest {
   constructor(projectRoot, options = {}) {
@@ -85,8 +98,8 @@ class GateTest {
       runner.register(name, mod);
     }
 
-    // Attach reporters
-    new ConsoleReporter(runner);
+    // Attach reporters — skip ConsoleReporter in silent mode (e.g. MCP server)
+    if (!this.options.silent) new ConsoleReporter(runner);
     new JsonReporter(runner, this.config);
     new HtmlReporter(runner, this.config);
     if (this.options.sarif) new SarifReporter(runner, this.config);
@@ -118,4 +131,12 @@ module.exports = {
   HtmlReporter,
   SarifReporter,
   JunitReporter,
+  // Host abstraction — Gluecron-first (CLAUDE.md → STRATEGIC DIRECTION).
+  HostBridge,
+  GitHubBridge,
+  NotImplemented,
+  CANONICAL_COMMIT_STATES,
+  registerBridge,
+  createBridge,
+  listBridges,
 };

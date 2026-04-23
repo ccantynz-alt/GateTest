@@ -102,7 +102,7 @@ class SarifReporter {
           driver: {
             name: 'GateTest',
             version: '1.1.0',
-            informationUri: 'https://gatetest.io',
+            informationUri: 'https://gatetest.ai',
             rules,
           },
         },

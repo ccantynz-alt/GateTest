@@ -12,12 +12,21 @@
  * - Health check: verify GitHub is reachable before starting a scan
  *
  * Uses Node.js built-in https module — no external dependencies.
+ *
+ * Extends `HostBridge` — the host-agnostic contract (see
+ * src/core/host-bridge.js). Host-agnostic logic (report markdown, the
+ * `reportResults`/`postGateResult` convenience methods) lives on the base;
+ * this file only contains GitHub-specific primitives.
+ *
+ * TODO(gluecron): a GluecronBridge extending HostBridge will live at
+ * src/core/gluecron-bridge.js once Gluecron's API surface is confirmed.
  */
 
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const { HostBridge, registerBridge } = require('./host-bridge');
 
 const GITHUB_API_HOST = 'api.github.com';
 const GITHUB_API_VERSION = '2022-11-28';
@@ -309,14 +318,16 @@ async function apiRequest(method, urlPath, token, body) {
 }
 
 
-class GitHubBridge {
+class GitHubBridge extends HostBridge {
+  static get hostName() { return 'github'; }
+
   /**
    * @param {object} options
    * @param {string} [options.token] - GitHub token (PAT or GitHub App installation token).
    * @param {string} [options.projectRoot] - Project root for config file resolution.
    */
   constructor(options = {}) {
-    this.projectRoot = options.projectRoot || process.cwd();
+    super(options);
     this.token = options.token || resolveToken(this.projectRoot);
   }
 
@@ -760,10 +771,7 @@ class GitHubBridge {
    * @param {string} [options.context]   - Status context name (default: 'gatetest').
    */
   async setCommitStatus(owner, repo, sha, state, description, options = {}) {
-    const validStates = ['pending', 'success', 'failure', 'error'];
-    if (!validStates.includes(state)) {
-      throw new Error(`[GateTest] Invalid commit status state "${state}". Must be one of: ${validStates.join(', ')}`);
-    }
+    this._validateCommitState(state);
 
     const body = {
       state,
@@ -863,47 +871,10 @@ class GitHubBridge {
   }
 
   // ---------------------------------------------------------------------------
-  // Report posting
+  // Report posting — `postGateResult` and `reportResults` are inherited from
+  // HostBridge. They are host-agnostic and delegate to this bridge's
+  // `addPrComment` and `setCommitStatus` primitives above.
   // ---------------------------------------------------------------------------
-
-  /**
-   * Post a GateTest quality report as a formatted markdown comment on a PR.
-   *
-   * @param {string} owner     - Repository owner.
-   * @param {string} repo      - Repository name.
-   * @param {number} prNumber  - Pull request number.
-   * @param {object} summary   - GateTest run summary.
-   * @param {string}           summary.status       - 'passed' or 'failed'.
-   * @param {number}           summary.totalChecks   - Total number of checks run.
-   * @param {number}           summary.passed        - Number of checks that passed.
-   * @param {number}           summary.failed        - Number of checks that failed.
-   * @param {number}           summary.skipped       - Number of checks skipped.
-   * @param {number}           summary.duration      - Total duration in ms.
-   * @param {Array<object>}    summary.modules       - Per-module results.
-   * @param {Array<object>}    [summary.failures]    - Detailed failure info.
-   */
-  async postGateResult(owner, repo, prNumber, summary) {
-    const body = this._formatGateResultMarkdown(summary);
-    return this.addPrComment(owner, repo, prNumber, body);
-  }
-
-  /**
-   * Convenience method: set commit status AND post PR comment in one call.
-   * Derives the commit status state from the summary.
-   */
-  async reportResults(owner, repo, prNumber, sha, summary) {
-    const state = summary.status === 'passed' ? 'success' : 'failure';
-    const description = summary.status === 'passed'
-      ? `All ${summary.totalChecks} checks passed`
-      : `${summary.failed} of ${summary.totalChecks} checks failed`;
-
-    const [statusResult, commentResult] = await Promise.all([
-      this.setCommitStatus(owner, repo, sha, state, description),
-      this.postGateResult(owner, repo, prNumber, summary),
-    ]);
-
-    return { status: statusResult, comment: commentResult };
-  }
 
   // ---------------------------------------------------------------------------
   // Internal helpers
@@ -939,83 +910,11 @@ class GitHubBridge {
     });
   }
 
-  /**
-   * Format a GateTest summary object into a markdown PR comment.
-   */
-  _formatGateResultMarkdown(summary) {
-    const icon = summary.status === 'passed' ? ':white_check_mark:' : ':x:';
-    const title = summary.status === 'passed'
-      ? 'GateTest Quality Gate — PASSED'
-      : 'GateTest Quality Gate — FAILED';
-
-    const duration = summary.duration >= 1000
-      ? `${(summary.duration / 1000).toFixed(1)}s`
-      : `${summary.duration}ms`;
-
-    const lines = [];
-    lines.push(`## ${icon} ${title}`);
-    lines.push('');
-    lines.push('| Metric | Value |');
-    lines.push('|--------|-------|');
-    lines.push(`| **Total Checks** | ${summary.totalChecks} |`);
-    lines.push(`| **Passed** | ${summary.passed} |`);
-    lines.push(`| **Failed** | ${summary.failed} |`);
-    lines.push(`| **Skipped** | ${summary.skipped} |`);
-    lines.push(`| **Duration** | ${duration} |`);
-    lines.push('');
-
-    // Per-module breakdown.
-    if (summary.modules && summary.modules.length > 0) {
-      lines.push('### Module Results');
-      lines.push('');
-      lines.push('| Module | Status | Checks | Duration |');
-      lines.push('|--------|--------|--------|----------|');
-      for (const mod of summary.modules) {
-        const modIcon = mod.status === 'passed' ? ':white_check_mark:'
-          : mod.status === 'failed' ? ':x:'
-          : ':fast_forward:';
-        const modDuration = mod.duration >= 1000
-          ? `${(mod.duration / 1000).toFixed(1)}s`
-          : `${mod.duration}ms`;
-        const checkCount = mod.checks !== undefined ? mod.checks : '-';
-        lines.push(`| ${modIcon} ${mod.name} | ${mod.status} | ${checkCount} | ${modDuration} |`);
-      }
-      lines.push('');
-    }
-
-    // Failure details.
-    if (summary.failures && summary.failures.length > 0) {
-      lines.push('### Failures');
-      lines.push('');
-      for (const failure of summary.failures) {
-        lines.push(`<details>`);
-        lines.push(`<summary><b>${failure.module}</b>: ${failure.check}</summary>`);
-        lines.push('');
-        if (failure.expected !== undefined && failure.actual !== undefined) {
-          lines.push(`- **Expected:** ${failure.expected}`);
-          lines.push(`- **Actual:** ${failure.actual}`);
-        }
-        if (failure.file) {
-          lines.push(`- **File:** \`${failure.file}\`${failure.line ? `:${failure.line}` : ''}`);
-        }
-        if (failure.message) {
-          lines.push(`- **Details:** ${failure.message}`);
-        }
-        if (failure.suggestion) {
-          lines.push(`- **Suggested fix:** ${failure.suggestion}`);
-        }
-        lines.push('');
-        lines.push('</details>');
-        lines.push('');
-      }
-    }
-
-    lines.push('---');
-    lines.push(`<sub>Generated by <b>GateTest v1.0.0</b> at ${new Date().toISOString()}</sub>`);
-
-    return lines.join('\n');
-  }
 }
+
+// Auto-register this bridge under host name "github" so
+// createBridge('github', options) works without extra wiring.
+registerBridge(GitHubBridge.hostName, GitHubBridge);
 
 module.exports = {
   GitHubBridge,

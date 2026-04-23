@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
 
 interface ScanTier {
   name: string;
@@ -89,6 +89,18 @@ function stripeRequest(
 }
 
 export async function POST(req: NextRequest) {
+  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
+  return NextResponse.json(
+    {
+      status: "pre-launch",
+      message:
+        "Scan purchases are not yet available. Join the waitlist at gatetest.ai for launch notifications.",
+    },
+    { status: 503 }
+  );
+
+  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
+  /*
   if (!STRIPE_SECRET_KEY) {
     return NextResponse.json(
       { error: "Payments not configured yet" },
@@ -157,9 +169,16 @@ export async function POST(req: NextRequest) {
       sessionId: session.id,
     });
   } catch (err) {
+    // Never leak Stripe API internals / stack traces to the browser.
+    // Log server-side with full context; return a generic user-facing message.
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[GateTest] Checkout failed:", message);
+    return NextResponse.json(
+      { error: "Checkout failed. Please try again or contact support." },
+      { status: 500 }
+    );
   }
+  */
 }
 
 // GET — return available tiers

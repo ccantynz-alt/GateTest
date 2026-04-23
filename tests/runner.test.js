@@ -1,9 +1,12 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const { GateTestRunner, TestResult, Severity } = require('../src/core/runner');
 const { GateTestConfig } = require('../src/core/config');
+const { MemoryStore } = require('../src/core/memory');
 
 describe('TestResult', () => {
   it('should track check pass/fail', () => {
@@ -234,27 +237,32 @@ describe('GateTestRunner', () => {
   });
 
   it('should run auto-fixes when enabled', async () => {
-    const config = new GateTestConfig(path.resolve(__dirname, '..'));
-    const runner = new GateTestRunner(config, { autoFix: true });
-    let fixRan = false;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-runner-autofix-'));
+    try {
+      const config = new GateTestConfig(tmpDir);
+      const runner = new GateTestRunner(config, { autoFix: true });
+      let fixRan = false;
 
-    runner.register('fixable', {
-      async run(result) {
-        result.addCheck('fixme', false, {
-          severity: 'error',
-          autoFix: async () => {
-            fixRan = true;
-            return { fixed: true, description: 'Auto-fixed the issue' };
-          },
-        });
-      },
-    });
+      runner.register('fixable', {
+        async run(result) {
+          result.addCheck('fixme', false, {
+            severity: 'error',
+            autoFix: async () => {
+              fixRan = true;
+              return { fixed: true, description: 'Auto-fixed the issue' };
+            },
+          });
+        },
+      });
 
-    const summary = await runner.run(['fixable']);
-    assert.strictEqual(fixRan, true);
-    assert.strictEqual(summary.fixes.total, 1);
-    // After fix, the module should pass
-    assert.strictEqual(summary.gateStatus, 'PASSED');
+      const summary = await runner.run(['fixable']);
+      assert.strictEqual(fixRan, true);
+      assert.strictEqual(summary.fixes.total, 1);
+      // After fix, the module should pass
+      assert.strictEqual(summary.gateStatus, 'PASSED');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   it('should include diff metadata in summary', async () => {
@@ -275,25 +283,95 @@ describe('GateTestRunner', () => {
     assert.deepStrictEqual(summary.changedFiles, ['src/index.js', 'src/core/runner.js']);
   });
 
+  it('records applied fixes into MemoryStore (memory-aware auto-fix)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-runner-memfix-'));
+    try {
+      const config = new GateTestConfig(tmpDir);
+      const runner = new GateTestRunner(config, { autoFix: true });
+
+      runner.register('pylike', {
+        async run(result) {
+          result.addCheck('python:eval:src/a.py:10', false, {
+            severity: 'error',
+            autoFix: async () => ({
+              fixed: true,
+              description: 'Replaced eval with ast.literal_eval',
+              filesChanged: ['src/a.py'],
+            }),
+          });
+          result.addCheck('python:eval:src/b.py:5', false, {
+            severity: 'error',
+            autoFix: async () => ({
+              fixed: true,
+              description: 'Replaced eval with direct call',
+              filesChanged: ['src/b.py'],
+            }),
+          });
+        },
+      });
+
+      await runner.run(['pylike']);
+
+      const store = new MemoryStore(tmpDir);
+      const db = store.getFixPatterns();
+      assert.ok(db.patterns['python:eval'], 'python:eval pattern must be persisted');
+      assert.strictEqual(db.patterns['python:eval'].count, 2);
+      // Newest example first, with description
+      assert.ok(db.patterns['python:eval'].examples[0].description.includes('direct call'));
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not record fix when auto-fix fails', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-runner-nofix-'));
+    try {
+      const config = new GateTestConfig(tmpDir);
+      const runner = new GateTestRunner(config, { autoFix: true });
+
+      runner.register('nope', {
+        async run(result) {
+          result.addCheck('rust:unwrap:src/main.rs:3', false, {
+            severity: 'warning',
+            autoFix: async () => ({ fixed: false }),
+          });
+        },
+      });
+
+      await runner.run(['nope']);
+
+      const store = new MemoryStore(tmpDir);
+      const db = store.getFixPatterns();
+      assert.deepStrictEqual(db.patterns, {}, 'no patterns should be recorded when fix failed');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('should report fix details in summary', async () => {
-    const config = new GateTestConfig(path.resolve(__dirname, '..'));
-    const runner = new GateTestRunner(config, { autoFix: true });
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-runner-fixdetails-'));
+    try {
+      const config = new GateTestConfig(tmpDir);
+      const runner = new GateTestRunner(config, { autoFix: true });
 
-    runner.register('fixable', {
-      async run(result) {
-        result.addCheck('fix1', false, {
-          severity: 'error',
-          autoFix: async () => ({ fixed: true, description: 'Removed trailing space', filesChanged: ['a.js'] }),
-        });
-        result.addCheck('fix2', false, {
-          severity: 'error',
-          autoFix: async () => ({ fixed: true, description: 'Added semicolon', filesChanged: ['b.js'] }),
-        });
-      },
-    });
+      runner.register('fixable', {
+        async run(result) {
+          result.addCheck('fix1', false, {
+            severity: 'error',
+            autoFix: async () => ({ fixed: true, description: 'Removed trailing space', filesChanged: ['a.js'] }),
+          });
+          result.addCheck('fix2', false, {
+            severity: 'error',
+            autoFix: async () => ({ fixed: true, description: 'Added semicolon', filesChanged: ['b.js'] }),
+          });
+        },
+      });
 
-    const summary = await runner.run(['fixable']);
-    assert.strictEqual(summary.fixes.total, 2);
-    assert.strictEqual(summary.fixes.details.length, 2);
+      const summary = await runner.run(['fixable']);
+      assert.strictEqual(summary.fixes.total, 2);
+      assert.strictEqual(summary.fixes.details.length, 2);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

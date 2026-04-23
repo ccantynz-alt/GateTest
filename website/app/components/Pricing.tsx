@@ -1,6 +1,11 @@
-"use client";
-
-import { useState } from "react";
+// PRE-LAUNCH: checkout is disabled — see website/app/api/checkout/route.ts.
+// CTAs link to the waitlist instead of starting checkout. When attorney
+// review clears and Stripe is re-enabled, restore the `"use client"`
+// directive, the `useState` imports, the `handleCheckout` handler, the
+// `<input id="repo-url" />` block, and swap the `<a>` CTAs back to the
+// `<button onClick={handleCheckout}>` shape.
+const WAITLIST_HREF =
+  "mailto:hello@gatetest.ai?subject=GateTest%20waitlist&body=Please%20add%20me%20to%20the%20GateTest%20launch%20waitlist.";
 
 const scanPlans = [
   {
@@ -19,7 +24,7 @@ const scanPlans = [
       "Detailed report with file & line numbers",
       "Pay only when scan completes",
     ],
-    cta: "Run Quick Scan",
+    cta: "Join waitlist",
     highlight: false,
   },
   {
@@ -33,7 +38,7 @@ const scanPlans = [
     modules: "All 22 modules",
     features: [
       "Everything in Quick Scan",
-      "Security (OWASP, XSS, SQLi, Docker)",
+      "Security (OWASP, XSS, SQLi, SSRF, ReDoS, TLS, cookies)",
       "Accessibility (WCAG 2.2 AAA)",
       "Supply chain — typosquats + license compliance",
       "IaC security — Dockerfile, K8s, Terraform",
@@ -44,58 +49,19 @@ const scanPlans = [
       "AI code review by Claude",
       "Performance, SEO, links, compatibility, and more",
     ],
-    cta: "Run Full Scan",
+    cta: "Join waitlist",
     highlight: true,
   },
 ];
 
 const comingSoon = [
   "Auto-fix PRs — GateTest creates a PR that fixes the issues",
-  "Live browser testing — real Playwright-powered page testing",
+  "Live browser testing — real browser-powered page testing",
   "Visual regression — screenshot comparison between deploys",
   "Continuous monitoring — scan on every push, $49/month",
 ];
 
 export default function Pricing() {
-  const [repoUrl, setRepoUrl] = useState("");
-  const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleCheckout(tierId: string) {
-    if (!repoUrl || !repoUrl.includes("github.com")) {
-      setError("Please enter a valid GitHub repository URL above");
-      const input = document.getElementById("repo-url");
-      if (input) {
-        input.scrollIntoView({ behavior: "smooth", block: "center" });
-        input.focus();
-      }
-      return;
-    }
-
-    setLoading(tierId);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: tierId, repoUrl }),
-      });
-
-      const data = await res.json();
-
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      } else {
-        setError(data.error || "Checkout is not available yet. Coming soon!");
-      }
-    } catch {
-      setError("Checkout is not available yet. Coming soon!");
-    } finally {
-      setLoading(null);
-    }
-  }
-
   return (
     <section id="pricing" className="py-24 px-6 section-accent">
       <div className="relative z-10 mx-auto max-w-5xl">
@@ -120,23 +86,13 @@ export default function Pricing() {
           </div>
         </div>
 
-        {/* Repo URL input */}
-        <div className="max-w-xl mx-auto mb-12">
-          <label htmlFor="repo-url" className="block text-sm font-medium text-muted mb-2 text-center">
-            1. Enter your GitHub repo URL
-          </label>
-          <input
-            id="repo-url"
-            type="url"
-            value={repoUrl}
-            onChange={(e) => { setRepoUrl(e.target.value); setError(null); }}
-            placeholder="https://github.com/your-org/your-repo"
-            className={`w-full px-4 py-3 rounded-xl border bg-white text-foreground placeholder:text-muted/50 focus:outline-none text-sm transition-colors ${
-              error ? "border-danger focus:border-danger" : "border-border-strong focus:border-accent"
-            }`}
-          />
-          {error && <p className="text-sm text-danger mt-2 text-center">{error}</p>}
-          <p className="text-xs text-muted mt-2 text-center">2. Choose a scan tier below</p>
+        {/* PRE-LAUNCH notice (replaces the repo URL + tier-picker input) */}
+        <div className="max-w-xl mx-auto mb-12 text-center">
+          <div className="inline-block rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Pre-launch:</span>{" "}
+            scans are not yet available for purchase. Join the waitlist below
+            and we&apos;ll email you the moment checkout opens.
+          </div>
         </div>
 
         {/* Scan tiers */}
@@ -166,17 +122,14 @@ export default function Pricing() {
               </div>
               <p className="text-sm text-muted mb-5">{plan.description}</p>
 
-              <button
-                onClick={() => handleCheckout(plan.id)}
-                disabled={loading === plan.id}
-                className={`block w-full text-center py-3 px-5 rounded-xl font-semibold text-sm transition-all mb-6 cursor-pointer disabled:opacity-50 ${
-                  plan.highlight
-                    ? "btn-primary"
-                    : "btn-secondary"
+              <a
+                href={WAITLIST_HREF}
+                className={`block w-full text-center py-3 px-5 rounded-xl font-semibold text-sm transition-all mb-6 cursor-pointer ${
+                  plan.highlight ? "btn-primary" : "btn-secondary"
                 }`}
               >
-                {loading === plan.id ? "Redirecting..." : plan.cta}
-              </button>
+                {plan.cta}
+              </a>
 
               <ul className="space-y-2.5 mt-auto">
                 {plan.features.map((feature) => (

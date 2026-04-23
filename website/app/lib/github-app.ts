@@ -88,27 +88,46 @@ export function getPrivateKey(): string {
   let key = process.env.GATETEST_PRIVATE_KEY || "";
   if (!key) throw new Error("GATETEST_PRIVATE_KEY is not set");
 
-  // Strip wrapping quotes (single or double) that env-var tooling sometimes adds.
+  // Strip wrapping quotes that env-var tooling sometimes adds.
   if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
     key = key.slice(1, -1);
   }
 
-  // Convert any literal "\n" sequences to real newlines. Safe to run even if
-  // the key already has real newlines — those aren't preceded by a backslash.
+  // Convert escaped newlines to real newlines (happens with JSON/shell escapes).
   key = key.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
 
   // Normalise Windows line endings.
-  key = key.replace(/\r\n/g, "\n");
+  key = key.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  // If it's base64 (no BEGIN marker) try a one-shot decode.
+  // If no BEGIN marker, try base64 decode (some users paste just the body).
   if (!key.includes("BEGIN")) {
     try {
       const decoded = Buffer.from(key, "base64").toString("utf-8");
       if (decoded.includes("BEGIN")) key = decoded;
     } catch {
-      // fall through — we'll fail with a clearer error below
+      // fall through
     }
   }
+
+  // NEW: If key is all on one line (pasted as single blob), reconstruct proper PEM format.
+  // Common problem: Vercel env var field strips newlines when pasted.
+  if (key.includes("BEGIN") && !key.includes("\n")) {
+    // Extract the header, body, and footer
+    const headerMatch = key.match(/(-----BEGIN [A-Z ]+-----)(.*?)(-----END [A-Z ]+-----)/);
+    if (headerMatch) {
+      const [, header, body, footer] = headerMatch;
+      // Break body into 64-char lines (standard PEM format)
+      const cleanBody = body.replace(/\s+/g, "");
+      const lines: string[] = [];
+      for (let i = 0; i < cleanBody.length; i += 64) {
+        lines.push(cleanBody.slice(i, i + 64));
+      }
+      key = `${header}\n${lines.join("\n")}\n${footer}\n`;
+    }
+  }
+
+  // Ensure proper PEM ending (must end with newline after -----END-----)
+  if (!key.endsWith("\n")) key += "\n";
 
   if (!key.includes("BEGIN") || !key.includes("END")) {
     throw new Error(
@@ -117,15 +136,30 @@ export function getPrivateKey(): string {
     );
   }
 
-  // Validate by parsing. This turns OpenSSL's opaque "DECODER routines::unsupported"
-  // into a clearer error surface for callers.
+  // Validate by parsing. If PKCS#1 (BEGIN RSA PRIVATE KEY) fails, try converting.
   try {
     crypto.createPrivateKey({ key, format: "pem" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+
+    // Try one more recovery: if key has spaces instead of newlines in body
+    if (msg.includes("DECODER") || msg.includes("unsupported")) {
+      try {
+        const recovered = key
+          .replace(/(-----BEGIN [A-Z ]+-----)\s+/, "$1\n")
+          .replace(/\s+(-----END [A-Z ]+-----)/, "\n$1")
+          .replace(/([A-Za-z0-9+/=])\s+([A-Za-z0-9+/=])/g, "$1\n$2");
+        crypto.createPrivateKey({ key: recovered, format: "pem" });
+        return recovered;
+      } catch {
+        // fall through to original error
+      }
+    }
+
     throw new Error(
       `GATETEST_PRIVATE_KEY is not a valid PEM (${msg}). ` +
-        "Re-paste the .pem from GitHub — make sure newlines are preserved."
+        "Re-paste the .pem from GitHub — make sure the ENTIRE file contents are copied, " +
+        "including the -----BEGIN RSA PRIVATE KEY----- and -----END RSA PRIVATE KEY----- lines."
     );
   }
 

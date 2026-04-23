@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PreLaunchBanner from "./components/PreLaunchBanner";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://gatetest.io"),
+  metadataBase: new URL("https://gatetest.ai"),
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
     "22 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay only when the scan completes.",
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
     "SEO audit",
   ],
   alternates: {
-    canonical: "https://gatetest.io",
+    canonical: "https://gatetest.ai",
   },
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
@@ -87,7 +88,7 @@ export default function RootLayout({
               name: "GateTest",
               applicationCategory: "DeveloperApplication",
               operatingSystem: "Any",
-              url: "https://gatetest.io",
+              url: "https://gatetest.ai",
               description:
                 "AI-powered QA platform that scans your entire codebase with 22 modules — security, supply chain, auth flaws, CI hardening, and more. Pay only when the scan completes.",
               offers: [
@@ -110,6 +111,7 @@ export default function RootLayout({
             }),
           }}
         />
+        <PreLaunchBanner />
         {children}
       </body>
     </html>

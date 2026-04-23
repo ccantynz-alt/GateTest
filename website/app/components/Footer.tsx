@@ -1,6 +1,7 @@
 export default function Footer() {
   return (
-    <footer className="border-t border-border py-12 px-6 bg-background-warm">
+    <footer className="relative border-t border-border py-12 px-6 bg-background-warm">
+      <div className="footer-accent-bar absolute top-0 left-0 right-0" aria-hidden="true" />
       <div className="mx-auto max-w-6xl">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           <div>
@@ -41,7 +42,7 @@ export default function Footer() {
             <h4 className="font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-2">
               <li><a href="/#features" className="text-sm text-muted hover:text-foreground transition-colors">About</a></li>
-              <li><a href="mailto:hello@gatetest.io" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
+              <li><a href="mailto:hello@gatetest.ai" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
               <li><a href="/legal/privacy" className="text-sm text-muted hover:text-foreground transition-colors">Privacy Policy</a></li>
               <li><a href="/legal/terms" className="text-sm text-muted hover:text-foreground transition-colors">Terms of Service</a></li>
               <li><a href="/legal/refunds" className="text-sm text-muted hover:text-foreground transition-colors">Refund Policy</a></li>

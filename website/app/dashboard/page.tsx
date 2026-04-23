@@ -1,6 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import FindingsPanel from "@/app/components/FindingsPanel";
+import SiblingProducts from "@/app/components/SiblingProducts";
+
+interface ModuleSummary {
+  name: string;
+  status: "passed" | "failed" | "skipped" | "pending" | "running";
+  checks: number;
+  issues: number;
+  duration: number;
+  details?: string[];
+  skipped?: string;
+}
 
 interface ScanRecord {
   id: string;
@@ -173,17 +185,20 @@ export default function Dashboard() {
 
         {/* Empty state */}
         {scans.length === 0 && (
-          <div className="card p-12 text-center">
-            <p className="text-lg font-bold mb-2">No scans yet</p>
-            <p className="text-muted text-sm mb-6">
-              Run your first scan to see results here.
-            </p>
-            <a
-              href="/#pricing"
-              className="btn-primary px-6 py-3 text-sm inline-block"
-            >
-              Scan Your First Repo
-            </a>
+          <div className="space-y-6">
+            <div className="card p-12 text-center">
+              <p className="text-lg font-bold mb-2">No scans yet</p>
+              <p className="text-muted text-sm mb-6">
+                Run your first scan to see results here.
+              </p>
+              <a
+                href="/#pricing"
+                className="btn-primary px-6 py-3 text-sm inline-block"
+              >
+                Scan Your First Repo
+              </a>
+            </div>
+            <SiblingProducts />
           </div>
         )}
 
@@ -254,66 +269,57 @@ export default function Dashboard() {
                       )}
 
                       {modules.length > 0 ? (
-                        <div className="space-y-2">
-                          {modules.map((mod) => {
-                            const status = mod.status as string;
-                            const details =
-                              (mod.details as string[]) || [];
-                            return (
-                              <div
-                                key={mod.name as string}
-                                className={`p-3 rounded-lg border ${
-                                  status === "passed"
-                                    ? "border-green-100 bg-white"
-                                    : status === "failed"
-                                      ? "border-red-100 bg-red-50/30"
-                                      : "border-border bg-white"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`text-xs font-bold ${
-                                        status === "passed"
-                                          ? "text-success"
-                                          : status === "failed"
-                                            ? "text-danger"
-                                            : "text-muted"
-                                      }`}
-                                    >
-                                      {status === "passed"
-                                        ? "PASS"
+                        <div className="space-y-4">
+                          {/* Module summary grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {modules.map((mod) => {
+                              const status = mod.status as string;
+                              const issues = (mod.issues as number) || 0;
+                              const name = mod.name as string;
+                              return (
+                                <div
+                                  key={name}
+                                  className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs ${
+                                    status === "passed"
+                                      ? "border-green-100 bg-white"
+                                      : status === "failed"
+                                        ? "border-red-200 bg-red-50/40"
+                                        : "border-border bg-white"
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-[10px] ${
+                                      status === "passed"
+                                        ? "bg-green-100 text-green-700"
                                         : status === "failed"
-                                          ? "FAIL"
-                                          : "SKIP"}
-                                    </span>
-                                    <span className="font-medium text-sm">
-                                      {mod.name as string}
-                                    </span>
-                                  </div>
-                                  <span className="text-xs text-muted">
-                                    {mod.checks as number} checks
-                                    {(mod.issues as number) > 0 &&
-                                      ` · ${mod.issues} issues`}
-                                    {(mod.duration as number) > 0 &&
-                                      ` · ${mod.duration}ms`}
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
+                                    {status === "passed"
+                                      ? "✓"
+                                      : status === "failed"
+                                        ? "!"
+                                        : "–"}
                                   </span>
+                                  <span className="font-medium text-foreground truncate flex-1">
+                                    {name}
+                                  </span>
+                                  {issues > 0 && (
+                                    <span className="text-red-600 font-semibold">
+                                      {issues}
+                                    </span>
+                                  )}
                                 </div>
-                                {details.length > 0 && (
-                                  <ul className="mt-2 space-y-1">
-                                    {details.map((d, i) => (
-                                      <li
-                                        key={i}
-                                        className="text-xs text-muted font-mono pl-6"
-                                      >
-                                        → {d}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
+
+                          {/* Beautiful findings panel */}
+                          <FindingsPanel
+                            modules={modules as unknown as ModuleSummary[]}
+                            repoUrl={scan.repo_url}
+                          />
                         </div>
                       ) : (
                         <p className="text-sm text-muted">

@@ -26,7 +26,7 @@ export default function Cta() {
               <span className="ml-3 text-xs text-muted">We scan it for you</span>
             </div>
             <div className="p-5 text-left">
-              <p className="text-sm font-bold text-foreground mb-2">Scan + Fix &mdash; $199</p>
+              <p className="text-sm font-bold text-foreground mb-2">Full Scan &mdash; $99</p>
               <p className="text-xs text-muted mb-3">
                 22 modules. Full report. Auto-fix PR lands in your repo.
               </p>

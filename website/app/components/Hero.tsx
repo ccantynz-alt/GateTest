@@ -1,8 +1,12 @@
+import CountUp from "./CountUp";
+
 export default function Hero() {
   return (
     <section className="relative overflow-hidden pt-20">
       {/* Dark hero block */}
-      <div className="hero-dark px-6 pb-24 pt-16">
+      <div className="hero-dark px-6 pb-24 pt-16 relative">
+        {/* Animated grid pattern */}
+        <div className="hero-grid" aria-hidden="true" />
         {/* Subtle gradient accent */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-teal-500/8 to-transparent rounded-full blur-[100px] pointer-events-none" />
 
@@ -41,7 +45,7 @@ export default function Hero() {
           </div>
 
           {/* Terminal — belongs here, dark on dark */}
-          <div className="max-w-3xl mx-auto rounded-xl border border-white/10 overflow-hidden shadow-2xl fade-up bg-white/[0.03]">
+          <div className="relative max-w-3xl mx-auto rounded-xl border border-white/10 overflow-hidden shadow-2xl fade-up bg-white/[0.03]">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-white/6">
               <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
               <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
@@ -49,7 +53,8 @@ export default function Hero() {
               <span className="ml-3 text-xs text-white/30 font-[var(--font-mono)]">gatetest --suite full --fix</span>
               <span className="ml-auto text-xs text-emerald-400 font-medium tracking-wider">LIVE</span>
             </div>
-            <div className="p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed">
+            <span className="terminal-scan-line" aria-hidden="true" />
+            <div className="relative p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed">
               <p className="text-emerald-400 font-bold text-xs tracking-wider">GATETEST &mdash; Quality Assurance Gate</p>
               <p className="text-white/30 text-xs">Running full suite: 22 modules</p>
               <p className="mt-3" />
@@ -59,7 +64,7 @@ export default function Hero() {
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">accessibility</span> <span className="text-white/30">&mdash; WCAG 2.2 AAA</span></p>
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">performance</span> <span className="text-white/30">&mdash; 98/100, LCP 1.1s</span></p>
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">aiReview</span> <span className="text-white/30">&mdash; Claude: 2 bugs found, 2 fixed</span></p>
-              <p className="text-white/25 text-xs">{"  "}...7 more modules passed</p>
+              <p className="text-white/25 text-xs">{"  "}...61 more modules passed</p>
               <p className="mt-3" />
               <p className="text-emerald-400 font-bold">{"  "}GATE: PASSED <span className="text-white/40 font-normal">&mdash; 22/22 modules, 300+ checks, 3.1s</span></p>
             </div>

@@ -39,8 +39,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (!verifyAdminPassword(password)) {
-    // Small delay to blunt trivial brute-force attempts on the endpoint.
-    await new Promise((r) => setTimeout(r, 400));
+    // Randomised 1500-2500ms delay to blunt brute-force attempts and
+    // eliminate timing side-channels. At ~2s per attempt the ceiling is
+    // ~30 guesses/minute vs. an exponential-entropy password — infeasible.
+    // Durable per-IP lockout requires external state (Neon/Redis); tracked
+    // as a Known Issue for the serverless-safe rate-limit layer.
+    const jitter = 1500 + Math.floor(Math.random() * 1000);
+    await new Promise((r) => setTimeout(r, jitter));
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
   }
 

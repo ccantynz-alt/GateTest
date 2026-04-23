@@ -91,6 +91,39 @@ export async function POST(req: NextRequest) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`;
 
+    await sql`CREATE TABLE IF NOT EXISTS installations (
+      id BIGSERIAL PRIMARY KEY,
+      host TEXT NOT NULL,
+      installation_id TEXT NOT NULL,
+      customer_email TEXT,
+      customer_login TEXT,
+      setup_action TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (host, installation_id)
+    )`;
+
+    // Signal Bus E1 — scan_queue backs the async push-event pipeline from
+    // Gluecron. Rows are INSERTed by /api/events/push and claimed by the
+    // cron-driven consumer at /api/scan/worker/tick. event_id is the
+    // caller-supplied idempotency key.
+    await sql`CREATE TABLE IF NOT EXISTS scan_queue (
+      id BIGSERIAL PRIMARY KEY,
+      event_id TEXT UNIQUE NOT NULL,
+      repository TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      ref TEXT,
+      pull_request_number INT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      attempts INT NOT NULL DEFAULT 0,
+      last_error TEXT,
+      result_json JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
+      next_run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_session ON scans(session_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_email ON scans(customer_email)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status)`;
@@ -101,11 +134,49 @@ export async function POST(req: NextRequest) {
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_key ON api_calls(api_key_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_created ON api_calls(created_at)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_api_calls_idem ON api_calls(idempotency_key)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_installations_host_id ON installations(host, installation_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_installations_customer_email ON installations(customer_email)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_ready ON scan_queue (status, next_run_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_repo_sha ON scan_queue (repository, sha)`;
+
+    // Watchdog: continuously monitored domains/repos
+    await sql`CREATE TABLE IF NOT EXISTS watches (
+      id BIGSERIAL PRIMARY KEY,
+      owner_login TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target TEXT NOT NULL,
+      interval_minutes INTEGER NOT NULL DEFAULT 15,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      last_checked_at TIMESTAMPTZ,
+      last_status TEXT,
+      last_issue_count INTEGER DEFAULT 0,
+      auto_fix_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (owner_login, target_type, target)
+    )`;
+
+    await sql`CREATE TABLE IF NOT EXISTS heal_history (
+      id BIGSERIAL PRIMARY KEY,
+      watch_id BIGINT REFERENCES watches(id) ON DELETE CASCADE,
+      triggered_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL,
+      before_issue_count INTEGER,
+      after_issue_count INTEGER,
+      pr_url TEXT,
+      details JSONB
+    )`;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_watches_owner ON watches(owner_login)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_watches_enabled_checked ON watches(enabled, last_checked_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_heal_history_watch ON heal_history(watch_id, triggered_at DESC)`;
 
     return NextResponse.json({
       ok: true,
-      tables: ["scans", "customers", "api_keys", "api_calls"],
-      indexes: 10,
+      tables: ["scans", "customers", "api_keys", "api_calls", "installations", "scan_queue", "watches", "heal_history"],
+      indexes: 17,
       message: "Schema initialized (idempotent — safe to run multiple times)",
     });
   } catch (err) {

@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/", "/admin", "/scan/status"],
       },
     ],
-    sitemap: "https://gatetest.io/sitemap.xml",
+    sitemap: "https://gatetest.ai/sitemap.xml",
   };
 }

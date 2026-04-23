@@ -1,6 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+
+interface FailedFile {
+  file: string;
+  issues: string[];
+  reason: string;
+}
 
 interface FixResult {
   status: string;
@@ -11,6 +18,7 @@ interface FixResult {
   message?: string;
   error?: string;
   errors?: string[];
+  failedFiles?: FailedFile[];
 }
 
 interface AdminPanelProps {
@@ -89,9 +97,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const [guidanceLoading, setGuidanceLoading] = useState(false);
+  const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"scan" | "scans" | "customers" | "keys">("scan");
+  const [activeTab, setActiveTab] = useState<"scan" | "server" | "nuclear" | "watchdog" | "scans" | "customers" | "keys">("scan");
   const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
   const [keyName, setKeyName] = useState("");
   const [keyCustomer, setKeyCustomer] = useState("");
@@ -179,49 +189,63 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
   }
 
-  async function runScan() {
+  function runScan() {
     if (!repoUrl.includes("github.com")) {
       setError("Enter a valid GitHub repo URL");
       return;
     }
-
     setScanning(true);
     setResult(null);
+    setFixResult(null);
+    setGuidance(null);
     setError("");
-
-    try {
-      const res = await fetch("/api/scan/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, tier }),
-      });
-      const data = await res.json();
-      setResult(data);
-      // Refresh DB data after scan
-      loadDbData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setScanning(false);
-    }
   }
 
   async function fixIssues() {
     if (!result || !repoUrl) return;
     const failedMods = modules.filter((m) => (m.status as string) === "failed");
+
+    // Parse issues aggressively — extract file paths from multiple formats
     const issues = failedMods.flatMap((m) => {
       const details = (m.details as string[]) || [];
       return details.map((d) => {
-        const colonIdx = d.indexOf(":");
-        const file = colonIdx > 0 ? d.slice(0, colonIdx).trim() : "";
-        const issue = colonIdx > 0 ? d.slice(colonIdx + 1).trim() : d;
-        return { file, issue, module: m.name as string };
-      });
-    }).filter((i) => i.file);
+        // Format 1: "path/to/file.js:42: message" or "path/to/file.js: message"
+        let file = "";
+        let issue = d;
+        let line: number | undefined;
 
-    if (issues.length === 0) {
-      setError("No fixable issues found (issues need file paths)");
+        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
+        if (fileLineMatch) {
+          file = fileLineMatch[1];
+          line = Number(fileLineMatch[2]);
+          issue = fileLineMatch[3];
+        } else {
+          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
+        }
+
+        // Format 2: "Missing <filename>" → treat as create-file issue
+        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+        if (!file && missingMatch) {
+          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
+          issue = `CREATE_FILE: ${d}`;
+        }
+
+        return { file, issue, module: m.name as string, line };
+      });
+    });
+
+    const fixable = issues.filter((i) => i.file);
+    const unfixable = issues.filter((i) => !i.file);
+
+    if (fixable.length === 0) {
+      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review (config, infrastructure, or architectural changes).`);
       return;
+    }
+
+    if (unfixable.length > 0) {
+      // eslint-disable-next-line no-console
+      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
     }
 
     setFixing(true);
@@ -238,6 +262,33 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       setFixResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fix failed");
+    } finally {
+      setFixing(false);
+    }
+  }
+
+  async function retryFailedFiles() {
+    if (!fixResult?.failedFiles?.length || !repoUrl) return;
+    // Replay the exact file-level issues that hit the API-unavailable path.
+    // Each failedFile's `issues[]` entry is the same shape the first submission
+    // used (free-form strings), so we re-pack them with the file pointer for
+    // the fix route.
+    const issues = fixResult.failedFiles.flatMap((ff) =>
+      ff.issues.map((i) => ({ file: ff.file, issue: i, module: "retry" })),
+    );
+
+    setFixing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl, issues }),
+      });
+      const data = await res.json() as FixResult;
+      setFixResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
     } finally {
       setFixing(false);
     }
@@ -262,66 +313,80 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const stats = dbData?.stats;
 
   return (
-    <div className="min-h-screen bg-background px-6 py-12">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">GateTest Admin</h1>
-            <p className="text-sm text-muted">
-              Signed in as <span className="font-mono">{adminLogin}</span>
-            </p>
-          </div>
+    <div className="min-h-screen bg-[#0a0a12]">
+      {/* Dark command center header */}
+      <div className="border-b border-white/8 px-6 py-5">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
+              <span className="text-white font-bold text-lg font-[var(--font-mono)]">G</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Command Center</h1>
+              <p className="text-xs text-white/40">
+                Signed in as <span className="font-mono text-emerald-400">{adminLogin}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
             <a
               href="/admin/health"
-              className="text-sm px-3 py-1.5 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors font-medium"
+              className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors font-medium"
             >
-              Run Self-Test
+              Self-Test
             </a>
-            <a href="/" className="text-sm text-muted hover:text-foreground">
-              &larr; Back to site
+            <a href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+              &larr; Site
             </a>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-6xl mx-auto px-6 py-6">
         {/* Stats bar */}
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.total_scans}</p>
-              <p className="text-xs text-muted">Total Scans</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.total_scans}</p>
+              <p className="text-xs text-white/40">Total Scans</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.total_customers}</p>
-              <p className="text-xs text-muted">Customers</p>
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.total_customers}</p>
+              <p className="text-xs text-white/40">Customers</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-emerald-400">
                 ${Number(stats.total_revenue || 0).toFixed(0)}
               </p>
-              <p className="text-xs text-muted">Revenue</p>
+              <p className="text-xs text-white/40">Revenue</p>
             </div>
-            <div className="card p-4 text-center">
-              <p className="text-2xl font-bold">{stats.avg_score || 0}</p>
-              <p className="text-xs text-muted">Avg Score</p>
+            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
+              <p className="text-2xl font-bold text-white">{stats.avg_score || 0}</p>
+              <p className="text-xs text-white/40">Avg Score</p>
             </div>
           </div>
         )}
 
-        {/* Tab navigation */}
-        <div className="flex gap-1 mb-6 border-b border-border">
-          {(["scan", "scans", "customers", "keys"] as const).map((tab) => (
+        {/* Tab navigation — dark themed */}
+        <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto">
+          {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab
-                  ? "border-accent text-foreground"
-                  : "border-transparent text-muted hover:text-foreground"
-              }`}
+                  ? "border-emerald-400 text-white"
+                  : "border-transparent text-white/40 hover:text-white/70"
+              } ${tab === "nuclear" ? "font-bold text-red-400" : ""}`}
             >
               {tab === "scan"
-                ? "Run Scan"
+                ? "Repo Scan"
+                : tab === "server"
+                ? "Server Scan"
+                : tab === "nuclear"
+                ? "☢ Nuclear Scan"
+                : tab === "watchdog"
+                ? "Watchdog"
                 : tab === "scans"
                 ? "Recent Scans"
                 : tab === "customers"
@@ -360,6 +425,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 >
                   <option value="quick">Quick (4 modules)</option>
                   <option value="full">Full (22 modules)</option>
+                  <option value="full">Full (67 modules)</option>
                 </select>
                 <button
                   onClick={runScan}
@@ -372,11 +438,51 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               {error && <p className="text-danger text-sm mt-3">{error}</p>}
             </div>
 
-            {scanning && (
-              <div className="card p-8 text-center">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-muted">Scanning {repoUrl}...</p>
-              </div>
+            {scanning && repoUrl && (
+              <LiveScanTerminal
+                repoUrl={repoUrl}
+                tier={tier}
+                onComplete={(data) => {
+                  setResult(data);
+                  setScanning(false);
+                  loadDbData();
+                  // Auto-fix: if issues found, automatically trigger fix
+                  const issues = (data.totalIssues as number) || 0;
+                  if (issues > 0) {
+                    const mods = (data.modules as Array<Record<string, unknown>>) || [];
+                    const failed = mods.filter((m) => (m.status as string) === "failed");
+                    const fixable = failed.flatMap((m) => {
+                      const details = (m.details as string[]) || [];
+                      return details.map((d) => {
+                        const fMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8})(?::(\d+))?(?:\s*[-—:]\s*|\s+)(.+)$/);
+                        if (fMatch) return { file: fMatch[1], issue: fMatch[3], module: m.name as string };
+                        const fOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+                        if (fOnly) return { file: fOnly[1], issue: fOnly[2], module: m.name as string };
+                        const missing = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+                        if (missing) return { file: missing[1], issue: `CREATE_FILE: ${d}`, module: m.name as string };
+                        return { file: "", issue: d, module: m.name as string };
+                      });
+                    }).filter((i) => i.file);
+
+                    if (fixable.length > 0) {
+                      setFixing(true);
+                      fetch("/api/scan/fix", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ repoUrl, issues: fixable }),
+                      })
+                        .then((r) => r.json())
+                        .then((d) => setFixResult(d as FixResult))
+                        .catch((e) => setError(e instanceof Error ? e.message : "Fix failed"))
+                        .finally(() => setFixing(false));
+                    }
+                  }
+                }}
+                onError={(err) => {
+                  setError(err);
+                  setScanning(false);
+                }}
+              />
             )}
 
             {result && !scanning && (
@@ -420,14 +526,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     </button>
                     {totalIssues > 0 && (
                       <>
-                        <button
-                          onClick={fixIssues}
-                          disabled={fixing}
-                          className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
-                          style={{ background: "#059669" }}
-                        >
-                          {fixing ? "AI Fixing..." : `Fix ${totalIssues} Issues (AI + PR)`}
-                        </button>
+                        {!fixResult && !fixing && (
+                          <button
+                            onClick={fixIssues}
+                            disabled={fixing}
+                            className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                            style={{ background: "#059669" }}
+                          >
+                            Re-fix {totalIssues} Issues (AI + PR)
+                          </button>
+                        )}
+                        {fixing && (
+                          <span className="text-xs text-accent font-medium animate-pulse">AI fixing issues automatically...</span>
+                        )}
                         <button
                           onClick={() => {
                             const failedMods = modules.filter((m) => (m.status as string) === "failed");
@@ -443,10 +554,77 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                         >
                           Copy Issues
                         </button>
+                        <button
+                          onClick={async () => {
+                            setGuidanceLoading(true);
+                            setGuidance(null);
+                            const failedModulesLocal = modules.filter((m) => (m.status as string) === "failed");
+                            const allIssues = failedModulesLocal.flatMap((m) => {
+                              const details = (m.details as string[]) || [];
+                              return details.map((d) => ({ module: m.name as string, detail: d }));
+                            });
+                            try {
+                              const res = await fetch("/api/scan/guidance", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ issues: allIssues }),
+                              });
+                              const data = await res.json();
+                              setGuidance(data.guidance || []);
+                            } catch {
+                              setError("Could not generate guidance");
+                            } finally {
+                              setGuidanceLoading(false);
+                            }
+                          }}
+                          disabled={guidanceLoading}
+                          className="btn-secondary px-4 py-2 text-xs disabled:opacity-50"
+                        >
+                          {guidanceLoading ? "Generating..." : "Manual Fix Guide"}
+                        </button>
                       </>
                     )}
                   </div>
                 </div>
+
+                {/* Manual guidance for unfixable issues */}
+                {guidance && guidance.length > 0 && (
+                  <div className="card p-5 mt-4 border-l-4 border-l-accent">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold">Step-by-step fix guide ({guidance.length} issues)</h3>
+                      <button
+                        onClick={() => setGuidance(null)}
+                        className="text-muted hover:text-foreground text-lg px-2"
+                        aria-label="Close guide"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      {guidance.map((g, i) => (
+                        <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
+                            <h4 className="font-semibold text-sm">{g.title}</h4>
+                          </div>
+                          <p className="text-xs text-muted mb-3">{g.why}</p>
+                          <ol className="text-sm space-y-1 list-decimal list-inside">
+                            {g.steps.map((s, j) => (
+                              <li key={j} className="text-foreground">{s}</li>
+                            ))}
+                          </ol>
+                          {g.commands && g.commands.length > 0 && (
+                            <div className="mt-3 space-y-1">
+                              {g.commands.map((cmd, j) => (
+                                <pre key={j} className="bg-[#0a0a12] text-emerald-400 text-xs font-mono p-2 rounded overflow-x-auto">{cmd}</pre>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Fix result */}
                 {fixing && (
@@ -466,21 +644,79 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           <h3 className="font-bold">Pull Request Created</h3>
                         </div>
                         <p className="text-sm text-muted mb-3">
-                          Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files.
-                          Review and merge the PR to apply the fixes.
+                          Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
+                          {totalIssues > (fixResult.issuesFixed || 0) && (
+                            <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
+                          )}.
                         </p>
-                        <a
-                          href={fixResult.prUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-primary px-4 py-2 text-xs"
-                          style={{ background: "#059669" }}
-                        >
-                          View PR on GitHub &rarr;
-                        </a>
+                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                          <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={fixResult.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary px-4 py-2 text-xs"
+                            style={{ background: "#059669" }}
+                          >
+                            View PR on GitHub &rarr;
+                          </a>
+                          {fixResult.prUrl && (
+                            <button
+                              onClick={() => {
+                                // Scan the fix branch to verify
+                                const prUrl = fixResult.prUrl || "";
+                                const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+                                if (match) {
+                                  window.open(
+                                    `${prUrl}/files`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="btn-secondary px-4 py-2 text-xs"
+                            >
+                              View Changes
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : fixResult.status === "api_unavailable" ? (
+                      <>
+                        <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
+                        <p className="text-sm text-muted mt-1">{fixResult.message}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-muted">
+                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
+                        )}
                       </>
                     ) : fixResult.status === "no_fixes" ? (
-                      <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                      <>
+                        <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-muted">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <>
                         <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
@@ -488,6 +724,20 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                           <ul className="mt-2 text-xs text-muted space-y-1">
                             {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
                           </ul>
+                        )}
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-border">
+                            <p className="text-xs text-muted">
+                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-secondary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
                         )}
                       </>
                     )}
@@ -530,6 +780,16 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             )}
           </>
+        )}
+
+        {/* Tab: Server Scan */}
+        {activeTab === "server" && (
+          <ServerScanPanel />
+        )}
+
+        {/* Tab: Nuclear Scan */}
+        {activeTab === "nuclear" && (
+          <NuclearScanPanel />
         )}
 
         {/* Tab: Recent Scans */}
@@ -761,5 +1021,492 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+interface ServerFix {
+  platform: string;
+  title: string;
+  code: string;
+  instructions: string;
+}
+
+function ServerScanPanel() {
+  const [url, setUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  const [generatingFixes, setGeneratingFixes] = useState(false);
+  const [fixes, setFixes] = useState<Record<string, ServerFix[]> | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  async function runServerScan() {
+    if (!url) { setError("Enter a URL"); return; }
+    setScanning(true); setResult(null); setError(""); setFixes(null);
+    try {
+      const res = await fetch("/api/scan/server", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Scan failed"); return; }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally { setScanning(false); }
+  }
+
+  async function generateFixes() {
+    if (!result) return;
+    setGeneratingFixes(true);
+    try {
+      const res = await fetch("/api/scan/server-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname: result.hostname, modules: result.modules }),
+      });
+      const data = await res.json();
+      setFixes(data.fixes || {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate fixes");
+    } finally { setGeneratingFixes(false); }
+  }
+
+  function copyCode(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(id);
+    setTimeout(() => setCopiedCode(null), 1500);
+  }
+
+  const modules = (result?.modules as Array<Record<string, unknown>>) || [];
+  const totalIssues = (result?.totalIssues as number) || 0;
+
+  return (
+    <>
+      <div className="card p-6 mb-8">
+        <p className="text-sm text-muted mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runServerScan(); }}
+            placeholder="https://example.com"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+          />
+          <button onClick={runServerScan} disabled={scanning} className="btn-primary px-6 py-3 text-sm disabled:opacity-50">
+            {scanning ? "Scanning..." : "Scan Server"}
+          </button>
+        </div>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      </div>
+
+      {scanning && (
+        <div className="card p-8 text-center">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted">Checking SSL, headers, DNS, performance...</p>
+        </div>
+      )}
+
+      {result && !scanning && (
+        <div className="space-y-4">
+          <div className={`card p-6 ${totalIssues === 0 ? "border-l-4 border-l-green-500" : "border-l-4 border-l-amber-500"}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">
+                  {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
+                </h2>
+                <p className="text-sm text-muted">
+                  {result.hostname as string} &middot; {modules.length} modules &middot; {result.duration as number}ms
+                </p>
+              </div>
+              <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
+                totalIssues === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+              }`}>
+                {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
+              </span>
+            </div>
+            {totalIssues > 0 && (
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={generateFixes}
+                  disabled={generatingFixes}
+                  className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
+                  style={{ background: "#059669" }}
+                >
+                  {generatingFixes ? "Generating..." : `Generate Fixes`}
+                </button>
+                <button
+                  onClick={runServerScan}
+                  className="btn-secondary px-4 py-2 text-xs"
+                >
+                  Re-scan
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Generated fixes — ready-to-paste configs */}
+          {fixes && Object.keys(fixes).length > 0 && (
+            <div className="card p-5 border-l-4 border-l-accent">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-accent text-lg">⚡</span>
+                <h3 className="font-bold">Ready-to-paste fixes</h3>
+              </div>
+              <div className="space-y-5">
+                {Object.entries(fixes).map(([category, fixList]) => (
+                  <div key={category}>
+                    <h4 className="font-semibold text-sm text-foreground mb-2">{category}</h4>
+                    <div className="space-y-3">
+                      {fixList.map((f, idx) => {
+                        const id = `${category}-${idx}`;
+                        return (
+                          <div key={id} className="rounded-lg border border-border bg-gray-50 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-border">
+                              <div>
+                                <div className="text-xs font-bold text-foreground">{f.platform}</div>
+                                <div className="text-xs text-muted">{f.title}</div>
+                              </div>
+                              <button
+                                onClick={() => copyCode(f.code, id)}
+                                className="btn-secondary px-3 py-1 text-xs"
+                              >
+                                {copiedCode === id ? "Copied!" : "Copy"}
+                              </button>
+                            </div>
+                            <pre className="p-3 text-xs font-mono text-foreground overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                            <p className="px-3 py-2 bg-amber-50 text-xs text-amber-800 border-t border-amber-100">
+                              {f.instructions}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {fixes && Object.keys(fixes).length === 0 && (
+            <div className="card p-5 border-l-4 border-l-amber-500">
+              <p className="text-sm text-muted">
+                No automated fixes available for these specific issues. They require manual review or infrastructure access.
+              </p>
+            </div>
+          )}
+
+          {modules.map((mod) => {
+            const status = mod.status as string;
+            const details = (mod.details as string[]) || [];
+            return (
+              <div key={mod.name as string} className={`card p-4 ${
+                status === "passed" ? "border-l-4 border-l-green-500" :
+                status === "warning" ? "border-l-4 border-l-amber-500" :
+                "border-l-4 border-l-red-500"
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-sm">{mod.label as string || mod.name as string}</span>
+                  <span className={`text-xs font-bold ${
+                    status === "passed" ? "text-green-600" : status === "warning" ? "text-amber-600" : "text-red-600"
+                  }`}>
+                    {status === "passed" ? "PASS" : status === "warning" ? "WARN" : "FAIL"}
+                  </span>
+                </div>
+                {details.length > 0 && (
+                  <ul className="space-y-1">
+                    {details.map((d, i) => (
+                      <li key={i} className={`text-xs font-mono ${
+                        d.startsWith("error") ? "text-red-600" :
+                        d.startsWith("warning") ? "text-amber-600" :
+                        d.startsWith("pass") ? "text-green-600" :
+                        "text-muted"
+                      }`}>
+                        {d}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+interface NuclearFinding {
+  category: string;
+  severity: "error" | "warning" | "info" | "pass";
+  title: string;
+  detail: string;
+}
+
+function NuclearScanPanel() {
+  const [url, setUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  const [fixResult, setFixResult] = useState<Record<string, unknown> | null>(null);
+
+  async function runNuclear() {
+    if (!url) { setError("Enter a URL"); return; }
+    setScanning(true); setResult(null); setError(""); setFixResult(null);
+    try {
+      const res = await fetch("/api/scan/nuclear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Scan failed"); return; }
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally { setScanning(false); }
+  }
+
+  async function fixEverything() {
+    if (!result) return;
+    setFixing(true);
+    try {
+      const issueFindings = (result.findings as NuclearFinding[] || [])
+        .filter(f => f.severity === "error" || f.severity === "warning");
+
+      // Try SSH auto-heal first (autonomous fix)
+      const ip = result.resolvedIp as string || "";
+      if (ip && issueFindings.length > 0) {
+        try {
+          const sshRes = await fetch("/api/heal/ssh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              host: ip,
+              hostname: result.hostname,
+              issues: issueFindings.map(f => ({
+                category: f.category,
+                title: f.title,
+                detail: f.detail,
+              })),
+            }),
+          });
+          const sshData = await sshRes.json();
+          if (sshRes.ok && sshData.status !== "failed") {
+            setFixResult(sshData);
+            return;
+          }
+          // SSH failed (no credentials etc.) — fall through to config snippets
+        } catch {
+          // SSH agent not available — fall through
+        }
+      }
+
+      // Fallback: generate config snippets
+      const res = await fetch("/api/scan/server-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostname: result.hostname,
+          modules: issueFindings.reduce((acc, f) => {
+            const cat = f.category.toLowerCase().replace(/[^a-z]/g, "");
+            const existing = acc.find((m) => m.name === cat);
+            if (existing) { existing.details.push(`${f.severity}: ${f.title} - ${f.detail}`); }
+            else { acc.push({ name: cat, status: "failed", details: [`${f.severity}: ${f.title} - ${f.detail}`] }); }
+            return acc;
+          }, [] as Array<{ name: string; status: string; details: string[] }>),
+        }),
+      });
+      const data = await res.json();
+      setFixResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fix failed");
+    } finally { setFixing(false); }
+  }
+
+  const findings = (result?.findings as NuclearFinding[]) || [];
+  const summary = result?.summary as { errors: number; warnings: number; passes: number; total: number } | undefined;
+  const diagnosis = (result?.diagnosis as string[]) || [];
+
+  return (
+    <>
+      <div className="card p-6 mb-6 border-l-4 border-l-red-500">
+        <div className="flex items-start gap-3 mb-3">
+          <span className="text-2xl">☢</span>
+          <div>
+            <h3 className="font-bold text-lg">Nuclear Scan</h3>
+            <p className="text-sm text-muted">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") runNuclear(); }}
+            placeholder="https://crontech.ai"
+            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+          />
+          <button
+            onClick={runNuclear}
+            disabled={scanning}
+            className="btn-primary px-6 py-3 text-sm font-bold disabled:opacity-50"
+            style={{ background: "#dc2626" }}
+          >
+            {scanning ? "Nuking..." : "☢ Nuclear Scan"}
+          </button>
+        </div>
+        {error && <p className="text-danger text-sm mt-3">{error}</p>}
+      </div>
+
+      {scanning && (
+        <div className="card p-8 text-center">
+          <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="font-bold">Running full-stack diagnosis...</p>
+          <p className="text-xs text-muted mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
+        </div>
+      )}
+
+      {result && !scanning && (
+        <>
+          {/* Diagnosis */}
+          <div className="card p-6 mb-4 border-l-4 border-l-red-500">
+            <h3 className="font-bold mb-3">Diagnosis</h3>
+            {diagnosis.map((d, i) => (
+              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-700 font-bold" : d.startsWith("FIX") ? "text-accent font-medium" : "text-foreground"}`}>
+                {d}
+              </p>
+            ))}
+            <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+              <div className="p-2 bg-red-50 rounded">
+                <div className="text-2xl font-bold text-red-700">{summary?.errors ?? 0}</div>
+                <div className="text-xs text-muted">Errors</div>
+              </div>
+              <div className="p-2 bg-amber-50 rounded">
+                <div className="text-2xl font-bold text-amber-700">{summary?.warnings ?? 0}</div>
+                <div className="text-xs text-muted">Warnings</div>
+              </div>
+              <div className="p-2 bg-green-50 rounded">
+                <div className="text-2xl font-bold text-green-700">{summary?.passes ?? 0}</div>
+                <div className="text-xs text-muted">Passes</div>
+              </div>
+              <div className="p-2 bg-gray-50 rounded">
+                <div className="text-2xl font-bold">{summary?.total ?? 0}</div>
+                <div className="text-xs text-muted">Total Checks</div>
+              </div>
+            </div>
+            {(summary?.errors ?? 0) + (summary?.warnings ?? 0) > 0 && (
+              <div className="mt-5">
+                <button
+                  onClick={fixEverything}
+                  disabled={fixing}
+                  className="btn-primary w-full py-4 text-base font-bold disabled:opacity-50"
+                  style={{ background: "#059669" }}
+                >
+                  {fixing ? "Generating fix plan..." : "⚡ Fix Everything Automatically"}
+                </button>
+                <p className="text-xs text-muted text-center mt-2">
+                  Generates ready-to-apply fixes for every issue found. Code fixes go to a PR; config fixes produce Vercel/Nginx/DNS snippets.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fixes */}
+          {fixResult && (
+            <div className="card p-5 mb-4 border-l-4 border-l-accent">
+              {/* SSH auto-heal result */}
+              {(fixResult as Record<string, unknown>).actions ? (
+                <>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xl">{(fixResult as Record<string, unknown>).status === "healed" ? "✅" : "⚡"}</span>
+                    <h3 className="font-bold">
+                      {(fixResult as Record<string, unknown>).status === "healed"
+                        ? "Server Healed"
+                        : (fixResult as Record<string, unknown>).status === "partial"
+                          ? "Partially Healed"
+                          : "Heal Attempted"}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-muted mb-3">
+                    {(fixResult as Record<string, unknown>).message as string}
+                  </p>
+                  <div className="space-y-2">
+                    {((fixResult as Record<string, unknown>).actions as Array<{ issue: string; command: string; output: string; status: string }>).map((a, i) => (
+                      <div key={i} className={`rounded-lg border p-3 text-xs ${
+                        a.status === "fixed" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={a.status === "fixed" ? "text-green-600" : "text-red-600"}>
+                            {a.status === "fixed" ? "✓" : "✗"}
+                          </span>
+                          <span className="font-medium">{a.issue}</span>
+                        </div>
+                        <pre className="font-mono text-xs bg-black/5 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (fixResult as Record<string, unknown>).fixes && Object.keys((fixResult as Record<string, unknown>).fixes as Record<string, unknown>).length > 0 ? (
+                <>
+                  <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
+                  <p className="text-sm text-muted mb-3">
+                    {((fixResult as Record<string, unknown>).totalFixes as number) || 0} fixes across {((fixResult as Record<string, unknown>).categories as number) || 0} categories.
+                  </p>
+                  <details className="text-xs font-mono bg-gray-50 p-3 rounded max-h-96 overflow-auto">
+                    <summary className="cursor-pointer font-semibold">View all fix snippets</summary>
+                    <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
+                  </details>
+                </>
+              ) : (
+                <div>
+                  <h3 className="font-bold mb-2">⚡ Fix attempted</h3>
+                  <p className="text-sm text-muted">
+                    To enable autonomous server repair, set these in Vercel env vars:
+                  </p>
+                  <ul className="text-xs font-mono text-muted mt-2 space-y-1">
+                    <li>GATETEST_SSH_HOST — server IP (e.g. 45.76.171.37)</li>
+                    <li>GATETEST_SSH_USER — username (default: root)</li>
+                    <li>GATETEST_SSH_PASSWORD — server password</li>
+                  </ul>
+                  <p className="text-xs text-muted mt-2">
+                    Once set, &quot;Fix Everything&quot; will SSH into the server and run fix commands automatically.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Findings by category */}
+          {(() => {
+            const byCategory = findings.reduce((acc: Record<string, NuclearFinding[]>, f) => {
+              (acc[f.category] = acc[f.category] || []).push(f);
+              return acc;
+            }, {});
+            return Object.entries(byCategory).map(([cat, items]) => (
+              <div key={cat} className="card p-4 mb-3">
+                <h4 className="font-bold text-sm mb-2">{cat}</h4>
+                <div className="space-y-1">
+                  {items.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className={`font-bold shrink-0 w-16 ${
+                        f.severity === "error" ? "text-red-600" :
+                        f.severity === "warning" ? "text-amber-600" :
+                        f.severity === "pass" ? "text-green-600" :
+                        "text-muted"
+                      }`}>{f.severity.toUpperCase()}</span>
+                      <span className="font-medium shrink-0 min-w-[140px]">{f.title}</span>
+                      <span className="text-muted">{f.detail}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
+        </>
+      )}
+    </>
   );
 }

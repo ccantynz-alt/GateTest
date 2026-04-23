@@ -445,11 +445,11 @@ class ExplorerModule extends BaseModule {
           if (!el) return interaction;
 
           if (element.inputType === 'email') {
-            await el.fill('test@gatetest.io').catch(() => {});
+            await el.fill('test@gatetest.ai').catch(() => {});
           } else if (element.inputType === 'number') {
             await el.fill('42').catch(() => {});
           } else if (element.inputType === 'url') {
-            await el.fill('https://gatetest.io').catch(() => {});
+            await el.fill('https://gatetest.ai').catch(() => {});
           } else if (element.inputType === 'tel') {
             await el.fill('+1234567890').catch(() => {});
           } else if (element.inputType === 'search' || element.inputType === 'text') {

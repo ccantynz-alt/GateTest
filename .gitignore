@@ -1,7 +1,5 @@
 node_modules/
-.gatetest/reports/
-.gatetest/screenshots/
-.gatetest/baselines/
+.gatetest/
 coverage/
 dist/
 .env
@@ -13,4 +11,3 @@ website/.next/
 website/node_modules/
 website/test-results/
 website/playwright-report/
-package-lock.json

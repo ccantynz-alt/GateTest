@@ -80,8 +80,13 @@ class GateTestCache {
    */
   clear() {
     this.cache = { version: '1.0', files: {}, lastSaved: null };
-    if (fs.existsSync(this.cachePath)) {
+    // Atomic delete — catch ENOENT instead of pre-checking (avoids
+    // TOCTOU where a concurrent process unlinks the file between
+    // `existsSync` and `unlinkSync`, crashing this process).
+    try {
       fs.unlinkSync(this.cachePath);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
     }
   }
 
