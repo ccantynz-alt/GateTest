@@ -94,6 +94,7 @@ describe('enqueueScan', () => {
       '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b',
       'refs/heads/main',
       7,
+      'gluecron',
     ]);
   });
 
@@ -123,7 +124,21 @@ describe('enqueueScan', () => {
       'b'.repeat(40),
       null,
       null,
+      'gluecron',
     ]);
+  });
+
+  it('passes host: github when explicitly set', async () => {
+    const sql = makeFakeSql([[{ id: 5 }]]);
+    await enqueueScan({
+      eventId: 'evt-gh',
+      repository: 'alice/webapp',
+      sha: 'c'.repeat(40),
+      host: 'github',
+      sql,
+    });
+    const values = sql.calls[0].values;
+    assert.strictEqual(values[5], 'github', `expected host='github', got ${values[5]}`);
   });
 
   it('throws when eventId / repository / sha / sql are missing', async () => {

@@ -37,6 +37,7 @@ async function ensureScanQueueTable(sql) {
     sha TEXT NOT NULL,
     ref TEXT,
     pull_request_number INT,
+    host TEXT NOT NULL DEFAULT 'gluecron',
     status TEXT NOT NULL DEFAULT 'queued',
     attempts INT NOT NULL DEFAULT 0,
     last_error TEXT,
@@ -46,6 +47,7 @@ async function ensureScanQueueTable(sql) {
     completed_at TIMESTAMPTZ,
     next_run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE scan_queue ADD COLUMN IF NOT EXISTS host TEXT NOT NULL DEFAULT 'gluecron'`;
   await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_ready
     ON scan_queue (status, next_run_at)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_repo_sha
@@ -68,6 +70,7 @@ async function ensureScanQueueTable(sql) {
  * @param {string} opts.sha
  * @param {string|null} [opts.ref]
  * @param {number|null} [opts.pullRequestNumber]
+ * @param {'github'|'gluecron'} [opts.host]  source host; default 'gluecron'
  * @param {Function} opts.sql
  * @returns {Promise<{duplicate: boolean, id: number|null}>}
  */
@@ -77,6 +80,7 @@ async function enqueueScan({
   sha,
   ref = null,
   pullRequestNumber = null,
+  host = 'gluecron',
   sql,
 }) {
   if (!sql || typeof sql !== 'function') {
@@ -91,11 +95,13 @@ async function enqueueScan({
       ? null
       : Number(pullRequestNumber);
 
+  const safeHost = host === 'github' ? 'github' : 'gluecron';
+
   const rows = await sql`
     INSERT INTO scan_queue
-      (event_id, repository, sha, ref, pull_request_number, status, attempts, next_run_at)
+      (event_id, repository, sha, ref, pull_request_number, host, status, attempts, next_run_at)
     VALUES
-      (${eventId}, ${repository}, ${sha}, ${ref}, ${prNum}, 'queued', 0, NOW())
+      (${eventId}, ${repository}, ${sha}, ${ref}, ${prNum}, ${safeHost}, 'queued', 0, NOW())
     ON CONFLICT (event_id) DO NOTHING
     RETURNING id
   `;
@@ -140,7 +146,7 @@ async function claimNextJob(sql) {
     FROM next
     WHERE q.id = next.id
     RETURNING q.id, q.event_id, q.repository, q.sha, q.ref,
-              q.pull_request_number, q.attempts
+              q.pull_request_number, q.host, q.attempts
   `;
 
   if (!Array.isArray(rows) || rows.length === 0) return null;

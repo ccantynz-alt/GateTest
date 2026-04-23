@@ -193,6 +193,7 @@ async function processPushEvent({
       sha: payload.sha,
       ref: payload.ref,
       pullRequestNumber: payload.pullRequestNumber,
+      host: 'gluecron',
       sql,
     });
   } catch (err) {
