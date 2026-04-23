@@ -48,7 +48,7 @@ const TOOLS = [
   {
     name: 'scan_local',
     description:
-      'Scan a local directory with GateTest\'s 67-module engine. ' +
+      'Scan a local directory with GateTest\'s 68-module engine. ' +
       'Returns issues found across security, reliability, code quality, ' +
       'and more. Use suite="quick" for the 4 core modules or suite="full" ' +
       'for all 67 modules. Optionally pass a list of specific module names.',
@@ -96,7 +96,7 @@ const TOOLS = [
   {
     name: 'list_modules',
     description:
-      'List all 67 GateTest modules with their names and descriptions. ' +
+      'List all 68 GateTest modules with their names and descriptions. ' +
       'Use this to discover what modules are available before calling ' +
       'scan_local with a specific modules list.',
     inputSchema: {
@@ -107,7 +107,7 @@ const TOOLS = [
   {
     name: 'check_health',
     description:
-      'Verify GateTest is operational. Returns version, module count, ' +
+      'Verify GateTest is operational. Returns version, module count (68), ' +
       'and a list of all loaded module names.',
     inputSchema: {
       type: 'object',
@@ -228,7 +228,7 @@ async function handleListModules() {
   try {
     const gt = new GateTest(process.cwd()).init();
     const allModules = gt.registry.getAll();
-    const lines = ['## GateTest Modules (67 total)', ''];
+    const lines = [`## GateTest Modules (${allModules.size} total)`, ''];
 
     for (const [name, mod] of allModules) {
       const desc = mod.description || mod.name || name;
@@ -250,18 +250,10 @@ async function handleCheckHealth() {
   try {
     const gt = new GateTest(process.cwd()).init();
     const moduleNames = gt.registry.list();
-    const result = {
-      status: 'ok',
-      version: '1.0.0',
-      modulesLoaded: moduleNames.length,
-      modules: moduleNames,
-      engine: 'GateTest v1.40.0',
-      transport: 'stdio',
-    };
     return {
       content: [{
         type: 'text',
-        text: `## GateTest Health\n\n✅ **Operational**\n\n- Engine: ${result.engine}\n- Modules loaded: ${result.modulesLoaded}\n- Transport: ${result.transport}`,
+        text: `## GateTest Health\n\n✅ **Operational**\n\n- Engine: GateTest v1.41.0\n- Modules loaded: ${moduleNames.length}\n- Transport: stdio`,
       }],
     };
   } catch (err) {
