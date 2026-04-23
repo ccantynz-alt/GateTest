@@ -142,6 +142,7 @@ async function runWorkerTick({
           sha: job.sha,
           ref: job.ref,
           pullRequestNumber: job.pull_request_number,
+          host: job.host || 'gluecron',
           scanResult,
         });
       }
@@ -182,6 +183,7 @@ async function runWorkerTick({
           sha: job.sha,
           ref: job.ref,
           pullRequestNumber: job.pull_request_number,
+          host: job.host || 'gluecron',
           scanResult,
         });
       }

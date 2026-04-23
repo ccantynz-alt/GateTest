@@ -252,6 +252,7 @@ async function processGitHubEvent({
       sha: payload.sha,
       ref: payload.ref,
       pullRequestNumber: payload.pullRequestNumber,
+      host: 'github',
       sql,
     });
   } catch (err) {

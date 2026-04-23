@@ -73,6 +73,7 @@ const BUILT_IN_MODULES = {
   featureFlag: '../modules/feature-flag.js',
   tlsSecurity: '../modules/tls-security.js',
   cookieSecurity: '../modules/cookie-security.js',
+  crossFileTaint: '../modules/cross-file-taint.js',
 };
 
 class ModuleRegistry {

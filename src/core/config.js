@@ -77,6 +77,7 @@ const DEFAULT_CONFIG = {
       'featureFlag',
       'tlsSecurity',
       'cookieSecurity',
+      'crossFileTaint',
       'fakeFixDetector',
     ],
     standard: [
@@ -121,6 +122,7 @@ const DEFAULT_CONFIG = {
       'featureFlag',
       'tlsSecurity',
       'cookieSecurity',
+      'crossFileTaint',
       'fakeFixDetector',
     ],
     full: [
@@ -175,6 +177,7 @@ const DEFAULT_CONFIG = {
       'featureFlag',
       'tlsSecurity',
       'cookieSecurity',
+      'crossFileTaint',
       'mutation',
       'python',
       'go',
@@ -246,6 +249,7 @@ const DEFAULT_CONFIG = {
       'featureFlag',
       'tlsSecurity',
       'cookieSecurity',
+      'crossFileTaint',
       'liveCrawler',
       'explorer',
       'chaos',
