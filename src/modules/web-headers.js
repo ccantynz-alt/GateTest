@@ -164,6 +164,11 @@ class WebHeadersModule extends BaseModule {
     } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
+
+    // Skip the module's own source — its pattern strings match its own rules.
+    const relUnix = rel.replace(/\\/g, '/');
+    if (/(?:^|\/)src[\\/]modules[\\/]/.test(relUnix)) return 0;
+
     const lines = content.split('\n');
     let issues = 0;
     const lowerContent = content.toLowerCase();

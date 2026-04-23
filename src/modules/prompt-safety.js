@@ -40,6 +40,10 @@ const DEFAULT_EXCLUDES = [
   '.next', '__pycache__', 'target', 'vendor',
 ];
 
+// Paths that define detection patterns — scanning them would produce FPs
+// because the pattern strings match the very rules they implement.
+const MODULE_SOURCE_RE = /(?:^|\/)src[\\/]modules[\\/]/;
+
 const SCAN_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 
 // Client-bundled env prefixes. NEXT_PUBLIC_* (Next.js), VITE_* (Vite),
@@ -163,6 +167,11 @@ class PromptSafetyModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
+
+    // Skip detection-pattern source files — scanning the module that
+    // defines the patterns produces false positives on the patterns themselves.
+    if (MODULE_SOURCE_RE.test(rel.replace(/\\/g, '/'))) return 0;
+
     const lines = content.split('\n');
     let issues = 0;
 

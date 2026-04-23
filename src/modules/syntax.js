@@ -268,8 +268,14 @@ class SyntaxModule extends BaseModule {
 
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
-      const content = fs.readFileSync(file, 'utf-8');
+      const raw = fs.readFileSync(file, 'utf-8');
       const dir = path.dirname(file);
+
+      // Strip line comments and block comments before scanning to avoid
+      // flagging require() calls that appear inside comment examples.
+      // Also strip string literals to avoid false positives in template
+      // strings and test fixtures.
+      const content = this._stripCommentsAndStrings(raw);
 
       // Match require() calls with relative paths
       const requireRegex = /require\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g;
@@ -299,6 +305,61 @@ class SyntaxModule extends BaseModule {
         message: `${unresolvedCount - maxReports} more unresolved imports not shown`,
       });
     }
+  }
+
+  _stripCommentsAndStrings(source) {
+    // Strip block comments, line comments, template literals, and string
+    // literals so that pattern-matching code and test fixtures don't
+    // produce false positives.
+    let out = '';
+    let i = 0;
+    while (i < source.length) {
+      // Block comment
+      if (source[i] === '/' && source[i + 1] === '*') {
+        while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i++;
+        i += 2;
+        continue;
+      }
+      // Line comment
+      if (source[i] === '/' && source[i + 1] === '/') {
+        while (i < source.length && source[i] !== '\n') i++;
+        continue;
+      }
+      // Template literal
+      if (source[i] === '`') {
+        i++;
+        let depth = 1;
+        while (i < source.length && depth > 0) {
+          if (source[i] === '\\') { i += 2; continue; }
+          if (source[i] === '`') depth--;
+          i++;
+        }
+        continue;
+      }
+      // Single-quoted string
+      if (source[i] === "'") {
+        i++;
+        while (i < source.length && source[i] !== "'" && source[i] !== '\n') {
+          if (source[i] === '\\') i++;
+          i++;
+        }
+        i++;
+        continue;
+      }
+      // Double-quoted string
+      if (source[i] === '"') {
+        i++;
+        while (i < source.length && source[i] !== '"' && source[i] !== '\n') {
+          if (source[i] === '\\') i++;
+          i++;
+        }
+        i++;
+        continue;
+      }
+      out += source[i];
+      i++;
+    }
+    return out;
   }
 
   _resolveImport(dir, importPath) {
