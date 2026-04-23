@@ -100,6 +100,43 @@ function emptyResult(startTime: number, error: string, authSource?: string | nul
 }
 
 /**
+ * Execute a scan from directly-provided files (no GitHub fetch).
+ * Used by platforms like Zoobicon that POST file contents to the API.
+ */
+export async function runScanDirect(
+  files: RepoFile[],
+  tier: string,
+  projectName?: string
+): Promise<ScanResult> {
+  const startTime = Date.now();
+
+  if (!files || files.length === 0) {
+    return emptyResult(startTime, "No files provided");
+  }
+
+  const capped = files.slice(0, MAX_FILES_TO_READ);
+  const filePaths = capped.map((f) => f.path);
+
+  const { modules, totalIssues } = await runTier(tier === "full" ? "full" : "quick", {
+    owner: projectName || "direct",
+    repo: projectName || "upload",
+    files: filePaths,
+    fileContents: capped,
+  });
+
+  return {
+    status: "complete",
+    modules,
+    totalModules: modules.length,
+    completedModules: modules.length,
+    totalIssues,
+    totalFixed: 0,
+    duration: Date.now() - startTime,
+    authSource: "direct",
+  };
+}
+
+/**
  * Execute the scan for a repo + tier. Returns a ScanResult (never throws).
  */
 export async function runScan(

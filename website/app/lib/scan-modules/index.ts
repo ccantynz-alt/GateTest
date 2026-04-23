@@ -33,26 +33,12 @@ import {
   compatibility,
 } from "./web";
 import { aiReview } from "./ai";
-import {
-  errorSwallow,
-  hardcodedUrl,
-  flakyTests,
-  typescriptStrictness,
-  envVars,
-  deadCode,
-  dependencies,
-  dockerfile,
-  shell,
-  tlsSecurity,
-  cookieSecurity,
-  ssrf,
-  asyncIteration,
-  retryHygiene,
-  nPlusOne,
-  logPii,
-  moneyFloat,
-  importCycle,
-} from "./infra";
+import { dependencyFreshness } from "./dependencies";
+import { maliciousDeps, licenses } from "./supply-chain";
+import { iacSecurity, ciHardening } from "./iac";
+import { migrations } from "./migrations";
+import { authFlaws } from "./auth-flaws";
+import { flakyTests } from "./flaky-tests";
 
 export type { ModuleRunner, ModuleContext, RepoFile, ModuleOutput } from "./types";
 export { TIERS } from "./types";
@@ -76,24 +62,14 @@ export const MODULES: Record<string, ModuleRunner> = {
   performance,
   compatibility,
   aiReview,
-  errorSwallow,
-  hardcodedUrl,
+  dependencyFreshness,
+  maliciousDeps,
+  licenses,
+  iacSecurity,
+  ciHardening,
+  migrations,
+  authFlaws,
   flakyTests,
-  typescriptStrictness,
-  envVars,
-  deadCode,
-  dependencies,
-  dockerfile,
-  shell,
-  tlsSecurity,
-  cookieSecurity,
-  ssrf,
-  asyncIteration,
-  retryHygiene,
-  nPlusOne,
-  logPii,
-  moneyFloat,
-  importCycle,
 };
 
 export interface ModuleResultEnvelope {
