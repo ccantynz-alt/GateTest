@@ -399,8 +399,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* DB init notice */}
         {dbData?.note && (
-          <div className="card p-4 mb-6 border-l-4 border-l-yellow-400">
-            <p className="text-sm text-muted">{dbData.note}</p>
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 mb-6 border-l-4 border-l-yellow-400">
+            <p className="text-sm text-white/50">{dbData.note}</p>
             <button onClick={initDb} className="btn-primary px-4 py-2 text-xs mt-2">
               Initialize Database
             </button>
@@ -410,21 +410,21 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: Run Scan */}
         {activeTab === "scan" && (
           <>
-            <div className="card p-6 mb-8">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-8">
               <div className="grid sm:grid-cols-[1fr,auto,auto] gap-3">
                 <input
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-full"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm w-full"
                 />
                 <select
                   value={tier}
                   onChange={(e) => setTier(e.target.value)}
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 >
-                  <option value="quick">Quick (4 modules)</option>
+                  <option value="quick">Quick (39 modules)</option>
                   <option value="full">Full (67 modules)</option>
                 </select>
                 <button
@@ -487,18 +487,18 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
             {result && !scanning && (
               <div className="space-y-4">
-                <div className={`card p-6 ${totalIssues === 0 ? "border-success" : "border-accent"}`}>
+                <div className={`rounded-xl bg-white/[0.04] border ${totalIssues === 0 ? "border-emerald-500/50" : "border-emerald-500/30"} p-6`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold">
                         {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
                       </h2>
-                      <p className="text-sm text-muted">
+                      <p className="text-sm text-white/50">
                         {modules.length} modules &middot; {result.duration as number}ms
                       </p>
                     </div>
                     <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                      totalIssues === 0 ? "bg-green-50 text-success" : "bg-amber-50 text-amber-700"
+                      totalIssues === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
                     }`}>
                       {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
                     </span>
@@ -589,12 +589,12 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
                 {/* Manual guidance for unfixable issues */}
                 {guidance && guidance.length > 0 && (
-                  <div className="card p-5 mt-4 border-l-4 border-l-accent">
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 mt-4 border-l-4 border-l-accent">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-bold">Step-by-step fix guide ({guidance.length} issues)</h3>
                       <button
                         onClick={() => setGuidance(null)}
-                        className="text-muted hover:text-foreground text-lg px-2"
+                        className="text-white/50 hover:text-white text-lg px-2"
                         aria-label="Close guide"
                       >
                         &times;
@@ -602,15 +602,15 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     </div>
                     <div className="space-y-4">
                       {guidance.map((g, i) => (
-                        <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
+                        <div key={i} className="rounded-lg border border-white/10 p-4 bg-white/[0.03]">
                           <div className="flex items-baseline gap-2 mb-1">
                             <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
                             <h4 className="font-semibold text-sm">{g.title}</h4>
                           </div>
-                          <p className="text-xs text-muted mb-3">{g.why}</p>
+                          <p className="text-xs text-white/50 mb-3">{g.why}</p>
                           <ol className="text-sm space-y-1 list-decimal list-inside">
                             {g.steps.map((s, j) => (
-                              <li key={j} className="text-foreground">{s}</li>
+                              <li key={j} className="text-white/80">{s}</li>
                             ))}
                           </ol>
                           {g.commands && g.commands.length > 0 && (
@@ -628,28 +628,28 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
                 {/* Fix result */}
                 {fixing && (
-                  <div className="card p-6 text-center">
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 text-center">
                     <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                     <p className="font-medium">AI is reading your code and generating fixes...</p>
-                    <p className="text-xs text-muted mt-1">This may take 30-60 seconds depending on the number of issues</p>
+                    <p className="text-xs text-white/50 mt-1">This may take 30-60 seconds depending on the number of issues</p>
                   </div>
                 )}
 
                 {fixResult && (
-                  <div className={`card p-5 ${fixResult.prUrl ? "border-success" : "border-accent"}`}>
+                  <div className={`rounded-xl bg-white/[0.04] border ${fixResult.prUrl ? "border-emerald-500/50" : "border-emerald-500/30"} p-5`}>
                     {fixResult.prUrl ? (
                       <>
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-success text-lg">&#10003;</span>
                           <h3 className="font-bold">Pull Request Created</h3>
                         </div>
-                        <p className="text-sm text-muted mb-3">
+                        <p className="text-sm text-white/50 mb-3">
                           Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
                           {totalIssues > (fixResult.issuesFixed || 0) && (
                             <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
                           )}.
                         </p>
-                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                        <div className="mt-3 p-3 rounded-lg bg-amber-900/30 border border-amber-500/30 text-xs text-amber-300 mb-3">
                           <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -685,11 +685,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     ) : fixResult.status === "api_unavailable" ? (
                       <>
                         <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
-                        <p className="text-sm text-muted mt-1">{fixResult.message}</p>
+                        <p className="text-sm text-white/50 mt-1">{fixResult.message}</p>
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-muted">
-                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
                             </p>
                             <button
                               onClick={retryFailedFiles}
@@ -703,10 +703,10 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       </>
                     ) : fixResult.status === "no_fixes" ? (
                       <>
-                        <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                        <p className="text-sm text-white/50">{fixResult.message || "No fixes could be generated"}</p>
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-muted">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
+                            <p className="text-xs text-white/50">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
                             <button
                               onClick={retryFailedFiles}
                               disabled={fixing}
@@ -721,14 +721,14 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       <>
                         <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
                         {fixResult.errors && fixResult.errors.length > 0 && (
-                          <ul className="mt-2 text-xs text-muted space-y-1">
+                          <ul className="mt-2 text-xs text-white/50 space-y-1">
                             {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
                           </ul>
                         )}
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
-                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-border">
-                            <p className="text-xs text-muted">
-                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
+                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
                             </p>
                             <button
                               onClick={retryFailedFiles}
@@ -748,27 +748,24 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   const status = mod.status as string;
                   const details = (mod.details as string[]) || [];
                   return (
-                    <div key={mod.name as string} className={`card p-4 ${
-                      status === "failed" ? "border-l-4 border-l-danger" :
-                      status === "passed" ? "border-l-4 border-l-success" : ""
-                    }`}>
+                    <div key={mod.name as string} className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${status === "failed" ? "border-l-4 border-l-red-500" : status === "passed" ? "border-l-4 border-l-emerald-500" : ""}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className={`text-sm font-bold ${
-                            status === "passed" ? "text-success" : status === "failed" ? "text-danger" : "text-muted"
+                            status === "passed" ? "text-emerald-400" : status === "failed" ? "text-red-400" : "text-white/40"
                           }`}>
                             {status === "passed" ? "PASS" : status === "failed" ? "FAIL" : "SKIP"}
                           </span>
                           <span className="font-semibold text-sm">{mod.name as string}</span>
                         </div>
-                        <div className="text-xs text-muted">
+                        <div className="text-xs text-white/40">
                           {mod.checks as number} checks &middot; {mod.issues as number} issues &middot; {mod.duration as number}ms
                         </div>
                       </div>
                       {details.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {details.map((d, i) => (
-                            <li key={i} className="text-xs text-muted font-mono pl-14">
+                            <li key={i} className="text-xs text-white/50 font-mono pl-14">
                               &rarr; {d}
                             </li>
                           ))}
@@ -794,43 +791,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab: Recent Scans */}
         {activeTab === "scans" && (
-          <div className="card overflow-hidden">
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
             {dbLoading ? (
-              <div className="p-8 text-center text-muted">Loading...</div>
+              <div className="p-8 text-center text-white/40">Loading...</div>
             ) : !dbData?.scans?.length ? (
-              <div className="p-8 text-center text-muted">No scans recorded yet.</div>
+              <div className="p-8 text-center text-white/40">No scans recorded yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-surface-solid">
-                      <th className="text-left px-4 py-3 font-medium text-muted">Repo</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Tier</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Score</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Customer</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Date</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Repo</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Tier</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Score</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Customer</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dbData.scans.map((scan) => (
-                      <tr key={scan.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs max-w-[200px] truncate">
+                      <tr key={scan.id} className="border-b border-white/[0.06] last:border-0">
+                        <td className="px-4 py-3 font-mono text-xs text-white/70 max-w-[200px] truncate">
                           {scan.repo_url?.replace("https://github.com/", "") || "-"}
                         </td>
-                        <td className="px-4 py-3">{scan.tier}</td>
+                        <td className="px-4 py-3 text-white/70">{scan.tier}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                            scan.status === "completed" ? "bg-green-50 text-success" :
-                            scan.status === "failed" ? "bg-red-50 text-danger" :
-                            "bg-yellow-50 text-yellow-700"
+                            scan.status === "completed" ? "bg-emerald-500/20 text-emerald-400" :
+                            scan.status === "failed" ? "bg-red-500/20 text-red-400" :
+                            "bg-amber-500/20 text-amber-400"
                           }`}>
                             {scan.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3">{scan.score ?? "-"}</td>
-                        <td className="px-4 py-3 text-xs">{scan.customer_email || "-"}</td>
-                        <td className="px-4 py-3 text-xs text-muted">
+                        <td className="px-4 py-3 text-white/70">{scan.score ?? "-"}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">{scan.customer_email || "-"}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">
                           {scan.created_at ? new Date(scan.created_at).toLocaleDateString() : "-"}
                         </td>
                       </tr>
