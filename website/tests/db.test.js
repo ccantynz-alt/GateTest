@@ -4,7 +4,9 @@
  * Run: node --test website/tests/db.test.js
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { describe, it, beforeEach } = require("node:test");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const assert = require("node:assert/strict");
 
 // ─── Mock SQL layer ─────────────────────────────────────────────────

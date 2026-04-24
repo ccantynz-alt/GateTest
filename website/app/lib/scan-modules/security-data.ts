@@ -5,7 +5,7 @@
  * No defaults, no placeholders, no "checks = 1; break;" shortcuts.
  */
 
-import type { ModuleContext, ModuleOutput, ModuleRunner, RepoFile } from "./types";
+import type { ModuleContext, ModuleOutput, ModuleRunner } from "./types";
 
 const TEST_PATH_RE = /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.(test|spec)\./i;
 const ENV_PATH_RE = /(^|\/)\.env($|\.)/i;

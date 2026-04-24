@@ -11,7 +11,7 @@
  * One source of truth.
  */
 
-import type { ModuleRunner, ModuleContext, RepoFile } from "./types";
+import type { ModuleRunner, ModuleContext } from "./types";
 import { TIERS } from "./types";
 import {
   syntax,

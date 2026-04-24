@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -19,14 +20,14 @@ export default function Navbar() {
         : "bg-transparent border-b border-white/8"
     }`}>
       <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
             <span className="text-white font-bold text-sm font-[var(--font-mono)]">G</span>
           </div>
           <span className={`text-xl font-bold tracking-tight ${scrolled ? "text-foreground" : "text-white"}`}>
             Gate<span className="text-teal-400">Test</span>
           </span>
-        </a>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8">
           {["Features", "Modules", "Compare", "Integrations", "Pricing"].map((item) => (

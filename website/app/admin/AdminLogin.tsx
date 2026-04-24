@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 interface AdminLoginProps {
   hasGitHubOAuth: boolean;
@@ -126,9 +127,9 @@ export default function AdminLogin({
         )}
 
         <div className="mt-8 text-center">
-          <a href="/" className="text-sm text-muted hover:text-foreground">
+          <Link href="/" className="text-sm text-muted hover:text-foreground">
             &larr; Back to site
-          </a>
+          </Link>
         </div>
       </div>
     </div>

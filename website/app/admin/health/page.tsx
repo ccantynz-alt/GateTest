@@ -72,7 +72,8 @@ function getSuggestion(check: Check): string | null {
 }
 
 function formatCheckForCopy(check: Check): string {
-  const icon = check.status === "ok" ? "✅" : check.status === "warn" ? "⚠️" : check.status === "fail" ? "❌" : "⏳";
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _icon = check.status === "ok" ? "✅" : check.status === "warn" ? "⚠️" : check.status === "fail" ? "❌" : "⏳";
   const suggestion = getSuggestion(check);
   let text = `[${check.status.toUpperCase()}] ${check.label}`;
   if (check.detail) text += `\nDetail: ${check.detail}`;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
 interface FailedFile {
@@ -335,9 +336,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
             >
               Self-Test
             </a>
-            <a href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+            <Link href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
               &larr; Site
-            </a>
+            </Link>
           </div>
         </div>
       </div>

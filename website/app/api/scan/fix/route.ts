@@ -144,7 +144,8 @@ async function askClaude(fileContent: string, filePath: string, issues: string[]
   const enrichedIssues = await Promise.all(issues.map(async (issue) => {
     const brokenMatch = issue.match(/BROKEN LINK \(404\):\s*(https:\/\/github\.com\/([^/]+)\/([^/]+)\/([^\s]+))/i);
     if (brokenMatch) {
-      const [, fullUrl, owner, repo, path] = brokenMatch;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const [, _fullUrl, owner, repo, _path] = brokenMatch;
       try {
         // Check what releases actually exist
         const relRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {

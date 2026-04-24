@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "GateTest Installed — You're All Set",
@@ -65,20 +66,20 @@ export default function Installed() {
             Upgrade to Scan + Fix and GateTest will automatically create PRs
             that fix the issues it finds. From $199 per scan.
           </p>
-          <a
+          <Link
             href="/#pricing"
             className="inline-block px-6 py-3 rounded-lg bg-accent hover:bg-accent-light text-white font-semibold text-sm transition-colors"
           >
             See Pricing
-          </a>
+          </Link>
         </div>
 
-        <a
+        <Link
           href="/"
           className="text-sm text-muted hover:text-foreground transition-colors"
         >
           &larr; Back to gatetest.ai
-        </a>
+        </Link>
       </div>
     </div>
   );
