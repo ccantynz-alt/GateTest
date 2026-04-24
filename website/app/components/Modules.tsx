@@ -111,6 +111,128 @@ const activeModules = [
   },
 ];
 
+const categories = [
+  {
+    name: "Security",
+    blurb: "Vulnerabilities that get you breached",
+    modules: [
+      { name: "Secrets", desc: "AWS keys, GitHub tokens, Stripe keys, 14 credential patterns" },
+      { name: "SSRF", desc: "User-controlled URLs reaching internal services or cloud metadata" },
+      { name: "TLS Security", desc: "rejectUnauthorized:false, verify=False, NODE_TLS_REJECT_UNAUTHORIZED=0" },
+      { name: "Cookie Security", desc: "httpOnly:false, secure:false, weak session secrets" },
+      { name: "Hardcoded URLs", desc: "localhost, RFC1918 IPs, staging subdomains baked into prod code" },
+      { name: "ReDoS", desc: "Catastrophic regex backtracking — nested quantifiers, overlapping alternation" },
+    ],
+  },
+  {
+    name: "Code Quality",
+    blurb: "Bugs hiding in plain sight",
+    modules: [
+      { name: "N+1 Queries", desc: "DB calls inside loops across Prisma, Sequelize, TypeORM, Mongoose, Drizzle" },
+      { name: "Race Conditions", desc: "TOCTOU / check-then-act: stat → unlink, findOne → create without transaction" },
+      { name: "Resource Leaks", desc: "Unclosed streams, setInterval with no clearInterval, open file handles" },
+      { name: "Error Swallow", desc: "Empty catch {}, .catch(() => {}), fire-and-forget .save() without await" },
+      { name: "Async Iteration", desc: ".forEach(async), .filter(async), unwrapped .map(async)" },
+      { name: "Import Cycles", desc: "Circular dependencies causing runtime TDZ — Tarjan SCC algorithm" },
+      { name: "Retry Hygiene", desc: "No backoff, no jitter, unbounded while(true) retry loops" },
+    ],
+  },
+  {
+    name: "AI & Safety",
+    blurb: "LLM-era attack surfaces",
+    modules: [
+      { name: "Prompt Safety", desc: "Injection surfaces, NEXT_PUBLIC_ API keys, unbounded max_tokens cost-DoS" },
+      { name: "Deprecated Models", desc: "claude-v1, text-davinci-*, palm-2 — retired models in production" },
+      { name: "AI Code Review", desc: "Claude reads your code, finds real bugs, explains root causes" },
+      { name: "Agentic Explorer", desc: "AI agent investigates memory-informed hypotheses about your codebase" },
+    ],
+  },
+  {
+    name: "TypeScript",
+    blurb: "Type safety drift that bites at runtime",
+    modules: [
+      { name: "TypeScript Strictness", desc: "strict:false, noImplicitAny:false, @ts-nocheck, any-typed exports" },
+      { name: "Syntax", desc: "JS, TS, JSON, YAML, CSS, HTML parse errors — broken imports, unclosed brackets" },
+      { name: "Lint", desc: "ESLint with flat config (v9+), Stylelint — runs from correct config directory" },
+      { name: "Dead Code", desc: "Unused exports, orphaned files, 10+ line commented-out blocks" },
+      { name: "Flaky Tests", desc: ".only/.skip committed, Math.random(), real fetch in tests, unrestored env" },
+      { name: "Feature Flags", desc: "if(true), if(false), FEATURE_X=true stale-const collapsed flags" },
+    ],
+  },
+  {
+    name: "Infrastructure",
+    blurb: "Misconfigs that own your cloud",
+    modules: [
+      { name: "Dockerfile", desc: "root user, :latest tags, curl|sh, secrets baked into layers" },
+      { name: "CI Security", desc: "Unpinned Actions, shell injection via ${{ github.event }}, soft-fail gate" },
+      { name: "Kubernetes", desc: "privileged, hostNetwork, :latest images, docker.sock, missing resource limits" },
+      { name: "Terraform", desc: "Public S3 ACL, 0.0.0.0/0 on SSH/RDP, unencrypted RDS, IAM Principal=*" },
+      { name: "Shell Scripts", desc: "curl|sh, unsafe rm -rf $VAR, eval injection, missing set -euo pipefail" },
+      { name: "SQL Migrations", desc: "DROP COLUMN, ADD NOT NULL without default, INDEX without CONCURRENTLY" },
+    ],
+  },
+  {
+    name: "Developer Hygiene",
+    blurb: "The quiet tax on every codebase",
+    modules: [
+      { name: "Log PII", desc: "console.log(password), logger.info(user), JSON.stringify(headers)" },
+      { name: "Env Vars", desc: "References without declaration, unused declared vars, NEXT_PUBLIC_ exposure" },
+      { name: "Cron Expressions", desc: "Invalid fields, impossible dates (Feb 30), @weely typos" },
+      { name: "Datetime Bugs", desc: "datetime.now() naive, Date() month 0-vs-1, moment() without .tz()" },
+      { name: "Money Float", desc: "parseFloat(price), float(amount) — currency drift via IEEE-754" },
+      { name: "Secret Rotation", desc: "Credentials > 90 days old (git blame), .env ↔ .env.example drift" },
+      { name: "Web Headers", desc: "CSP unsafe-eval, wildcard CORS+credentials, HSTS < 180 days" },
+      { name: "OpenAPI Drift", desc: "Code routes missing from spec, spec paths with no handler" },
+      { name: "Homoglyphs", desc: "Trojan Source bidi chars (CVE-2021-42574), Cyrillic in Latin identifiers" },
+      { name: "PR Size", desc: "Files > 100, lines > 1000, per-file > 500, directory sprawl > 3" },
+    ],
+  },
+  {
+    name: "Language Coverage",
+    blurb: "9 language backends — same engine",
+    modules: [
+      { name: "Python", desc: "Django, Flask, FastAPI — same 67 checks, Python-native patterns" },
+      { name: "Go", desc: "Go modules, goroutine patterns, standard library idioms" },
+      { name: "Rust", desc: "Cargo ecosystem, unsafe blocks, ownership-adjacent patterns" },
+      { name: "Java", desc: "Maven/Gradle, Spring patterns, Java-specific security rules" },
+      { name: "Ruby", desc: "Bundler, Rails patterns, Ruby security idioms" },
+      { name: "PHP", desc: "Composer, WordPress patterns, PHP-specific injection vectors" },
+      { name: "C#", desc: ".NET/NuGet ecosystem, ASP.NET patterns" },
+      { name: "Kotlin", desc: "Gradle/Maven, Android and JVM Kotlin patterns" },
+      { name: "Swift", desc: "Swift Package Manager, iOS/macOS security patterns" },
+    ],
+  },
+  {
+    name: "Scanning & Testing",
+    blurb: "Beyond static analysis",
+    modules: [
+      { name: "Performance", desc: "Lighthouse metrics — FCP, LCP, CLS, TTI, TBT" },
+      { name: "Accessibility", desc: "WCAG 2.2 AAA — alt text, ARIA, keyboard traps, heading hierarchy" },
+      { name: "SEO", desc: "Meta tags, Open Graph, canonical URLs, structured data" },
+      { name: "Links", desc: "Broken internal and external links — no dead anchors" },
+      { name: "Mutation Testing", desc: "Modifies your source to verify tests actually catch bugs" },
+      { name: "Visual Regression", desc: "Screenshot comparison between deploys — pixel-level changes" },
+      { name: "Chaos Testing", desc: "Network failures, slow responses, dependency outages" },
+      { name: "Live Crawler", desc: "Playwright browser — visits every page, clicks every button" },
+    ],
+  },
+  {
+    name: "Source & Quality",
+    blurb: "Foundation of every scan",
+    modules: [
+      { name: "Code Quality", desc: "console.log, debugger, TODO/FIXME, eval(), complexity thresholds" },
+      { name: "Security", desc: "OWASP patterns, XSS, SQL injection, innerHTML, shell exec" },
+      { name: "Dependencies", desc: "npm/pip/Cargo/Go — wildcards, :latest pins, deprecated packages" },
+      { name: "Unit Tests", desc: "Test coverage, missing test files, test quality analysis" },
+      { name: "Integration Tests", desc: "API contract tests, service boundary verification" },
+      { name: "Documentation", desc: "README accuracy, JSDoc completeness, OpenAPI spec presence" },
+      { name: "Compatibility", desc: "Node.js version, browser targets, breaking API usage" },
+      { name: "Data Integrity", desc: "Schema validation, data contract enforcement" },
+      { name: "Fake-Fix Detector", desc: "Catches AI chicken-scratching — symptom patches, not root causes" },
+    ],
+  },
+];
+
 const comingSoonModules = [
   {
     name: "Live Browser Testing",
@@ -139,7 +261,7 @@ export default function Modules() {
             What We Check
           </span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4 text-foreground">
-            22 modules. <span className="gradient-text">Every scan.</span>
+            67 modules. <span className="gradient-text">Every scan.</span>
           </h2>
           <p className="text-muted text-lg max-w-2xl mx-auto">
             Source code analysis, AI review, infrastructure hardening, supply chain,

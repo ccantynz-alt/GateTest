@@ -40,7 +40,8 @@ interface CallbackArgs {
   ref?: string | null;
   pullRequestNumber?: number | null;
   host?: string;
-  scanResult: Parameters<typeof sendGluecronCallback>[0]["scanResult"];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scanResult: any;
 }
 
 async function dispatchCallback(args: CallbackArgs): Promise<void> {

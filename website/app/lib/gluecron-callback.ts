@@ -21,11 +21,13 @@ export type GluecronStatus = "passed" | "failed" | "error" | "success";
 export interface GluecronPayload {
   repository: string; // "owner/name"
   sha: string; // full 40-char SHA
-  status: GluecronStatus;
+  status?: GluecronStatus;
   ref?: string;
   pullRequestNumber?: number;
   summary?: string;
   details?: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scanResult?: any;
   durationMs?: number;
 }
 
@@ -177,3 +179,6 @@ export async function pingGluecron(): Promise<{ ok: boolean; error?: string; ski
     req.end();
   });
 }
+
+// Alias kept for callers that use the older name.
+export const sendGluecronCallback = postGluecronResult;
