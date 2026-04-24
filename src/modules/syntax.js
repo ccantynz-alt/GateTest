@@ -79,6 +79,27 @@ class SyntaxModule extends BaseModule {
     const relPath = path.relative(projectRoot, file);
     try {
       const content = fs.readFileSync(file, 'utf-8');
+      const ext = path.extname(file).toLowerCase();
+
+      // .mjs files are ES modules — vm.Script rejects top-level import/export.
+      // Use `node --check` (or treat them as syntactically valid if node --check
+      // is unavailable) so ESM files don't false-positive.
+      if (ext === '.mjs') {
+        const { exitCode, stderr } = this._exec(`node --check "${file}" 2>&1`, {
+          cwd: projectRoot,
+        });
+        if (exitCode !== 0 && stderr && /SyntaxError/i.test(stderr)) {
+          result.addCheck(`syntax:${relPath}`, false, {
+            file: relPath,
+            message: stderr.trim().slice(0, 200),
+            suggestion: 'Fix the syntax error at the indicated location',
+          });
+        } else {
+          result.addCheck(`syntax:${relPath}`, true);
+        }
+        return;
+      }
+
       const vm = require('vm');
       new vm.Script(content, { filename: file });
       result.addCheck(`syntax:${relPath}`, true);
@@ -245,18 +266,46 @@ class SyntaxModule extends BaseModule {
   }
 
   _checkTypeScript(projectRoot, result) {
-    const { exitCode, stdout, stderr } = this._exec('npx tsc --noEmit 2>&1', {
-      cwd: projectRoot,
-      timeout: 120000,
-    });
-    if (exitCode === 0) {
+    // Find the directory that actually has a tsconfig.json.
+    // Some repos put TypeScript in a subdirectory (e.g. website/) with no
+    // root-level tsconfig — running tsc from the wrong directory produces
+    // spurious "No inputs were found" errors.
+    const tscDirs = [projectRoot];
+    const subdirs = ['website', 'app', 'client', 'frontend', 'src'];
+    for (const sub of subdirs) {
+      const candidate = path.join(projectRoot, sub);
+      if (fs.existsSync(path.join(candidate, 'tsconfig.json'))) {
+        tscDirs.push(candidate);
+      }
+    }
+
+    let anyRan = false;
+    let allPass = true;
+    const allErrors = [];
+
+    for (const dir of tscDirs) {
+      if (!fs.existsSync(path.join(dir, 'tsconfig.json'))) continue;
+      anyRan = true;
+      const { exitCode, stdout, stderr } = this._exec('npx tsc --noEmit 2>&1', {
+        cwd: dir,
+        timeout: 120000,
+      });
+      if (exitCode !== 0) {
+        allPass = false;
+        const output = stdout + stderr;
+        const errors = output.split('\n').filter(l => l.includes('error TS'));
+        allErrors.push(...errors);
+      }
+    }
+
+    if (!anyRan) {
+      result.addCheck('typescript-strict', true, { message: 'No tsconfig.json found', severity: 'info' });
+    } else if (allPass) {
       result.addCheck('typescript-strict', true);
     } else {
-      const output = stdout + stderr;
-      const errors = output.split('\n').filter(l => l.includes('error TS'));
       result.addCheck('typescript-strict', false, {
-        message: `${errors.length} TypeScript error(s)`,
-        details: errors.slice(0, 10),
+        message: `${allErrors.length} TypeScript error(s)`,
+        details: allErrors.slice(0, 10),
         suggestion: 'Run "npx tsc --noEmit" to see all errors',
       });
     }

@@ -57,6 +57,9 @@ class SecretsModule extends BaseModule {
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        // `// secrets-ok` on this line or the previous line suppresses
+        const prevLine = i > 0 ? lines[i - 1] : '';
+        if (/\bsecrets-ok\b/.test(line) || /\bsecrets-ok\b/.test(prevLine)) continue;
         for (const pattern of this.patterns) {
           // Reset regex lastIndex for global regexes
           pattern.regex.lastIndex = 0;

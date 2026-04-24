@@ -169,6 +169,8 @@ class WebHeadersModule extends BaseModule {
     const relUnix = rel.replace(/\\/g, '/');
     if (/(?:^|\/)src[\\/]modules[\\/]/.test(relUnix)) return 0;
 
+    const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
+
     const lines = content.split('\n');
     let issues = 0;
     const lowerContent = content.toLowerCase();
@@ -189,12 +191,16 @@ class WebHeadersModule extends BaseModule {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
+      // Suppressor: `// web-headers-ok` on same line or previous line
+      const prevLine = i > 0 ? lines[i - 1] : '';
+      if (/\bweb-headers-ok\b/.test(line) || /\bweb-headers-ok\b/.test(prevLine)) continue;
+
       // CSP: unsafe-eval / unsafe-inline. Look only on lines that
       // include a CSP directive marker.
       if (/content-security-policy|frame-ancestors|default-src|script-src|style-src|object-src/i.test(line)) {
         if (/['"`]?unsafe-eval['"`]?/i.test(line)) {
           issues += this._flag(result, `web-headers:csp-unsafe-eval:${rel}:${i + 1}`, {
-            severity: 'error',
+            severity: isTest ? 'warning' : 'error',
             file: rel,
             line: i + 1,
             message: 'Content-Security-Policy contains `unsafe-eval` — re-enables `eval()`/`new Function()` and the entire class of attacks CSP is supposed to block',
@@ -239,7 +245,7 @@ class WebHeadersModule extends BaseModule {
       const idx = content.search(/access-control-allow-origin/i);
       const lineNo = content.slice(0, Math.max(0, idx)).split('\n').length;
       issues += this._flag(result, `web-headers:cors-wildcard-with-credentials:${rel}:${lineNo}`, {
-        severity: 'error',
+        severity: isTest ? 'warning' : 'error',
         file: rel,
         line: lineNo,
         message: '`Access-Control-Allow-Origin: *` co-occurs with `Access-Control-Allow-Credentials: true` — cross-site credential theft surface, and browsers should (but don\'t always) reject it',

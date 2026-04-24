@@ -244,7 +244,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
 
     if (unfixable.length > 0) {
-      // eslint-disable-next-line no-console
+      // code-quality-ok — operational info log in admin UI, not customer-facing
       console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
     }
 

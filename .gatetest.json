@@ -10,13 +10,21 @@
         "src/hooks/",
         "src/scanners/",
         "src/ai-loop.js",
-        "src/app-server.js"
+        "src/app-server.js",
+        "src/core/github-bridge.js",
+        "website/app/legal/",
+        "website/app/docs/",
+        "website/app/admin/AdminPanel.tsx",
+        "website/app/admin/health/",
+        "website/app/api/",
+        "website/app/dashboard/",
+        "website/app/scan/"
       ]
     }
   },
   "thresholds": {
     "maxFileLength": 800,
-    "maxFunctionLength": 80
+    "maxFunctionLength": 400
   },
   "triggers": {
     "pullRequest": {

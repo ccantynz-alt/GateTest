@@ -166,7 +166,7 @@ export async function recordApiCall(params: {
       SET last_used_at = NOW(), total_calls = total_calls + 1
       WHERE id = ${params.apiKeyId}
     `;
-  } catch (err) {
+  } catch (err) { // error-ok — usage tracking is best-effort; never block the API response
     console.error("[GateTest] recordApiCall failed:", err);
   }
 }

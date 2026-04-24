@@ -153,6 +153,15 @@ class ErrorSwallowModule extends BaseModule {
     return out;
   }
 
+  // Returns true if the current line or the previous line carries a
+  // `// error-ok` suppressor comment, meaning the developer has documented
+  // that this specific swallow is intentional.
+  _isSuppressed(lines, lineIdx) {
+    const line = lines[lineIdx] || '';
+    const prev = lineIdx > 0 ? lines[lineIdx - 1] : '';
+    return /\berror-ok\b/.test(line) || /\berror-ok\b/.test(prev);
+  }
+
   _scanFile(file, projectRoot, result) {
     let content;
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
@@ -170,7 +179,7 @@ class ErrorSwallowModule extends BaseModule {
       // 1. Empty catch block — `catch (err) {}` or `catch {}` on one
       //    line, OR `catch (err) {` followed immediately by `}`.
       const catchOnLine = line.match(/\bcatch\s*(?:\(([^)]*)\))?\s*\{/);
-      if (catchOnLine && !isInString(line, catchOnLine.index)) {
+      if (catchOnLine && !isInString(line, catchOnLine.index) && !this._isSuppressed(lines, i)) {
         const bodyText = this._collectBlockBody(lines, i, catchOnLine.index);
         if (bodyText.body === '' && bodyText.closed) {
           issues += this._flag(result, `error-swallow:empty-catch:${rel}:${i + 1}`, {
@@ -193,7 +202,7 @@ class ErrorSwallowModule extends BaseModule {
 
       // 2. `.catch(() => {})` / `.catch(() => null)` / `.catch(noop)`
       const catchNoop = line.match(/\.catch\s*\(\s*(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0)\s*\)/);
-      if (catchNoop && !isInString(line, catchNoop.index)) {
+      if (catchNoop && !isInString(line, catchNoop.index) && !this._isSuppressed(lines, i)) {
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
           severity: isTest ? 'warning' : 'error',
           file: rel,
@@ -204,7 +213,7 @@ class ErrorSwallowModule extends BaseModule {
       }
       // `.catch(noop)` / `.catch(ignore)` / `.catch(() => { /* ignore */ })`
       const catchNamedNoop = line.match(/\.catch\s*\(\s*(?:noop|ignore|swallow|_)\s*\)/);
-      if (catchNamedNoop && !isInString(line, catchNamedNoop.index)) {
+      if (catchNamedNoop && !isInString(line, catchNamedNoop.index) && !this._isSuppressed(lines, i)) {
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
           severity: isTest ? 'warning' : 'error',
           file: rel,
@@ -216,7 +225,7 @@ class ErrorSwallowModule extends BaseModule {
 
       // 3. Global silent handlers
       const globalHandler = line.match(/process\.on\s*\(\s*['"`](uncaughtException|unhandledRejection)['"`]/);
-      if (globalHandler && !isInString(line, globalHandler.index)) {
+      if (globalHandler && !isInString(line, globalHandler.index) && !this._isSuppressed(lines, i)) {
         // Look at next ~8 lines for a throw/exit/log-with-rethrow
         const windowText = lines.slice(i, Math.min(lines.length, i + 10)).join('\n');
         const hasExit = /\bprocess\.exit\s*\(/.test(windowText);
@@ -238,7 +247,7 @@ class ErrorSwallowModule extends BaseModule {
       //    next ~5 lines doesn't mention `err` — we look ONLY after
       //    the opening brace to avoid counting the param itself.
       const nodeCb = line.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/);
-      if (nodeCb && !isInString(line, nodeCb.index)) {
+      if (nodeCb && !isInString(line, nodeCb.index) && !this._isSuppressed(lines, i)) {
         const errName = nodeCb[1];
         // Body starts right after the `{` on this line.
         const braceOffset = line.indexOf('{', nodeCb.index + nodeCb[0].length - 1);
@@ -263,7 +272,7 @@ class ErrorSwallowModule extends BaseModule {
       //    line by `.then(` or `.catch(`. Deliberately narrow.
       if (!isTest) {
         const flt = line.match(/^(\s*)([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)\s*\(/);
-        if (flt && !isInString(line, flt.index)) {
+        if (flt && !isInString(line, flt.index) && !this._isSuppressed(lines, i)) {
           const indent = flt[1];
           const method = flt[3];
           if (PROMISE_METHOD_HINTS.includes(method.toLowerCase())) {

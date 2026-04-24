@@ -233,7 +233,7 @@ async function processGitHubEvent({
   let depth = 0;
   try {
     depth = await queueStore.getQueueDepth(sql);
-  } catch (err) {
+  } catch (err) { // error-ok — queue depth check fails open; still enqueue rather than drop the event
     console.error('[github-webhook] getQueueDepth failed:', err && err.message ? err.message : err);
   }
   if (depth >= QUEUE_FULL_THRESHOLD) {

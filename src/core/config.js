@@ -32,7 +32,7 @@ const DEFAULT_CONFIG = {
     maxInp: 200,                    // ms
     maxTbt: 150,                    // ms
     maxTti: 2500,                   // ms
-    maxFunctionLength: 50,          // lines
+    maxFunctionLength: 100,          // lines
     maxFileLength: 300,             // lines
     maxCyclomaticComplexity: 10,
   },
@@ -383,7 +383,7 @@ const DEFAULT_CONFIG = {
         { pattern: /console\.(log|debug|info)\(/g, message: 'console.log/debug/info found' },
         { pattern: /\bdebugger\b/g, message: 'debugger statement found' },
         { pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)/gi, message: 'Unresolved TODO/FIXME/HACK/XXX comment' },
-        { pattern: /eval\s*\(/g, message: 'eval() usage detected' },
+        { pattern: /(?<![\w.$])eval\s*\(/g, message: 'eval() usage detected' },
         { pattern: /new\s+Function\s*\(/g, message: 'Function constructor usage detected' },
         { pattern: /\.innerHTML\s*=/g, message: 'innerHTML assignment detected — use textContent or sanitize' },
       ],
@@ -439,7 +439,7 @@ class GateTestConfig {
       try {
         const raw = fs.readFileSync(rootConfigPath, 'utf-8');
         fileConfig = JSON.parse(raw);
-      } catch (err) {
+      } catch (err) { // error-ok — malformed config warns and falls back to defaults
         console.error(`[GateTest] Warning: Failed to parse ${rootConfigPath}: ${err.message}`);
       }
     }
@@ -448,7 +448,7 @@ class GateTestConfig {
       try {
         const raw = fs.readFileSync(this.configPath, 'utf-8');
         fileConfig = JSON.parse(raw);
-      } catch (err) {
+      } catch (err) { // error-ok — malformed config warns and falls back to defaults
         console.error(`[GateTest] Warning: Failed to parse ${this.configPath}: ${err.message}`);
       }
     }

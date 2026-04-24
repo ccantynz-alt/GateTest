@@ -232,7 +232,7 @@ async function cloneAndScan(owner, name, branch, token) {
     const reportPath = path.join(tmpDir, '.gatetest/reports/gatetest-report-latest.json');
     let report = null;
     if (fs.existsSync(reportPath)) {
-      try { report = JSON.parse(fs.readFileSync(reportPath, 'utf-8')); } catch {}
+      try { report = JSON.parse(fs.readFileSync(reportPath, 'utf-8')); } catch {} // error-ok — malformed JSON treated as missing report
     }
 
     if (report) {
@@ -265,7 +265,7 @@ async function cloneAndScan(owner, name, branch, token) {
 
   } finally {
     // Cleanup
-    try { execSync(`rm -rf ${tmpDir}`, { stdio: 'pipe' }); } catch {}
+    try { execSync(`rm -rf ${tmpDir}`, { stdio: 'pipe' }); } catch {} // error-ok — cleanup in finally; failure is harmless
   }
 }
 
@@ -366,7 +366,7 @@ const server = http.createServer(async (req, res) => {
         } else {
           console.log(`[GateTest] Ignoring event: ${eventType}`);
         }
-      } catch (err) {
+      } catch (err) { // error-ok — webhook handler must not crash the server process
         console.error(`[GateTest] Error processing webhook:`, err.message);
       }
     });
