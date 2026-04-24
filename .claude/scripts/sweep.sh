@@ -25,7 +25,7 @@ findings=""
 
 # 1. Tests
 if ! node --test tests/*.test.js >/tmp/gatetest-sweep-tests.log 2>&1; then
-  failed=$(grep -E "^(not ok|# fail)" /tmp/gatetest-sweep-tests.log | head -5 | sed 's/^/    /')
+  failed=$(grep -a -E "^(not ok|# fail)" /tmp/gatetest-sweep-tests.log | head -5 | sed 's/^/    /')
   findings+=$'\n- Tests failing:\n'"$failed"
 fi
 
