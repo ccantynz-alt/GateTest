@@ -44,6 +44,14 @@ const MODULE_LABELS: Record<string, string> = {
   performance: "Performance",
   aiReview: "AI code review",
   fakeFixDetector: "Fake-fix detector",
+  dependencyFreshness: "Dependency freshness",
+  maliciousDeps: "Malicious deps (supply-chain)",
+  licenses: "License compliance",
+  iacSecurity: "IaC security (Docker/K8s/TF)",
+  ciHardening: "CI/CD hardening",
+  migrations: "SQL migration safety",
+  authFlaws: "Auth flaws",
+  flakyTests: "Flaky-test detector",
 };
 
 export default function ScanStatus() {
@@ -81,7 +89,9 @@ export default function ScanStatus() {
       ? ["syntax", "lint", "secrets", "codeQuality"]
       : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
          "seo", "links", "compatibility", "dataIntegrity", "documentation",
-         "performance", "aiReview", "fakeFixDetector"];
+         "performance", "aiReview", "fakeFixDetector", "dependencyFreshness",
+         "maliciousDeps", "licenses", "iacSecurity", "ciHardening",
+         "migrations", "authFlaws", "flakyTests"];
     setAnimModules(names.map((n) => ({ name: n, status: "pending" as const, checks: 0, issues: 0, duration: 0 })));
   }, [params.tier]);
 
@@ -389,7 +399,7 @@ export default function ScanStatus() {
               <div className="p-5 rounded-xl border border-border bg-white text-center">
                 <p className="text-sm text-muted mb-4">
                   {params.tier === "quick"
-                    ? "Passed the Quick Scan. Want to go deeper with all 67 modules?"
+                    ? "Passed the Quick Scan. Want to go deeper with all 22 modules?"
                     : "Clean across all modules."}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">

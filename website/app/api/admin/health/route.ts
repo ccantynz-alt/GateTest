@@ -14,7 +14,7 @@
  *   3. GitHub App auth (mints a JWT + verifies signing key is valid)
  *   4. Stripe API reachable (hits /v1/balance)
  *   5. Anthropic API reachable (hits /v1/messages with 1-token probe)
- *   6. All 14 scan modules loaded and callable
+ *   6. All 22 scan modules loaded and callable
  *   7. Real scan on a tiny public repo (octocat/Hello-World)
  *
  * This endpoint makes real network calls. Expect 5-10s total runtime.
@@ -196,11 +196,33 @@ async function checkGluecron(): Promise<Check> {
     };
   } catch (err) {
     const msg = (err as Error).message || "unknown";
+    // Safe diagnostic of what Vercel actually handed us. NEVER prints key material.
+    const raw = process.env.GATETEST_PRIVATE_KEY || "";
+    const diag = {
+      len: raw.length,
+      hasBegin: raw.includes("BEGIN"),
+      hasEnd: raw.includes("END"),
+      hasDashes: raw.includes("-----"),
+      hasLiteralBackslashN: raw.includes("\\n"),
+      realLineCount: (raw.match(/\n/g) || []).length,
+      startsWithDashes: raw.trimStart().startsWith("-----"),
+      looksQuoted:
+        (raw.startsWith('"') && raw.endsWith('"')) ||
+        (raw.startsWith("'") && raw.endsWith("'")),
+      looksBase64: /^[A-Za-z0-9+/=\s]+$/.test(raw) && !raw.includes("BEGIN"),
+    };
+    const hint = /DECODER routines/i.test(msg)
+      ? " — OpenSSL rejected the key format."
+      : "";
+    const diagStr =
+      `len=${diag.len} begin=${diag.hasBegin} end=${diag.hasEnd} dashes=${diag.hasDashes} ` +
+      `real-newlines=${diag.realLineCount} literal-\\n=${diag.hasLiteralBackslashN} ` +
+      `quoted=${diag.looksQuoted} base64?=${diag.looksBase64}`;
     return {
       id: "gluecron",
       label: "Gluecron (git host)",
       status: "fail",
-      detail: `Network error: ${msg}`,
+      detail: `${msg}${hint} | ${diagStr}`,
       duration: Date.now() - started,
     };
   }
@@ -305,12 +327,12 @@ async function checkAnthropic(): Promise<Check> {
 async function checkModules(): Promise<Check> {
   const started = Date.now();
   const names = Object.keys(MODULES);
-  if (names.length < 14) {
+  if (names.length < 22) {
     return {
       id: "modules",
       label: "Scan modules",
       status: "fail",
-      detail: `Only ${names.length} modules registered (expected 14)`,
+      detail: `Only ${names.length} modules registered (expected 22)`,
       duration: Date.now() - started,
     };
   }
