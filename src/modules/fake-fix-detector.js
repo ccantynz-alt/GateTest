@@ -23,9 +23,7 @@ const BaseModule = require('./base-module');
 const https = require('https');
 
 const ANTHROPIC_API_HOST = 'api.anthropic.com';
-const MODEL_SONNET = 'claude-sonnet-4-20250514';
-const MODEL_HAIKU = 'claude-haiku-4-5-20251022';
-// Kept for backwards compatibility with tests that may reference it.
+const MODEL_SONNET = 'claude-sonnet-4-6';
 const MODEL = MODEL_SONNET;
 const MAX_DIFF_SIZE = 120000; // 120KB — cap the payload sent to AI
 const AI_TIMEOUT_MS = 60000;
@@ -35,10 +33,10 @@ const AI_TIMEOUT_MS = 60000;
 // --------------------------------------------------------------------
 //
 // Every paid scan has a hard ceiling on AI spend. We estimate cost per call
-// from token counts (Anthropic pricing: see MODEL_PRICING below). When
-// cumulative spend hits 80% of the ceiling we fall back to Haiku. At 95%
-// we stop calling Claude entirely — remaining hunks are marked "unverified
-// (cost cap reached)" so the customer still gets a useful report.
+// from token counts (Anthropic pricing: see MODEL_PRICING below). At 95%
+// of the ceiling we stop calling Claude entirely — remaining hunks are
+// marked "unverified (cost cap reached)" so the customer still gets a
+// useful report.
 //
 // Ledger is keyed by scanId so parallel scans don't interfere. Memory-only:
 // this is a per-invocation tracker, not persistent state.
@@ -55,13 +53,11 @@ const DEFAULT_CEILING_USD = 3.0;
 // Anthropic pricing changes. Both figures cover input AND output.
 const MODEL_PRICING = {
   [MODEL_SONNET]: { inputPerMTok: 3.0, outputPerMTok: 15.0 },
-  [MODEL_HAIKU]: { inputPerMTok: 0.8, outputPerMTok: 4.0 },
 };
 
-const DOWNGRADE_RATIO = 0.8;  // 80% → switch to Haiku
 const HARD_STOP_RATIO = 0.95; // 95% → stop calling Claude
 
-// Map<scanId, { ceiling, spent, calls, hitCap, downgraded, tier }>
+// Map<scanId, { ceiling, spent, calls, hitCap, tier }>
 const costLedger = new Map();
 
 function estimateTokens(text) {
@@ -89,7 +85,6 @@ function initCostLedger(scanId, tier) {
     spent: 0,
     calls: 0,
     hitCap: false,
-    downgraded: false,
     tier: tier || 'full',
   };
   costLedger.set(scanId, entry);
@@ -115,7 +110,6 @@ function getCostReport(scanId) {
     calls: entry.calls,
     hitCap: entry.hitCap,
     tier: entry.tier,
-    downgraded: entry.downgraded,
     remaining: Math.max(0, entry.ceiling - entry.spent),
   };
 }
@@ -525,12 +519,7 @@ class FakeFixDetectorModule extends BaseModule {
         continue;
       }
 
-      // --- Cost-cap gate: downgrade to Haiku at 80% ---
-      const useHaiku = ledger.spent >= ledger.ceiling * DOWNGRADE_RATIO;
-      if (useHaiku && !ledger.downgraded) {
-        ledger.downgraded = true;
-      }
-      const model = useHaiku ? MODEL_HAIKU : MODEL_SONNET;
+      const model = MODEL_SONNET;
 
       // Build a per-hunk diff payload Claude can reason about.
       const hunkDiff = this._renderHunk(hunk);
@@ -578,37 +567,28 @@ If the hunk is a genuine real fix, return { "findings": [], "verdict": "real-fix
 Be ruthless. We are building a product that kills fake fixes.`;
 
       // Pre-check estimated cost — if this single call would blow the
-      // cap, fall back to Haiku or stop. This prevents a single oversized
-      // hunk from spending over-budget in one shot.
+      // cap, stop. This prevents a single oversized hunk from spending
+      // over-budget in one shot.
       const estimatedInputTokens = estimateTokens(prompt);
       const estimatedOutputTokens = 512; // assume ~512 tokens of JSON
-      let projectedCost = estimateCostUsd(
+      const projectedCost = estimateCostUsd(
         model,
         estimatedInputTokens,
         estimatedOutputTokens
       );
       if (ledger.spent + projectedCost > ledger.ceiling * HARD_STOP_RATIO) {
-        // Try Haiku instead — if that also exceeds the cap, skip the hunk.
-        const haikuCost = estimateCostUsd(
-          MODEL_HAIKU,
-          estimatedInputTokens,
-          estimatedOutputTokens
-        );
-        if (ledger.spent + haikuCost > ledger.ceiling * HARD_STOP_RATIO) {
-          ledger.hitCap = true;
-          unverifiedCount++;
-          findings.push({
-            ruleId: 'ai:unverified',
-            file: hunk.file,
-            line: hunk.lineNumber,
-            severity: 'info',
-            title: 'AI verification skipped (cost cap reached)',
-            explanation: `This diff hunk was not sent to Claude because the per-scan AI spend ceiling of $${ledger.ceiling.toFixed(2)} would be exceeded.`,
-            suggestion: 'Rerun with a higher tier if you need AI verification on every hunk.',
-          });
-          continue;
-        }
-        projectedCost = haikuCost;
+        ledger.hitCap = true;
+        unverifiedCount++;
+        findings.push({
+          ruleId: 'ai:unverified',
+          file: hunk.file,
+          line: hunk.lineNumber,
+          severity: 'info',
+          title: 'AI verification skipped (cost cap reached)',
+          explanation: `This diff hunk was not sent to Claude because the per-scan AI spend ceiling of $${ledger.ceiling.toFixed(2)} would be exceeded.`,
+          suggestion: 'Rerun with a higher tier if you need AI verification on every hunk.',
+        });
+        continue;
       }
 
       let response;
@@ -616,7 +596,7 @@ Be ruthless. We are building a product that kills fake fixes.`;
         response = await this._callClaude(
           apiKey,
           prompt,
-          useHaiku ? MODEL_HAIKU : model
+          model
         );
       } catch (err) {
         // One failed call shouldn't kill the whole engine. Record and continue.
@@ -641,7 +621,7 @@ Be ruthless. We are building a product that kills fake fixes.`;
       const inputTokens = usage?.input_tokens || estimatedInputTokens;
       const outputTokens = usage?.output_tokens || estimatedOutputTokens;
       const actualCost = estimateCostUsd(
-        useHaiku ? MODEL_HAIKU : model,
+        model,
         inputTokens,
         outputTokens
       );

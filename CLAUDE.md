@@ -190,7 +190,7 @@ Every tool here was chosen because it is the **best in its class right now.** If
 | Layer | Choice | Why |
 |---|---|---|
 | **AI Code Review** | Claude API (Anthropic) | Best reasoning, finds real bugs not patterns |
-| **Model** | claude-sonnet-4-20250514 | Fast, accurate, cost-effective |
+| **Model** | claude-sonnet-4-6 | Latest Sonnet — fastest, most capable, cost-effective |
 
 ### GitHub Integration
 | Layer | Choice | Why |
