@@ -20,6 +20,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Use-case pages — framework/language targeting
     { url: `${base}/for/nextjs`, lastModified: now, changeFrequency: "monthly", priority: 0.85 },
     { url: `${base}/for/typescript`, lastModified: now, changeFrequency: "monthly", priority: 0.85 },
+    { url: `${base}/for/nodejs`, lastModified: now, changeFrequency: "monthly", priority: 0.85 },
+    { url: `${base}/for/python`, lastModified: now, changeFrequency: "monthly", priority: 0.85 },
+
+    // Feature pages
+    { url: `${base}/features/auto-fix`, lastModified: now, changeFrequency: "monthly", priority: 0.85 },
 
     // Legal
     { url: `${base}/legal/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
@@ -27,4 +32,3 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/legal/refunds`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
   ];
 }
-
