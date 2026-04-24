@@ -35,7 +35,7 @@ class HtmlReporter {
     const historyPath = path.join(absDir, 'scan-history.json');
     let history = [];
     if (fs.existsSync(historyPath)) {
-      try { history = JSON.parse(fs.readFileSync(historyPath, 'utf-8')); } catch {}
+      try { history = JSON.parse(fs.readFileSync(historyPath, 'utf-8')); } catch {} // error-ok — malformed history treated as empty; fresh start
     }
     history.push({
       timestamp: summary.timestamp,

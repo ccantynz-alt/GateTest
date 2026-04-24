@@ -40,6 +40,10 @@ const DEFAULT_EXCLUDES = [
   '.next', '__pycache__', 'target', 'vendor',
 ];
 
+// Paths that define detection patterns — scanning them would produce FPs
+// because the pattern strings match the very rules they implement.
+const MODULE_SOURCE_RE = /(?:^|\/)src[\\/]modules[\\/]/;
+
 const SCAN_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 
 // Client-bundled env prefixes. NEXT_PUBLIC_* (Next.js), VITE_* (Vite),
@@ -163,6 +167,14 @@ class PromptSafetyModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
+
+    // Skip detection-pattern source files — scanning the module that
+    // defines the patterns produces false positives on the patterns themselves.
+    if (MODULE_SOURCE_RE.test(rel.replace(/\\/g, '/'))) return 0;
+
+    const relUnix = rel.replace(/\\/g, '/');
+    const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
+
     const lines = content.split('\n');
     let issues = 0;
 
@@ -177,7 +189,7 @@ class PromptSafetyModule extends BaseModule {
         for (const tok of pubMatch) {
           if (PUBLIC_ENV_PREFIX.test(tok) && KEYISH_SUFFIX.test(tok)) {
             issues += this._flag(result, `prompt-safety:public-api-key:${rel}:${i + 1}`, {
-              severity: 'error',
+              severity: isTest ? 'warning' : 'error',
               file: rel,
               line: i + 1,
               match: tok,
@@ -223,7 +235,7 @@ class PromptSafetyModule extends BaseModule {
     }
 
     // 4. LLM call without max_tokens — scan object-literal calls
-    issues += this._scanLlmCalls(content, lines, rel, result);
+    issues += this._scanLlmCalls(content, lines, rel, result, isTest);
 
     // 5. Prompt injection: string templates combining a prompt-shaped
     // literal with a user-input-hinted variable, with no delimiter
@@ -233,7 +245,7 @@ class PromptSafetyModule extends BaseModule {
     return issues;
   }
 
-  _scanLlmCalls(content, lines, rel, result) {
+  _scanLlmCalls(content, lines, rel, result, isTest = false) {
     let issues = 0;
     // Match both JS/TS and Python call-expressions. The object/kwarg
     // body is captured greedily; we then check for `max_tokens`.
@@ -257,7 +269,7 @@ class PromptSafetyModule extends BaseModule {
         const idx = m.index;
         const lineNo = content.slice(0, idx).split('\n').length;
         issues += this._flag(result, `prompt-safety:no-max-tokens:${kind}:${rel}:${lineNo}`, {
-          severity: 'error',
+          severity: isTest ? 'warning' : 'error',
           file: rel,
           line: lineNo,
           api: kind,

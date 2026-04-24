@@ -12,6 +12,7 @@ import { getAdminConfig, generateState } from "../../../lib/admin-session";
 
 const STATE_COOKIE_NAME = "gatetest_admin_oauth_state";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_req: NextRequest) {
   const status = getAdminConfig();
 

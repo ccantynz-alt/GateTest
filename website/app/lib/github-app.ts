@@ -159,7 +159,7 @@ export function getPrivateKey(): string {
     throw new Error(
       `GATETEST_PRIVATE_KEY is not a valid PEM (${msg}). ` +
         "Re-paste the .pem from GitHub — make sure the ENTIRE file contents are copied, " +
-        "including the -----BEGIN RSA PRIVATE KEY----- and -----END RSA PRIVATE KEY----- lines."
+        "including the -----BEGIN RSA PRIVATE KEY----- and -----END RSA PRIVATE KEY----- lines." // secrets-ok — this is a documentation string in an error message, not a real key
     );
   }
 

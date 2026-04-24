@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Page Not Found — GateTest",
@@ -14,12 +15,12 @@ export default function NotFound() {
           The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a href="/" className="btn-primary px-6 py-3 text-sm text-center">
+          <Link href="/" className="btn-primary px-6 py-3 text-sm text-center">
             Back to Home
-          </a>
-          <a href="/dashboard" className="btn-secondary px-6 py-3 text-sm text-center">
+          </Link>
+          <Link href="/dashboard" className="btn-secondary px-6 py-3 text-sm text-center">
             My Scans
-          </a>
+          </Link>
         </div>
       </div>
     </div>

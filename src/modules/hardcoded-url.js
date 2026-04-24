@@ -194,6 +194,10 @@ class HardcodedUrlModule extends BaseModule {
       }
       if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
 
+      // Suppressor comment on same or previous line.
+      const prevLine = i > 0 ? lines[i - 1] : '';
+      if (/\bhardcoded-url-ok\b/.test(line) || /\bhardcoded-url-ok\b/.test(prevLine)) continue;
+
       // Skip lines whose identifier context says "dev URL".
       if (DEV_CONTEXT_LINE_RE.test(line)) continue;
 

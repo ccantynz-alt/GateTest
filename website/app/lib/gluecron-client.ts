@@ -286,6 +286,7 @@ export async function fetchFileSha(
   repo: string,
   path: string,
   ref: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _token: string
 ): Promise<string> {
   const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
@@ -337,6 +338,7 @@ export async function postPrComment(
   repo: string,
   prNumber: number,
   body: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _token: string
 ): Promise<GluecronApiResponse> {
   return gluecronApi(
@@ -354,6 +356,7 @@ export async function createBranch(
   repo: string,
   branchName: string,
   baseSha: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _token: string
 ): Promise<GluecronApiResponse> {
   return gluecronApi(
@@ -378,6 +381,7 @@ export async function upsertFile(
   message: string,
   branch: string,
   existingSha: string | null | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _token: string
 ): Promise<GluecronApiResponse> {
   const body: Record<string, unknown> = {
@@ -412,6 +416,7 @@ export async function openPullRequest(
   body: string,
   headBranch: string,
   baseBranch: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _token: string
 ): Promise<GluecronApiResponse> {
   return gluecronApi(

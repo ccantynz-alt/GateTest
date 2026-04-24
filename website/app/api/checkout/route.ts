@@ -18,7 +18,8 @@ import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
 
 interface ScanTier {
   name: string;
@@ -42,7 +43,8 @@ const TIERS: Record<string, ScanTier> = {
   },
 };
 
-function stripeRequest(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _stripeRequest(
   method: string,
   path: string,
   body?: string
@@ -88,7 +90,8 @@ function stripeRequest(
   });
 }
 
-export async function POST(req: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function POST(_req: NextRequest) {
   // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
   return NextResponse.json(
     {

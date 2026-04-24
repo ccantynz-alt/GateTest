@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
       const piMeta = (pi.metadata || {}) as Record<string, string>;
       tier = tier || piMeta.tier || "";
       repoUrl = repoUrl || piMeta.repo_url || "";
-    } catch (err) {
+    } catch (err) { // error-ok — PI lookup is best-effort; proceed with session metadata
       console.error("[GateTest] PI metadata lookup failed:", err);
     }
   }
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
     await sql`INSERT INTO scans (id, session_id, payment_intent_id, customer_email, repo_url, tier, status, tier_price_usd)
       VALUES (${scanId}, ${sessionId}, ${paymentIntentId}, ${emailOrNull}, ${repoUrl}, ${tier}, 'pending', ${tierPriceUsd})
       ON CONFLICT (id) DO NOTHING`;
-  } catch (dbErr) {
+  } catch (dbErr) { // error-ok — DB write is best-effort; scan proceeds via Stripe metadata fallback
     // DB write is best-effort — scan still proceeds via Stripe metadata fallback
     console.error("[GateTest] DB write failed (webhook):", dbErr);
   }
@@ -233,10 +233,12 @@ export async function POST(req: NextRequest) {
         tierPriceUsd,
       });
       if (outcome.skipped) {
+        // code-quality-ok — operational status log inside webhook after() handler
         console.log(
           `[GateTest] Scan job ${jobId} skipped: ${outcome.reason}`
         );
       } else {
+        // code-quality-ok — operational status log inside webhook after() handler
         console.log(
           `[GateTest] Scan job ${jobId} finished: ${outcome.result?.status}`
         );
@@ -251,7 +253,7 @@ export async function POST(req: NextRequest) {
           "POST",
           `/v1/payment_intents/${paymentIntentId}/cancel`
         );
-      } catch (cancelErr) {
+      } catch (cancelErr) { // error-ok — cancel is best-effort recovery; nothing left to do if this also fails
         console.error("[GateTest] Fallback cancel failed:", cancelErr);
       }
       // Mark scan as failed in DB

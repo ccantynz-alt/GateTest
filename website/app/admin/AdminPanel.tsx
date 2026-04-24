@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
 interface FailedFile {
@@ -244,7 +245,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     }
 
     if (unfixable.length > 0) {
-      // eslint-disable-next-line no-console
+      // code-quality-ok — operational info log in admin UI, not customer-facing
       console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
     }
 
@@ -335,9 +336,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
             >
               Self-Test
             </a>
-            <a href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+            <Link href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
               &larr; Site
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -398,8 +399,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* DB init notice */}
         {dbData?.note && (
-          <div className="card p-4 mb-6 border-l-4 border-l-yellow-400">
-            <p className="text-sm text-muted">{dbData.note}</p>
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 mb-6 border-l-4 border-l-yellow-400">
+            <p className="text-sm text-white/50">{dbData.note}</p>
             <button onClick={initDb} className="btn-primary px-4 py-2 text-xs mt-2">
               Initialize Database
             </button>
@@ -409,22 +410,21 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: Run Scan */}
         {activeTab === "scan" && (
           <>
-            <div className="card p-6 mb-8">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-8">
               <div className="grid sm:grid-cols-[1fr,auto,auto] gap-3">
                 <input
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-full"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm w-full"
                 />
                 <select
                   value={tier}
                   onChange={(e) => setTier(e.target.value)}
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 >
-                  <option value="quick">Quick (4 modules)</option>
-                  <option value="full">Full (22 modules)</option>
+                  <option value="quick">Quick (39 modules)</option>
                   <option value="full">Full (67 modules)</option>
                 </select>
                 <button
@@ -487,18 +487,18 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
             {result && !scanning && (
               <div className="space-y-4">
-                <div className={`card p-6 ${totalIssues === 0 ? "border-success" : "border-accent"}`}>
+                <div className={`rounded-xl bg-white/[0.04] border ${totalIssues === 0 ? "border-emerald-500/50" : "border-emerald-500/30"} p-6`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold">
                         {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
                       </h2>
-                      <p className="text-sm text-muted">
+                      <p className="text-sm text-white/50">
                         {modules.length} modules &middot; {result.duration as number}ms
                       </p>
                     </div>
                     <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                      totalIssues === 0 ? "bg-green-50 text-success" : "bg-amber-50 text-amber-700"
+                      totalIssues === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
                     }`}>
                       {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
                     </span>
@@ -589,12 +589,12 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
                 {/* Manual guidance for unfixable issues */}
                 {guidance && guidance.length > 0 && (
-                  <div className="card p-5 mt-4 border-l-4 border-l-accent">
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 mt-4 border-l-4 border-l-accent">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-bold">Step-by-step fix guide ({guidance.length} issues)</h3>
                       <button
                         onClick={() => setGuidance(null)}
-                        className="text-muted hover:text-foreground text-lg px-2"
+                        className="text-white/50 hover:text-white text-lg px-2"
                         aria-label="Close guide"
                       >
                         &times;
@@ -602,15 +602,15 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     </div>
                     <div className="space-y-4">
                       {guidance.map((g, i) => (
-                        <div key={i} className="rounded-lg border border-border p-4 bg-gray-50">
+                        <div key={i} className="rounded-lg border border-white/10 p-4 bg-white/[0.03]">
                           <div className="flex items-baseline gap-2 mb-1">
                             <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
                             <h4 className="font-semibold text-sm">{g.title}</h4>
                           </div>
-                          <p className="text-xs text-muted mb-3">{g.why}</p>
+                          <p className="text-xs text-white/50 mb-3">{g.why}</p>
                           <ol className="text-sm space-y-1 list-decimal list-inside">
                             {g.steps.map((s, j) => (
-                              <li key={j} className="text-foreground">{s}</li>
+                              <li key={j} className="text-white/80">{s}</li>
                             ))}
                           </ol>
                           {g.commands && g.commands.length > 0 && (
@@ -628,28 +628,28 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
                 {/* Fix result */}
                 {fixing && (
-                  <div className="card p-6 text-center">
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 text-center">
                     <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                     <p className="font-medium">AI is reading your code and generating fixes...</p>
-                    <p className="text-xs text-muted mt-1">This may take 30-60 seconds depending on the number of issues</p>
+                    <p className="text-xs text-white/50 mt-1">This may take 30-60 seconds depending on the number of issues</p>
                   </div>
                 )}
 
                 {fixResult && (
-                  <div className={`card p-5 ${fixResult.prUrl ? "border-success" : "border-accent"}`}>
+                  <div className={`rounded-xl bg-white/[0.04] border ${fixResult.prUrl ? "border-emerald-500/50" : "border-emerald-500/30"} p-5`}>
                     {fixResult.prUrl ? (
                       <>
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-success text-lg">&#10003;</span>
                           <h3 className="font-bold">Pull Request Created</h3>
                         </div>
-                        <p className="text-sm text-muted mb-3">
+                        <p className="text-sm text-white/50 mb-3">
                           Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
                           {totalIssues > (fixResult.issuesFixed || 0) && (
                             <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
                           )}.
                         </p>
-                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                        <div className="mt-3 p-3 rounded-lg bg-amber-900/30 border border-amber-500/30 text-xs text-amber-300 mb-3">
                           <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -685,11 +685,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     ) : fixResult.status === "api_unavailable" ? (
                       <>
                         <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
-                        <p className="text-sm text-muted mt-1">{fixResult.message}</p>
+                        <p className="text-sm text-white/50 mt-1">{fixResult.message}</p>
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-muted">
-                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
                             </p>
                             <button
                               onClick={retryFailedFiles}
@@ -703,10 +703,10 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       </>
                     ) : fixResult.status === "no_fixes" ? (
                       <>
-                        <p className="text-sm text-muted">{fixResult.message || "No fixes could be generated"}</p>
+                        <p className="text-sm text-white/50">{fixResult.message || "No fixes could be generated"}</p>
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-muted">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
+                            <p className="text-xs text-white/50">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
                             <button
                               onClick={retryFailedFiles}
                               disabled={fixing}
@@ -721,14 +721,14 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       <>
                         <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
                         {fixResult.errors && fixResult.errors.length > 0 && (
-                          <ul className="mt-2 text-xs text-muted space-y-1">
+                          <ul className="mt-2 text-xs text-white/50 space-y-1">
                             {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
                           </ul>
                         )}
                         {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
-                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-border">
-                            <p className="text-xs text-muted">
-                              <strong className="text-foreground">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
+                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+                            <p className="text-xs text-white/50">
+                              <strong className="text-white">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
                             </p>
                             <button
                               onClick={retryFailedFiles}
@@ -748,27 +748,24 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   const status = mod.status as string;
                   const details = (mod.details as string[]) || [];
                   return (
-                    <div key={mod.name as string} className={`card p-4 ${
-                      status === "failed" ? "border-l-4 border-l-danger" :
-                      status === "passed" ? "border-l-4 border-l-success" : ""
-                    }`}>
+                    <div key={mod.name as string} className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${status === "failed" ? "border-l-4 border-l-red-500" : status === "passed" ? "border-l-4 border-l-emerald-500" : ""}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className={`text-sm font-bold ${
-                            status === "passed" ? "text-success" : status === "failed" ? "text-danger" : "text-muted"
+                            status === "passed" ? "text-emerald-400" : status === "failed" ? "text-red-400" : "text-white/40"
                           }`}>
                             {status === "passed" ? "PASS" : status === "failed" ? "FAIL" : "SKIP"}
                           </span>
                           <span className="font-semibold text-sm">{mod.name as string}</span>
                         </div>
-                        <div className="text-xs text-muted">
+                        <div className="text-xs text-white/40">
                           {mod.checks as number} checks &middot; {mod.issues as number} issues &middot; {mod.duration as number}ms
                         </div>
                       </div>
                       {details.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {details.map((d, i) => (
-                            <li key={i} className="text-xs text-muted font-mono pl-14">
+                            <li key={i} className="text-xs text-white/50 font-mono pl-14">
                               &rarr; {d}
                             </li>
                           ))}
@@ -794,43 +791,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab: Recent Scans */}
         {activeTab === "scans" && (
-          <div className="card overflow-hidden">
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
             {dbLoading ? (
-              <div className="p-8 text-center text-muted">Loading...</div>
+              <div className="p-8 text-center text-white/40">Loading...</div>
             ) : !dbData?.scans?.length ? (
-              <div className="p-8 text-center text-muted">No scans recorded yet.</div>
+              <div className="p-8 text-center text-white/40">No scans recorded yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-surface-solid">
-                      <th className="text-left px-4 py-3 font-medium text-muted">Repo</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Tier</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Score</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Customer</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Date</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Repo</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Tier</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Score</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Customer</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dbData.scans.map((scan) => (
-                      <tr key={scan.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs max-w-[200px] truncate">
+                      <tr key={scan.id} className="border-b border-white/[0.06] last:border-0">
+                        <td className="px-4 py-3 font-mono text-xs text-white/70 max-w-[200px] truncate">
                           {scan.repo_url?.replace("https://github.com/", "") || "-"}
                         </td>
-                        <td className="px-4 py-3">{scan.tier}</td>
+                        <td className="px-4 py-3 text-white/70">{scan.tier}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                            scan.status === "completed" ? "bg-green-50 text-success" :
-                            scan.status === "failed" ? "bg-red-50 text-danger" :
-                            "bg-yellow-50 text-yellow-700"
+                            scan.status === "completed" ? "bg-emerald-500/20 text-emerald-400" :
+                            scan.status === "failed" ? "bg-red-500/20 text-red-400" :
+                            "bg-amber-500/20 text-amber-400"
                           }`}>
                             {scan.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3">{scan.score ?? "-"}</td>
-                        <td className="px-4 py-3 text-xs">{scan.customer_email || "-"}</td>
-                        <td className="px-4 py-3 text-xs text-muted">
+                        <td className="px-4 py-3 text-white/70">{scan.score ?? "-"}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">{scan.customer_email || "-"}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">
                           {scan.created_at ? new Date(scan.created_at).toLocaleDateString() : "-"}
                         </td>
                       </tr>
@@ -845,9 +842,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: API Keys */}
         {activeTab === "keys" && (
           <div className="space-y-6">
-            <div className="card p-6">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6">
               <h2 className="text-lg font-bold mb-1">Issue an API key</h2>
-              <p className="text-xs text-muted mb-4">
+              <p className="text-xs text-white/50 mb-4">
                 For external platforms calling <code className="font-mono">POST /api/v1/scan</code>.
                 The plaintext key is shown ONCE after creation — copy it immediately.
               </p>
@@ -857,19 +854,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   value={keyName}
                   onChange={(e) => setKeyName(e.target.value)}
                   placeholder="Key name (e.g. Platform A prod)"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 />
                 <input
                   type="email"
                   value={keyCustomer}
                   onChange={(e) => setKeyCustomer(e.target.value)}
                   placeholder="customer@example.com (optional)"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 />
                 <select
                   value={keyTier}
                   onChange={(e) => setKeyTier(e.target.value as "quick" | "full")}
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 >
                   <option value="quick">quick</option>
                   <option value="full">full</option>
@@ -879,7 +876,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   value={keyRate}
                   onChange={(e) => setKeyRate(Math.max(1, Number(e.target.value) || 60))}
                   placeholder="60"
-                  className="px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm w-24"
+                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm w-24"
                 />
                 <button onClick={createKey} className="btn-primary px-6 py-3 text-sm">
                   Create Key
@@ -888,16 +885,16 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               {keyError && <p className="text-danger text-sm mt-3">{keyError}</p>}
 
               {newKey && (
-                <div className="mt-4 p-4 border-l-4 border-l-green-500 bg-green-50/50 rounded">
-                  <p className="text-sm font-bold text-green-800 mb-1">
+                <div className="mt-4 p-4 border-l-4 border-l-emerald-500 bg-emerald-900/20 rounded">
+                  <p className="text-sm font-bold text-emerald-300 mb-1">
                     Key created — copy it now, it will not be shown again.
                   </p>
-                  <p className="text-xs text-green-800 mb-2">
+                  <p className="text-xs text-emerald-300 mb-2">
                     <strong>{newKey.name}</strong> · tier {newKey.tier_allowed} ·{" "}
                     {newKey.rate_limit_per_hour}/hr
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 font-mono text-xs bg-white border border-green-200 rounded px-3 py-2 break-all">
+                    <code className="flex-1 font-mono text-xs bg-white/5 border border-white/10 rounded px-3 py-2 break-all text-white/80">
                       {newKey.plaintext_key}
                     </code>
                     <button
@@ -913,48 +910,48 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               )}
             </div>
 
-            <div className="card overflow-hidden">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-surface-solid">
-                      <th className="text-left px-4 py-3 font-medium text-muted">Name</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Prefix</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Tier</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Rate/hr</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Calls</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Last used</th>
-                      <th className="text-right px-4 py-3 font-medium text-muted">Action</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Name</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Prefix</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Tier</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Rate/hr</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Calls</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Last used</th>
+                      <th className="text-right px-4 py-3 font-medium text-white/40">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {apiKeys === null ? (
                       <tr>
-                        <td colSpan={8} className="p-6 text-center text-muted">Loading...</td>
+                        <td colSpan={8} className="p-6 text-center text-white/40">Loading...</td>
                       </tr>
                     ) : apiKeys.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="p-6 text-center text-muted">
+                        <td colSpan={8} className="p-6 text-center text-white/40">
                           No keys issued yet. Create one above.
                         </td>
                       </tr>
                     ) : (
                       apiKeys.map((k) => (
-                        <tr key={k.id} className="border-b border-border last:border-0">
-                          <td className="px-4 py-3">{k.name}</td>
-                          <td className="px-4 py-3 font-mono text-xs">{k.key_prefix}…</td>
-                          <td className="px-4 py-3">{k.tier_allowed}</td>
-                          <td className="px-4 py-3">{k.rate_limit_per_hour}</td>
-                          <td className="px-4 py-3">{k.total_calls}</td>
+                        <tr key={k.id} className="border-b border-white/[0.06] last:border-0">
+                          <td className="px-4 py-3 text-white/70">{k.name}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-white/70">{k.key_prefix}…</td>
+                          <td className="px-4 py-3 text-white/70">{k.tier_allowed}</td>
+                          <td className="px-4 py-3 text-white/70">{k.rate_limit_per_hour}</td>
+                          <td className="px-4 py-3 text-white/70">{k.total_calls}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                              k.active ? "bg-green-50 text-success" : "bg-slate-100 text-slate-500"
+                              k.active ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-white/40"
                             }`}>
                               {k.active ? "active" : "revoked"}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-xs text-muted">
+                          <td className="px-4 py-3 text-xs text-white/40">
                             {k.last_used_at ? new Date(k.last_used_at).toLocaleString() : "never"}
                           </td>
                           <td className="px-4 py-3 text-right">
@@ -975,7 +972,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             </div>
 
-            <div className="card p-4 text-xs text-muted">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 text-xs text-white/50">
               Docs: <a href="/docs/api" className="text-accent hover:underline">/docs/api</a> ·
               Endpoint: <code className="font-mono">POST /api/v1/scan</code>
             </div>
@@ -984,31 +981,31 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab: Customers */}
         {activeTab === "customers" && (
-          <div className="card overflow-hidden">
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
             {dbLoading ? (
-              <div className="p-8 text-center text-muted">Loading...</div>
+              <div className="p-8 text-center text-white/40">Loading...</div>
             ) : !dbData?.customers?.length ? (
-              <div className="p-8 text-center text-muted">No customers yet.</div>
+              <div className="p-8 text-center text-white/40">No customers yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-surface-solid">
-                      <th className="text-left px-4 py-3 font-medium text-muted">Email</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">GitHub</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Scans</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Spent</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted">Joined</th>
+                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Email</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">GitHub</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Scans</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Spent</th>
+                      <th className="text-left px-4 py-3 font-medium text-white/40">Joined</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dbData.customers.map((c) => (
-                      <tr key={c.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3 text-xs">{c.email}</td>
-                        <td className="px-4 py-3 font-mono text-xs">{c.github_login || "-"}</td>
-                        <td className="px-4 py-3">{c.total_scans}</td>
-                        <td className="px-4 py-3">${Number(c.total_spent_usd || 0).toFixed(0)}</td>
-                        <td className="px-4 py-3 text-xs text-muted">
+                      <tr key={c.id} className="border-b border-white/[0.06] last:border-0">
+                        <td className="px-4 py-3 text-xs text-white/70">{c.email}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-white/70">{c.github_login || "-"}</td>
+                        <td className="px-4 py-3 text-white/70">{c.total_scans}</td>
+                        <td className="px-4 py-3 text-white/70">${Number(c.total_spent_usd || 0).toFixed(0)}</td>
+                        <td className="px-4 py-3 text-xs text-white/40">
                           {c.created_at ? new Date(c.created_at).toLocaleDateString() : "-"}
                         </td>
                       </tr>
@@ -1084,8 +1081,8 @@ function ServerScanPanel() {
 
   return (
     <>
-      <div className="card p-6 mb-8">
-        <p className="text-sm text-muted mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-8">
+        <p className="text-sm text-white/50 mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
         <div className="flex gap-3">
           <input
             type="url"
@@ -1093,7 +1090,7 @@ function ServerScanPanel() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") runServerScan(); }}
             placeholder="https://example.com"
-            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+            className="flex-1 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
           />
           <button onClick={runServerScan} disabled={scanning} className="btn-primary px-6 py-3 text-sm disabled:opacity-50">
             {scanning ? "Scanning..." : "Scan Server"}
@@ -1103,26 +1100,26 @@ function ServerScanPanel() {
       </div>
 
       {scanning && (
-        <div className="card p-8 text-center">
+        <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-8 text-center">
           <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted">Checking SSL, headers, DNS, performance...</p>
+          <p className="text-white/50">Checking SSL, headers, DNS, performance...</p>
         </div>
       )}
 
       {result && !scanning && (
         <div className="space-y-4">
-          <div className={`card p-6 ${totalIssues === 0 ? "border-l-4 border-l-green-500" : "border-l-4 border-l-amber-500"}`}>
+          <div className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 ${totalIssues === 0 ? "border-l-4 border-l-emerald-500" : "border-l-4 border-l-amber-500"}`}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">
                   {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
                 </h2>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-white/50">
                   {result.hostname as string} &middot; {modules.length} modules &middot; {result.duration as number}ms
                 </p>
               </div>
               <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                totalIssues === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                totalIssues === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
               }`}>
                 {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
               </span>
@@ -1149,7 +1146,7 @@ function ServerScanPanel() {
 
           {/* Generated fixes — ready-to-paste configs */}
           {fixes && Object.keys(fixes).length > 0 && (
-            <div className="card p-5 border-l-4 border-l-accent">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 border-l-4 border-l-accent">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-accent text-lg">⚡</span>
                 <h3 className="font-bold">Ready-to-paste fixes</h3>
@@ -1157,16 +1154,16 @@ function ServerScanPanel() {
               <div className="space-y-5">
                 {Object.entries(fixes).map(([category, fixList]) => (
                   <div key={category}>
-                    <h4 className="font-semibold text-sm text-foreground mb-2">{category}</h4>
+                    <h4 className="font-semibold text-sm text-white/80 mb-2">{category}</h4>
                     <div className="space-y-3">
                       {fixList.map((f, idx) => {
                         const id = `${category}-${idx}`;
                         return (
-                          <div key={id} className="rounded-lg border border-border bg-gray-50 overflow-hidden">
-                            <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-border">
+                          <div key={id} className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 bg-white/[0.04] border-b border-white/10">
                               <div>
-                                <div className="text-xs font-bold text-foreground">{f.platform}</div>
-                                <div className="text-xs text-muted">{f.title}</div>
+                                <div className="text-xs font-bold text-white/80">{f.platform}</div>
+                                <div className="text-xs text-white/50">{f.title}</div>
                               </div>
                               <button
                                 onClick={() => copyCode(f.code, id)}
@@ -1175,8 +1172,8 @@ function ServerScanPanel() {
                                 {copiedCode === id ? "Copied!" : "Copy"}
                               </button>
                             </div>
-                            <pre className="p-3 text-xs font-mono text-foreground overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
-                            <p className="px-3 py-2 bg-amber-50 text-xs text-amber-800 border-t border-amber-100">
+                            <pre className="p-3 text-xs font-mono text-white/70 overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                            <p className="px-3 py-2 bg-amber-900/30 text-xs text-amber-300 border-t border-amber-500/30">
                               {f.instructions}
                             </p>
                           </div>
@@ -1190,8 +1187,8 @@ function ServerScanPanel() {
           )}
 
           {fixes && Object.keys(fixes).length === 0 && (
-            <div className="card p-5 border-l-4 border-l-amber-500">
-              <p className="text-sm text-muted">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 border-l-4 border-l-amber-500">
+              <p className="text-sm text-white/50">
                 No automated fixes available for these specific issues. They require manual review or infrastructure access.
               </p>
             </div>
@@ -1201,15 +1198,15 @@ function ServerScanPanel() {
             const status = mod.status as string;
             const details = (mod.details as string[]) || [];
             return (
-              <div key={mod.name as string} className={`card p-4 ${
-                status === "passed" ? "border-l-4 border-l-green-500" :
+              <div key={mod.name as string} className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${
+                status === "passed" ? "border-l-4 border-l-emerald-500" :
                 status === "warning" ? "border-l-4 border-l-amber-500" :
                 "border-l-4 border-l-red-500"
               }`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-sm">{mod.label as string || mod.name as string}</span>
+                  <span className="font-semibold text-sm text-white/80">{mod.label as string || mod.name as string}</span>
                   <span className={`text-xs font-bold ${
-                    status === "passed" ? "text-green-600" : status === "warning" ? "text-amber-600" : "text-red-600"
+                    status === "passed" ? "text-emerald-400" : status === "warning" ? "text-amber-400" : "text-red-400"
                   }`}>
                     {status === "passed" ? "PASS" : status === "warning" ? "WARN" : "FAIL"}
                   </span>
@@ -1218,10 +1215,10 @@ function ServerScanPanel() {
                   <ul className="space-y-1">
                     {details.map((d, i) => (
                       <li key={i} className={`text-xs font-mono ${
-                        d.startsWith("error") ? "text-red-600" :
-                        d.startsWith("warning") ? "text-amber-600" :
-                        d.startsWith("pass") ? "text-green-600" :
-                        "text-muted"
+                        d.startsWith("error") ? "text-red-400" :
+                        d.startsWith("warning") ? "text-amber-400" :
+                        d.startsWith("pass") ? "text-emerald-400" :
+                        "text-white/50"
                       }`}>
                         {d}
                       </li>
@@ -1332,12 +1329,12 @@ function NuclearScanPanel() {
 
   return (
     <>
-      <div className="card p-6 mb-6 border-l-4 border-l-red-500">
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-6 border-l-4 border-l-red-500">
         <div className="flex items-start gap-3 mb-3">
           <span className="text-2xl">☢</span>
           <div>
             <h3 className="font-bold text-lg">Nuclear Scan</h3>
-            <p className="text-sm text-muted">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
+            <p className="text-sm text-white/50">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -1347,7 +1344,7 @@ function NuclearScanPanel() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") runNuclear(); }}
             placeholder="https://crontech.ai"
-            className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-foreground text-sm"
+            className="flex-1 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
           />
           <button
             onClick={runNuclear}
@@ -1362,39 +1359,39 @@ function NuclearScanPanel() {
       </div>
 
       {scanning && (
-        <div className="card p-8 text-center">
+        <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-8 text-center">
           <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="font-bold">Running full-stack diagnosis...</p>
-          <p className="text-xs text-muted mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
+          <p className="text-xs text-white/50 mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
         </div>
       )}
 
       {result && !scanning && (
         <>
           {/* Diagnosis */}
-          <div className="card p-6 mb-4 border-l-4 border-l-red-500">
+          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-4 border-l-4 border-l-red-500">
             <h3 className="font-bold mb-3">Diagnosis</h3>
             {diagnosis.map((d, i) => (
-              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-700 font-bold" : d.startsWith("FIX") ? "text-accent font-medium" : "text-foreground"}`}>
+              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-400 font-bold" : d.startsWith("FIX") ? "text-accent font-medium" : "text-white/80"}`}>
                 {d}
               </p>
             ))}
             <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-              <div className="p-2 bg-red-50 rounded">
-                <div className="text-2xl font-bold text-red-700">{summary?.errors ?? 0}</div>
-                <div className="text-xs text-muted">Errors</div>
+              <div className="p-2 bg-red-500/10 rounded border border-red-500/20">
+                <div className="text-2xl font-bold text-red-400">{summary?.errors ?? 0}</div>
+                <div className="text-xs text-white/40">Errors</div>
               </div>
-              <div className="p-2 bg-amber-50 rounded">
-                <div className="text-2xl font-bold text-amber-700">{summary?.warnings ?? 0}</div>
-                <div className="text-xs text-muted">Warnings</div>
+              <div className="p-2 bg-amber-500/10 rounded border border-amber-500/20">
+                <div className="text-2xl font-bold text-amber-400">{summary?.warnings ?? 0}</div>
+                <div className="text-xs text-white/40">Warnings</div>
               </div>
-              <div className="p-2 bg-green-50 rounded">
-                <div className="text-2xl font-bold text-green-700">{summary?.passes ?? 0}</div>
-                <div className="text-xs text-muted">Passes</div>
+              <div className="p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
+                <div className="text-2xl font-bold text-emerald-400">{summary?.passes ?? 0}</div>
+                <div className="text-xs text-white/40">Passes</div>
               </div>
-              <div className="p-2 bg-gray-50 rounded">
-                <div className="text-2xl font-bold">{summary?.total ?? 0}</div>
-                <div className="text-xs text-muted">Total Checks</div>
+              <div className="p-2 bg-white/[0.04] rounded border border-white/10">
+                <div className="text-2xl font-bold text-white/70">{summary?.total ?? 0}</div>
+                <div className="text-xs text-white/40">Total Checks</div>
               </div>
             </div>
             {(summary?.errors ?? 0) + (summary?.warnings ?? 0) > 0 && (
@@ -1407,7 +1404,7 @@ function NuclearScanPanel() {
                 >
                   {fixing ? "Generating fix plan..." : "⚡ Fix Everything Automatically"}
                 </button>
-                <p className="text-xs text-muted text-center mt-2">
+                <p className="text-xs text-white/40 text-center mt-2">
                   Generates ready-to-apply fixes for every issue found. Code fixes go to a PR; config fixes produce Vercel/Nginx/DNS snippets.
                 </p>
               </div>
@@ -1416,7 +1413,7 @@ function NuclearScanPanel() {
 
           {/* Fixes */}
           {fixResult && (
-            <div className="card p-5 mb-4 border-l-4 border-l-accent">
+            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 mb-4 border-l-4 border-l-accent">
               {/* SSH auto-heal result */}
               {(fixResult as Record<string, unknown>).actions ? (
                 <>
@@ -1430,21 +1427,21 @@ function NuclearScanPanel() {
                           : "Heal Attempted"}
                     </h3>
                   </div>
-                  <p className="text-sm text-muted mb-3">
+                  <p className="text-sm text-white/50 mb-3">
                     {(fixResult as Record<string, unknown>).message as string}
                   </p>
                   <div className="space-y-2">
                     {((fixResult as Record<string, unknown>).actions as Array<{ issue: string; command: string; output: string; status: string }>).map((a, i) => (
                       <div key={i} className={`rounded-lg border p-3 text-xs ${
-                        a.status === "fixed" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                        a.status === "fixed" ? "border-emerald-500/30 bg-emerald-900/20" : "border-red-500/30 bg-red-900/20"
                       }`}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={a.status === "fixed" ? "text-green-600" : "text-red-600"}>
+                          <span className={a.status === "fixed" ? "text-emerald-400" : "text-red-400"}>
                             {a.status === "fixed" ? "✓" : "✗"}
                           </span>
-                          <span className="font-medium">{a.issue}</span>
+                          <span className="font-medium text-white/80">{a.issue}</span>
                         </div>
-                        <pre className="font-mono text-xs bg-black/5 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
+                        <pre className="font-mono text-xs bg-black/20 text-white/60 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
                       </div>
                     ))}
                   </div>
@@ -1452,26 +1449,26 @@ function NuclearScanPanel() {
               ) : (fixResult as Record<string, unknown>).fixes && Object.keys((fixResult as Record<string, unknown>).fixes as Record<string, unknown>).length > 0 ? (
                 <>
                   <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
-                  <p className="text-sm text-muted mb-3">
+                  <p className="text-sm text-white/50 mb-3">
                     {((fixResult as Record<string, unknown>).totalFixes as number) || 0} fixes across {((fixResult as Record<string, unknown>).categories as number) || 0} categories.
                   </p>
-                  <details className="text-xs font-mono bg-gray-50 p-3 rounded max-h-96 overflow-auto">
-                    <summary className="cursor-pointer font-semibold">View all fix snippets</summary>
-                    <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
+                  <details className="text-xs font-mono bg-white/[0.03] border border-white/10 p-3 rounded max-h-96 overflow-auto">
+                    <summary className="cursor-pointer font-semibold text-white/70">View all fix snippets</summary>
+                    <pre className="mt-2 whitespace-pre-wrap text-white/60">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
                   </details>
                 </>
               ) : (
                 <div>
                   <h3 className="font-bold mb-2">⚡ Fix attempted</h3>
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-white/50">
                     To enable autonomous server repair, set these in Vercel env vars:
                   </p>
-                  <ul className="text-xs font-mono text-muted mt-2 space-y-1">
+                  <ul className="text-xs font-mono text-white/50 mt-2 space-y-1">
                     <li>GATETEST_SSH_HOST — server IP (e.g. 45.76.171.37)</li>
                     <li>GATETEST_SSH_USER — username (default: root)</li>
                     <li>GATETEST_SSH_PASSWORD — server password</li>
                   </ul>
-                  <p className="text-xs text-muted mt-2">
+                  <p className="text-xs text-white/40 mt-2">
                     Once set, &quot;Fix Everything&quot; will SSH into the server and run fix commands automatically.
                   </p>
                 </div>
@@ -1486,19 +1483,19 @@ function NuclearScanPanel() {
               return acc;
             }, {});
             return Object.entries(byCategory).map(([cat, items]) => (
-              <div key={cat} className="card p-4 mb-3">
-                <h4 className="font-bold text-sm mb-2">{cat}</h4>
+              <div key={cat} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 mb-3">
+                <h4 className="font-bold text-sm mb-2 text-white/80">{cat}</h4>
                 <div className="space-y-1">
                   {items.map((f, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs">
                       <span className={`font-bold shrink-0 w-16 ${
-                        f.severity === "error" ? "text-red-600" :
-                        f.severity === "warning" ? "text-amber-600" :
-                        f.severity === "pass" ? "text-green-600" :
-                        "text-muted"
+                        f.severity === "error" ? "text-red-400" :
+                        f.severity === "warning" ? "text-amber-400" :
+                        f.severity === "pass" ? "text-emerald-400" :
+                        "text-white/40"
                       }`}>{f.severity.toUpperCase()}</span>
-                      <span className="font-medium shrink-0 min-w-[140px]">{f.title}</span>
-                      <span className="text-muted">{f.detail}</span>
+                      <span className="font-medium shrink-0 min-w-[140px] text-white/70">{f.title}</span>
+                      <span className="text-white/40">{f.detail}</span>
                     </div>
                   ))}
                 </div>

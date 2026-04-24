@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Footer() {
   return (
     <footer className="relative border-t border-border py-12 px-6 bg-background-warm">
@@ -41,7 +43,7 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-2">
-              <li><a href="/#features" className="text-sm text-muted hover:text-foreground transition-colors">About</a></li>
+              <li><Link href="/#features" className="text-sm text-muted hover:text-foreground transition-colors">About</Link></li>
               <li><a href="mailto:hello@gatetest.ai" className="text-sm text-muted hover:text-foreground transition-colors">Contact</a></li>
               <li><a href="/legal/privacy" className="text-sm text-muted hover:text-foreground transition-colors">Privacy Policy</a></li>
               <li><a href="/legal/terms" className="text-sm text-muted hover:text-foreground transition-colors">Terms of Service</a></li>

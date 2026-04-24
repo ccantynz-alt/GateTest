@@ -175,7 +175,9 @@ const PATTERN_RULES = [
   {
     id: 'empty-catch',
     direction: 'added',
-    pattern: /^\+.*\bcatch\s*(\([^)]*\))?\s*\{\s*\}/,
+    // Exclude lines that carry a `// error-ok` suppressor documenting why
+    // the empty catch is intentional (e.g. cleanup in finally, fallback value).
+    pattern: /^\+.*\bcatch\s*(\([^)]*\))?\s*\{\s*\}(?!.*\berror-ok\b)/,
     severity: 'error',
     title: 'Empty catch block added',
     explanation: 'An empty catch swallows errors silently — the root cause is hidden, not fixed.',

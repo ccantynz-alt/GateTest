@@ -28,6 +28,7 @@
  *   503 { error: 'secret not set' }     — env misconfigured
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const crypto = require('crypto');
 
 // Backpressure threshold. Above this queue depth we 429.
@@ -173,7 +174,7 @@ async function processPushEvent({
   let depth = 0;
   try {
     depth = await queueStore.getQueueDepth(sql);
-  } catch (err) {
+  } catch (err) { // error-ok — queue depth check fails open; still enqueue rather than drop the event
     console.error('[events-push] getQueueDepth failed:', err && err.message ? err.message : err);
     // Fail open — if we can't read depth, still try to enqueue.
   }

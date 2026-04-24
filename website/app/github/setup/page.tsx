@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Install GateTest — GitHub App",
@@ -112,12 +113,12 @@ export default function GitHubSetup() {
 
         {/* Back link */}
         <div className="text-center mt-10">
-          <a
+          <Link
             href="/"
             className="text-sm text-muted hover:text-foreground transition-colors"
           >
             &larr; Back to gatetest.ai
-          </a>
+          </Link>
         </div>
       </div>
     </div>

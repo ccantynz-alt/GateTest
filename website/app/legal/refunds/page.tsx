@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Refund Policy — GateTest",
@@ -299,9 +300,9 @@ export default function Refunds() {
         </div>
 
         <div className="mt-12">
-          <a href="/" className="text-sm text-muted hover:text-foreground transition-colors">
+          <Link href="/" className="text-sm text-muted hover:text-foreground transition-colors">
             &larr; Back to gatetest.ai
-          </a>
+          </Link>
         </div>
       </div>
     </div>

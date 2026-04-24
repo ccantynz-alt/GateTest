@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Checkout Cancelled — GateTest",
@@ -15,18 +16,18 @@ export default function CheckoutCancel() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a
+          <Link
             href="/#pricing"
             className="px-8 py-4 text-base font-semibold rounded-xl bg-accent hover:bg-accent-light text-white transition-all"
           >
             Try Again
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="px-8 py-4 text-base font-semibold rounded-xl border border-border hover:border-accent/50 text-foreground transition-all"
           >
             Back to Home
-          </a>
+          </Link>
         </div>
       </div>
     </div>

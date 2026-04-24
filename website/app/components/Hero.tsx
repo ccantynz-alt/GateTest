@@ -1,5 +1,3 @@
-import CountUp from "./CountUp";
-
 export default function Hero() {
   return (
     <section className="relative overflow-hidden pt-20">

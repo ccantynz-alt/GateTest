@@ -89,7 +89,7 @@ class ModuleRegistry {
           const ModuleClass = require(modulePath);
           this.modules.set(name, new ModuleClass());
         }
-      } catch (err) {
+      } catch (err) { // error-ok — failed module load is non-fatal; suite runs without it
         console.warn(`[GateTest] Warning: Could not load module "${name}": ${err.message}`);
       }
     }
@@ -105,7 +105,7 @@ class ModuleRegistry {
         const ModuleClass = require(path.join(modulesDir, file));
         const name = path.basename(file, '.js');
         this.modules.set(name, new ModuleClass());
-      } catch (err) {
+      } catch (err) { // error-ok — failed custom module load is non-fatal; suite runs without it
         console.warn(`[GateTest] Warning: Could not load custom module "${file}": ${err.message}`);
       }
     }

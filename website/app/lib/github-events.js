@@ -36,6 +36,7 @@
  *   - Malformed body → 400
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const crypto = require('crypto');
 
 const QUEUE_FULL_THRESHOLD = 500;
@@ -233,7 +234,7 @@ async function processGitHubEvent({
   let depth = 0;
   try {
     depth = await queueStore.getQueueDepth(sql);
-  } catch (err) {
+  } catch (err) { // error-ok — queue depth check fails open; still enqueue rather than drop the event
     console.error('[github-webhook] getQueueDepth failed:', err && err.message ? err.message : err);
   }
   if (depth >= QUEUE_FULL_THRESHOLD) {

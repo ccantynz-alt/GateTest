@@ -15,14 +15,19 @@ class LintModule extends BaseModule {
   async run(result, config) {
     const projectRoot = config.projectRoot;
 
-    // Check if ESLint is available
-    const eslintConfigExists = this._hasConfig(projectRoot, [
-      '.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintrc.yml',
-      '.eslintrc.yaml', '.eslintrc.cjs',
-    ]) || this._hasPackageJsonField(projectRoot, 'eslintConfig');
+    // ESLint flat config (v8+) uses eslint.config.{mjs,js,cjs,ts}.
+    // Also search immediate subdirectories (monorepo pattern like website/).
+    // Run ESLint from the directory that actually owns the config so v9+ can find it.
+    const eslintFlatConfigs = ['eslint.config.mjs', 'eslint.config.js', 'eslint.config.cjs', 'eslint.config.ts'];
+    const eslintLegacyConfigs = ['.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc.cjs'];
+    const allEslintConfigs = [...eslintFlatConfigs, ...eslintLegacyConfigs];
+    const eslintDir =
+      (this._hasConfig(projectRoot, allEslintConfigs) || this._hasPackageJsonField(projectRoot, 'eslintConfig'))
+        ? projectRoot
+        : this._findConfigSubdir(projectRoot, allEslintConfigs);
 
-    if (eslintConfigExists) {
-      this._runEslint(projectRoot, result);
+    if (eslintDir) {
+      this._runEslint(eslintDir, result);
     } else {
       result.addCheck('lint:eslint-config', false, {
         message: 'No ESLint configuration found',
@@ -33,13 +38,15 @@ class LintModule extends BaseModule {
     // Check if Stylelint is available
     const cssFiles = this._collectFiles(projectRoot, ['.css', '.scss', '.less']);
     if (cssFiles.length > 0) {
-      const stylelintConfigExists = this._hasConfig(projectRoot, [
-        '.stylelintrc', '.stylelintrc.js', '.stylelintrc.json', '.stylelintrc.yml',
-      ]);
+      const stylelintConfigExists =
+        this._hasConfig(projectRoot, ['.stylelintrc', '.stylelintrc.js', '.stylelintrc.json', '.stylelintrc.yml', 'stylelint.config.js', 'stylelint.config.mjs']) ||
+        this._hasConfigInSubdirs(projectRoot, ['.stylelintrc', '.stylelintrc.js', '.stylelintrc.json', 'stylelint.config.js', 'stylelint.config.mjs']);
       if (stylelintConfigExists) {
         this._runStylelint(projectRoot, result);
       } else {
+        // Downgrade to warning — Tailwind/utility-CSS projects may intentionally skip Stylelint
         result.addCheck('lint:stylelint-config', false, {
+          severity: 'warning',
           message: 'CSS files found but no Stylelint configuration',
           suggestion: 'Install and configure Stylelint for CSS quality',
         });
@@ -57,6 +64,24 @@ class LintModule extends BaseModule {
 
   _hasConfig(projectRoot, filenames) {
     return filenames.some(f => fs.existsSync(path.join(projectRoot, f)));
+  }
+
+  _hasConfigInSubdirs(projectRoot, filenames) {
+    return !!this._findConfigSubdir(projectRoot, filenames);
+  }
+
+  _findConfigSubdir(projectRoot, filenames) {
+    try {
+      const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        const subdir = path.join(projectRoot, entry.name);
+        if (filenames.some(f => fs.existsSync(path.join(subdir, f)))) return subdir;
+      }
+    } catch { // error-ok — readdir failure is non-fatal
+    }
+    return null;
   }
 
   _hasPackageJsonField(projectRoot, field) {

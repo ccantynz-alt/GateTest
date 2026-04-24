@@ -45,12 +45,21 @@ class SecretsModule extends BaseModule {
         continue;
       }
 
+      // Skip module source files — they contain detection pattern strings
+      // that match the very rules they implement (e.g. cookie-security.js
+      // has "changeme" as a weak-secret pattern, not an actual secret).
+      const relUnix = relPath.replace(/\\/g, '/');
+      if (/(?:^|\/)src[\\/]modules[\\/]/.test(relUnix)) continue;
+
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split('\n');
       const found = [];
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        // `// secrets-ok` on this line or the previous line suppresses
+        const prevLine = i > 0 ? lines[i - 1] : '';
+        if (/\bsecrets-ok\b/.test(line) || /\bsecrets-ok\b/.test(prevLine)) continue;
         for (const pattern of this.patterns) {
           // Reset regex lastIndex for global regexes
           pattern.regex.lastIndex = 0;
@@ -66,7 +75,9 @@ class SecretsModule extends BaseModule {
 
       if (found.length > 0) {
         totalSecrets += found.length;
+        const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)[\\/]|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
         result.addCheck(`secrets:${relPath}`, false, {
+          severity: isTest ? 'warning' : 'error',
           file: relPath,
           message: `${found.length} potential secret(s) found`,
           details: found,

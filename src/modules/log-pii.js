@@ -228,7 +228,13 @@ class LogPiiModule extends BaseModule {
 
       if (this._suppressed(lines, i)) continue;
 
-      const match = JS_LOGGER_CALL_RE.exec(line);
+      // Strip string literal content so that logger patterns appearing
+      // inside description strings or test fixtures don't false-positive.
+      // We blank the content of single/double-quoted strings but preserve
+      // the quotes themselves so the rest of the line structure is intact.
+      const lineForMatch = this._blankStringContent(line);
+
+      const match = JS_LOGGER_CALL_RE.exec(lineForMatch);
       if (!match) continue;
       const method = match[1];
       const callStart = match.index + match[0].length;
@@ -462,6 +468,31 @@ class LogPiiModule extends BaseModule {
   _suppressed(lines, i) {
     return (lines[i] && SUPPRESS_RE.test(lines[i])) ||
       (i > 0 && lines[i - 1] && SUPPRESS_RE.test(lines[i - 1]));
+  }
+
+  _blankStringContent(line) {
+    // Replace content of single- and double-quoted strings with spaces so
+    // that patterns inside string literals don't false-positive. Preserves
+    // the original string positions (character counts unchanged).
+    let out = '';
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i];
+      if (ch === '"' || ch === "'") {
+        out += ch;
+        i++;
+        while (i < line.length && line[i] !== ch && line[i] !== '\n') {
+          if (line[i] === '\\') { out += '  '; i += 2; continue; }
+          out += ' ';
+          i++;
+        }
+        if (i < line.length) { out += line[i]; i++; }
+        continue;
+      }
+      out += ch;
+      i++;
+    }
+    return out;
   }
 
   _findUnquotedHash(line) {

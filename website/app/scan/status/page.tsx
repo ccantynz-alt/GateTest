@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import FindingsPanel from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 
@@ -59,6 +60,7 @@ export default function ScanStatus() {
   const [elapsed, setElapsed] = useState(0);
   const [animModules, setAnimModules] = useState<ModuleResult[]>([]);
   const [animIndex, setAnimIndex] = useState(0);
+  // eslint-disable-next-line react-hooks/purity
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
 
@@ -382,13 +384,13 @@ export default function ScanStatus() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   {params.tier === "quick" && (
-                    <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                      Run Full Scan — All 22 Modules
-                    </a>
+                    <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                      Run Full Scan — All 67 Modules
+                    </Link>
                   )}
-                  <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                  <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
                     Scan Another Repo
-                  </a>
+                  </Link>
                 </div>
               </div>
             )}
@@ -402,13 +404,13 @@ export default function ScanStatus() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {params.tier === "quick" && (
-                    <a href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
+                    <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
                       Run Full Scan — $99
-                    </a>
+                    </Link>
                   )}
-                  <a href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                  <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
                     Scan Another Repo
-                  </a>
+                  </Link>
                 </div>
               </div>
             )}
@@ -417,7 +419,7 @@ export default function ScanStatus() {
             <div className="p-4 rounded-xl border border-border bg-background-alt text-center">
               <p className="text-sm text-muted">
                 Bookmark this page to revisit your results, or view all your scans at{" "}
-                <a href="/dashboard" className="text-accent font-medium hover:underline">My Scans</a>.
+                <Link href="/dashboard" className="text-accent font-medium hover:underline">My Scans</Link>.
               </p>
             </div>
 
@@ -435,7 +437,7 @@ export default function ScanStatus() {
               <p className="font-bold text-slate-700">{scanResult?.error || "This checkout session expired."}</p>
               <p className="text-sm text-muted mt-1">No charge was made. Start a new scan when you&apos;re ready.</p>
             </div>
-            <a href="/#pricing" className="btn-primary px-6 py-3 text-sm">Start New Scan</a>
+            <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm">Start New Scan</Link>
           </div>
         )}
 
@@ -446,7 +448,7 @@ export default function ScanStatus() {
               <p className="font-bold text-amber-700">{scanResult?.error || "Scan failed"}</p>
               <p className="text-sm text-muted mt-1">No charge was made. Card hold released.</p>
             </div>
-            <a href="/#pricing" className="btn-primary px-6 py-3 text-sm">Try Again</a>
+            <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm">Try Again</Link>
           </div>
         )}
 

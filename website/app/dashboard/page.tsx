@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import FindingsPanel from "@/app/components/FindingsPanel";
 import SiblingProducts from "@/app/components/SiblingProducts";
 
@@ -77,6 +78,7 @@ export default function Dashboard() {
   }, [customer]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (customer) loadScans();
   }, [customer, loadScans]);
 
@@ -113,9 +115,9 @@ export default function Dashboard() {
             Sign in with GitHub
           </a>
           <div className="mt-6">
-            <a href="/" className="text-sm text-muted hover:text-foreground">
+            <Link href="/" className="text-sm text-muted hover:text-foreground">
               &larr; Back to GateTest
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -137,9 +139,9 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <a href="/#pricing" className="btn-primary px-5 py-2.5 text-sm">
+            <Link href="/#pricing" className="btn-primary px-5 py-2.5 text-sm">
               New Scan
-            </a>
+            </Link>
             <button
               onClick={logout}
               className="text-sm text-muted hover:text-foreground"
@@ -191,12 +193,12 @@ export default function Dashboard() {
               <p className="text-muted text-sm mb-6">
                 Run your first scan to see results here.
               </p>
-              <a
+              <Link
                 href="/#pricing"
                 className="btn-primary px-6 py-3 text-sm inline-block"
               >
                 Scan Your First Repo
-              </a>
+              </Link>
             </div>
             <SiblingProducts />
           </div>

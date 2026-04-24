@@ -216,6 +216,12 @@ class CodeQualityModule extends BaseModule {
     for (const { pattern, message } of patterns) {
       const regex = new RegExp(pattern.source, pattern.flags);
       for (let i = 0; i < lines.length; i++) {
+        // Suppressor: `// code-quality-ok` on the same line or the previous line
+        // silences any forbidden-pattern hit on that line.
+        const line = lines[i] || '';
+        const prevLine = i > 0 ? (lines[i - 1] || '') : '';
+        if (/\bcode-quality-ok\b/.test(line) || /\bcode-quality-ok\b/.test(prevLine)) continue;
+
         // Use the file-level neutralised view — strings, template literals,
         // regex literals, line comments, AND multi-line block comments have
         // been replaced with spaces while preserving line numbers. Prevents
@@ -244,6 +250,20 @@ class CodeQualityModule extends BaseModule {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const trimmed = line.trim();
+
+      // Skip comment lines — "function definition" in a comment is not a function
+      if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) {
+        // Still count braces (in non-comment code) but don't set function starts from comments
+        for (const char of line) {
+          if (char === '{') braceDepth++;
+          if (char === '}') {
+            braceDepth--;
+            if (braceDepth === 0) functionStart = -1;
+          }
+        }
+        continue;
+      }
 
       // Detect function declarations
       const funcMatch = line.match(/(?:function\s+(\w+)|(\w+)\s*(?:=|:)\s*(?:async\s+)?(?:function|\(.*?\)\s*=>))/);
@@ -303,19 +323,33 @@ class CodeQualityModule extends BaseModule {
   }
 
   _checkUnusedImports(relPath, content, lines, result) {
+    // Strip block comments and line comments so documentation examples
+    // with import statements don't false-positive as real declarations.
+    const stripped = content
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => ' '.repeat(m.length))  // block comments
+      .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));        // line comments
+
     const importRegex = /(?:import\s+(?:{([^}]+)}|(\w+))\s+from|const\s+(?:{([^}]+)}|(\w+))\s*=\s*require\()/g;
     let match;
 
-    while ((match = importRegex.exec(content)) !== null) {
+    while ((match = importRegex.exec(stripped)) !== null) {
       const imported = match[1] || match[2] || match[3] || match[4];
       if (!imported) continue;
 
-      const names = imported.split(',').map(n => n.trim().split(/\s+as\s+/).pop().trim()).filter(Boolean);
+      const names = imported
+        .split(',')
+        .map((n) => {
+          // Strip TypeScript `type ` keyword prefix inside named imports
+          // e.g. `{ type RepoFile }` — the import name is `RepoFile`
+          const clean = n.trim().replace(/^type\s+/, '');
+          return clean.split(/\s+as\s+/).pop().trim();
+        })
+        .filter(Boolean);
 
       for (const name of names) {
-        if (!name || name === '*') continue;
-        // Count occurrences (subtract the import line itself)
-        const occurrences = content.split(new RegExp(`\\b${name}\\b`)).length - 1;
+        if (!name || name === '*' || !/^\w+$/.test(name)) continue;
+        // Count occurrences in stripped content (subtract the import line itself)
+        const occurrences = stripped.split(new RegExp(`\\b${name}\\b`)).length - 1;
         if (occurrences <= 1) {
           result.addCheck(`quality:unused-import:${relPath}:${name}`, false, {
             file: relPath,

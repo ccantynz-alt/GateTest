@@ -130,6 +130,7 @@ export default function LiveScanTerminal({ repoUrl, tier, sessionId, onComplete,
         setRunning(false);
         onError(err.message);
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoUrl, tier, onComplete, onError]);
 
   // Auto-scroll

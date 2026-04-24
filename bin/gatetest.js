@@ -130,7 +130,7 @@ async function main() {
     try {
       const auth = await bridge.verifyAuth();
       console.log(`  Auth:       ${auth.type} — ${auth.login || auth.name}`);
-    } catch (err) {
+    } catch (err) { // error-ok — auth check in CLI health output; failure message shown to user
       console.log(`  Auth:       ${err.message}`);
     }
 
@@ -451,7 +451,7 @@ async function runWatchMode(gatetest, args) {
       } else {
         await gatetest.runSuite(args.suite || 'quick');
       }
-    } catch (err) {
+    } catch (err) { // error-ok — watch mode must keep running after a scan error
       console.error(`[GateTest] Error: ${err.message}`);
     }
 
