@@ -24,7 +24,7 @@
  * Tools exposed:
  *   scan_local       — scan a local directory path
  *   run_module       — run one specific module against a path
- *   list_modules     — list all 67 modules with descriptions
+ *   list_modules     — list all 84 modules with descriptions
  *   check_health     — verify GateTest engine is operational
  */
 
@@ -48,10 +48,10 @@ const TOOLS = [
   {
     name: 'scan_local',
     description:
-      'Scan a local directory with GateTest\'s 68-module engine. ' +
+      'Scan a local directory with GateTest\'s 84-module engine. ' +
       'Returns issues found across security, reliability, code quality, ' +
       'and more. Use suite="quick" for the 4 core modules or suite="full" ' +
-      'for all 67 modules. Optionally pass a list of specific module names.',
+      'for all 84 modules. Optionally pass a list of specific module names.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -107,7 +107,7 @@ const TOOLS = [
   {
     name: 'check_health',
     description:
-      'Verify GateTest is operational. Returns version, module count (68), ' +
+      'Verify GateTest is operational. Returns version, module count (84), ' +
       'and a list of all loaded module names.',
     inputSchema: {
       type: 'object',
