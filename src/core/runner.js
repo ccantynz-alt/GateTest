@@ -7,6 +7,8 @@
 const { EventEmitter } = require('events');
 
 // AI Fix Engine — injected after all modules run, before the autoFix pass.
+// Adds autoFix closures to any check that has a file path + fix hint but
+// no existing autoFix function. This makes every module AI-fixable.
 let _aiFix;
 try { _aiFix = require('./ai-fix-engine'); } catch { _aiFix = null; }
 
@@ -215,6 +217,7 @@ class GateTestRunner extends EventEmitter {
       // Pass diff-mode context to module
       const moduleConfig = Object.create(this.config);
       moduleConfig._runnerOptions = this.options;
+      // deployReadiness reads all prior results to compute the aggregate score
       moduleConfig._allResults = this.results;
       await mod.run(result, moduleConfig);
 
