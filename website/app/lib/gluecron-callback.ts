@@ -153,10 +153,11 @@ export async function sendGluecronCallback(args: {
   repository: string;
   sha: string;
   ref?: string;
-  scanResult: { gateStatus?: string; duration?: number; [key: string]: unknown };
+  scanResult: unknown;
 }): Promise<GluecronResponse> {
   const { repository, sha, ref, scanResult } = args;
-  const rawStatus = (scanResult?.gateStatus ?? "").toLowerCase();
+  const sr = scanResult as Record<string, unknown> | null | undefined;
+  const rawStatus = (typeof sr?.gateStatus === "string" ? sr.gateStatus : "").toLowerCase();
   const status: GluecronStatus =
     rawStatus === "passed" ? "passed"
     : rawStatus === "blocked" ? "failed"
@@ -167,8 +168,8 @@ export async function sendGluecronCallback(args: {
     sha,
     ref,
     status,
-    durationMs: typeof scanResult?.duration === "number" ? scanResult.duration : undefined,
-    details: scanResult,
+    durationMs: typeof sr?.duration === "number" ? sr.duration : undefined,
+    details: sr ?? undefined,
   });
 }
 
