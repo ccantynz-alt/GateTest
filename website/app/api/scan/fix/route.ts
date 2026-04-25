@@ -21,8 +21,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createBranch,
+  fetchBlob,
   fetchFileSha,
-  gluecronApi,
+  getBranchSha,
+  getDefaultBranch,
   openPullRequest,
   postPrComment,
   resolveRepoAuth,
@@ -507,18 +509,11 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const fileRes = await gluecronApi(
-        "GET",
-        `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath
-          .split("/")
-          .map(encodeURIComponent)
-          .join("/")}?encoding=base64`
-      );
-      if (fileRes.status !== 200 || !fileRes.data.content) {
+      const originalContent = await fetchBlob(owner, repo, filePath, "HEAD", token);
+      if (!originalContent) {
         errors.push(`Could not read ${filePath}`);
         return;
       }
-      const originalContent = Buffer.from(fileRes.data.content as string, "base64").toString("utf-8");
 
       if (originalContent.length > MAX_FILE_BYTES) {
         errors.push(`Skipped ${filePath}: file too large (${originalContent.length} bytes, limit ${MAX_FILE_BYTES})`);
@@ -603,28 +598,11 @@ export async function POST(req: NextRequest) {
 
   // Create a branch, commit fixes, open PR
   try {
-    // Get default branch + its tip SHA from Gluecron's repo endpoint.
-    const repoRes = await gluecronApi(
-      "GET",
-      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
-    );
-    const defaultBranch =
-      ((repoRes.data.defaultBranch as string) ||
-        (repoRes.data.default_branch as string) ||
-        "main");
-
-    // Pull the tree metadata for the default branch — Gluecron includes the
-    // branch-tip sha on the tree response per the wire contract.
-    const treeMeta = await gluecronApi(
-      "GET",
-      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(defaultBranch)}?recursive=1`
-    );
-    const baseSha =
-      (treeMeta.data.sha as string | undefined) ||
-      ((treeMeta.data as { tree?: Array<{ sha?: string }> }).tree?.[0]?.sha);
+    const defaultBranch = await getDefaultBranch(owner, repo, token);
+    const baseSha = await getBranchSha(owner, repo, defaultBranch, token);
 
     if (!baseSha) {
-      return NextResponse.json({ error: "Could not get base branch SHA from Gluecron" }, { status: 500 });
+      return NextResponse.json({ error: "Could not get base branch SHA — check repo access" }, { status: 500 });
     }
 
     // Create branch via Gluecron.

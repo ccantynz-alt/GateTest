@@ -40,7 +40,7 @@ interface CallbackArgs {
   ref?: string | null;
   pullRequestNumber?: number | null;
   host?: string;
-  scanResult: Parameters<typeof sendGluecronCallback>[0]["scanResult"];
+  scanResult?: Record<string, unknown> | null;
 }
 
 async function dispatchCallback(args: CallbackArgs): Promise<void> {
@@ -50,7 +50,7 @@ async function dispatchCallback(args: CallbackArgs): Promise<void> {
       sha: args.sha,
       ref: args.ref ?? null,
       pullRequestNumber: args.pullRequestNumber ?? null,
-      scanResult: args.scanResult,
+      scanResult: args.scanResult ?? {},
     });
   } else {
     await sendGluecronCallback({

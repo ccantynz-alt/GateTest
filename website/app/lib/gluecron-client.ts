@@ -43,6 +43,98 @@ function getToken(): string {
   return process.env.GLUECRON_API_TOKEN || "";
 }
 
+function getGithubToken(): string {
+  return process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
+}
+
+export function isGitHubToken(token: string): boolean {
+  if (!token) return false;
+  const ghToken = getGithubToken();
+  return (
+    !getToken() ||
+    token.startsWith("ghp_") ||
+    token.startsWith("gho_") ||
+    token.startsWith("github_pat_") ||
+    (ghToken !== "" && token === ghToken)
+  );
+}
+
+/**
+ * GitHub REST API wrapper — mirrors gluecronApi signature.
+ * Used as a fallback when the resolved token is a GitHub PAT.
+ */
+export async function githubRestApi(
+  method: string,
+  path: string,
+  token: string,
+  body?: Record<string, unknown>
+): Promise<GluecronApiResponse> {
+  const payload = body ? JSON.stringify(body) : undefined;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "User-Agent": "GateTest/1.2.0",
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (payload) {
+    headers["Content-Type"] = "application/json";
+  }
+  const res = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers,
+    body: payload,
+  });
+  let data: Record<string, unknown>;
+  try {
+    data = await res.json() as Record<string, unknown>;
+  } catch {
+    data = {};
+  }
+  return { status: res.status, data };
+}
+
+/**
+ * Get the default branch name of a repo.
+ */
+export async function getDefaultBranch(
+  owner: string,
+  repo: string,
+  token: string
+): Promise<string> {
+  if (isGitHubToken(token) && token) {
+    const res = await githubRestApi("GET", `/repos/${owner}/${repo}`, token);
+    if (res.status === 200) {
+      return (res.data.default_branch as string) || "main";
+    }
+  }
+  const res = await gluecronApi("GET", `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+  if (res.status === 200) {
+    return (res.data.defaultBranch as string) || (res.data.default_branch as string) || "main";
+  }
+  return "main";
+}
+
+/**
+ * Get the SHA at the tip of a branch.
+ */
+export async function getBranchSha(
+  owner: string,
+  repo: string,
+  branch: string,
+  token: string
+): Promise<string | null> {
+  if (isGitHubToken(token) && token) {
+    const res = await githubRestApi("GET", `/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, token);
+    if (res.status === 200) {
+      return ((res.data as { object?: { sha?: string } }).object?.sha) || null;
+    }
+  }
+  const res = await gluecronApi("GET", `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(branch)}?recursive=0`);
+  if (res.status === 200) {
+    return (res.data.sha as string) || null;
+  }
+  return null;
+}
+
 export interface GluecronApiResponse {
   status: number;
   data: Record<string, unknown>;
@@ -286,9 +378,19 @@ export async function fetchFileSha(
   repo: string,
   path: string,
   ref: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<string> {
+  if (isGitHubToken(token) && token) {
+    try {
+      const qs = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+      const ghRes = await githubRestApi("GET", `/repos/${owner}/${repo}/contents/${path}${qs}`, token);
+      if (ghRes.status === 200) {
+        return (ghRes.data.sha as string) || "";
+      }
+      if (ghRes.status === 404) return "";
+    } catch { /* fall through to gluecron */ }
+  }
+
   const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
   const res = await gluecronApi(
     "GET",
@@ -338,9 +440,16 @@ export async function postPrComment(
   repo: string,
   prNumber: number,
   body: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token) && token) {
+    return githubRestApi(
+      "POST",
+      `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+      token,
+      { body }
+    );
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${prNumber}/comments`,
@@ -356,9 +465,16 @@ export async function createBranch(
   repo: string,
   branchName: string,
   baseSha: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token) && token) {
+    return githubRestApi(
+      "POST",
+      `/repos/${owner}/${repo}/git/refs`,
+      token,
+      { ref: `refs/heads/${branchName}`, sha: baseSha }
+    );
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs`,
@@ -371,7 +487,7 @@ export async function createBranch(
 
 /**
  * Upsert a file on a branch. If `existingSha` is given, this is an update;
- * otherwise Gluecron treats it as a create.
+ * otherwise treat as a create.
  */
 export async function upsertFile(
   owner: string,
@@ -381,12 +497,24 @@ export async function upsertFile(
   message: string,
   branch: string,
   existingSha: string | null | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  const b64content = Buffer.from(content).toString("base64");
+
+  if (isGitHubToken(token) && token) {
+    const body: Record<string, unknown> = { message, content: b64content, branch };
+    if (existingSha) body.sha = existingSha;
+    return githubRestApi(
+      "PUT",
+      `/repos/${owner}/${repo}/contents/${path.split("/").map(encodeURIComponent).join("/")}`,
+      token,
+      body
+    );
+  }
+
   const body: Record<string, unknown> = {
     message,
-    content: Buffer.from(content).toString("base64"),
+    content: b64content,
     branch,
   };
   if (existingSha) body.sha = existingSha;
@@ -404,10 +532,8 @@ export async function upsertFile(
 /**
  * Open a pull request.
  *
- * NOTE: Gluecron takes `baseBranch` / `headBranch` in the body (NOT
- * GitHub's `base` / `head`). Callers should use this helper's argument
- * order (head first, then base) to stay consistent with the rest of
- * the codebase's conventions.
+ * GitHub uses `head`/`base`; Gluecron uses `headBranch`/`baseBranch`.
+ * This helper handles both — callers always pass (headBranch, baseBranch).
  */
 export async function openPullRequest(
   owner: string,
@@ -416,9 +542,16 @@ export async function openPullRequest(
   body: string,
   headBranch: string,
   baseBranch: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token) && token) {
+    return githubRestApi(
+      "POST",
+      `/repos/${owner}/${repo}/pulls`,
+      token,
+      { title, body, head: headBranch, base: baseBranch }
+    );
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,

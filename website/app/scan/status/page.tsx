@@ -15,6 +15,22 @@ interface ModuleResult {
   skipped?: string;
 }
 
+interface FixableIssue {
+  file: string;
+  issue: string;
+  module: string;
+}
+
+interface FixResult {
+  status: string;
+  prUrl?: string;
+  prNumber?: number;
+  filesFixed?: number;
+  issuesFixed?: number;
+  errors?: string[];
+  message?: string;
+}
+
 interface ScanResult {
   status: "complete" | "failed" | "expired";
   modules: ModuleResult[];
@@ -27,6 +43,7 @@ interface ScanResult {
   tier?: string;
   error?: string;
   canRetry?: boolean;
+  fixableIssues?: FixableIssue[];
 }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -65,6 +82,9 @@ export default function ScanStatus() {
   const scanTriggered = useRef(false);
 
   const [params, setParams] = useState<{ id: string; repo: string; tier: string }>({ id: "", repo: "", tier: "quick" });
+  const [fixState, setFixState] = useState<"idle" | "fixing" | "done" | "error">("idle");
+  const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const fixTriggered = useRef(false);
 
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
@@ -175,6 +195,27 @@ export default function ScanStatus() {
   }, [params]);
 
   const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
+
+  const triggerFix = async () => {
+    if (fixTriggered.current || !scanResult) return;
+    fixTriggered.current = true;
+    setFixState("fixing");
+    try {
+      const issues = scanResult.fixableIssues || [];
+      const repoUrl = params.repo || scanResult.repoUrl || "";
+      const res = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl, issues }),
+      });
+      const data = await res.json() as FixResult;
+      setFixResult(data);
+      setFixState(data.status === "pr_created" || data.status === "fixes_committed" ? "done" : "error");
+    } catch (err) {
+      setFixResult({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+      setFixState("error");
+    }
+  };
 
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";
@@ -375,23 +416,107 @@ export default function ScanStatus() {
               <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
             )}
 
-            {/* What's next */}
+            {/* Fix All Issues — AI-powered auto-fix panel */}
             {(scanResult?.totalIssues || 0) > 0 && (
               <div className="p-5 rounded-xl border border-border bg-white">
-                <h3 className="font-bold text-foreground mb-2">What&apos;s next?</h3>
-                <p className="text-sm text-muted mb-4">
-                  The issues above show exactly what needs fixing — file names and line numbers included. You can fix them manually, or run a deeper scan for more coverage.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {params.tier === "quick" && (
-                    <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                      Run Full Scan — All 67 Modules
-                    </Link>
-                  )}
-                  <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
-                    Scan Another Repo
-                  </Link>
-                </div>
+                {fixState === "idle" && (
+                  <>
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <h3 className="font-bold text-foreground mb-1">Fix All Issues Automatically</h3>
+                        <p className="text-sm text-muted">
+                          Claude AI reads every file, generates the fixes, verifies each one, and opens a pull request — ready to merge.
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-mono text-accent bg-accent/10 px-2 py-1 rounded">AI-powered</span>
+                    </div>
+                    <ul className="text-xs text-muted mb-4 space-y-1">
+                      <li className="flex items-center gap-2"><span className="text-success">✓</span> Reads and fixes each file with context</li>
+                      <li className="flex items-center gap-2"><span className="text-success">✓</span> Verifies fixes don&apos;t introduce new issues</li>
+                      <li className="flex items-center gap-2"><span className="text-success">✓</span> Creates a pull request on your repo</li>
+                      <li className="flex items-center gap-2"><span className="text-success">✓</span> You review and merge — GateTest never auto-merges</li>
+                    </ul>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button
+                        onClick={triggerFix}
+                        className="btn-primary px-6 py-3 text-sm text-center"
+                      >
+                        Fix {scanResult?.totalIssues || 0} Issues — Open PR
+                      </button>
+                      {params.tier === "quick" && (
+                        <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                          Run Full Scan — All 67 Modules
+                        </Link>
+                      )}
+                      <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                        Scan Another Repo
+                      </Link>
+                    </div>
+                  </>
+                )}
+
+                {fixState === "fixing" && (
+                  <div className="text-center py-4">
+                    <div className="w-10 h-10 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <h3 className="font-bold text-foreground mb-2">Claude is fixing your code…</h3>
+                    <p className="text-sm text-muted mb-4">Reading files, generating fixes, verifying each one. This takes 1–3 minutes.</p>
+                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div className="h-2 bg-accent rounded-full animate-pulse" style={{ width: "60%" }}></div>
+                    </div>
+                  </div>
+                )}
+
+                {fixState === "done" && fixResult && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <h3 className="font-bold text-foreground">
+                          {fixResult.issuesFixed || 0} issues fixed across {fixResult.filesFixed || 0} files
+                        </h3>
+                        <p className="text-sm text-muted">Pull request opened — review and merge when ready.</p>
+                      </div>
+                    </div>
+                    {fixResult.prUrl && (
+                      <a
+                        href={fixResult.prUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary px-6 py-3 text-sm inline-block mb-3"
+                      >
+                        View Pull Request #{fixResult.prNumber}
+                      </a>
+                    )}
+                    {(fixResult.errors || []).length > 0 && (
+                      <details className="mt-3">
+                        <summary className="text-xs text-muted cursor-pointer">
+                          {fixResult.errors!.length} file{fixResult.errors!.length !== 1 ? "s" : ""} could not be fixed
+                        </summary>
+                        <ul className="mt-2 text-xs text-muted space-y-1">
+                          {fixResult.errors!.map((e, i) => <li key={i}>• {e}</li>)}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                {fixState === "error" && (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-2xl">⚠️</span>
+                      <div>
+                        <h3 className="font-bold text-foreground">Fix could not complete</h3>
+                        <p className="text-sm text-muted">{fixResult?.message || "An error occurred. Please try again."}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { fixTriggered.current = false; setFixState("idle"); setFixResult(null); }}
+                      className="btn-secondary px-6 py-3 text-sm"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
