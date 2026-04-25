@@ -6,6 +6,12 @@
 
 const { EventEmitter } = require('events');
 
+// AI Fix Engine — injected after all modules run, before the autoFix pass.
+// Adds autoFix closures to any check that has a file path + fix hint but
+// no existing autoFix function. This makes every module AI-fixable.
+let _aiFix;
+try { _aiFix = require('./ai-fix-engine'); } catch { _aiFix = null; }
+
 /** Severity levels — only 'error' blocks the gate. */
 const Severity = {
   ERROR: 'error',
@@ -160,6 +166,11 @@ class GateTestRunner extends EventEmitter {
       await this._runSequential(modulesToRun);
     }
 
+    // Inject AI autoFix closures onto checks that lack one (requires API key + file ref)
+    if (this.config && this.config.projectRoot && _aiFix) {
+      try { _aiFix.injectAutoFixes(this.results, this.config.projectRoot); } catch { /* non-fatal */ }
+    }
+
     // Auto-fix pass: if enabled, run fixable checks
     if (this.options.autoFix) {
       await this._runAutoFixes();
@@ -206,6 +217,8 @@ class GateTestRunner extends EventEmitter {
       // Pass diff-mode context to module
       const moduleConfig = Object.create(this.config);
       moduleConfig._runnerOptions = this.options;
+      // deployReadiness reads all prior results to compute the aggregate score
+      moduleConfig._allResults = this.results;
       await mod.run(result, moduleConfig);
 
       // Only errors block — warnings are allowed through

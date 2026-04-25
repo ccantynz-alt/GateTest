@@ -74,6 +74,27 @@ const BUILT_IN_MODULES = {
   tlsSecurity: '../modules/tls-security.js',
   cookieSecurity: '../modules/cookie-security.js',
   crossFileTaint: '../modules/cross-file-taint.js',
+  // P0 — deploy & CI integrity
+  deployScriptValidator: '../modules/deploy-script-validator.js',
+  serviceConsistency: '../modules/service-consistency.js',
+  nativeBundlerGuard: '../modules/native-bundler-guard.js',
+  ciParamValidator: '../modules/ci-param-validator.js',
+  // P1 — security & correctness
+  authBypass: '../modules/auth-bypass.js',
+  // P2 — code quality (AI-specific)
+  aiHallucination: '../modules/ai-hallucination.js',
+  monorepoConstraints: '../modules/monorepo-constraints.js',
+  zodSchemaPresence: '../modules/zod-schema.js',
+  bundleSize: '../modules/bundle-size.js',
+  duplicateCode: '../modules/duplicate-code.js',
+  // P2/P3 — contract drift
+  trpcContract: '../modules/trpc-contract.js',
+  webhookPayload: '../modules/webhook-payload.js',
+  // AI intelligence layer
+  intentVerification: '../modules/intent-verification.js',
+  regressionPredictor: '../modules/regression-predictor.js',
+  architectureDrift: '../modules/architecture-drift.js',
+  deployReadiness: '../modules/deploy-readiness.js',
 };
 
 class ModuleRegistry {
