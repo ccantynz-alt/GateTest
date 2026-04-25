@@ -15,7 +15,7 @@ const path = require('path');
 const https = require('https');
 
 const ANTHROPIC_API_HOST = 'api.anthropic.com';
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-sonnet-4-6';
 const MAX_FILES_PER_REVIEW = 10;
 const MAX_FILE_SIZE = 50000; // 50KB per file
 
@@ -38,8 +38,6 @@ class AiReviewModule extends BaseModule {
     const projectRoot = config.projectRoot;
     this._lastProjectRoot = projectRoot;
     const runnerOptions = config._runnerOptions || {};
-    // Memory context (attached by the memory module when it runs first).
-    // This is the compounding moat: Claude gets smarter context every scan.
     const memory = config._memory || null;
 
     // Get files to review
@@ -49,7 +47,6 @@ class AiReviewModule extends BaseModule {
         .filter(f => this._isReviewableFile(f))
         .map(f => path.join(projectRoot, f));
     } else {
-      // Review recent git changes or sample source files
       filesToReview = this._getRecentChanges(projectRoot);
     }
 
@@ -61,7 +58,6 @@ class AiReviewModule extends BaseModule {
       return;
     }
 
-    // Limit to MAX_FILES_PER_REVIEW
     const reviewBatch = filesToReview.slice(0, MAX_FILES_PER_REVIEW);
 
     result.addCheck('ai-review:scanning', true, {
@@ -69,7 +65,6 @@ class AiReviewModule extends BaseModule {
       message: `AI reviewing ${reviewBatch.length} file(s)...`,
     });
 
-    // Build review payload
     const fileContents = [];
     for (const file of reviewBatch) {
       try {
@@ -100,10 +95,6 @@ class AiReviewModule extends BaseModule {
     }
   }
 
-  /**
-   * Build a compact memory-context block the prompt can condition on.
-   * Keeps token usage bounded while giving Claude real codebase context.
-   */
   _buildMemoryContext(memory) {
     if (!memory) return '';
 
@@ -131,9 +122,6 @@ class AiReviewModule extends BaseModule {
       for (const k of fpKeys) lines.push(`  - ${k}`);
     }
 
-    // Fix patterns: tell Claude what GateTest has already auto-fixed here.
-    // This lets Claude suggest the same kind of fix for matching issues
-    // rather than inventing a new approach each scan.
     const topFixPatterns = memory.topFixPatterns || [];
     if (topFixPatterns.length > 0) {
       lines.push(`Known fix patterns (GateTest has auto-fixed these before — prefer matching strategies):`);
@@ -183,9 +171,7 @@ Rules:
 - If the code is clean, return an empty issues array
 - Be specific about line numbers
 
-Files to review:
-
-${filesText}`;
+Files to review:\n\n${filesText}`;
 
     return new Promise((resolve, reject) => {
       const body = JSON.stringify({
@@ -221,8 +207,6 @@ ${filesText}`;
             }
 
             const text = response.content?.[0]?.text || '';
-
-            // Extract JSON from response (Claude may wrap it in markdown)
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               resolve(JSON.parse(jsonMatch[0]));
@@ -265,8 +249,6 @@ ${filesText}`;
       return;
     }
 
-    // Convert AI findings to GateTest checks — but honour memory's
-    // recorded false positives so we don't re-flag dismissed issues.
     const store = memory?.store;
     let filtered = 0;
     for (const issue of issues) {
@@ -290,7 +272,6 @@ ${filesText}`;
         fixedCode: issue.fixedCode,
       };
 
-      // Wire up auto-fix: if Claude returned fixedCode, apply it to the file
       if (issue.fixedCode && issue.file && issue.line) {
         const filePath = issue.file;
         const lineNum = issue.line;
@@ -302,7 +283,6 @@ ${filesText}`;
       result.addCheck(`ai-review:${issue.category || 'quality'}:${issue.file}:${issue.line || 0}`, false, checkDetails);
     }
 
-    // Summary
     if (review.summary) {
       result.addCheck('ai-review:summary', true, {
         severity: 'info',
@@ -318,10 +298,6 @@ ${filesText}`;
     });
   }
 
-  /**
-   * Apply Claude's fixedCode to the source file.
-   * Replaces lines around the issue location with the AI-generated fix.
-   */
   _applyFix(projectRoot, relPath, lineNum, fixedCode) {
     try {
       const absPath = path.join(projectRoot, relPath);
@@ -334,9 +310,6 @@ ${filesText}`;
 
       if (idx < 0 || idx >= lines.length) return { fixed: false };
 
-      // Replace the target line(s) with the fix.
-      // If the fix is multi-line, replace the same number of lines from the
-      // original, or just replace the single target line if we can't be sure.
       const replaceCount = Math.min(fixLines.length, lines.length - idx);
       lines.splice(idx, replaceCount, ...fixLines);
 
@@ -368,7 +341,6 @@ ${filesText}`;
         .map(f => path.join(projectRoot, f))
         .filter(f => fs.existsSync(f));
     } catch {
-      // Not a git repo or no commits — review all source files
       return this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']).slice(0, MAX_FILES_PER_REVIEW);
     }
   }
