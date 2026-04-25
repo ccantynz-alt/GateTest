@@ -146,6 +146,33 @@ export async function postGluecronResult(
 }
 
 /**
+ * Adapter used by scan/run and scan/worker/tick. Converts a raw GateTest
+ * summary object into a GluecronPayload and posts it. Never throws.
+ */
+export async function sendGluecronCallback(args: {
+  repository: string;
+  sha: string;
+  ref?: string;
+  scanResult: { gateStatus?: string; duration?: number; [key: string]: unknown };
+}): Promise<GluecronResponse> {
+  const { repository, sha, ref, scanResult } = args;
+  const rawStatus = (scanResult?.gateStatus ?? "").toLowerCase();
+  const status: GluecronStatus =
+    rawStatus === "passed" ? "passed"
+    : rawStatus === "blocked" ? "failed"
+    : "error";
+
+  return postGluecronResult({
+    repository,
+    sha,
+    ref,
+    status,
+    durationMs: typeof scanResult?.duration === "number" ? scanResult.duration : undefined,
+    details: scanResult,
+  });
+}
+
+/**
  * Liveness probe against GlueCron's unauthenticated /api/hooks/ping. Useful
  * for the admin health check before we rely on the callback.
  */
