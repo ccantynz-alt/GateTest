@@ -42,7 +42,7 @@ class SarifReporter {
         const ruleId = `gatetest/${moduleResult.module}/${this._sanitizeRuleId(check.name)}`;
         if (!ruleIndex.has(ruleId)) {
           ruleIndex.set(ruleId, rules.length);
-          rules.push({
+          const ruleEntry = {
             id: ruleId,
             name: check.name,
             shortDescription: { text: check.message || check.name },
@@ -53,7 +53,11 @@ class SarifReporter {
             properties: {
               tags: [moduleResult.module],
             },
-          });
+          };
+          if (check.suggestion) {
+            ruleEntry.help = { text: check.suggestion };
+          }
+          rules.push(ruleEntry);
         }
 
         // Create result
@@ -80,13 +84,6 @@ class SarifReporter {
                 startColumn: 1,
               },
             },
-          }];
-        }
-
-        // Add fix suggestion
-        if (check.suggestion) {
-          sarifResult.fixes = [{
-            description: { text: check.suggestion },
           }];
         }
 
