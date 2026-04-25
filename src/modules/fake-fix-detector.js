@@ -496,11 +496,27 @@ class FakeFixDetectorModule extends BaseModule {
   // AI engine
   // ------------------------------------------------------------------
 
+  // Source file extensions the AI engine should analyse.
+  // Config/data files (JSON, YAML, TOML, lock files, markdown) are excluded
+  // because Claude will misidentify legitimate config resets (e.g. vercel.json
+  // → {}) as "deleting config to hide error" — they're not source logic.
+  _isSourceFile(filePath) {
+    const ext = (filePath || '').split('.').pop().toLowerCase();
+    return [
+      'js', 'mjs', 'cjs', 'jsx',
+      'ts', 'mts', 'cts', 'tsx',
+      'py', 'go', 'rs', 'java',
+      'rb', 'php', 'cs', 'kt', 'swift',
+      'sh', 'bash',
+    ].includes(ext);
+  }
+
   async _runAiEngine(apiKey, diff, context, ledger) {
     // Split the diff into per-hunk chunks so the cost ledger can stop
     // mid-scan if a big diff threatens to blow the budget. Each hunk is
     // analysed with its own prompt and counts as one Claude call.
-    const hunks = this._parseDiff(diff);
+    // Only analyse source code files — config/data files generate false positives.
+    const hunks = this._parseDiff(diff).filter(h => this._isSourceFile(h.file));
     const contextBlock = context
       ? `\nCONTEXT — the bug/error this diff is supposed to fix:\n${context}\n`
       : '';
