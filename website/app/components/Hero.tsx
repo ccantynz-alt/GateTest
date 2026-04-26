@@ -27,7 +27,7 @@ export default function Hero() {
 
           {/* Subheadline */}
           <p className="text-lg sm:text-xl text-white/50 max-w-2xl mx-auto mb-12 leading-relaxed fade-up">
-            84 modules scan your entire codebase. Security, supply chain,
+            90 modules scan your entire codebase. Security, supply chain,
             auth flaws, CI hardening, and more. AI-powered review finds real
             bugs &mdash; then auto-fixes them. You only pay when it&apos;s delivered.
           </p>
@@ -54,7 +54,7 @@ export default function Hero() {
             <span className="terminal-scan-line" aria-hidden="true" />
             <div className="relative p-6 font-[var(--font-mono)] text-sm text-left space-y-1.5 leading-relaxed">
               <p className="text-emerald-400 font-bold text-xs tracking-wider">GATETEST &mdash; Quality Assurance Gate</p>
-              <p className="text-white/30 text-xs">Running full suite: 84 modules</p>
+              <p className="text-white/30 text-xs">Running full suite: 90 modules</p>
               <p className="mt-3" />
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">syntax</span> <span className="text-white/30">&mdash; 47 checks, 12ms</span></p>
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">secrets</span> <span className="text-white/30">&mdash; 312 files, 0 found</span></p>
@@ -62,17 +62,17 @@ export default function Hero() {
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">accessibility</span> <span className="text-white/30">&mdash; WCAG 2.2 AAA</span></p>
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">performance</span> <span className="text-white/30">&mdash; 98/100, LCP 1.1s</span></p>
               <p className="text-white/70">{"  "}<span className="text-emerald-400">&#10003;</span> <span className="text-white/90 font-medium">aiReview</span> <span className="text-white/30">&mdash; Claude: 2 bugs found, 2 fixed</span></p>
-              <p className="text-white/25 text-xs">{"  "}...61 more modules passed</p>
+              <p className="text-white/25 text-xs">{"  "}...85 more modules passed</p>
               <p className="mt-3" />
-              <p className="text-emerald-400 font-bold">{"  "}GATE: PASSED <span className="text-white/40 font-normal">&mdash; 67/84 modules, 300+ checks, 3.1s</span></p>
+              <p className="text-emerald-400 font-bold">{"  "}GATE: PASSED <span className="text-white/40 font-normal">&mdash; 90/90 modules, 300+ checks, 3.1s</span></p>
             </div>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-14 max-w-2xl mx-auto fade-up stagger">
             {[
-              { value: "22", label: "Test Modules" },
-              { value: "300+", label: "Quality Checks" },
+              { value: "90", label: "Test Modules" },
+              { value: "800+", label: "Quality Checks" },
               { value: "$0", label: "If Scan Fails" },
               { value: "0", label: "Tolerance for Bugs" },
             ].map((stat) => (

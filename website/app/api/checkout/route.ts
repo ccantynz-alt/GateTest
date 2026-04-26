@@ -37,9 +37,9 @@ const TIERS: Record<string, ScanTier> = {
   full: {
     name: "Full Scan",
     priceInCents: 9900,
-    modules: "all-84",
+    modules: "all-90",
     description:
-      "All 84 modules — security, supply chain, auth, CI hardening, AI review, and more. AI auto-fix PR included.",
+      "All 90 modules — security, supply chain, auth, CI hardening, AI review, and more. AI auto-fix PR included.",
   },
 };
 
