@@ -139,7 +139,7 @@ The thing that doesn't exist anywhere else today.
 - [x] **3.2** Cross-finding correlation engine — **DONE commit `(this commit)`** (`website/app/lib/cross-finding-correlator.js`, 24 tests in `tests/cross-finding-correlator.test.js`). Reads the full findings set, identifies CHAINS where the combined severity is materially worse than the worst individual finding. Strict output schema (CHAIN / SEVERITY / INVOLVES / IMPACT / FIX_ORDER), max 5 chains, SKIP marker honest fallback when nothing combines. Validates finding numbers against bounds, rejects single-finding "chains," skips malformed blocks instead of failing the whole batch. Resolves finding numbers back to detail strings for the markdown report. Renders as `## GateTest Cross-Finding Correlation` with severity badges (🔴/🟠/🟡/⚪). Wired into the Nuclear path — runs in parallel with diagnoseFindings (independent Claude calls) for speed.
 - [ ] Mutation testing pass: mutate the customer's source under their tests, report which mutations survive (= test gaps).
 - [ ] Chaos / fuzz pass: generate adversarial inputs for entry points (HTTP routes, CLI args, file parsers), run, report what crashes.
-- [ ] Executive summary report: single markdown doc, non-technical readable, suitable to hand to a CTO.
+- [x] **3.5** Executive summary report — **DONE commit `(this commit)`** (`website/app/lib/executive-summary.js`, 22 tests in `tests/executive-summary.test.js`). Synthesises scan stats + top findings + chains into a CTO-readable single document. 5 sections (HEADLINE / POSTURE / TOP_3_ACTIONS / WORKING_WELL / RECOMMENDED_NEXT) with strict-output schema. Renders as `# Executive Summary` markdown with subject hostname, blockquote headline, posture bullets, top-3 actions, what's working well counter-balance, recommended next step. Wired into Nuclear path AFTER parallel diagnosis + correlation — sequential because it depends on their outputs. Failures non-blocking. Output ordered in `report`: executive first (CTO read), then technical diagnosis report, then correlation report.
 - [ ] Wire `nuclear` tier into `/api/checkout/route.ts` `TIERS` and add the card to `Pricing.tsx`. Stripe product already exists.
 - [ ] Real-repo proof on 3 repos. Document in `docs/proofs/phase-3-<repo>.md`.
 - [ ] Definition of done: customer can buy $399 tier and receive a deliverable that justifies a $399 spend (i.e. a real engineer would say "yes, that was worth $399").
@@ -166,7 +166,7 @@ The thing that doesn't exist anywhere else today.
 | --- | --- | --- |
 | 1 — Iterative fix loop | 2026-04-26 | 6/6 sub-tasks at scaffold-or-better. 1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold, 1.3 ✓, 1.4 ✓, 1.5 ~ partial (1/3 proofs done; remaining 2 need API-keyed session). 1.2b + 1.4-before/after-scan activate in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
 | 2 — $199 Scan + Fix tier | 2026-04-26 | 2/5 sub-tasks shipped (2.1 ✓, 2.2 ✓; 2.3/2.4 open) |
-| 3 — $399 Nuclear tier | 2026-04-26 | 2/7 sub-tasks shipped (3.1 ✓, 3.2 ✓; 3.3/3.4/3.5/3.6/3.7 open) |
+| 3 — $399 Nuclear tier | 2026-04-26 | 3/7 sub-tasks shipped (3.1 ✓, 3.2 ✓, 3.5 ✓; 3.3/3.4/3.6/3.7 open). 3.3 (mutation testing) and 3.4 (chaos/fuzz) need either a runtime (Vercel functions can't run customer test suites) or a new dependency (Stryker, etc.) — both Boss-Rule-adjacent so deferred to a session where Craig can confirm direction. |
 | 4 — Honesty sweep | — | not started |
 
 ---

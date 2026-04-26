@@ -11,6 +11,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
+// Phase 3.5 — executive summary composer. Synthesises diagnoses +
+// chains + scan stats into a single CTO-readable report.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { composeExecutiveSummary, renderExecutiveSummary } = require("@/app/lib/executive-summary") as {
+  composeExecutiveSummary: (opts: {
+    scanStats?: { modulesPassed?: number; modulesTotal?: number; errors?: number; warnings?: number; checksPerformed?: number; durationMs?: number };
+    topFindings?: Array<{ detail: string; module?: string; severity?: string }>;
+    chains?: Array<{ title: string; severity: string; impact: string }>;
+    hostname?: string;
+    askClaudeForSummary: (prompt: string) => Promise<string>;
+  }) => Promise<{
+    ok: boolean;
+    sections: { headline: string; posture: string; topActions: string; workingWell: string; recommendedNext: string } | null;
+    reason: string | null;
+  }>;
+  renderExecutiveSummary: (
+    result: {
+      ok: boolean;
+      sections: { headline: string; posture: string; topActions: string; workingWell: string; recommendedNext: string } | null;
+      reason?: string | null;
+    } | null,
+    opts?: { hostname?: string }
+  ) => string;
+};
+
 // Phase 3.2 — cross-finding correlator. Identifies attack chains
 // across the full findings set — combinations that are materially
 // worse than the worst individual finding.
@@ -361,7 +386,13 @@ async function askClaudeForDiagnosis(prompt: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { hostname?: string; modules?: ModResult[]; tier?: string; scanContext?: { platform?: string; stack?: string[] } };
+  let body: {
+    hostname?: string;
+    modules?: ModResult[];
+    tier?: string;
+    scanContext?: { platform?: string; stack?: string[] };
+    scanStats?: { modulesPassed?: number; modulesTotal?: number; errors?: number; warnings?: number; checksPerformed?: number; durationMs?: number };
+  };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -395,9 +426,7 @@ export async function POST(req: NextRequest) {
       });
     }
     try {
-      // Run diagnosis + correlation in parallel — independent calls
-      // both consume Anthropic but neither depends on the other's
-      // output, so do them concurrently.
+      // Run diagnosis + correlation in parallel — independent calls.
       const [diagResult, corrResult] = await Promise.all([
         diagnoseFindings({
           findings,
@@ -411,6 +440,23 @@ export async function POST(req: NextRequest) {
           askClaudeForCorrelation: askClaudeForDiagnosis, // same Claude wrapper, different prompt
         }),
       ]);
+      // Executive summary depends on diagnoses + chains, so it runs
+      // sequentially. Failures non-blocking — we still return the
+      // technical sections.
+      let execResult: Awaited<ReturnType<typeof composeExecutiveSummary>> | null = null;
+      try {
+        execResult = await composeExecutiveSummary({
+          scanStats: body.scanStats,
+          topFindings: findings.slice(0, 10),
+          chains: corrResult.chains,
+          hostname,
+          askClaudeForSummary: askClaudeForDiagnosis,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "executive summary failed";
+        execResult = { ok: false, sections: null, reason: message };
+      }
+      const execMarkdown = renderExecutiveSummary(execResult, { hostname });
       return NextResponse.json({
         hostname,
         tier: "nuclear",
@@ -418,10 +464,14 @@ export async function POST(req: NextRequest) {
         diagnosed: diagResult.diagnoses.filter((d) => d.ok).length,
         skipped: diagResult.diagnoses.filter((d) => !d.ok).length,
         chainsIdentified: corrResult.chains.length,
-        summary: `${diagResult.summary} · ${corrResult.summary}`,
+        executiveSummary: execResult?.ok ? execResult.sections : null,
+        summary: `${diagResult.summary} · ${corrResult.summary}${execResult?.ok ? ' · executive summary generated' : ''}`,
         diagnoses: diagResult.diagnoses,
         chains: corrResult.chains,
-        report: renderDiagnosesReport(diagResult.diagnoses, diagResult.summary)
+        // Order matters: executive first (CTO read), then technical detail.
+        report: execMarkdown
+          + "\n\n"
+          + renderDiagnosesReport(diagResult.diagnoses, diagResult.summary)
           + "\n\n"
           + renderCorrelationReport(corrResult),
       });
