@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://gatetest.ai"),
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
-    "22 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay only when the scan completes.",
+    "84 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay only when the scan completes.",
   keywords: [
     "QA",
     "testing",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "22 modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
+      "84 modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
     url: "https://gatetest.io",
     siteName: "GateTest",
     type: "website",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "22 modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
+      "84 modules scan your entire codebase. We find the bugs AND fix them. Pay only when the scan completes.",
   },
   robots: {
     index: true,
@@ -90,7 +90,7 @@ export default function RootLayout({
               operatingSystem: "Any",
               url: "https://gatetest.ai",
               description:
-                "AI-powered QA platform that scans your entire codebase with 22 modules — security, supply chain, auth flaws, CI hardening, and more. Pay only when the scan completes.",
+                "AI-powered QA platform that scans your entire codebase with 84 modules — security, supply chain, auth flaws, CI hardening, and more. Pay only when the scan completes.",
               offers: [
                 {
                   "@type": "Offer",
@@ -105,7 +105,7 @@ export default function RootLayout({
                   price: "99.00",
                   priceCurrency: "USD",
                   description:
-                    "All 22 modules including AI code review, security, supply chain, auth flaws, and more",
+                    "All 84 modules including AI code review, security, supply chain, auth flaws, and more",
                 },
               ],
             }),

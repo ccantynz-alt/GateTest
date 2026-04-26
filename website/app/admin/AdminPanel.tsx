@@ -425,7 +425,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
                 >
                   <option value="quick">Quick (39 modules)</option>
-                  <option value="full">Full (67 modules)</option>
+                  <option value="full">Full (84 modules)</option>
                 </select>
                 <button
                   onClick={runScan}

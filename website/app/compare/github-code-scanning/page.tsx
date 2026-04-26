@@ -38,11 +38,11 @@ const faqItems = [
   },
   {
     q: "Does GateTest post commit statuses and PR comments like GitHub Code Scanning does?",
-    a: "Yes — identical workflow integration. Install the GateTest GitHub App once, and every push gets a commit status (pass/fail) with a link to the full report. Every PR gets a formatted comment with per-module results, severity counts, file references, and line numbers. The developer workflow is indistinguishable from GitHub Code Scanning — but with 67 modules instead of CodeQL's security-only scope.",
+    a: "Yes — identical workflow integration. Install the GateTest GitHub App once, and every push gets a commit status (pass/fail) with a link to the full report. Every PR gets a formatted comment with per-module results, severity counts, file references, and line numbers. The developer workflow is indistinguishable from GitHub Code Scanning — but with 84 modules instead of CodeQL's security-only scope.",
   },
   {
     q: "GitHub Code Scanning is free for public repos. Does GateTest offer anything similar?",
-    a: "GateTest's pricing is per scan ($29 quick / $99 full 67 modules). There's no subscription or per-seat billing — a public-repo open-source project pays exactly the same as an enterprise. We don't currently offer a free tier, but $99 for a full 67-module scan including AI code review is substantially cheaper than what GitHub Advanced Security costs at enterprise scale.",
+    a: "GateTest's pricing is per scan ($29 quick / $99 full 84 modules). There's no subscription or per-seat billing — a public-repo open-source project pays exactly the same as an enterprise. We don't currently offer a free tier, but $99 for a full 84-module scan including AI code review is substantially cheaper than what GitHub Advanced Security costs at enterprise scale.",
   },
   {
     q: "Does GateTest work with repos on git hosts other than GitHub?",
@@ -145,7 +145,7 @@ export default function GitHubCodeScanningPage() {
               href="/"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 67 Modules
+              See All 84 Modules
             </Link>
           </div>
         </div>
@@ -225,7 +225,7 @@ export default function GitHubCodeScanningPage() {
             {[
               {
                 title: "Same workflow, 67x more coverage",
-                body: "GateTest posts commit statuses and PR comments in exactly the same format as GitHub Code Scanning. The developer experience is identical — install the GitHub App, push code, see results on the PR. But instead of security-only CodeQL alerts, you get 67 modules: security, performance, accessibility, AI safety, visual regression, and more.",
+                body: "GateTest posts commit statuses and PR comments in exactly the same format as GitHub Code Scanning. The developer experience is identical — install the GitHub App, push code, see results on the PR. But instead of security-only CodeQL alerts, you get 84 modules: security, performance, accessibility, AI safety, visual regression, and more.",
               },
               {
                 title: "AI code review CodeQL can't do",
