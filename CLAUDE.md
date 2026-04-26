@@ -155,7 +155,7 @@ The thing that doesn't exist anywhere else today.
 1. **Pick up from the last unchecked box.** Every session reads this list, finds the first `- [ ]` box, and works it. No re-asking Craig.
 2. **Commit at every meaningful milestone.** Bible's "no chicken scratchings" rule still applies — but partial-progress commits with clear messages are fine and encouraged so the next session has a clean handoff.
 3. **Real-repo proof is mandatory.** No phase counts as done without the proof docs. "It compiles" is not done.
-4. **Boss Rule still applies.** Stripe product creation, DNS, brand copy, production deploys → Craig. Everything else inside this plan → execute.
+4. **Boss Rule loosened for this plan only.** Sub-tasks 2.3, 3.6, and 4.2 (the three would-be pauses) are **pre-authorised** when the preceding sub-tasks of their phase have shipped with proof artifacts and tests green. So $199 doesn't get flipped on for sale until pair-review + architecture annotations + proof docs exist; $399 doesn't get flipped on until diagnosis + correlation + mutation + chaos + report + proof docs exist; compare-page sweep doesn't run until the modules being marketed are validated. Authorisation: Craig 2026-04-26 — *"we just want you to start building from the start and carry on to finish."* Nuclear-button items (production deploys, DNS, new third-party API integrations, brand rewrites, anything touching money/user-data outside this plan) still require Craig's explicit go-ahead.
 5. **Update CLAUDE.md when a phase ships.** Tick the boxes. Move the version number. Add a date.
 6. **Tests stay green.** Sweep checklist runs every session. If something this plan touched broke a test, fix it before moving on.
 

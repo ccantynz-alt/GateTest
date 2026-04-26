@@ -33,6 +33,19 @@ import {
 // structured per-attempt logging. The loop carries forward each previous
 // failure into the next prompt so Claude sees its own mistake. Pure JS
 // helper, tested standalone in tests/fix-attempt-loop.test.js.
+// Phase 1.2 — cross-fix syntax-validation gate. Sits between the
+// per-file iterative loop and PR creation. Catches Claude output that
+// passes shape + pattern checks but doesn't actually parse.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateFixesSyntax, summariseSyntaxGate } = require("@/app/lib/cross-fix-syntax-gate") as {
+  validateFixesSyntax: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+  }) => {
+    accepted: Array<{ file: string; fixed: string; original: string; issues: string[]; language: string }>;
+    rejected: Array<{ file: string; fixed: string; original: string; issues: string[]; reason: string; language: string }>;
+  };
+  summariseSyntaxGate: (result: { accepted: unknown[]; rejected: unknown[] }) => string;
+};
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-attempt-loop") as {
   attemptFixWithRetries: (opts: {
@@ -659,6 +672,36 @@ export async function POST(req: NextRequest) {
       errors,
       skippedForBudget,
       failedFiles,
+    });
+  }
+
+  // Phase 1.2 — cross-fix syntax gate. Ran ONCE on the full collected
+  // fix set after every per-file iterative loop completed. Anything that
+  // doesn't parse is dropped from the PR — the customer never sees a
+  // broken-syntax fix on their branch.
+  const syntaxGate = validateFixesSyntax({ fixes });
+  if (syntaxGate.rejected.length > 0) {
+    for (const r of syntaxGate.rejected) {
+      errors.push(`Rejected ${r.file} (${r.language}): ${r.reason}`);
+    }
+    // Replace the working fix list with the syntax-validated subset.
+    // The accepted entries carry the same shape as the originals plus
+    // a `language` field; downstream code reads `file`/`fixed`/etc.
+    fixes.length = 0;
+    for (const a of syntaxGate.accepted) {
+      fixes.push({ file: a.file, fixed: a.fixed, original: a.original, issues: a.issues });
+    }
+  }
+  const syntaxGateSummary = summariseSyntaxGate(syntaxGate);
+
+  if (fixes.length === 0) {
+    return NextResponse.json({
+      status: "no_fixes",
+      message: `Every fix failed the syntax gate — Claude returned content that doesn't parse. ${syntaxGateSummary}`,
+      errors,
+      skippedForBudget,
+      failedFiles,
+      syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
     });
   }
 
