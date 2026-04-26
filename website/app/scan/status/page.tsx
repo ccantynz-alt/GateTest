@@ -79,6 +79,7 @@ export default function ScanStatus() {
   // eslint-disable-next-line react-hooks/purity
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
+  const fixTriggered = useRef(false);
 
   const [params, setParams] = useState<{ id: string; repo: string; tier: string }>({ id: "", repo: "", tier: "quick" });
 
@@ -244,6 +245,18 @@ export default function ScanStatus() {
       setFixing(false);
     }
   }
+
+  // Auto-trigger fix once the scan completes with fixable issues — matches
+  // the admin Command Center behaviour so the customer doesn't have to click
+  // a second button to see the repair step happen.
+  useEffect(() => {
+    if (fixTriggered.current) return;
+    if (scanResult?.status !== "complete") return;
+    if ((scanResult.totalIssues || 0) === 0) return;
+    if (extractFixableIssues(scanResult.modules).length === 0) return;
+    fixTriggered.current = true;
+    runFix();
+  }, [scanResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";

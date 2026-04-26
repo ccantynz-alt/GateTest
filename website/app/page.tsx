@@ -4,6 +4,7 @@ import Problem from "./components/Problem";
 import AiNative from "./components/AiNative";
 import HowItWorks from "./components/HowItWorks";
 import Modules from "./components/Modules";
+import Install from "./components/Install";
 import Comparison from "./components/Comparison";
 import Integrations from "./components/Integrations";
 import ContinuousScanning from "./components/ContinuousScanning";
@@ -22,6 +23,7 @@ export default function Home() {
         <AiNative />
         <HowItWorks />
         <Modules />
+        <Install />
         <Comparison />
         <Integrations />
         <ContinuousScanning />
