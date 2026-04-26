@@ -29,6 +29,19 @@ interface ScanResult {
   canRetry?: boolean;
 }
 
+interface FixResult {
+  status: string;
+  prUrl?: string;
+  prNumber?: number;
+  branch?: string;
+  filesFixed?: number;
+  issuesFixed?: number;
+  message?: string;
+  error?: string;
+  errors?: string[];
+  failedFiles?: Array<{ file: string; issues: string[]; reason: string }>;
+}
+
 const MODULE_LABELS: Record<string, string> = {
   syntax: "Syntax validation",
   lint: "Linting checks",
@@ -60,6 +73,9 @@ export default function ScanStatus() {
   const [elapsed, setElapsed] = useState(0);
   const [animModules, setAnimModules] = useState<ModuleResult[]>([]);
   const [animIndex, setAnimIndex] = useState(0);
+  const [fixing, setFixing] = useState(false);
+  const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const [fixError, setFixError] = useState("");
   // eslint-disable-next-line react-hooks/purity
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
@@ -175,6 +191,59 @@ export default function ScanStatus() {
   }, [params]);
 
   const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
+
+  // Parse failed-module details into the {file, issue, module} shape that
+  // /api/scan/fix expects. Mirrors AdminPanel's parser so admin and customer
+  // paths produce identical fix-input payloads.
+  function extractFixableIssues(modules: ModuleResult[]) {
+    const failed = modules.filter((m) => m.status === "failed");
+    return failed.flatMap((m) => {
+      const details = m.details || [];
+      return details.map((d) => {
+        let file = "";
+        let issue = d;
+        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
+        if (fileLineMatch) {
+          file = fileLineMatch[1];
+          issue = fileLineMatch[3];
+        } else {
+          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
+        }
+        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
+        if (!file && missingMatch) {
+          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
+          issue = `CREATE_FILE: ${d}`;
+        }
+        return { file, issue, module: m.name };
+      }).filter((i) => i.file);
+    });
+  }
+
+  async function runFix() {
+    if (!scanResult || !params.repo) return;
+    const issues = extractFixableIssues(scanResult.modules);
+    if (issues.length === 0) {
+      setFixError("No auto-fixable issues — these need manual review (config / infrastructure / architectural).");
+      return;
+    }
+    setFixing(true);
+    setFixResult(null);
+    setFixError("");
+    try {
+      const res = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: params.repo, issues }),
+      });
+      const data = await res.json() as FixResult;
+      setFixResult(data);
+    } catch (err) {
+      setFixError(err instanceof Error ? err.message : "Fix failed");
+    } finally {
+      setFixing(false);
+    }
+  }
 
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";
@@ -375,23 +444,105 @@ export default function ScanStatus() {
               <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
             )}
 
-            {/* What's next */}
+            {/* What's next — AI fix is the primary CTA */}
             {(scanResult?.totalIssues || 0) > 0 && (
               <div className="p-5 rounded-xl border border-border bg-white">
-                <h3 className="font-bold text-foreground mb-2">What&apos;s next?</h3>
+                <h3 className="font-bold text-foreground mb-2">Fix everything automatically</h3>
                 <p className="text-sm text-muted mb-4">
-                  The issues above show exactly what needs fixing — file names and line numbers included. You can fix them manually, or run a deeper scan for more coverage.
+                  GateTest can hand the issue list to Claude, generate the fixes, verify each one against the scanner, and open a pull request on your repo. Included with every scan.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {params.tier === "quick" && (
-                    <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm text-center">
-                      Run Full Scan — All 67 Modules
+
+                {!fixResult && !fixing && (
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={runFix}
+                      className="btn-primary px-6 py-3 text-sm text-center"
+                      style={{ background: "#059669" }}
+                    >
+                      Fix {scanResult?.totalIssues} Issue{(scanResult?.totalIssues || 0) > 1 ? "s" : ""} with AI
+                    </button>
+                    <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
+                      Scan Another Repo
                     </Link>
-                  )}
-                  <Link href="/#pricing" className="btn-secondary px-6 py-3 text-sm text-center">
-                    Scan Another Repo
-                  </Link>
-                </div>
+                  </div>
+                )}
+
+                {fixing && (
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Claude is reading your code and generating fixes…</p>
+                      <p className="text-xs text-amber-700 mt-0.5">Typically 30&ndash;90 seconds. Each fix is re-scanned before commit.</p>
+                    </div>
+                  </div>
+                )}
+
+                {fixError && (
+                  <p className="mt-3 text-sm text-amber-700">{fixError}</p>
+                )}
+
+                {fixResult && (
+                  <div className={`mt-3 p-4 rounded-lg border ${fixResult.prUrl ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                    {fixResult.prUrl ? (
+                      <>
+                        <p className="text-sm font-bold text-green-800 mb-1">
+                          ✓ Pull request opened &mdash; {fixResult.issuesFixed} issue{(fixResult.issuesFixed || 0) > 1 ? "s" : ""} fixed across {fixResult.filesFixed} file{(fixResult.filesFixed || 0) > 1 ? "s" : ""}
+                        </p>
+                        <p className="text-xs text-green-700 mb-3">
+                          Fixes are on branch <code className="font-mono">{fixResult.branch}</code>. Your main branch is unchanged until you merge.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <a
+                            href={fixResult.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary px-5 py-2.5 text-sm text-center"
+                            style={{ background: "#059669" }}
+                          >
+                            View pull request &rarr;
+                          </a>
+                          <button
+                            onClick={runFix}
+                            className="btn-secondary px-5 py-2.5 text-sm text-center"
+                            disabled={fixing}
+                          >
+                            Re-fix
+                          </button>
+                        </div>
+                        {fixResult.errors && fixResult.errors.length > 0 && (
+                          <details className="mt-3 text-xs text-green-800/80">
+                            <summary className="cursor-pointer font-medium">{fixResult.errors.length} item{fixResult.errors.length > 1 ? "s" : ""} could not be auto-fixed</summary>
+                            <ul className="mt-2 space-y-0.5 pl-3 list-disc">
+                              {fixResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                            </ul>
+                          </details>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-amber-800">{fixResult.error || fixResult.message || "Fix could not complete"}</p>
+                        {fixResult.errors && fixResult.errors.length > 0 && (
+                          <ul className="mt-2 text-xs text-amber-700 space-y-0.5">
+                            {fixResult.errors.slice(0, 5).map((e, i) => <li key={i}>&rarr; {e}</li>)}
+                          </ul>
+                        )}
+                        <button
+                          onClick={runFix}
+                          className="mt-3 btn-secondary px-4 py-2 text-sm"
+                          disabled={fixing}
+                        >
+                          Try again
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {params.tier === "quick" && !fixing && !fixResult && (
+                  <p className="mt-4 text-xs text-muted">
+                    Want every module scanned, not just 4? <Link href="/#pricing" className="text-accent font-medium hover:underline">Upgrade to Full Scan</Link> &mdash; AI fix included.
+                  </p>
+                )}
               </div>
             )}
 
@@ -399,8 +550,8 @@ export default function ScanStatus() {
               <div className="p-5 rounded-xl border border-border bg-white text-center">
                 <p className="text-sm text-muted mb-4">
                   {params.tier === "quick"
-                    ? "Passed the Quick Scan. Want to go deeper with all 22 modules?"
-                    : "Clean across all modules."}
+                    ? "Passed the Quick Scan. Want to go deeper with all 84 modules?"
+                    : "Clean across all 84 modules."}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {params.tier === "quick" && (

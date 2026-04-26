@@ -5,7 +5,7 @@
  * 1. Customer selects a scan tier and provides repo URL
  * 2. This route creates a Stripe Checkout Session with capture_method: manual
  * 3. Customer completes payment → Stripe holds the funds
- * 4. GateTest runs the scan
+ * 4. GateTest runs the scan (and AI fix on Full Scan)
  * 5. Scan succeeds → capture the payment
  * 6. Scan fails → cancel the payment intent (hold released)
  *
@@ -18,8 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
 
 interface ScanTier {
   name: string;
@@ -38,13 +37,13 @@ const TIERS: Record<string, ScanTier> = {
   full: {
     name: "Full Scan",
     priceInCents: 9900,
-    modules: "all-22",
-    description: "All 22 modules — security, supply chain, auth, CI hardening, AI review, and more",
+    modules: "all-84",
+    description:
+      "All 84 modules — security, supply chain, auth, CI hardening, AI review, and more. AI auto-fix PR included.",
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _stripeRequest(
+function stripeRequest(
   method: string,
   path: string,
   body?: string
@@ -90,20 +89,7 @@ function _stripeRequest(
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function POST(_req: NextRequest) {
-  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
-  return NextResponse.json(
-    {
-      status: "pre-launch",
-      message:
-        "Scan purchases are not yet available. Join the waitlist at gatetest.ai for launch notifications.",
-    },
-    { status: 503 }
-  );
-
-  // PRE-LAUNCH: disabled until attorney review + launch. Restore this block to re-enable.
-  /*
+export async function POST(req: NextRequest) {
   if (!STRIPE_SECRET_KEY) {
     return NextResponse.json(
       { error: "Payments not configured yet" },
@@ -126,9 +112,14 @@ export async function POST(_req: NextRequest) {
     );
   }
 
-  if (!input.repoUrl || !input.repoUrl.includes("github.com")) {
+  // Accept gluecron.com URLs first, fall back to github.com during the
+  // dual-host migration window. Either host's URL shape is valid.
+  if (
+    !input.repoUrl ||
+    !(input.repoUrl.includes("github.com") || input.repoUrl.includes("gluecron.com"))
+  ) {
     return NextResponse.json(
-      { error: "A valid GitHub repository URL is required" },
+      { error: "A valid GitHub or Gluecron repository URL is required" },
       { status: 400 }
     );
   }
@@ -181,7 +172,6 @@ export async function POST(_req: NextRequest) {
       { status: 500 }
     );
   }
-  */
 }
 
 // GET — return available tiers

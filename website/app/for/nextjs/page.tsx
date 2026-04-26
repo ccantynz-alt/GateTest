@@ -183,7 +183,7 @@ export default function NextJsPage() {
           </h1>
           <p className="text-lg text-white/60 max-w-2xl leading-relaxed">
             GateTest understands Next.js — App Router conventions, server actions, Vercel deployment config,
-            next.config.js security headers, and NEXT_PUBLIC_* environment variable exposure. 67 modules
+            next.config.js security headers, and NEXT_PUBLIC_* environment variable exposure. 84 modules
             built for the way modern Next.js apps are actually structured.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
@@ -198,7 +198,7 @@ export default function NextJsPage() {
               href="/"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 67 Modules
+              See All 84 Modules
             </Link>
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function NextJsPage() {
             Ship Next.js apps with confidence.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            67 modules, App Router awareness, AI-powered review, auto-fix PRs. Pay only when results are delivered.
+            84 modules, App Router awareness, AI-powered review, auto-fix PRs. Pay only when results are delivered.
           </p>
           <Link
             href="/"

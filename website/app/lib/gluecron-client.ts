@@ -278,6 +278,105 @@ export async function fetchBlob(
 }
 
 /**
+ * Returns true if the token looks like a GitHub credential (PAT, OAuth token,
+ * fine-grained PAT, or app installation token). Used to route helpers to the
+ * GitHub API when a Gluecron token is unavailable but a GitHub PAT exists.
+ */
+function isGitHubToken(token: string): boolean {
+  if (!token) return false;
+  if (token.startsWith("ghp_") || token.startsWith("gho_")) return true;
+  if (token.startsWith("github_pat_") || token.startsWith("ghs_")) return true;
+  if (token === (process.env.GITHUB_TOKEN || "")) return true;
+  if (token === (process.env.GATETEST_GITHUB_TOKEN || "")) return true;
+  return false;
+}
+
+/**
+ * Resolve the tip SHA of a branch. Tries Gluecron's tree endpoint first
+ * (which carries the branch-tip sha on the response per its wire contract),
+ * then falls back to GitHub's git-ref endpoint. Returns null if neither
+ * host can resolve it — caller should surface the error.
+ */
+export async function resolveBaseBranchSha(
+  owner: string,
+  repo: string,
+  branch: string,
+  token: string
+): Promise<{ sha: string | null; defaultBranch: string; source: "gluecron" | "github" | "none" }> {
+  // GitHub-first if the token is a GitHub credential
+  if (isGitHubToken(token)) {
+    try {
+      const ghRepo = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        headers: { Authorization: `Bearer ${token}`, "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" },
+      });
+      if (ghRepo.ok) {
+        const repoData = await ghRepo.json() as { default_branch?: string };
+        const defaultBranch = branch || repoData.default_branch || "main";
+        const ghRef = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(defaultBranch)}`,
+          { headers: { Authorization: `Bearer ${token}`, "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" } }
+        );
+        if (ghRef.ok) {
+          const refData = await ghRef.json() as { object?: { sha?: string } };
+          if (refData.object?.sha) {
+            return { sha: refData.object.sha, defaultBranch, source: "github" };
+          }
+        }
+      }
+    } catch { /* fall through to gluecron */ }
+  }
+
+  // Try Gluecron
+  try {
+    const repoRes = await gluecronApi(
+      "GET",
+      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+    );
+    const defaultBranch =
+      branch ||
+      ((repoRes.data.defaultBranch as string) ||
+        (repoRes.data.default_branch as string) ||
+        "main");
+
+    const treeMeta = await gluecronApi(
+      "GET",
+      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(defaultBranch)}?recursive=1`
+    );
+    const sha =
+      (treeMeta.data.sha as string | undefined) ||
+      ((treeMeta.data as { tree?: Array<{ sha?: string }> }).tree?.[0]?.sha) ||
+      null;
+
+    if (sha) return { sha, defaultBranch, source: "gluecron" };
+  } catch { /* fall through */ }
+
+  // Last-ditch GitHub attempt even without a recognised token shape — many
+  // public repos can be read unauthenticated, and in that case we still
+  // want to be able to compute a base SHA rather than failing the whole PR.
+  try {
+    const headers: Record<string, string> = { "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const ghRepo = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    if (ghRepo.ok) {
+      const repoData = await ghRepo.json() as { default_branch?: string };
+      const defaultBranch = branch || repoData.default_branch || "main";
+      const ghRef = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(defaultBranch)}`,
+        { headers }
+      );
+      if (ghRef.ok) {
+        const refData = await ghRef.json() as { object?: { sha?: string } };
+        if (refData.object?.sha) {
+          return { sha: refData.object.sha, defaultBranch, source: "github" };
+        }
+      }
+    }
+  } catch { /* fall through */ }
+
+  return { sha: null, defaultBranch: branch || "main", source: "none" };
+}
+
+/**
  * Fetch a file's SHA (for upsert). Returns "" if the file does not exist
  * on that branch (caller will then PUT without a sha, creating the file).
  */
@@ -286,9 +385,23 @@ export async function fetchFileSha(
   repo: string,
   path: string,
   ref: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<string> {
+  if (isGitHubToken(token)) {
+    try {
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+        { headers: { Authorization: `Bearer ${token}`, "User-Agent": "GateTest", Accept: "application/vnd.github.v3+json" } }
+      );
+      if (ghRes.ok) {
+        const ghData = await ghRes.json() as { sha?: string };
+        return ghData.sha || "";
+      }
+      // 404 = file doesn't exist yet — caller treats empty sha as "create"
+      if (ghRes.status === 404) return "";
+    } catch { /* fall through to gluecron */ }
+  }
+
   const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
   const res = await gluecronApi(
     "GET",
@@ -338,9 +451,27 @@ export async function postPrComment(
   repo: string,
   prNumber: number,
   body: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token)) {
+    try {
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "User-Agent": "GateTest",
+            Accept: "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ body }),
+        }
+      );
+      const data = await ghRes.json().catch(() => ({}));
+      return { status: ghRes.status, data: data as Record<string, unknown> };
+    } catch { /* fall through to gluecron */ }
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${prNumber}/comments`,
@@ -356,9 +487,24 @@ export async function createBranch(
   repo: string,
   branchName: string,
   baseSha: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token)) {
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "GateTest",
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: baseSha }),
+      });
+      const data = await ghRes.json().catch(() => ({}));
+      return { status: ghRes.status, data: data as Record<string, unknown> };
+    } catch { /* fall through to gluecron */ }
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs`,
@@ -381,12 +527,35 @@ export async function upsertFile(
   message: string,
   branch: string,
   existingSha: string | null | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  const contentBase64 = Buffer.from(content).toString("base64");
+
+  if (isGitHubToken(token)) {
+    try {
+      const body: Record<string, unknown> = { message, content: contentBase64, branch };
+      if (existingSha) body.sha = existingSha;
+      const ghRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "User-Agent": "GateTest",
+            Accept: "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await ghRes.json().catch(() => ({}));
+      return { status: ghRes.status, data: data as Record<string, unknown> };
+    } catch { /* fall through to gluecron */ }
+  }
+
   const body: Record<string, unknown> = {
     message,
-    content: Buffer.from(content).toString("base64"),
+    content: contentBase64,
     branch,
   };
   if (existingSha) body.sha = existingSha;
@@ -405,9 +574,8 @@ export async function upsertFile(
  * Open a pull request.
  *
  * NOTE: Gluecron takes `baseBranch` / `headBranch` in the body (NOT
- * GitHub's `base` / `head`). Callers should use this helper's argument
- * order (head first, then base) to stay consistent with the rest of
- * the codebase's conventions.
+ * GitHub's `base` / `head`). The GitHub fallback here translates to
+ * GitHub's `head` / `base` shape transparently.
  */
 export async function openPullRequest(
   owner: string,
@@ -416,9 +584,24 @@ export async function openPullRequest(
   body: string,
   headBranch: string,
   baseBranch: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _token: string
+  token: string
 ): Promise<GluecronApiResponse> {
+  if (isGitHubToken(token)) {
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "GateTest",
+          Accept: "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title, body, head: headBranch, base: baseBranch }),
+      });
+      const data = await ghRes.json().catch(() => ({}));
+      return { status: ghRes.status, data: data as Record<string, unknown> };
+    } catch { /* fall through to gluecron */ }
+  }
   return gluecronApi(
     "POST",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,

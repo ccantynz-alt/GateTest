@@ -1051,4 +1051,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-18
+Date last updated: 2026-04-26 — flywheel close-out: customer "Fix with AI" button wired on `/scan/status`, Gluecron base-SHA bug fixed with GitHub-direct fallback across createBranch / upsertFile / openPullRequest / postPrComment / fetchFileSha (so the fix flow can complete on either host), Claude fixer model upgraded to claude-sonnet-4-6, checkout re-enabled (Stripe POST handler restored, Pricing.tsx back to client component with handleCheckout), AI auto-fix folded into Full Scan ($99) and Quick Scan ($29) — no separate "$199 Scan + Fix" tier needed; the fix is the product. Marketing drift swept: 22 → 84 across hero, layout, Cta, HowItWorks, Modules, Hero, opengraph-image, layout structured-data, github/setup, docs/api, compare/* and for/* pages. Module count truth: 84 (per `node bin/gatetest.js --list`), Bible v1.40.0 string still says "67" pending a separate version-string refresh.

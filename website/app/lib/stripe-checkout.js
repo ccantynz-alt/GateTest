@@ -29,9 +29,9 @@ const TIERS = {
   full: {
     name: 'Full Scan',
     priceInCents: 9900,
-    modules: 'all-67',
+    modules: 'all-84',
     description:
-      'All 67 modules — security, accessibility, SEO, AI review, and more',
+      'All 84 modules — security, accessibility, SEO, AI review, and more',
   },
 };
 
