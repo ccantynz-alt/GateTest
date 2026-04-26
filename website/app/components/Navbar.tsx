@@ -30,7 +30,7 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          {["Features", "Modules", "Compare", "Integrations", "Pricing"].map((item) => (
+          {["Features", "Modules", "Install", "Compare", "Integrations", "Pricing"].map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
@@ -97,7 +97,7 @@ export default function Navbar() {
             ? "border-border bg-white/95 backdrop-blur-xl"
             : "border-white/10 bg-[#0a0a12]/95 backdrop-blur-xl"
         }`}>
-          {["Features", "Modules", "Compare", "Integrations", "Pricing"].map((item) => (
+          {["Features", "Modules", "Install", "Compare", "Integrations", "Pricing"].map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}

@@ -416,9 +416,14 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const stats = dbData?.stats;
 
   return (
-    <div className="min-h-screen bg-[#0a0a12]">
+    <div className="min-h-screen bg-gradient-to-b from-[#0f172a] via-[#0d1424] to-[#0a0f1e] relative">
+      {/* Soft brand accent so the panel reads as 'control room', not 'horror movie' */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,rgba(45,212,191,0.08),transparent_70%)]"
+      />
       {/* Dark command center header */}
-      <div className="border-b border-white/8 px-6 py-5">
+      <div className="relative border-b border-white/8 px-6 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
@@ -445,7 +450,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="relative max-w-6xl mx-auto px-6 py-6">
         {/* Stats bar */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
