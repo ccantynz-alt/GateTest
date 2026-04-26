@@ -29,6 +29,43 @@ import {
   resolveRepoAuth,
   upsertFile,
 } from "../../../lib/gluecron-client";
+// Phase 1 of THE FIX-FIRST BUILD PLAN — N-attempt iterative loop with
+// structured per-attempt logging. The loop carries forward each previous
+// failure into the next prompt so Claude sees its own mistake. Pure JS
+// helper, tested standalone in tests/fix-attempt-loop.test.js.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-attempt-loop") as {
+  attemptFixWithRetries: (opts: {
+    askClaude: (issues: string[]) => Promise<string>;
+    validateFix: (original: string, fixed: string) => { ok: boolean; reason?: string };
+    verifyFixQuality: (fixed: string, filePath: string) => { clean: boolean; newIssues: string[] };
+    originalContent: string;
+    filePath: string;
+    issues: string[];
+    maxAttempts?: number;
+    now?: () => number;
+  }) => Promise<{
+    success: boolean;
+    fixed: string | null;
+    attempts: Array<{
+      attemptNumber: number;
+      startedAt: number;
+      durationMs: number;
+      outcome: "success" | "validation-fail" | "quality-fail" | "claude-error";
+      validationReason: string | null;
+      qualityIssues: string[];
+      claudeError: string | null;
+    }>;
+    finalReason: string | null;
+  }>;
+  summariseAttempts: (attempts: Array<{ outcome: string; durationMs: number }>) => string;
+};
+
+// Default attempt ceiling — set higher than the old hardcoded "1+1 retry"
+// so the loop has room to learn from its own mistakes. Configurable via
+// GATETEST_FIX_MAX_ATTEMPTS env var if a deployment wants tighter cost
+// control or more aggressive recovery.
+const DEFAULT_MAX_ATTEMPTS = Number(process.env.GATETEST_FIX_MAX_ATTEMPTS) || 3;
 
 // Vercel Pro allows up to 300s. Fix runs 44 issues across ~10 files, each file
 // needs a Claude call + GitHub read + commit. 300s gives headroom for retries
@@ -478,6 +515,21 @@ export async function POST(req: NextRequest) {
   const fixes: Fix[] = [];
   const errors: string[] = [];
 
+  // Phase 1: per-file attempt history. Each entry captures every attempt
+  // the iterative loop made — used in the PR body, surfaced in the API
+  // response, and logged so a human reviewer can see at a glance how many
+  // attempts each fix took and what each attempt's outcome was.
+  type AttemptLog = {
+    attemptNumber: number;
+    startedAt: number;
+    durationMs: number;
+    outcome: "success" | "validation-fail" | "quality-fail" | "claude-error";
+    validationReason: string | null;
+    qualityIssues: string[];
+    claudeError: string | null;
+  };
+  const attemptHistoryByFile: Record<string, { attempts: AttemptLog[]; summary: string; success: boolean }> = {};
+
   // Time budget — start the clock so per-file workers can bail early if the
   // remaining budget won't fit another Claude round-trip + retries.
   const startedAt = Date.now();
@@ -525,36 +577,41 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // First pass: generate fix
-      let fixedContent = await askClaude(originalContent, filePath, fileIssues);
-      let validation = validateFix(originalContent, fixedContent);
-      if (!validation.ok) {
-        errors.push(`Skipped ${filePath}: ${validation.reason}`);
+      // Phase 1: iterative fix loop with up to N attempts. Each attempt's
+      // outcome is logged; on quality-fail the next attempt sees explicit
+      // feedback about what was introduced. On total failure, all attempts
+      // are surfaced in the response so the UI can show the full trail.
+      const loopResult = await attemptFixWithRetries({
+        askClaude: (currentIssues: string[]) => askClaude(originalContent, filePath, currentIssues),
+        validateFix,
+        verifyFixQuality,
+        originalContent,
+        filePath,
+        issues: fileIssues,
+        maxAttempts: DEFAULT_MAX_ATTEMPTS,
+      });
+
+      attemptHistoryByFile[filePath] = {
+        attempts: loopResult.attempts,
+        summary: summariseAttempts(loopResult.attempts),
+        success: loopResult.success,
+      };
+
+      // If every attempt was a Claude API error, treat it the same as the
+      // outer catch would have — file gets queued for retry, not marked
+      // permanently failed, and the rolling network-error counter ticks
+      // so concurrency degrades. Other failure modes (validation /
+      // quality) just go in errors.
+      if (!loopResult.success) {
+        const allClaudeErrors = loopResult.attempts.length > 0 && loopResult.attempts.every((a) => a.outcome === "claude-error");
+        if (allClaudeErrors) {
+          throw new Error(loopResult.attempts[loopResult.attempts.length - 1].claudeError || "Claude API error");
+        }
+        errors.push(`Skipped ${filePath} (${loopResult.attempts.length} attempt${loopResult.attempts.length > 1 ? "s" : ""}): ${loopResult.finalReason}`);
         return;
       }
 
-      // Verify fix doesn't introduce new issues
-      let verify = verifyFixQuality(fixedContent, filePath);
-      if (!verify.clean) {
-        // Second pass: tell Claude to fix its own mistakes
-        const retryIssues = [
-          ...fileIssues,
-          ...verify.newIssues.map((i) => `YOUR FIX INTRODUCED: ${i} — fix this too`),
-        ];
-        fixedContent = await askClaude(originalContent, filePath, retryIssues);
-        validation = validateFix(originalContent, fixedContent);
-        if (!validation.ok) {
-          errors.push(`Skipped ${filePath} after retry: ${validation.reason}`);
-          return;
-        }
-        verify = verifyFixQuality(fixedContent, filePath);
-        if (!verify.clean) {
-          errors.push(`Skipped ${filePath}: fix still introduces issues after retry: ${verify.newIssues.join("; ")}`);
-          return;
-        }
-      }
-
-      fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
+      fixes.push({ file: filePath, original: originalContent, fixed: loopResult.fixed!, issues: fileIssues });
       // Reset the rolling network-error counter on any success — only sustained
       // failure across multiple files should drop concurrency.
       state.consecutiveNetworkErrors = 0;

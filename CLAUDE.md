@@ -103,6 +103,73 @@ The `HostBridge` refactor is pre-authorized, and both bridges (GitHub + Gluecron
 
 ---
 
+## THE FIX-FIRST BUILD PLAN — MAKE THE PRODUCT MATCH THE PRICING (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-26 — *"I want an honest product that does what it says it's going to do and it fixes everything for that pricing tier... we make a plan, this is the project we're going to build, we don't stop until it's built and then we'll reassess."*
+
+This plan supersedes "pick the next Known Issue." Every session reads this section, picks up where the previous session stopped on this plan, and continues. Only stop for Boss Rule items. No "what should I do next" questions back to Craig — the plan IS the answer.
+
+### The competitive thesis
+
+Nobody on the market today (April 2026) ships **scan → iterative-self-validating-fix-loop → cross-finding conflict detection → test generation per fix → pair-review → on pay-per-completion pricing**. GitHub Copilot Autofix is CodeQL-narrow. Snyk Code Autofix is pattern-matched. DeepSource Autofix uses fix recipes. Sweep is single-pass. Devin is autonomous-agent demo-ware. Codium/CodeRabbit/Greptile are review-only. The gap is real. We build into that gap. 110% best-in-class, not 10%.
+
+### Phase 1 — Foundation: the iterative fix loop
+
+The thing that doesn't exist anywhere else today.
+
+- [ ] Per-finding fix attempt → re-scan THAT specific finding in isolation → if fail, retry with the failure context → max N retries (configurable, default 3) → log every attempt
+- [ ] Cross-fix conflict detection: apply ALL accepted fixes in one workspace → re-run full scan → prove no fix broke anything else → if a regression appears, roll back the offending fix and re-attempt
+- [ ] Test generation per fix: for every bug Claude fixes, Claude generates the regression test that would have caught it. Test goes into the same PR.
+- [ ] PR composition: single clean PR with code + new tests + per-fix written rationale + before/after scan report (markdown table)
+- [ ] Real-repo proof: end-to-end on 3 real public repos. Output documented in `docs/proofs/phase-1-<repo>.md` with timestamps, before/after scan reports, and the actual PR diff.
+- [ ] Definition of done for this phase: all four bullets above ship working AND the 3 proof docs exist AND `node --test tests/*.test.js` is green.
+
+### Phase 2 — $199 Scan + Fix tier (depth)
+
+- [ ] Pair-review agent: a second Claude reads the first agent's PR diff and posts a written critique as a PR comment. Critique scored on a fixed rubric (correctness / completeness / readability / test coverage).
+- [ ] Architecture annotations: Claude reads the full codebase shape (not just per-file) and produces a separate "design observations" report attached to the PR. Not auto-fixed — reported.
+- [ ] Wire `scan_fix` tier into `/api/checkout/route.ts` `TIERS` and add the card to `Pricing.tsx`. Stripe product already exists (Craig confirmed — see screenshot 2026-04-26).
+- [ ] Real-repo proof on 3 repos. Document in `docs/proofs/phase-2-<repo>.md`.
+- [ ] Definition of done: customer can buy $199 tier and receive a measurably deeper deliverable than $99.
+
+### Phase 3 — $399 Nuclear tier (correlation + adversarial)
+
+- [ ] Replace ALL templated shell-command fixes in `website/app/api/scan/server-fix/route.ts` with Claude-driven diagnosis tied to the actual evidence from the scan. No category-matched templates. Each fix is reasoned from the specific error.
+- [ ] Cross-finding correlation engine: Claude reads ALL findings together and identifies attack chains (e.g. "your CSP unsafe-inline + your CORS wildcard + your cookie httponly:false combine to enable session takeover via XSS"). Output as a separate "Correlated Findings" section.
+- [ ] Mutation testing pass: mutate the customer's source under their tests, report which mutations survive (= test gaps).
+- [ ] Chaos / fuzz pass: generate adversarial inputs for entry points (HTTP routes, CLI args, file parsers), run, report what crashes.
+- [ ] Executive summary report: single markdown doc, non-technical readable, suitable to hand to a CTO.
+- [ ] Wire `nuclear` tier into `/api/checkout/route.ts` `TIERS` and add the card to `Pricing.tsx`. Stripe product already exists.
+- [ ] Real-repo proof on 3 repos. Document in `docs/proofs/phase-3-<repo>.md`.
+- [ ] Definition of done: customer can buy $399 tier and receive a deliverable that justifies a $399 spend (i.e. a real engineer would say "yes, that was worth $399").
+
+### Phase 4 — Honesty sweep
+
+- [ ] Disable any of the 90 modules that don't survive real-repo validation in Phase 1-3 testing. Mark them experimental, remove from default suites.
+- [ ] Sweep `compare/*` pages to match shipped reality. Remove "Scan + Fix tier ($199)" and "Nuclear ($399)" mentions until Phase 2 / Phase 3 ship — re-add when they do.
+- [ ] Update CLAUDE.md `## VERSION` to reflect post-build state.
+- [ ] Move every Known Issue that this plan resolved out of the table.
+
+### Operating rules during the build
+
+1. **Pick up from the last unchecked box.** Every session reads this list, finds the first `- [ ]` box, and works it. No re-asking Craig.
+2. **Commit at every meaningful milestone.** Bible's "no chicken scratchings" rule still applies — but partial-progress commits with clear messages are fine and encouraged so the next session has a clean handoff.
+3. **Real-repo proof is mandatory.** No phase counts as done without the proof docs. "It compiles" is not done.
+4. **Boss Rule still applies.** Stripe product creation, DNS, brand copy, production deploys → Craig. Everything else inside this plan → execute.
+5. **Update CLAUDE.md when a phase ships.** Tick the boxes. Move the version number. Add a date.
+6. **Tests stay green.** Sweep checklist runs every session. If something this plan touched broke a test, fix it before moving on.
+
+### Status tracker
+
+| Phase | Started | Done |
+| --- | --- | --- |
+| 1 — Iterative fix loop | 2026-04-26 (this session) | — |
+| 2 — $199 Scan + Fix tier | — | — |
+| 3 — $399 Nuclear tier | — | — |
+| 4 — Honesty sweep | — | — |
+
+---
+
 ## PROTECTED PLATFORMS — PERMANENT INTEGRATIONS (READ THIS EVERY SESSION)
 
 **GateTest protects the following Craig-owned platforms. These integrations are PERMANENT. They must survive every future Claude session. They cannot be removed, weakened, or "simplified" without Craig's explicit authorization.**
