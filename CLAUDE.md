@@ -117,12 +117,13 @@ Nobody on the market today (April 2026) ships **scan → iterative-self-validati
 
 The thing that doesn't exist anywhere else today.
 
-- [ ] Per-finding fix attempt → re-scan THAT specific finding in isolation → if fail, retry with the failure context → max N retries (configurable, default 3) → log every attempt
-- [ ] Cross-fix conflict detection: apply ALL accepted fixes in one workspace → re-run full scan → prove no fix broke anything else → if a regression appears, roll back the offending fix and re-attempt
-- [ ] Test generation per fix: for every bug Claude fixes, Claude generates the regression test that would have caught it. Test goes into the same PR.
-- [ ] PR composition: single clean PR with code + new tests + per-fix written rationale + before/after scan report (markdown table)
-- [ ] Real-repo proof: end-to-end on 3 real public repos. Output documented in `docs/proofs/phase-1-<repo>.md` with timestamps, before/after scan reports, and the actual PR diff.
-- [ ] Definition of done for this phase: all four bullets above ship working AND the 3 proof docs exist AND `node --test tests/*.test.js` is green.
+- [x] **1.1** Per-finding fix attempt → re-scan THAT specific finding in isolation → if fail, retry with the failure context → max N retries (configurable, default 3) → log every attempt — **DONE commit `c9535fd`** (`website/app/lib/fix-attempt-loop.js`, 11 tests in `tests/fix-attempt-loop.test.js`)
+- [~] **1.2a** Cross-fix syntax-validation gate (vm.compileFunction for JS, JSON.parse for JSON; TS family pass-through pending typescript dep at the root) — **DONE commit `478b675`** (`website/app/lib/cross-fix-syntax-gate.js`, 22 tests in `tests/cross-fix-syntax-gate.test.js`)
+- [ ] **1.2b** Cross-file scanner re-validation: build synthetic post-fix workspace from `originalFileContents + fixes`, run `runTier()` from `website/app/lib/scan-modules`, diff against the original scan's findings, roll back any fix that introduced new findings the original didn't have. Caller (scan/run + scan/status pages) needs to pass `originalFileContents` and `originalFindings` into `/api/scan/fix` for this to work end-to-end.
+- [ ] **1.3** Test generation per fix: for every bug Claude fixes, Claude generates the regression test that would have caught it. Test goes into the same PR.
+- [ ] **1.4** PR composition: single clean PR with code + new tests + per-fix written rationale + before/after scan report + syntax-gate summary + iterative-loop attempt history per file (markdown table).
+- [ ] **1.5** Real-repo proof: end-to-end on 3 real public repos. Output documented in `docs/proofs/phase-1-<repo>.md` with timestamps, before/after scan reports, and the actual PR diff.
+- [ ] **Definition of done for this phase:** every box above ticked AND the 3 proof docs exist AND `node --test tests/*.test.js` is green.
 
 ### Phase 2 — $199 Scan + Fix tier (depth)
 
@@ -161,12 +162,12 @@ The thing that doesn't exist anywhere else today.
 
 ### Status tracker
 
-| Phase | Started | Done |
+| Phase | Started | Status |
 | --- | --- | --- |
-| 1 — Iterative fix loop | 2026-04-26 (this session) | — |
-| 2 — $199 Scan + Fix tier | — | — |
-| 3 — $399 Nuclear tier | — | — |
-| 4 — Honesty sweep | — | — |
+| 1 — Iterative fix loop | 2026-04-26 | 2/6 sub-tasks shipped (1.1 ✓, 1.2a ✓; 1.2b/1.3/1.4/1.5 open) |
+| 2 — $199 Scan + Fix tier | — | not started |
+| 3 — $399 Nuclear tier | — | not started |
+| 4 — Honesty sweep | — | not started |
 
 ---
 
