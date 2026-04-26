@@ -51,9 +51,13 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 function isRetryableNetworkError(err: unknown): boolean {
   if (!err) return false;
   const msg = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : "";
   const code = (err as { code?: string; cause?: { code?: string } }).code
     || (err as { cause?: { code?: string } }).cause?.code
     || "";
+  // AbortError from our 45s timeout — the file may be large or Anthropic slow;
+  // treat as transient so it goes into the retry queue rather than hard-failing.
+  if (name === "AbortError" || /aborted|abort/i.test(msg)) return true;
   const retryableCodes = [
     "EPROTO", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT",
     "EAI_AGAIN", "ENOTFOUND", "EPIPE", "EHOSTUNREACH",
@@ -556,7 +560,8 @@ export async function POST(req: NextRequest) {
       state.consecutiveNetworkErrors = 0;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "unknown";
-      const isNetworkErr = /EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|unreachable/i.test(raw);
+      const isAbortErr = err instanceof Error && (err.name === "AbortError" || /aborted|abort/i.test(raw));
+      const isNetworkErr = isAbortErr || /EPROTO|ECONNRESET|ETIMEDOUT|ssl.*alert|handshake|fetch failed|socket hang up|unreachable/i.test(raw);
 
       if (isNetworkErr) {
         state.consecutiveNetworkErrors += 1;
@@ -571,7 +576,10 @@ export async function POST(req: NextRequest) {
           state.haltRun = true;
         }
         failedFiles.push({ file: filePath, issues: fileIssues, reason: "api-unavailable" });
-        errors.push(`${filePath}: Anthropic API temporarily unavailable — queued for retry`);
+        const msg = isAbortErr
+          ? `${filePath}: request timed out (file may be too large) — queued for retry`
+          : `${filePath}: Anthropic API temporarily unavailable — queued for retry`;
+        errors.push(msg);
       } else {
         errors.push(`Failed to fix ${filePath}: ${raw}`);
       }
