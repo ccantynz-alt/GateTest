@@ -33,12 +33,26 @@ import {
 // structured per-attempt logging. The loop carries forward each previous
 // failure into the next prompt so Claude sees its own mistake. Pure JS
 // helper, tested standalone in tests/fix-attempt-loop.test.js.
-// Phase 1.2b — cross-fix scanner re-validation gate. Runs the real
-// scanner suite against the synthetic post-fix workspace and rolls
-// back any fix that introduced a new finding the original scan
-// didn't have. Imported lazily; only called when the caller supplies
-// `originalFileContents` and `originalFindingsByModule`.
+// Phase 1.2b — cross-fix scanner re-validation gate.
 import { runTier } from "@/app/lib/scan-modules";
+
+// Phase 1.3 — test generation per fix. For every successful fix,
+// Claude writes a regression test that demonstrates the original bug
+// would have failed and the fix passes. Test files are appended to
+// `fixes` as new-file entries so the existing PR commit logic ships
+// them in the same PR.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { generateTestsForFixes } = require("@/app/lib/test-generator") as {
+  generateTestsForFixes: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    askClaudeForTest: (prompt: string) => Promise<string>;
+    frameworkHint?: string;
+  }) => Promise<{
+    tests: Array<{ path: string; content: string; sourceFile: string }>;
+    skipped: Array<{ sourceFile: string; reason: string }>;
+    summary: string;
+  }>;
+};
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gate") as {
   validateFixesAgainstScanner: (opts: {
@@ -383,6 +397,27 @@ const MAX_FILE_BYTES = 400 * 1024;
  * Ask Claude to generate a NEW file (when it doesn't exist yet).
  * Used when the issue is "Missing X" and we need to create X.
  */
+/**
+ * Phase 1.3 — thin wrapper around anthropicCallWithRetry shaped for
+ * the test-generator's askClaudeForTest contract: takes a prompt,
+ * returns the raw text. Same model + retry behaviour as the main
+ * fix path.
+ */
+async function askClaudeForTest(prompt: string): Promise<string> {
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const res = await anthropicCallWithRetry(body);
+  if (res.status !== 200) {
+    const errSnippet = JSON.stringify(res.data).slice(0, 200);
+    throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
+  }
+  const content = res.data.content as Array<{ type: string; text: string }>;
+  return content?.[0]?.text || "";
+}
+
 async function askClaudeCreate(filePath: string, context: string[]): Promise<string> {
   const prompt = `You are an expert developer. Generate the COMPLETE contents of a new file.
 
@@ -797,6 +832,31 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Phase 1.3 — test generation per fix. For every successful,
+  // gate-passed fix, ask Claude to write a regression test that
+  // would have failed against the original code. Tests are added
+  // to `fixes` as new-file entries so the existing PR commit logic
+  // ships them in the same PR. Per-fix failures here NEVER block
+  // the underlying fix — a missing regression test is annoying but
+  // not destructive.
+  const testGen = await generateTestsForFixes({
+    fixes,
+    askClaudeForTest,
+  }).catch((err) => {
+    // Failing the WHOLE batch shouldn't kill the PR. Log and proceed
+    // with no generated tests.
+    const message = err instanceof Error ? err.message : "test generation failed";
+    errors.push(`Test generation failed (no regression tests added): ${message}`);
+    return { tests: [] as Array<{ path: string; content: string; sourceFile: string }>, skipped: [] as Array<{ sourceFile: string; reason: string }>, summary: `test generation: failed (${message})` };
+  });
+  for (const t of testGen.tests) {
+    fixes.push({ file: t.path, original: "", fixed: t.content, issues: [`Regression test for ${t.sourceFile}`] });
+  }
+  for (const s of testGen.skipped) {
+    errors.push(`No regression test for ${s.sourceFile}: ${s.reason}`);
+  }
+  const testGenSummary = testGen.summary;
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -934,6 +994,7 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
       scannerGate: scannerGateSummary
         ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
         : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
+      testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {

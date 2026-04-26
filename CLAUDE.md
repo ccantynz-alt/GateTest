@@ -120,7 +120,7 @@ The thing that doesn't exist anywhere else today.
 - [x] **1.1** Per-finding fix attempt → re-scan THAT specific finding in isolation → if fail, retry with the failure context → max N retries (configurable, default 3) → log every attempt — **DONE commit `c9535fd`** (`website/app/lib/fix-attempt-loop.js`, 11 tests in `tests/fix-attempt-loop.test.js`)
 - [~] **1.2a** Cross-fix syntax-validation gate (vm.compileFunction for JS, JSON.parse for JSON; TS family pass-through pending typescript dep at the root) — **DONE commit `478b675`** (`website/app/lib/cross-fix-syntax-gate.js`, 22 tests in `tests/cross-fix-syntax-gate.test.js`)
 - [~] **1.2b** Cross-file scanner re-validation — algorithm + wiring shipped in commit `(this commit)`: `website/app/lib/cross-fix-scanner-gate.js` builds a synthetic post-fix workspace, calls `runTier()` from `website/app/lib/scan-modules`, diffs against the original scan's findings, attributes new findings to specific fixes, and rolls back the offending ones. 22 tests in `tests/cross-fix-scanner-gate.test.js`. Wired into `/api/scan/fix` — gate runs ONLY when caller passes `originalFileContents` + `originalFindingsByModule`. Outstanding for "fully wired end-to-end": scan/status page needs to pass those fields into `/api/scan/fix` (admin Command Center likewise). Until that wiring lands, the gate is a no-op for production traffic — the scaffold is ready and tested but not yet active.
-- [ ] **1.3** Test generation per fix: for every bug Claude fixes, Claude generates the regression test that would have caught it. Test goes into the same PR.
+- [x] **1.3** Test generation per fix — **DONE commit `(this commit)`** (`website/app/lib/test-generator.js`, 33 tests in `tests/test-generator.test.js`). For every successful, gate-passed fix, Claude writes a regression test that demonstrates the original bug. Tests land at `tests/auto-generated/<flattened-path>.test.<ext>` in the same PR. Defaults to `node:test` framework; honors `frameworkHint`. Untestable fixes (config, docs, CREATE_FILE, type modules) are skipped silently. Per-fix failures never block the underlying fix from shipping.
 - [ ] **1.4** PR composition: single clean PR with code + new tests + per-fix written rationale + before/after scan report + syntax-gate summary + iterative-loop attempt history per file (markdown table).
 - [ ] **1.5** Real-repo proof: end-to-end on 3 real public repos. Output documented in `docs/proofs/phase-1-<repo>.md` with timestamps, before/after scan reports, and the actual PR diff.
 - [ ] **Definition of done for this phase:** every box above ticked AND the 3 proof docs exist AND `node --test tests/*.test.js` is green.
@@ -164,7 +164,7 @@ The thing that doesn't exist anywhere else today.
 
 | Phase | Started | Status |
 | --- | --- | --- |
-| 1 — Iterative fix loop | 2026-04-26 | 3/6 sub-tasks shipped (1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold; 1.3/1.4/1.5 open). 1.2b active in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
+| 1 — Iterative fix loop | 2026-04-26 | 4/6 sub-tasks shipped (1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold, 1.3 ✓; 1.4/1.5 open). 1.2b active in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
 | 2 — $199 Scan + Fix tier | — | not started |
 | 3 — $399 Nuclear tier | — | not started |
 | 4 — Honesty sweep | — | not started |
