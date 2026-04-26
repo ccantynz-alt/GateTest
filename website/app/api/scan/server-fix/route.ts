@@ -9,6 +9,30 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import https from "https";
+
+// Phase 3.1 — Nuclear diagnoser. Replaces the category-matched
+// shell-command templates below with real Claude-driven diagnosis
+// when the caller is on the $399 Nuclear tier.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { diagnoseFindings, renderDiagnosesReport } = require("@/app/lib/nuclear-diagnoser") as {
+  diagnoseFindings: (opts: {
+    findings: Array<{ detail: string; module?: string; severity?: string }>;
+    hostname?: string;
+    scanContext?: { platform?: string; stack?: string[] };
+    askClaudeForDiagnosis: (prompt: string) => Promise<string>;
+    maxFindings?: number;
+  }) => Promise<{
+    diagnoses: Array<{ finding: { detail: string; module?: string; severity?: string }; ok: boolean; diagnosis: { explanation: string; rootCause: string; recommendation: string; platformNotes: Record<string, string> } | null; reason: string | null }>;
+    summary: string;
+  }>;
+  renderDiagnosesReport: (
+    diagnoses: Array<{ finding: { detail: string; module?: string; severity?: string }; ok: boolean; diagnosis: { explanation: string; rootCause: string; recommendation: string; platformNotes: Record<string, string> } | null; reason: string | null }>,
+    summary: string
+  ) => string;
+};
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 interface ModResult {
   name: string;
@@ -250,8 +274,70 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]`,
   return fixes;
 }
 
+/**
+ * Phase 3.1 — minimal Claude wrapper for the Nuclear diagnoser path.
+ * Inline rather than imported because this route was previously
+ * synchronous-template-only. Mirrors the retry behaviour of
+ * /api/scan/fix's anthropicCallWithRetry (jittered exp backoff,
+ * 6 attempts) without duplicating the full helper.
+ */
+async function askClaudeForDiagnosis(prompt: string): Promise<string> {
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const doCall = () => new Promise<{ status: number; data: Record<string, unknown> }>((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.anthropic.com",
+      port: 443,
+      path: "/v1/messages",
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode || 0, data: JSON.parse(Buffer.concat(chunks).toString("utf-8")) }); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(60_000, () => { req.destroy(); reject(new Error("Anthropic request timed out")); });
+    req.write(body);
+    req.end();
+  });
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500)));
+    }
+    try {
+      const res = await doCall();
+      if (res.status === 200) {
+        const content = res.data.content as Array<{ type: string; text: string }>;
+        return content?.[0]?.text || "";
+      }
+      // Non-200 with non-retryable status — bail
+      if (res.status !== 429 && res.status < 500) {
+        throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(res.data).slice(0, 200)}`);
+      }
+    } catch (err) {
+      if (attempt === 3) throw err;
+    }
+  }
+  throw new Error("Anthropic API unreachable after retries");
+}
+
 export async function POST(req: NextRequest) {
-  let body: { hostname?: string; modules?: ModResult[] };
+  let body: { hostname?: string; modules?: ModResult[]; tier?: string; scanContext?: { platform?: string; stack?: string[] } };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -259,6 +345,61 @@ export async function POST(req: NextRequest) {
   const hostname = body.hostname || "your-domain.com";
   const modules = body.modules || [];
 
+  // Phase 3.1 — Nuclear-tier diagnosis branch. When the caller's tier
+  // is `nuclear`, replace category-matched shell templates with
+  // Claude-driven evidence-tied diagnosis. The Quick / Full flows
+  // continue to use the legacy template generators below — they ship
+  // free with those tiers and their snippets are useful starting
+  // points for non-Nuclear customers.
+  if (body.tier === "nuclear" && ANTHROPIC_API_KEY) {
+    const findings: Array<{ detail: string; module: string; severity: string }> = [];
+    for (const mod of modules) {
+      if (mod.status === "passed") continue;
+      for (const detail of (mod.details || [])) {
+        findings.push({ detail, module: mod.name, severity: mod.status });
+      }
+    }
+    if (findings.length === 0) {
+      return NextResponse.json({
+        hostname,
+        tier: "nuclear",
+        categories: 0,
+        totalFixes: 0,
+        diagnoses: [],
+        summary: "Nuclear diagnoser: 0 findings (all modules passed)",
+        report: "## GateTest Nuclear Diagnosis Report\n\nNo error or warning findings to diagnose. All scanned modules passed.",
+      });
+    }
+    try {
+      const result = await diagnoseFindings({
+        findings,
+        hostname,
+        scanContext: body.scanContext,
+        askClaudeForDiagnosis,
+      });
+      return NextResponse.json({
+        hostname,
+        tier: "nuclear",
+        totalFindings: findings.length,
+        diagnosed: result.diagnoses.filter((d) => d.ok).length,
+        skipped: result.diagnoses.filter((d) => !d.ok).length,
+        summary: result.summary,
+        diagnoses: result.diagnoses,
+        report: renderDiagnosesReport(result.diagnoses, result.summary),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "diagnosis failed";
+      return NextResponse.json({
+        error: `Nuclear diagnosis failed: ${message}`,
+        hostname,
+        tier: "nuclear",
+      }, { status: 500 });
+    }
+  }
+
+  // Quick / Full tier path — legacy templates. Kept because they're
+  // useful free starter snippets at lower tiers; the dishonest
+  // pattern only existed at Nuclear, which now branches above.
   const allFixes: Record<string, FixSnippet[]> = {};
 
   for (const mod of modules) {
