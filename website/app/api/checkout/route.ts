@@ -41,6 +41,19 @@ const TIERS: Record<string, ScanTier> = {
     description:
       "All 90 modules — security, supply chain, auth, CI hardening, AI review, and more. AI auto-fix PR included.",
   },
+  // Phase 2.3 — $199 Scan + Fix tier. Wired in once Phase 2.1 (pair-review),
+  // 2.2 (architecture annotator), and 2.4 (4/3 real-repo proofs validated:
+  // gatetest, Crontech, Gluecron, MarcoReid) shipped per the loosened Boss
+  // Rule. Same 90-module scan as Full, plus depth deliverables: pair-review
+  // critique on every fix and architecture-annotator design observations
+  // attached as separate PR comments.
+  scan_fix: {
+    name: "Scan + Fix",
+    priceInCents: 19900,
+    modules: "all-90+pair-review+architecture",
+    description:
+      "Everything in Full Scan, plus a second-Claude pair-review critique on every fix (correctness/completeness/readability/test-coverage rubric) and a separate architecture-annotator report on codebase-shape design observations. Same PR, deeper deliverable.",
+  },
 };
 
 function stripeRequest(
