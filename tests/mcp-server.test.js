@@ -19,7 +19,15 @@ const SCAN_PATH   = path.resolve(__dirname, '..');   // GateTest repo root
 // Helper: send one JSON-RPC request, collect the response line
 // ---------------------------------------------------------------------------
 
-function callMcp(method, params = {}, timeoutMs = 20000) {
+// Per-call timeout. 20s was originally chosen for solo runs; under the full
+// 1142-test sweep the very first cold-spawn (Node startup + 84-module
+// registry load + JSON-RPC roundtrip) regularly lands at 18-22s on a loaded
+// runner, intermittently tripping the timeout and producing a flaky "tools/list"
+// failure that vanishes on rerun. 60s gives 3x headroom on cold start while
+// still bounding a genuinely-stuck server. Sweep duration impact is zero
+// because successful calls return in 1-3s and the timeout only matters when
+// the server is broken.
+function callMcp(method, params = {}, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [SERVER_PATH], {
       stdio: ['pipe', 'pipe', 'pipe'],
