@@ -95,7 +95,11 @@ function parseSummaryOutput(raw) {
     const firstLine = linesArr[idx].slice(`${label}:`.length).trim();
     const buf = firstLine ? [firstLine] : [];
     for (let i = idx + 1; i < linesArr.length; i++) {
-      if (/^[A-Z_]+:\s/.test(linesArr[i])) break;
+      // Stop at next ALL-CAPS section header. The trailing token must
+      // be either whitespace OR end-of-line, since `split('\n')` strips
+      // the newline so a header line like "POSTURE:" has no trailing
+      // whitespace at all.
+      if (/^[A-Z_]+:(\s|$)/.test(linesArr[i])) break;
       buf.push(linesArr[i]);
     }
     return buf.join('\n').trim() || null;

@@ -101,7 +101,10 @@ function parseDiagnosisOutput(raw) {
     const buf = firstLine ? [firstLine] : [];
     for (let i = idx + 1; i < linesArr.length; i++) {
       // Stop at next ALL-CAPS section header
-      if (/^[A-Z_]+:\s/.test(linesArr[i])) break;
+      // Stop at next ALL-CAPS section header. Trailing token must be
+      // whitespace OR end-of-line — `split('\n')` strips the newline
+      // so a header line like "ROOT_CAUSE:" has no trailing whitespace.
+      if (/^[A-Z_]+:(\s|$)/.test(linesArr[i])) break;
       buf.push(linesArr[i]);
     }
     const joined = buf.join('\n').trim();
