@@ -95,6 +95,14 @@ const BUILT_IN_MODULES = {
   regressionPredictor: '../modules/regression-predictor.js',
   architectureDrift: '../modules/architecture-drift.js',
   deployReadiness: '../modules/deploy-readiness.js',
+  // Runtime contract & cache layer
+  deployContract: '../modules/deploy-contract.js',
+  cacheHeaders: '../modules/cache-headers.js',
+  // Infrastructure truth oracles
+  bashSafety: '../modules/bash-safety.js',
+  envIntegrity: '../modules/env-integrity.js',
+  systemd: '../modules/systemd.js',
+  rollbackHonesty: '../modules/rollback-honesty.js',
 };
 
 class ModuleRegistry {

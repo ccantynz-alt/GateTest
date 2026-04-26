@@ -51,6 +51,12 @@ const HELP = `
     --crawl-max <n>    Max pages to crawl (default: 100)
     --feedback         Show the latest crawl feedback report
 
+    --diagnose <url>   Full real-time diagnosis: availability, response time, cache, bottleneck, action plan
+    --monitor <url>    Continuous monitoring: polls every 60s, alerts on downtime/slowness/stale content
+    --monitor-interval <n>  Polling interval in seconds (default: 60)
+    --monitor-heal     Auto-apply safe fixes (cache flush) when issues detected
+    --flush <url>      Flush CDN cache: tries Vercel, Cloudflare, custom webhook, then gives manual steps
+
   EXAMPLES
     gatetest                          Run standard checks
     gatetest --suite full             Run every single check
@@ -59,6 +65,10 @@ const HELP = `
     gatetest --suite quick            Fast pre-commit checks
     gatetest --server https://gatetest.ai    Scan server SSL, headers, DNS
     gatetest --crawl https://zoobicon.com   Crawl and test live site
+    gatetest --diagnose https://mysite.com  Full real-time diagnosis + action plan
+    gatetest --monitor https://mysite.com   Start continuous monitoring (60s poll)
+    gatetest --monitor https://mysite.com --monitor-interval 30 --monitor-heal
+    gatetest --flush https://mysite.com     Flush CDN cache (Vercel/Cloudflare/webhook)
     gatetest --crawl-loop https://zoobicon.com  Continuous test-fix loop
 
   MODULES
@@ -225,6 +235,73 @@ async function main() {
     return;
   }
 
+  // Full real-time diagnosis
+  if (args.diagnose) {
+    const Diagnostics = require('../src/runtime/diagnostics');
+    const diag = new Diagnostics();
+    const url = args.diagnose.startsWith('http') ? args.diagnose : `https://${args.diagnose}`;
+    console.log(`\n  GATETEST — Real-Time Diagnosis\n  Target: ${url}\n`);
+    try {
+      const r = await diag.diagnose(url);
+      const icon = { healthy: '\x1b[32m✓ HEALTHY\x1b[0m', warning: '\x1b[33m! WARNING\x1b[0m', degraded: '\x1b[33m⚠ DEGRADED\x1b[0m', critical: '\x1b[31m✗ CRITICAL\x1b[0m' }[r.status] || r.status;
+      console.log(`  Status: ${icon}`);
+      if (r.checks.responseTime) console.log(`  Response: p50=${r.checks.responseTime.p50}ms, p95=${r.checks.responseTime.p95}ms`);
+      if (r.checks.cache) console.log(`  Cache: ${r.checks.cache.strategy || 'unknown'} | CDN: ${r.checks.cache.cdnStatus || 'n/a'}`);
+      if (r.checks.bottleneck?.classification !== 'none') console.log(`  Bottleneck: ${r.checks.bottleneck?.classification || 'none'}`);
+      if (r.issues.length > 0) {
+        console.log('\n  Issues found:');
+        for (const i of r.issues) console.log(`    ${i.severity === 'critical' ? '\x1b[31m✗\x1b[0m' : i.severity === 'error' ? '\x1b[33m!\x1b[0m' : '·'} [${i.code}] ${i.message}`);
+      }
+      if (r.actions.length > 0) {
+        console.log('\n  Recommended actions:');
+        for (const a of r.actions) console.log(`    → ${a}`);
+      }
+      console.log('');
+      process.exit(r.status === 'healthy' ? 0 : 1);
+    } catch (err) {
+      console.error(`\n  \x1b[31mDiagnosis failed: ${err.message}\x1b[0m\n`);
+      process.exit(1);
+    }
+  }
+
+  // Continuous monitoring
+  if (args.monitor) {
+    const Monitor = require('../src/runtime/monitor');
+    const url = args.monitor.startsWith('http') ? args.monitor : `https://${args.monitor}`;
+    const monitor = new Monitor({
+      autoHeal: args.monitorHeal || false,
+      webhook: process.env.GATETEST_ALERT_WEBHOOK,
+      logFile: require('path').join(process.cwd(), '.gatetest', 'monitor', 'monitor.log'),
+    });
+    monitor.addTarget(url, { interval: args.monitorInterval || 60, label: url });
+    monitor.start();
+    return;
+  }
+
+  // Cache flush
+  if (args.flush) {
+    const CacheManager = require('../src/runtime/cache-manager');
+    const cm = new CacheManager();
+    const url = args.flush.startsWith('http') ? args.flush : `https://${args.flush}`;
+    console.log(`\n  GATETEST — Cache Flush\n  Target: ${url}\n`);
+    try {
+      const r = await cm.flush(url);
+      for (const a of r.actions) {
+        const icon = a.success ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+        console.log(`  ${icon} ${a.provider}: ${a.message}`);
+      }
+      if (r.manualSteps.length > 0) {
+        console.log('\n  Manual steps:');
+        for (const s of r.manualSteps) console.log(`    ${s}`);
+      }
+      console.log('');
+      process.exit(r.actions.some(a => a.success) ? 0 : 1);
+    } catch (err) {
+      console.error(`\n  \x1b[31mFlush failed: ${err.message}\x1b[0m\n`);
+      process.exit(1);
+    }
+  }
+
   // Server scan — check SSL, headers, DNS, performance on a live URL
   if (args.server) {
     const ServerScanner = require('../src/scanners/server-scanner');
@@ -289,6 +366,11 @@ function parseArgs(argv) {
     else if (arg === '--crawl-loop' && argv[i + 1]) args.crawlLoop = argv[++i];
     else if (arg === '--crawl-max' && argv[i + 1]) args.crawlMax = parseInt(argv[++i]);
     else if (arg === '--feedback') args.feedback = true;
+    else if (arg === '--diagnose' && argv[i + 1]) args.diagnose = argv[++i];
+    else if (arg === '--monitor' && argv[i + 1]) args.monitor = argv[++i];
+    else if (arg === '--monitor-interval' && argv[i + 1]) args.monitorInterval = parseInt(argv[++i]);
+    else if (arg === '--monitor-heal') args.monitorHeal = true;
+    else if (arg === '--flush' && argv[i + 1]) args.flush = argv[++i];
   }
   return args;
 }
