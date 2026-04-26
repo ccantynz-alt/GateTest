@@ -36,6 +36,34 @@ import {
 // Phase 1.2b — cross-fix scanner re-validation gate.
 import { runTier } from "@/app/lib/scan-modules";
 
+// Phase 2.2 — architecture annotator. Reads the codebase SHAPE (not
+// per-file) and produces a "design observations" report — layering
+// violations, duplicated logic, god objects, refactoring opportunities.
+// REPORTED only, never auto-refactored. Posts as a PR comment.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { annotateArchitecture, renderArchitectureComment } = require("@/app/lib/architecture-annotator") as {
+  annotateArchitecture: (opts: {
+    fileContents: Array<{ path: string; content: string }>;
+    askClaudeForArchitecture: (prompt: string) => Promise<string>;
+    repoUrl?: string;
+    sampleCount?: number;
+    maxFileBytes?: number;
+  }) => Promise<{
+    ok: boolean;
+    body: string | null;
+    summary: { sourceFiles: number; totalFiles: number; totalBytes: number; topDirectories: Array<{ dir: string; count: number }>; extensionCounts: Record<string, number>; largestFiles: Array<{ path: string; bytes: number }> } | null;
+    sampleFiles: Array<{ path: string; bytes: number }> | null;
+    reason: string | null;
+  }>;
+  renderArchitectureComment: (result: {
+    ok: boolean;
+    body: string | null;
+    summary?: { sourceFiles: number } | null;
+    sampleFiles?: Array<{ path: string; bytes: number }> | null;
+    reason?: string | null;
+  } | null) => string;
+};
+
 // Phase 2.1 — pair-review agent. Second Claude critiques each fix on a
 // 4-axis rubric (correctness / completeness / readability / testCoverage),
 // posts result as a PR comment.
@@ -1003,6 +1031,31 @@ export async function POST(req: NextRequest) {
       // Non-critical — PR was created successfully, comment failed
     }
 
+    // Phase 2.2 — architecture annotator. Runs only on the $199 tier.
+    // Posts a separate PR comment with design observations the
+    // per-file scanner cannot see (layering, god objects, etc.).
+    // Requires `originalFileContents` so it has the codebase shape;
+    // skipped silently if the caller didn't pass that.
+    let architectureSummary: string | undefined;
+    if (input.tier === "scan_fix" && Array.isArray(input.originalFileContents) && input.originalFileContents.length > 0) {
+      try {
+        const arch = await annotateArchitecture({
+          fileContents: input.originalFileContents,
+          askClaudeForArchitecture: askClaudeForTest,
+          repoUrl,
+        });
+        architectureSummary = arch.ok
+          ? `architecture: ${arch.summary?.sourceFiles ?? '?'} source files analysed, ${arch.sampleFiles?.length ?? 0} sampled, report posted`
+          : `architecture: skipped (${arch.reason})`;
+        const archMarkdown = renderArchitectureComment(arch);
+        await postPrComment(owner, repo, prNumber, archMarkdown, token);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "architecture annotator failed";
+        errors.push(`Architecture annotation failed (no report posted): ${message}`);
+        architectureSummary = `architecture: failed (${message})`;
+      }
+    }
+
     // Phase 2.1 — pair-review agent. Runs only when the caller's tier
     // is scan_fix (the $199 tier). For Quick / Full scans the loop +
     // gates + test-gen + composer ship without pair-review. The
@@ -1057,6 +1110,9 @@ export async function POST(req: NextRequest) {
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
+      architecture: architectureSummary
+        ? { summary: architectureSummary }
+        : { skipped: true, reason: "tier is not scan_fix or originalFileContents not supplied — architecture annotation is a $199-tier value-add" },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {

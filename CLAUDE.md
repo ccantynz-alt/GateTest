@@ -128,7 +128,7 @@ The thing that doesn't exist anywhere else today.
 ### Phase 2 — $199 Scan + Fix tier (depth)
 
 - [x] **2.1** Pair-review agent — **DONE commit `(this commit)`** (`website/app/lib/pair-review.js`, 33 tests in `tests/pair-review.test.js`). Second Claude reads each fix's (original → fixed) diff and the regression test, scores 4 axes 1-5 (correctness / completeness / readability / testCoverage), writes a paragraph critique. Output rendered as a PR comment via `renderReviewComment`. Wired into route — runs ONLY when `input.tier === "scan_fix"` so $99 customers don't pay for $199 work. Failures non-blocking (PR ships even if critique fails). Auto-generated regression-test files are excluded from review (reviewing the test the first Claude wrote is a different task).
-- [ ] Architecture annotations: Claude reads the full codebase shape (not just per-file) and produces a separate "design observations" report attached to the PR. Not auto-fixed — reported.
+- [x] **2.2** Architecture annotations — **DONE commit `(this commit)`** (`website/app/lib/architecture-annotator.js`, 33 tests in `tests/architecture-annotator.test.js`). Reads the codebase SHAPE (not per-file): top-dir counts, ext distribution, biggest files, a sample of N (default 8) most-significant files. Sends to Claude with strict-output prompt. Produces "design observations" report (Summary / Observations / Recommendations sections) — informational only, never auto-refactored. Posts as a separate PR comment via `renderArchitectureComment`. Wired into route — runs ONLY on `tier === "scan_fix"` AND when `originalFileContents` is supplied. Failures non-blocking. Skips codebases with < 3 source files. Files in `node_modules/`, `dist/`, `build/`, `.next/`, `coverage/`, `vendor/`, tests, specs, and minified bundles are excluded from sampling.
 - [ ] Wire `scan_fix` tier into `/api/checkout/route.ts` `TIERS` and add the card to `Pricing.tsx`. Stripe product already exists (Craig confirmed — see screenshot 2026-04-26).
 - [ ] Real-repo proof on 3 repos. Document in `docs/proofs/phase-2-<repo>.md`.
 - [ ] Definition of done: customer can buy $199 tier and receive a measurably deeper deliverable than $99.
@@ -165,7 +165,7 @@ The thing that doesn't exist anywhere else today.
 | Phase | Started | Status |
 | --- | --- | --- |
 | 1 — Iterative fix loop | 2026-04-26 | 6/6 sub-tasks at scaffold-or-better. 1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold, 1.3 ✓, 1.4 ✓, 1.5 ~ partial (1/3 proofs done; remaining 2 need API-keyed session). 1.2b + 1.4-before/after-scan activate in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
-| 2 — $199 Scan + Fix tier | 2026-04-26 | 1/5 sub-tasks shipped (2.1 ✓; 2.2/2.3/2.4 open) |
+| 2 — $199 Scan + Fix tier | 2026-04-26 | 2/5 sub-tasks shipped (2.1 ✓, 2.2 ✓; 2.3/2.4 open) |
 | 3 — $399 Nuclear tier | — | not started |
 | 4 — Honesty sweep | — | not started |
 
