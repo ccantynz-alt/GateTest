@@ -296,19 +296,30 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     });
   }
 
-  async function fixIssues() {
-    if (!result || !repoUrl) return;
-    const failedMods = modules.filter((m) => (m.status as string) === "failed");
-    const issues = parseIssues(failedMods);
-    const fixable = issues.filter((i) => i.file);
-    const unfixable = issues.filter((i) => !i.file);
+  async function fixIssues(prebuiltIssues?: ReturnType<typeof parseIssues>) {
+    if (!repoUrl || fixing) return;
+
+    let fixable: ReturnType<typeof parseIssues>;
+    if (prebuiltIssues) {
+      fixable = prebuiltIssues;
+    } else {
+      if (!result) return;
+      const failedMods = modules.filter((m) => (m.status as string) === "failed");
+      const issues = parseIssues(failedMods);
+      fixable = issues.filter((i) => i.file);
+      const unfixable = issues.filter((i) => !i.file);
+      if (fixable.length === 0) {
+        setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review.`);
+        return;
+      }
+      if (unfixable.length > 0) {
+        console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`); // code-quality-ok
+      }
+    }
 
     if (fixable.length === 0) {
-      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review.`);
+      setError("No auto-fixable issues found.");
       return;
-    }
-    if (unfixable.length > 0) {
-      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`); // code-quality-ok
     }
 
     const initialProgress = buildFileProgress(fixable);
@@ -331,7 +342,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, issues }),
+        body: JSON.stringify({ repoUrl, issues: fixable }),
       });
       const data = await res.json() as FixResult;
       clearInterval(ticker);
@@ -541,31 +552,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   const issues = (data.totalIssues as number) || 0;
                   if (issues > 0) {
                     const mods = (data.modules as Array<Record<string, unknown>>) || [];
-                    const failed = mods.filter((m) => (m.status as string) === "failed");
-                    const fixable = failed.flatMap((m) => {
-                      const details = (m.details as string[]) || [];
-                      return details.map((d) => {
-                        const fMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8})(?::(\d+))?(?:\s*[-—:]\s*|\s+)(.+)$/);
-                        if (fMatch) return { file: fMatch[1], issue: fMatch[3], module: m.name as string };
-                        const fOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
-                        if (fOnly) return { file: fOnly[1], issue: fOnly[2], module: m.name as string };
-                        const missing = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
-                        if (missing) return { file: missing[1], issue: `CREATE_FILE: ${d}`, module: m.name as string };
-                        return { file: "", issue: d, module: m.name as string };
-                      });
-                    }).filter((i) => i.file);
-
+                    const fixable = parseIssues(mods).filter((i) => i.file);
                     if (fixable.length > 0) {
-                      setFixing(true);
-                      fetch("/api/scan/fix", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ repoUrl, issues: fixable }),
-                      })
-                        .then((r) => r.json())
-                        .then((d) => setFixResult(d as FixResult))
-                        .catch((e) => setError(e instanceof Error ? e.message : "Fix failed"))
-                        .finally(() => setFixing(false));
+                      // Use fixIssues() with pre-extracted issues so the live
+                      // progress panel shows — result state isn't updated yet here
+                      fixIssues(fixable);
                     }
                   }
                 }}
@@ -619,7 +610,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                       <>
                         {!fixResult && !fixing && (
                           <button
-                            onClick={fixIssues}
+                            onClick={() => fixIssues()}
                             disabled={fixing}
                             className="btn-primary px-4 py-2 text-xs disabled:opacity-50"
                             style={{ background: "#059669" }}
