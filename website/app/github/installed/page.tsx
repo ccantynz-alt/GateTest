@@ -20,7 +20,7 @@ export default function Installed() {
         </h1>
         <p className="text-lg text-muted mb-8">
           Every push and pull request will now be automatically scanned by
-          67 quality modules. Results appear as commit statuses and PR comments.
+          84 quality modules. Results appear as commit statuses and PR comments.
         </p>
 
         {/* What happens next */}
@@ -64,7 +64,7 @@ export default function Installed() {
           <h3 className="font-bold mb-2">Want auto-fixes too?</h3>
           <p className="text-sm text-muted mb-4">
             Upgrade to Scan + Fix and GateTest will automatically create PRs
-            that fix the issues it finds. From $199 per scan.
+            that fix the issues it finds — included in Full Scan and Quick Scan.
           </p>
           <Link
             href="/#pricing"

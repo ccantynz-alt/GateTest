@@ -35,8 +35,9 @@ export default function GitHubSetup() {
           </div>
           <div className="p-8 text-center">
             <p className="text-sm text-muted mb-6">
-              GateTest will request access to read your code and post scan
-              results as commit statuses and PR comments.
+              GateTest will request read/write access to your code (to scan it
+              and push AI-generated fix PRs) and post results as commit statuses
+              and PR comments.
             </p>
             <a
               href="https://github.com/apps/GateTestHQ"
@@ -60,7 +61,7 @@ export default function GitHubSetup() {
             {
               step: "2",
               title: "Push code or open a PR",
-              desc: "GateTest automatically scans with 67 quality modules.",
+              desc: "GateTest automatically scans with 84 quality modules.",
             },
             {
               step: "3",
@@ -92,9 +93,9 @@ export default function GitHubSetup() {
           </h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
-              { perm: "Contents", level: "Read", why: "Read your code to scan it" },
-              { perm: "Pull requests", level: "Write", why: "Post scan results" },
-              { perm: "Commit statuses", level: "Write", why: "Show pass/fail checks" },
+              { perm: "Contents", level: "Read & Write", why: "Scan your code and push AI fix branches" },
+              { perm: "Pull requests", level: "Read & Write", why: "Post results and open fix PRs" },
+              { perm: "Commit statuses", level: "Read & Write", why: "Show pass/fail on every commit" },
               { perm: "Metadata", level: "Read", why: "Know which repos to scan" },
             ].map((p) => (
               <div
