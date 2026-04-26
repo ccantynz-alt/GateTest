@@ -11,6 +11,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
+// Phase 3.2 — cross-finding correlator. Identifies attack chains
+// across the full findings set — combinations that are materially
+// worse than the worst individual finding.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { correlateFindings, renderCorrelationReport } = require("@/app/lib/cross-finding-correlator") as {
+  correlateFindings: (opts: {
+    findings: Array<{ detail: string; module?: string; severity?: string }>;
+    hostname?: string;
+    askClaudeForCorrelation: (prompt: string) => Promise<string>;
+    maxFindings?: number;
+  }) => Promise<{
+    ok: boolean;
+    chains: Array<{ title: string; severity: string; findingNumbers: number[]; findingsInvolved: string[]; impact: string; fixOrder: string }>;
+    summary: string;
+    reason: string | null;
+  }>;
+  renderCorrelationReport: (result: {
+    ok: boolean;
+    chains: Array<{ title: string; severity: string; findingNumbers: number[]; findingsInvolved: string[]; impact: string; fixOrder: string }>;
+    summary?: string;
+    reason?: string | null;
+  } | null) => string;
+};
+
 // Phase 3.1 — Nuclear diagnoser. Replaces the category-matched
 // shell-command templates below with real Claude-driven diagnosis
 // when the caller is on the $399 Nuclear tier.
@@ -371,21 +395,35 @@ export async function POST(req: NextRequest) {
       });
     }
     try {
-      const result = await diagnoseFindings({
-        findings,
-        hostname,
-        scanContext: body.scanContext,
-        askClaudeForDiagnosis,
-      });
+      // Run diagnosis + correlation in parallel — independent calls
+      // both consume Anthropic but neither depends on the other's
+      // output, so do them concurrently.
+      const [diagResult, corrResult] = await Promise.all([
+        diagnoseFindings({
+          findings,
+          hostname,
+          scanContext: body.scanContext,
+          askClaudeForDiagnosis,
+        }),
+        correlateFindings({
+          findings,
+          hostname,
+          askClaudeForCorrelation: askClaudeForDiagnosis, // same Claude wrapper, different prompt
+        }),
+      ]);
       return NextResponse.json({
         hostname,
         tier: "nuclear",
         totalFindings: findings.length,
-        diagnosed: result.diagnoses.filter((d) => d.ok).length,
-        skipped: result.diagnoses.filter((d) => !d.ok).length,
-        summary: result.summary,
-        diagnoses: result.diagnoses,
-        report: renderDiagnosesReport(result.diagnoses, result.summary),
+        diagnosed: diagResult.diagnoses.filter((d) => d.ok).length,
+        skipped: diagResult.diagnoses.filter((d) => !d.ok).length,
+        chainsIdentified: corrResult.chains.length,
+        summary: `${diagResult.summary} · ${corrResult.summary}`,
+        diagnoses: diagResult.diagnoses,
+        chains: corrResult.chains,
+        report: renderDiagnosesReport(diagResult.diagnoses, diagResult.summary)
+          + "\n\n"
+          + renderCorrelationReport(corrResult),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "diagnosis failed";

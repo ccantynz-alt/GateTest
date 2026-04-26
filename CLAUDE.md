@@ -136,7 +136,7 @@ The thing that doesn't exist anywhere else today.
 ### Phase 3 — $399 Nuclear tier (correlation + adversarial)
 
 - [x] **3.1** Replace ALL templated shell-command fixes with Claude-driven diagnosis — **DONE commit `(this commit)`** (`website/app/lib/nuclear-diagnoser.js`, 29 tests in `tests/nuclear-diagnoser.test.js`). Per-finding diagnoser sends each (detail, module, severity, hostname, platform context) to Claude and parses a structured response (EXPLANATION / ROOT_CAUSE / RECOMMENDATION / PLATFORM_NOTES). Replaces the category-matched template generators in `server-fix/route.ts` ONLY for the Nuclear tier — Quick/Full continue to use the legacy templates as free starter snippets (the dishonest "we know your stack" pattern only existed at Nuclear, which now branches to real diagnosis). Failures non-blocking per finding. Caps at 20 findings per request to bound Anthropic spend per call. `renderDiagnosesReport` formats the customer-visible markdown with $399-tier branded footer.
-- [ ] Cross-finding correlation engine: Claude reads ALL findings together and identifies attack chains (e.g. "your CSP unsafe-inline + your CORS wildcard + your cookie httponly:false combine to enable session takeover via XSS"). Output as a separate "Correlated Findings" section.
+- [x] **3.2** Cross-finding correlation engine — **DONE commit `(this commit)`** (`website/app/lib/cross-finding-correlator.js`, 24 tests in `tests/cross-finding-correlator.test.js`). Reads the full findings set, identifies CHAINS where the combined severity is materially worse than the worst individual finding. Strict output schema (CHAIN / SEVERITY / INVOLVES / IMPACT / FIX_ORDER), max 5 chains, SKIP marker honest fallback when nothing combines. Validates finding numbers against bounds, rejects single-finding "chains," skips malformed blocks instead of failing the whole batch. Resolves finding numbers back to detail strings for the markdown report. Renders as `## GateTest Cross-Finding Correlation` with severity badges (🔴/🟠/🟡/⚪). Wired into the Nuclear path — runs in parallel with diagnoseFindings (independent Claude calls) for speed.
 - [ ] Mutation testing pass: mutate the customer's source under their tests, report which mutations survive (= test gaps).
 - [ ] Chaos / fuzz pass: generate adversarial inputs for entry points (HTTP routes, CLI args, file parsers), run, report what crashes.
 - [ ] Executive summary report: single markdown doc, non-technical readable, suitable to hand to a CTO.
@@ -166,7 +166,7 @@ The thing that doesn't exist anywhere else today.
 | --- | --- | --- |
 | 1 — Iterative fix loop | 2026-04-26 | 6/6 sub-tasks at scaffold-or-better. 1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold, 1.3 ✓, 1.4 ✓, 1.5 ~ partial (1/3 proofs done; remaining 2 need API-keyed session). 1.2b + 1.4-before/after-scan activate in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
 | 2 — $199 Scan + Fix tier | 2026-04-26 | 2/5 sub-tasks shipped (2.1 ✓, 2.2 ✓; 2.3/2.4 open) |
-| 3 — $399 Nuclear tier | 2026-04-26 | 1/7 sub-tasks shipped (3.1 ✓; 3.2/3.3/3.4/3.5/3.6/3.7 open) |
+| 3 — $399 Nuclear tier | 2026-04-26 | 2/7 sub-tasks shipped (3.1 ✓, 3.2 ✓; 3.3/3.4/3.5/3.6/3.7 open) |
 | 4 — Honesty sweep | — | not started |
 
 ---
