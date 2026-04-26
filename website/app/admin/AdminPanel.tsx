@@ -874,8 +874,16 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 <input
                   type="text"
                   value={watchTarget}
-                  onChange={(e) => setWatchTarget(e.target.value)}
-                  placeholder={watchType === "repo" ? "owner/repo" : "https://example.com"}
+                  onChange={(e) => {
+                    let v = e.target.value;
+                    // Auto-strip full GitHub/Gluecron URLs to owner/repo format
+                    if (watchType === "repo") {
+                      const m = v.match(/(?:github\.com|gluecron\.com)\/([^/\s]+\/[^/\s?#]+)/);
+                      if (m) v = m[1].replace(/\.git$/, "");
+                    }
+                    setWatchTarget(v);
+                  }}
+                  placeholder={watchType === "repo" ? "owner/repo or paste GitHub URL" : "https://example.com"}
                   className="px-4 py-2.5 rounded-lg border border-white/10 bg-white/5 text-white placeholder:text-white/30 text-sm focus:border-emerald-500/50 focus:outline-none"
                 />
                 <div className="flex items-center gap-2">

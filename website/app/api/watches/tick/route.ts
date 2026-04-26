@@ -40,7 +40,7 @@ function authorizedTick(req: NextRequest): boolean {
   return false;
 }
 
-async function scanServer(target: string, baseUrl: string): Promise<{ totalIssues: number; status: string } | null> {
+async function scanServer(target: string, baseUrl: string): Promise<ScanResult | null> {
   try {
     const res = await fetch(`${baseUrl}/api/scan/server`, {
       method: "POST",
@@ -49,32 +49,56 @@ async function scanServer(target: string, baseUrl: string): Promise<{ totalIssue
     });
     if (!res.ok) return null;
     const data = await res.json();
+    const total = Number(data.totalIssues || 0);
     return {
-      totalIssues: Number(data.totalIssues || 0),
-      status: data.totalIssues === 0 ? "healthy" : data.totalIssues > 5 ? "down" : "degraded",
+      totalIssues: total,
+      status: total === 0 ? "healthy" : total > 5 ? "down" : "degraded",
     };
   } catch {
     return null;
   }
 }
 
-async function scanRepo(target: string, baseUrl: string): Promise<{ totalIssues: number; status: string } | null> {
+interface ScanResult {
+  totalIssues: number;
+  status: string;
+  modules?: Array<{ name: string; status: string; details?: string[] }>;
+}
+
+async function scanRepo(target: string, baseUrl: string): Promise<ScanResult | null> {
   try {
     const repoUrl = `https://github.com/${target}`;
     const res = await fetch(`${baseUrl}/api/scan/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repoUrl, tier: "quick" }),
+      // full tier so we get enough detail to generate meaningful fixes
+      body: JSON.stringify({ repoUrl, tier: "full" }),
     });
     if (!res.ok) return null;
     const data = await res.json();
     return {
       totalIssues: Number(data.totalIssues || 0),
       status: data.totalIssues === 0 ? "healthy" : "degraded",
+      modules: data.modules || [],
     };
   } catch {
     return null;
   }
+}
+
+// Extract fixable {file, issue, module} triples from scan module details
+function extractFixableIssues(modules: Array<{ name: string; status: string; details?: string[] }>): Array<{ file: string; issue: string; module: string }> {
+  const issues: Array<{ file: string; issue: string; module: string }> = [];
+  for (const mod of modules) {
+    if (mod.status !== "failed") continue;
+    for (const d of mod.details || []) {
+      const withLine = d.match(/^([\w./\-@+]+?\.[\w]{1,8})(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
+      if (withLine) { issues.push({ file: withLine[1], issue: withLine[2], module: mod.name }); continue; }
+      const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
+      if (fileOnly) { issues.push({ file: fileOnly[1], issue: fileOnly[2], module: mod.name }); }
+    }
+  }
+  return issues;
 }
 
 export async function GET(req: NextRequest) {
@@ -129,26 +153,29 @@ export async function GET(req: NextRequest) {
               ${JSON.stringify({ durationMs: Date.now() - scanStart, status: result.status })}, NOW())
     `;
 
-    // Trigger auto-fix for repos if issues went up and auto-fix is enabled
-    if (watch.auto_fix_enabled && watch.target_type === "repo" && result.totalIssues > 0) {
+    // Trigger auto-fix for repos if issues found and auto-fix is enabled
+    if (watch.auto_fix_enabled && watch.target_type === "repo" && result.totalIssues > 0 && result.modules) {
       try {
-        const fixRes = await fetch(`${baseUrl}/api/scan/fix`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            repoUrl: `https://github.com/${watch.target}`,
-            issues: [],
-          }),
-        });
-        const fixData = await fixRes.json();
-        const prUrl = fixData.prUrl || null;
-        await sql`
-          INSERT INTO heal_history (watch_id, action, status, pr_url, details, completed_at)
-          VALUES (${watch.id}, 'auto_fix_pr', ${prUrl ? "success" : "failed"}, ${prUrl},
-                  ${JSON.stringify({ fixesFixed: fixData.issuesFixed || 0 })}, NOW())
-        `;
+        const fixableIssues = extractFixableIssues(result.modules);
+        if (fixableIssues.length > 0) {
+          const fixRes = await fetch(`${baseUrl}/api/scan/fix`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              repoUrl: `https://github.com/${watch.target}`,
+              issues: fixableIssues,
+            }),
+          });
+          const fixData = await fixRes.json();
+          const prUrl = fixData.prUrl || null;
+          await sql`
+            INSERT INTO heal_history (watch_id, action, status, pr_url, details, completed_at)
+            VALUES (${watch.id}, 'auto_fix_pr', ${prUrl ? "success" : "failed"}, ${prUrl},
+                    ${JSON.stringify({ issuesFixed: fixData.issuesFixed || 0, issuesFound: fixableIssues.length })}, NOW())
+          `;
+        }
       } catch {
-        // Non-fatal
+        // Non-fatal — scan result is still stored
       }
     }
 
