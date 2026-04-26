@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
-import { isAdminRequest } from "@/app/lib/admin-auth";
+import { isAdminRequest, isOwnerAccount } from "@/app/lib/admin-auth";
 import { fetchBlob, fetchTree, resolveRepoAuth } from "@/app/lib/gluecron-client";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 // Wire contract reference: Gluecron.com/GATETEST_HOOK.md — each repo keeps its
@@ -178,9 +178,9 @@ export async function POST(req: NextRequest) {
   const owner = repoMatch[1];
   const repo = repoMatch[2].replace(/\.git$/, "");
 
-  // Admin bypass: if the request carries a valid admin cookie, we skip all
-  // Stripe interaction entirely. Admin scans never create or capture charges.
-  const isAdmin = isAdminRequest(req);
+  // Admin bypass: valid admin cookie OR repo owned by an account in
+  // GATETEST_OWNER_ACCOUNTS — both skip Stripe entirely. No charges created.
+  const isAdmin = isAdminRequest(req) || isOwnerAccount(owner);
 
   // ── Idempotency guard ─────────────────────────────────────────────
   // /api/scan/run can be invoked multiple times for the same session

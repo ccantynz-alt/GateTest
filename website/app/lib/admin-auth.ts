@@ -97,3 +97,18 @@ export function isAdminRequest(req: NextRequest): boolean {
 }
 
 export const ADMIN_COOKIE_NAME = COOKIE_NAME;
+
+/**
+ * Returns true if the given repo owner (GitHub/Gluecron username) is in the
+ * GATETEST_OWNER_ACCOUNTS env var. Owner accounts get free scan and fix access
+ * with no Stripe interaction — intended for Craig's own repos.
+ *
+ * Set GATETEST_OWNER_ACCOUNTS=ccantynz-alt,ccantynz in Vercel env vars.
+ * Comparison is case-insensitive.
+ */
+export function isOwnerAccount(repoOwner: string): boolean {
+  const raw = process.env.GATETEST_OWNER_ACCOUNTS || "";
+  if (!raw || !repoOwner) return false;
+  const accounts = raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  return accounts.includes(repoOwner.toLowerCase());
+}

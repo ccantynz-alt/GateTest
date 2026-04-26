@@ -173,36 +173,19 @@ export default function Modules() {
             More modules in development
           </h3>
           <p className="text-muted max-w-xl mx-auto">
-            Live browser testing, visual regression, auto-fix PRs, and mutation testing.
+            Live browser testing, visual regression, mutation testing, and chaos engineering.
             Powered by real browser automation.
           </p>
         </div>
 
-        {/* Active modules — the 13 flagship module cards. The remaining
-            54 modules (infra, supply-chain, language checkers, etc.) are
-            summarised in the subtitle above; see CLAUDE.md for the full
-            list. */}
-        {categories.map((cat) => (
-          <div key={cat.name} className="mb-10">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">{cat.name}</h3>
-                <p className="text-sm text-muted">{cat.blurb}</p>
-              </div>
-              <span className="text-xs font-mono text-muted shrink-0 ml-4">
-                {cat.modules.length} module{cat.modules.length !== 1 ? "s" : ""}
-              </span>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {comingSoonModules.map((mod) => (
+            <div key={mod.name} className="card p-4 opacity-60">
+              <h3 className="font-semibold text-foreground text-sm mb-1">{mod.name}</h3>
+              <p className="text-xs text-muted leading-relaxed">{mod.description}</p>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {cat.modules.map((mod) => (
-                <div key={mod.name} className="card p-4">
-                  <span className="text-sm font-semibold text-foreground">{mod.name}</span>
-                  <p className="text-xs text-muted mt-1">{mod.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
       </div>
     </section>
