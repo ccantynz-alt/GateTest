@@ -550,8 +550,8 @@ export default function ScanStatus() {
               <div className="p-5 rounded-xl border border-border bg-white text-center">
                 <p className="text-sm text-muted mb-4">
                   {params.tier === "quick"
-                    ? "Passed the Quick Scan. Want to go deeper with all 84 modules?"
-                    : "Clean across all 84 modules."}
+                    ? "Passed the Quick Scan. Want to go deeper with all 90 modules?"
+                    : "Clean across all 90 modules."}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {params.tier === "quick" && (

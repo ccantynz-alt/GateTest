@@ -20,7 +20,7 @@ const SCAN_PATH   = path.resolve(__dirname, '..');   // GateTest repo root
 // ---------------------------------------------------------------------------
 
 // Per-call timeout. 20s was originally chosen for solo runs; under the full
-// 1142-test sweep the very first cold-spawn (Node startup + 84-module
+// 1142-test sweep the very first cold-spawn (Node startup + 90-module
 // registry load + JSON-RPC roundtrip) regularly lands at 18-22s on a loaded
 // runner, intermittently tripping the timeout and producing a flaky "tools/list"
 // failure that vanishes on rerun. 60s gives 3x headroom on cold start while
@@ -113,12 +113,12 @@ describe('MCP server — tools/list', () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP server — check_health', () => {
-  it('returns operational status with 84 modules', async () => {
+  it('returns operational status with 90 modules', async () => {
     const res = await callMcp('tools/call', { name: 'check_health', arguments: {} });
     assert.ok(res.result, `expected result: ${JSON.stringify(res).slice(0, 200)}`);
     const text = res.result.content[0].text;
     assert.ok(text.includes('Operational') || text.includes('✅'), `expected operational: ${text.slice(0, 200)}`);
-    assert.ok(text.includes('84'), `expected 84 modules in health output: ${text}`);
+    assert.ok(text.includes('90'), `expected 90 modules in health output: ${text}`);
   });
 
   it('returns content array with at least one text item', async () => {
@@ -134,10 +134,10 @@ describe('MCP server — check_health', () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP server — list_modules', () => {
-  it('returns a list containing 84 modules', async () => {
+  it('returns a list containing 90 modules', async () => {
     const res = await callMcp('tools/call', { name: 'list_modules', arguments: {} });
     const text = res.result.content[0].text;
-    assert.ok(text.includes('84'), `expected 84 modules count: ${text.slice(0, 200)}`);
+    assert.ok(text.includes('90'), `expected 90 modules count: ${text.slice(0, 200)}`);
   });
 
   it('includes well-known module names in the output', async () => {

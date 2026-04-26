@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Code Quality for Next.js Apps — GateTest",
   description:
-    "67 checks built for Next.js: App Router route validation, React Hook exhaustive-deps, TypeScript strict mode, Core Web Vitals, OpenGraph tags, accessibility, security headers, and AI-powered fixes.",
+    "90 checks built for Next.js: App Router route validation, React Hook exhaustive-deps, TypeScript strict mode, Core Web Vitals, OpenGraph tags, accessibility, security headers, and AI-powered fixes.",
   keywords: [
     "Next.js code quality",
     "Next.js testing",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Code Quality for Next.js Apps — GateTest",
     description:
-      "67 checks built for Next.js: App Router route validation, React Hook exhaustive-deps, TypeScript strict mode, Core Web Vitals, OpenGraph tags, accessibility, security headers, and AI-powered fixes.",
+      "90 checks built for Next.js: App Router route validation, React Hook exhaustive-deps, TypeScript strict mode, Core Web Vitals, OpenGraph tags, accessibility, security headers, and AI-powered fixes.",
     url: "https://gatetest.ai/for/nextjs",
     siteName: "GateTest",
     type: "website",
@@ -183,7 +183,7 @@ export default function NextJsPage() {
           </h1>
           <p className="text-lg text-white/60 max-w-2xl leading-relaxed">
             GateTest understands Next.js — App Router conventions, server actions, Vercel deployment config,
-            next.config.js security headers, and NEXT_PUBLIC_* environment variable exposure. 84 modules
+            next.config.js security headers, and NEXT_PUBLIC_* environment variable exposure. 90 modules
             built for the way modern Next.js apps are actually structured.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
@@ -198,7 +198,7 @@ export default function NextJsPage() {
               href="/"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 84 Modules
+              See All 90 Modules
             </Link>
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function NextJsPage() {
             Ship Next.js apps with confidence.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            84 modules, App Router awareness, AI-powered review, auto-fix PRs. Pay only when results are delivered.
+            90 modules, App Router awareness, AI-powered review, auto-fix PRs. Pay only when results are delivered.
           </p>
           <Link
             href="/"

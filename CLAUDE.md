@@ -691,7 +691,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.40.0 — 67 modules (24 core + 9 universal language checkers
+GateTest v1.41.0 — 90 modules (24 core + 9 universal language checkers
 for Python, Go, Rust, Java, Ruby, PHP, C#, Kotlin, Swift + 7 **infra
 & supply-chain hardening scanners** — dependencies (npm/pip/Pipenv/
 Poetry/go.mod/Cargo/Bundler/Composer/Maven/Gradle), Dockerfile,
@@ -1051,4 +1051,4 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-26 — flywheel close-out: customer "Fix with AI" button wired on `/scan/status`, Gluecron base-SHA bug fixed with GitHub-direct fallback across createBranch / upsertFile / openPullRequest / postPrComment / fetchFileSha (so the fix flow can complete on either host), Claude fixer model upgraded to claude-sonnet-4-6, checkout re-enabled (Stripe POST handler restored, Pricing.tsx back to client component with handleCheckout), AI auto-fix folded into Full Scan ($99) and Quick Scan ($29) — no separate "$199 Scan + Fix" tier needed; the fix is the product. Marketing drift swept: 22 → 84 across hero, layout, Cta, HowItWorks, Modules, Hero, opengraph-image, layout structured-data, github/setup, docs/api, compare/* and for/* pages. Module count truth: 84 (per `node bin/gatetest.js --list`), Bible v1.40.0 string still says "67" pending a separate version-string refresh.
+Date last updated: 2026-04-26 — v1.41.0: Layer 4+5 build — 6 new infra oracle modules (deployContract, cacheHeaders, bashSafety, envIntegrity, systemd, rollbackHonesty) + full runtime engine (monitor, diagnostics, cache-manager, healer, alerts). Module count: 90 (confirmed via `node bin/gatetest.js --list`). Marketing drift swept 84→90 across all compare/*, for/*, layout, Hero, Pricing, HowItWorks, Problem, Modules, Cta, github/setup, github/installed, scan/status, checkout API, opengraph-image, manifest.json. Version string updated to v1.41.0. 1191 tests pass.
