@@ -33,7 +33,32 @@ import {
 // structured per-attempt logging. The loop carries forward each previous
 // failure into the next prompt so Claude sees its own mistake. Pure JS
 // helper, tested standalone in tests/fix-attempt-loop.test.js.
-// Phase 1.2 — cross-fix syntax-validation gate. Sits between the
+// Phase 1.2b — cross-fix scanner re-validation gate. Runs the real
+// scanner suite against the synthetic post-fix workspace and rolls
+// back any fix that introduced a new finding the original scan
+// didn't have. Imported lazily; only called when the caller supplies
+// `originalFileContents` and `originalFindingsByModule`.
+import { runTier } from "@/app/lib/scan-modules";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gate") as {
+  validateFixesAgainstScanner: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    originalFileContents: Array<{ path: string; content: string }>;
+    originalFindingsByModule: Record<string, string[]>;
+    runTier: (tier: string, ctx: { owner: string; repo: string; files: string[]; fileContents: Array<{ path: string; content: string }> }) => Promise<{ modules: Array<{ name: string; details?: string[] }>; totalIssues: number }>;
+    owner: string;
+    repo: string;
+    tier?: string;
+  }) => Promise<{
+    accepted: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    rolledBack: Array<{ file: string; fixed: string; original: string; issues: string[]; reason: string; newFindings: string[] }>;
+    unattributedFindings: Array<{ module: string; detail: string }>;
+    postFixFindingsByModule: Record<string, string[]>;
+    summary: string;
+  }>;
+};
+
+// Phase 1.2a — cross-fix syntax-validation gate. Sits between the
 // per-file iterative loop and PR creation. Catches Claude output that
 // passes shape + pattern checks but doesn't actually parse.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -465,8 +490,24 @@ interface IssueInput {
   module: string;
 }
 
+// Phase 1.2b — optional callers can pass the pre-fix workspace and the
+// pre-fix module findings so the scanner re-validation gate has a
+// baseline to diff against. When absent, the gate is skipped (the
+// per-file iterative loop + syntax gate still run; only cross-file
+// regression detection is missing).
+interface OriginalFileInput {
+  path: string;
+  content: string;
+}
+
 export async function POST(req: NextRequest) {
-  let input: { repoUrl?: string; issues?: IssueInput[] };
+  let input: {
+    repoUrl?: string;
+    issues?: IssueInput[];
+    originalFileContents?: OriginalFileInput[];
+    originalFindingsByModule?: Record<string, string[]>;
+    tier?: string;
+  };
   try {
     input = await req.json();
   } catch {
@@ -705,6 +746,57 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Phase 1.2b — cross-file scanner re-validation. Only runs when the
+  // caller supplied the original workspace + findings. Without that
+  // baseline we can't tell which findings are NEW vs pre-existing, so
+  // skip silently — per-file iterative loop + syntax gate still ran.
+  let scannerGateSummary: string | undefined;
+  let scannerGateRolledBack: Array<{ file: string; reason: string; newFindings: string[] }> = [];
+  if (
+    Array.isArray(input.originalFileContents) &&
+    input.originalFileContents.length > 0 &&
+    input.originalFindingsByModule &&
+    typeof input.originalFindingsByModule === "object"
+  ) {
+    const scannerGate = await validateFixesAgainstScanner({
+      fixes,
+      originalFileContents: input.originalFileContents,
+      originalFindingsByModule: input.originalFindingsByModule,
+      runTier,
+      owner,
+      repo,
+      tier: input.tier || "full",
+    });
+    scannerGateSummary = scannerGate.summary;
+    if (scannerGate.rolledBack.length > 0) {
+      for (const rb of scannerGate.rolledBack) {
+        errors.push(`Rolled back ${rb.file}: ${rb.reason} — ${rb.newFindings.join("; ")}`);
+      }
+      scannerGateRolledBack = scannerGate.rolledBack.map((rb) => ({
+        file: rb.file,
+        reason: rb.reason,
+        newFindings: rb.newFindings,
+      }));
+      // Replace fix list with scanner-validated subset.
+      fixes.length = 0;
+      for (const a of scannerGate.accepted) {
+        fixes.push({ file: a.file, fixed: a.fixed, original: a.original, issues: a.issues });
+      }
+    }
+
+    if (fixes.length === 0) {
+      return NextResponse.json({
+        status: "no_fixes",
+        message: `Every fix failed the cross-file scanner gate — each one introduced a new finding. ${scannerGateSummary}`,
+        errors,
+        skippedForBudget,
+        failedFiles,
+        syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
+        scannerGate: { rolledBack: scannerGateRolledBack, summary: scannerGateSummary },
+      });
+    }
+  }
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -838,6 +930,11 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
       authSource,
       errors,
       failedFiles,
+      syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
+      scannerGate: scannerGateSummary
+        ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
+        : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
+      attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {
     return NextResponse.json({
