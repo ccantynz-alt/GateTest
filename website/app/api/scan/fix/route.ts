@@ -36,6 +36,28 @@ import {
 // Phase 1.2b — cross-fix scanner re-validation gate.
 import { runTier } from "@/app/lib/scan-modules";
 
+// Phase 2.1 — pair-review agent. Second Claude critiques each fix on a
+// 4-axis rubric (correctness / completeness / readability / testCoverage),
+// posts result as a PR comment.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { runPairReview, renderReviewComment } = require("@/app/lib/pair-review") as {
+  runPairReview: (opts: {
+    fixes: Array<{ file: string; original: string; fixed: string; issues: string[] }>;
+    testsBySourceFile?: Record<string, string> | Map<string, string>;
+    askClaudeForReview: (prompt: string) => Promise<string>;
+  }) => Promise<{
+    reviews: Array<{ file: string; ok: boolean; scores: { correctness: number; completeness: number; readability: number; testCoverage: number } | null; critique: string | null; reason: string | null }>;
+    averages: { correctness: number; completeness: number; readability: number; testCoverage: number } | null;
+    reviewed: number;
+    skipped: number;
+    summary: string;
+  }>;
+  renderReviewComment: (
+    reviews: Array<{ file: string; ok: boolean; scores: { correctness: number; completeness: number; readability: number; testCoverage: number } | null; critique: string | null; reason: string | null }>,
+    averages: { correctness: number; completeness: number; readability: number; testCoverage: number } | null
+  ) => string;
+};
+
 // Phase 1.4 — PR-body composer. Builds the structured markdown report
 // from every artifact this route collects (fixes, errors, attempt
 // history, gate results, before/after findings, regression tests).
@@ -981,6 +1003,41 @@ export async function POST(req: NextRequest) {
       // Non-critical — PR was created successfully, comment failed
     }
 
+    // Phase 2.1 — pair-review agent. Runs only when the caller's tier
+    // is scan_fix (the $199 tier). For Quick / Full scans the loop +
+    // gates + test-gen + composer ship without pair-review. The
+    // critique posts as a separate PR comment so the customer sees
+    // a second pair of eyes on every fix.
+    let pairReviewSummary: string | undefined;
+    if (input.tier === "scan_fix") {
+      try {
+        // Build map: source-file → regression-test-content for the
+        // pair-review agent to see per-fix tests.
+        const testsBySourceFile: Record<string, string> = {};
+        for (const f of fixes) {
+          if (f.file.startsWith("tests/auto-generated/")) {
+            const sourceMatch = (f.issues || []).join(" ").match(/Regression test for (.+)/);
+            if (sourceMatch) testsBySourceFile[sourceMatch[1]] = f.fixed;
+          }
+        }
+        const review = await runPairReview({
+          fixes,
+          testsBySourceFile,
+          askClaudeForReview: askClaudeForTest, // same Claude wrapper, different prompt
+        });
+        pairReviewSummary = review.summary;
+        const reviewMarkdown = renderReviewComment(review.reviews, review.averages);
+        await postPrComment(owner, repo, prNumber, reviewMarkdown, token);
+      } catch (err) {
+        // Non-critical — PR + verification already posted. Pair review
+        // is a $199-tier value-add; if Claude is degraded, the rest
+        // of the deliverable still ships.
+        const message = err instanceof Error ? err.message : "pair review failed";
+        errors.push(`Pair review failed (no critique posted): ${message}`);
+        pairReviewSummary = `pair review: failed (${message})`;
+      }
+    }
+
     return NextResponse.json({
       status: "pr_created",
       prUrl,
@@ -997,6 +1054,9 @@ export async function POST(req: NextRequest) {
         ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
         : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
       testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
+      pairReview: pairReviewSummary
+        ? { summary: pairReviewSummary }
+        : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {
