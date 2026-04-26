@@ -17,23 +17,33 @@ import {
   getAdminUser,
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
+import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
 import { getDb } from "@/app/lib/db";
 import { generateApiKey } from "@/app/lib/api-key";
 
 export const dynamic = "force-dynamic";
 
+function checkPwCookie(v: string | undefined): boolean {
+  const pw = process.env.GATETEST_ADMIN_PASSWORD || "";
+  if (!pw || !v) return false;
+  const exp = crypto.createHmac("sha256", pw).update("gatetest-admin-v1").digest("hex");
+  const a = Buffer.from(v), b = Buffer.from(exp);
+  if (a.length !== b.length) return false;
+  try { return crypto.timingSafeEqual(a, b); } catch { return false; }
+}
+
 async function requireAdmin(): Promise<string | NextResponse> {
-  const status = getAdminConfig();
-  if (!status.ok || !status.config) {
-    return NextResponse.json({ error: "Admin not configured" }, { status: 503 });
-  }
   const store = await cookies();
-  const cookie = store.get(SESSION_COOKIE_NAME)?.value;
-  const login = getAdminUser(cookie, status.config);
-  if (!login) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Auth: GitHub OAuth OR password cookie
+  const status = getAdminConfig();
+  if (status.ok && status.config) {
+    const login = getAdminUser(store.get(SESSION_COOKIE_NAME)?.value, status.config);
+    if (login) return login;
   }
-  return login;
+  if (checkPwCookie(store.get(ADMIN_COOKIE_NAME)?.value)) return "admin";
+
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
 export async function GET() {
