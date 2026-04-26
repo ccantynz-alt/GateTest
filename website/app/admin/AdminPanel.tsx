@@ -22,6 +22,14 @@ interface FixResult {
   failedFiles?: FailedFile[];
 }
 
+type FileFixStatus = "pending" | "fixing" | "done" | "timeout" | "failed";
+
+interface FileProgress {
+  file: string;
+  status: FileFixStatus;
+  error?: string;
+}
+
 interface AdminPanelProps {
   adminLogin: string;
 }
@@ -98,6 +106,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
   const [guidanceLoading, setGuidanceLoading] = useState(false);
   const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
@@ -202,56 +211,84 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     setError("");
   }
 
-  async function fixIssues() {
-    if (!result || !repoUrl) return;
-    const failedMods = modules.filter((m) => (m.status as string) === "failed");
-
-    // Parse issues aggressively — extract file paths from multiple formats
-    const issues = failedMods.flatMap((m) => {
+  function parseIssues(mods: typeof modules) {
+    return mods.flatMap((m) => {
       const details = (m.details as string[]) || [];
       return details.map((d) => {
-        // Format 1: "path/to/file.js:42: message" or "path/to/file.js: message"
         let file = "";
         let issue = d;
         let line: number | undefined;
-
         const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
         if (fileLineMatch) {
-          file = fileLineMatch[1];
-          line = Number(fileLineMatch[2]);
-          issue = fileLineMatch[3];
+          file = fileLineMatch[1]; line = Number(fileLineMatch[2]); issue = fileLineMatch[3];
         } else {
           const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
           if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
         }
-
-        // Format 2: "Missing <filename>" → treat as create-file issue
         const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
         if (!file && missingMatch) {
           file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
           issue = `CREATE_FILE: ${d}`;
         }
-
         return { file, issue, module: m.name as string, line };
       });
     });
+  }
 
+  function buildFileProgress(fixableIssues: ReturnType<typeof parseIssues>): FileProgress[] {
+    const seen = new Set<string>();
+    return fixableIssues
+      .filter((i) => i.file && !seen.has(i.file) && seen.add(i.file))
+      .map((i) => ({ file: i.file, status: "pending" as FileFixStatus }));
+  }
+
+  function applyFixResult(progress: FileProgress[], data: FixResult): FileProgress[] {
+    const failedSet = new Set<string>((data.failedFiles || []).map((f) => f.file));
+    const timeoutSet = new Set<string>();
+    for (const e of data.errors || []) {
+      const m = e.match(/^([\w./\-@+]+?\.[\w]{1,8}):\s*(request timed out|Anthropic API)/);
+      if (m) timeoutSet.add(m[1]);
+    }
+    return progress.map((fp) => {
+      if (timeoutSet.has(fp.file)) return { ...fp, status: "timeout", error: "timed out — queued for retry" };
+      if (failedSet.has(fp.file)) {
+        const ff = (data.failedFiles || []).find((f) => f.file === fp.file);
+        return { ...fp, status: "failed", error: ff?.reason || "api error" };
+      }
+      return { ...fp, status: "done" };
+    });
+  }
+
+  async function fixIssues() {
+    if (!result || !repoUrl) return;
+    const failedMods = modules.filter((m) => (m.status as string) === "failed");
+    const issues = parseIssues(failedMods);
     const fixable = issues.filter((i) => i.file);
     const unfixable = issues.filter((i) => !i.file);
 
     if (fixable.length === 0) {
-      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review (config, infrastructure, or architectural changes).`);
+      setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review.`);
       return;
     }
-
     if (unfixable.length > 0) {
-      // code-quality-ok — operational info log in admin UI, not customer-facing
-      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`);
+      console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`); // code-quality-ok
     }
 
+    const initialProgress = buildFileProgress(fixable);
+    setFileProgress(initialProgress);
     setFixing(true);
     setFixResult(null);
     setError("");
+
+    // Animate files through "fixing" state so the user sees activity
+    let idx = 0;
+    const ticker = setInterval(() => {
+      idx += 1;
+      setFileProgress((prev) => prev.map((fp, i) => {
+        if (i < idx && fp.status === "pending") return { ...fp, status: "fixing" };
+        return fp;
+      }));
+    }, Math.max(2000, (50_000 / Math.max(initialProgress.length, 1))));
 
     try {
       const res = await fetch("/api/scan/fix", {
@@ -260,9 +297,13 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         body: JSON.stringify({ repoUrl, issues }),
       });
       const data = await res.json() as FixResult;
+      clearInterval(ticker);
+      setFileProgress((prev) => applyFixResult(prev, data));
       setFixResult(data);
     } catch (err) {
+      clearInterval(ticker);
       setError(err instanceof Error ? err.message : "Fix failed");
+      setFileProgress((prev) => prev.map((fp) => fp.status !== "done" ? { ...fp, status: "failed", error: "request failed" } : fp));
     } finally {
       setFixing(false);
     }
@@ -270,16 +311,26 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
   async function retryFailedFiles() {
     if (!fixResult?.failedFiles?.length || !repoUrl) return;
-    // Replay the exact file-level issues that hit the API-unavailable path.
-    // Each failedFile's `issues[]` entry is the same shape the first submission
-    // used (free-form strings), so we re-pack them with the file pointer for
-    // the fix route.
     const issues = fixResult.failedFiles.flatMap((ff) =>
       ff.issues.map((i) => ({ file: ff.file, issue: i, module: "retry" })),
     );
-
+    const retryFiles = fixResult.failedFiles.map((ff) => ({ file: ff.file, status: "pending" as FileFixStatus }));
+    setFileProgress((prev) => {
+      const retrySet = new Set(retryFiles.map((f) => f.file));
+      return prev.map((fp) => retrySet.has(fp.file) ? { ...fp, status: "pending", error: undefined } : fp);
+    });
     setFixing(true);
     setError("");
+
+    let idx = 0;
+    const ticker = setInterval(() => {
+      idx += 1;
+      setFileProgress((prev) => prev.map((fp, i) => {
+        if (i < idx && fp.status === "pending") return { ...fp, status: "fixing" };
+        return fp;
+      }));
+    }, Math.max(2000, (50_000 / Math.max(retryFiles.length, 1))));
+
     try {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
@@ -287,8 +338,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         body: JSON.stringify({ repoUrl, issues }),
       });
       const data = await res.json() as FixResult;
+      clearInterval(ticker);
+      setFileProgress((prev) => applyFixResult(prev, data));
       setFixResult(data);
     } catch (err) {
+      clearInterval(ticker);
       setError(err instanceof Error ? err.message : "Retry failed");
     } finally {
       setFixing(false);
@@ -627,119 +681,90 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 )}
 
                 {/* Fix result */}
-                {fixing && (
-                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 text-center">
-                    <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="font-medium">AI is reading your code and generating fixes...</p>
-                    <p className="text-xs text-white/50 mt-1">This may take 30-60 seconds depending on the number of issues</p>
-                  </div>
-                )}
+                {/* Live fix progress — shows during and after the fix run */}
+                {fileProgress.length > 0 && (
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
+                    {/* Header bar */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-2">
+                        {fixing && <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />}
+                        <span className="text-sm font-semibold">
+                          {fixing ? "Fixing files with Claude AI..." : fixResult?.prUrl ? "✓ Pull request created" : "Fix complete"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-white/40">
+                        <span className="text-emerald-400">{fileProgress.filter((f) => f.status === "done").length} done</span>
+                        {fileProgress.filter((f) => f.status === "timeout" || f.status === "failed").length > 0 && (
+                          <span className="text-amber-400">{fileProgress.filter((f) => f.status === "timeout" || f.status === "failed").length} retry</span>
+                        )}
+                        <span>{fileProgress.length} total</span>
+                      </div>
+                    </div>
 
-                {fixResult && (
-                  <div className={`rounded-xl bg-white/[0.04] border ${fixResult.prUrl ? "border-emerald-500/50" : "border-emerald-500/30"} p-5`}>
-                    {fixResult.prUrl ? (
-                      <>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-success text-lg">&#10003;</span>
-                          <h3 className="font-bold">Pull Request Created</h3>
-                        </div>
-                        <p className="text-sm text-white/50 mb-3">
-                          Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
-                          {totalIssues > (fixResult.issuesFixed || 0) && (
-                            <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
-                          )}.
-                        </p>
-                        <div className="mt-3 p-3 rounded-lg bg-amber-900/30 border border-amber-500/30 text-xs text-amber-300 mb-3">
-                          <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={fixResult.prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-primary px-4 py-2 text-xs"
-                            style={{ background: "#059669" }}
-                          >
-                            View PR on GitHub &rarr;
-                          </a>
-                          {fixResult.prUrl && (
-                            <button
-                              onClick={() => {
-                                // Scan the fix branch to verify
-                                const prUrl = fixResult.prUrl || "";
-                                const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-                                if (match) {
-                                  window.open(
-                                    `${prUrl}/files`,
-                                    "_blank"
-                                  );
-                                }
-                              }}
-                              className="btn-secondary px-4 py-2 text-xs"
-                            >
-                              View Changes
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    ) : fixResult.status === "api_unavailable" ? (
-                      <>
-                        <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
-                        <p className="text-sm text-white/50 mt-1">{fixResult.message}</p>
-                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-white/50">
-                              <strong className="text-white">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
-                            </p>
-                            <button
-                              onClick={retryFailedFiles}
-                              disabled={fixing}
-                              className="btn-primary px-4 py-2 text-xs font-semibold"
-                            >
-                              {fixing ? "Retrying..." : "Retry Failed"}
-                            </button>
+                    {/* Progress bar */}
+                    {fixing && (
+                      <div className="h-1 bg-white/[0.06]">
+                        <div
+                          className="h-1 bg-accent transition-all duration-700"
+                          style={{ width: `${Math.round((fileProgress.filter((f) => f.status !== "pending").length / fileProgress.length) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Per-file list */}
+                    <div className="divide-y divide-white/[0.04] max-h-72 overflow-y-auto">
+                      {fileProgress.map((fp) => (
+                        <div key={fp.file} className="flex items-start gap-3 px-4 py-2.5">
+                          <span className="mt-0.5 w-4 shrink-0 text-center text-xs">
+                            {fp.status === "done" && <span className="text-emerald-400">✓</span>}
+                            {fp.status === "fixing" && <span className="inline-block w-3 h-3 border border-accent border-t-transparent rounded-full animate-spin" />}
+                            {fp.status === "pending" && <span className="text-white/20">·</span>}
+                            {fp.status === "timeout" && <span className="text-amber-400">⏱</span>}
+                            {fp.status === "failed" && <span className="text-red-400">✗</span>}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-mono text-white/80 truncate block">{fp.file}</span>
+                            {fp.error && <span className="text-xs text-white/40 truncate block">{fp.error}</span>}
                           </div>
+                          <span className={`text-xs shrink-0 font-mono ${
+                            fp.status === "done" ? "text-emerald-400" :
+                            fp.status === "fixing" ? "text-accent" :
+                            fp.status === "timeout" ? "text-amber-400" :
+                            fp.status === "failed" ? "text-red-400" : "text-white/20"
+                          }`}>
+                            {fp.status === "fixing" ? "fixing…" : fp.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Result footer */}
+                    {fixResult && !fixing && (
+                      <div className="px-4 py-3 border-t border-white/[0.06] flex flex-wrap items-center gap-3">
+                        {fixResult.prUrl && (
+                          <>
+                            <a href={fixResult.prUrl} target="_blank" rel="noopener noreferrer"
+                              className="btn-primary px-4 py-2 text-xs" style={{ background: "#059669" }}>
+                              View PR on GitHub →
+                            </a>
+                            <span className="text-xs text-white/40">
+                              Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files
+                            </span>
+                          </>
                         )}
-                      </>
-                    ) : fixResult.status === "no_fixes" ? (
-                      <>
-                        <p className="text-sm text-white/50">{fixResult.message || "No fixes could be generated"}</p>
-                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
-                          <div className="mt-3 flex items-center justify-between gap-3">
-                            <p className="text-xs text-white/50">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
-                            <button
-                              onClick={retryFailedFiles}
-                              disabled={fixing}
-                              className="btn-primary px-4 py-2 text-xs font-semibold"
-                            >
-                              {fixing ? "Retrying..." : "Retry Failed"}
+                        {(fixResult.failedFiles?.length ?? 0) > 0 && (
+                          <>
+                            <button onClick={retryFailedFiles} disabled={fixing}
+                              className="btn-secondary px-4 py-2 text-xs font-semibold disabled:opacity-50">
+                              {fixing ? "Retrying…" : `Retry ${fixResult.failedFiles!.length} timed-out file${fixResult.failedFiles!.length !== 1 ? "s" : ""}`}
                             </button>
-                          </div>
+                            <span className="text-xs text-white/40">Files above marked ⏱ or ✗ will be retried</span>
+                          </>
                         )}
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
-                        {fixResult.errors && fixResult.errors.length > 0 && (
-                          <ul className="mt-2 text-xs text-white/50 space-y-1">
-                            {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
-                          </ul>
+                        {!fixResult.prUrl && !fixResult.failedFiles?.length && (
+                          <span className="text-xs text-white/50">{fixResult.message || fixResult.error || "No changes generated"}</span>
                         )}
-                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
-                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
-                            <p className="text-xs text-white/50">
-                              <strong className="text-white">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
-                            </p>
-                            <button
-                              onClick={retryFailedFiles}
-                              disabled={fixing}
-                              className="btn-secondary px-4 py-2 text-xs font-semibold"
-                            >
-                              {fixing ? "Retrying..." : "Retry Failed"}
-                            </button>
-                          </div>
-                        )}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
