@@ -296,6 +296,24 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     });
   }
 
+  function applyFixResultForBatch(progress: FileProgress[], data: FixResult, batchFiles: Set<string>): FileProgress[] {
+    const failedSet = new Set<string>((data.failedFiles || []).map((f) => f.file));
+    const timeoutSet = new Set<string>();
+    for (const e of data.errors || []) {
+      const m = e.match(/^([\w./\-@+]+?\.[\w]{1,8}):\s*(request timed out|Anthropic API)/);
+      if (m) timeoutSet.add(m[1]);
+    }
+    return progress.map((fp) => {
+      if (!batchFiles.has(fp.file)) return fp;
+      if (timeoutSet.has(fp.file)) return { ...fp, status: "timeout", error: "timed out — queued for retry" };
+      if (failedSet.has(fp.file)) {
+        const ff = (data.failedFiles || []).find((f) => f.file === fp.file);
+        return { ...fp, status: "failed", error: ff?.reason || "api error" };
+      }
+      return { ...fp, status: "done" };
+    });
+  }
+
   async function fixIssues(prebuiltIssues?: ReturnType<typeof parseIssues>) {
     if (!repoUrl || fixing) return;
 
@@ -328,73 +346,117 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     setFixResult(null);
     setError("");
 
-    // Animate files through "fixing" state so the user sees activity
-    let idx = 0;
-    const ticker = setInterval(() => {
-      idx += 1;
-      setFileProgress((prev) => prev.map((fp, i) => {
-        if (i < idx && fp.status === "pending") return { ...fp, status: "fixing" };
-        return fp;
-      }));
-    }, Math.max(2000, (50_000 / Math.max(initialProgress.length, 1))));
-
-    try {
-      const res = await fetch("/api/scan/fix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, issues: fixable }),
-      });
-      const data = await res.json() as FixResult;
-      clearInterval(ticker);
-      setFileProgress((prev) => applyFixResult(prev, data));
-      setFixResult(data);
-    } catch (err) {
-      clearInterval(ticker);
-      setError(err instanceof Error ? err.message : "Fix failed");
-      setFileProgress((prev) => prev.map((fp) => fp.status !== "done" ? { ...fp, status: "failed", error: "request failed" } : fp));
-    } finally {
-      setFixing(false);
+    // Group issues by unique file, then process in batches of 5 so each
+    // request fits within Vercel's function timeout and the user sees real
+    // progress as each batch completes instead of a frozen spinner.
+    const BATCH_SIZE = 5;
+    const fileMap = new Map<string, ReturnType<typeof parseIssues>>();
+    for (const issue of fixable) {
+      if (!fileMap.has(issue.file)) fileMap.set(issue.file, []);
+      fileMap.get(issue.file)!.push(issue);
     }
+    const uniqueFiles = [...fileMap.keys()];
+
+    const accumulated: FixResult = {
+      status: "complete",
+      failedFiles: [],
+      errors: [],
+      filesFixed: 0,
+      issuesFixed: 0,
+    };
+
+    for (let start = 0; start < uniqueFiles.length; start += BATCH_SIZE) {
+      const batchFiles = uniqueFiles.slice(start, start + BATCH_SIZE);
+      const batchSet = new Set(batchFiles);
+      const batchIssues = batchFiles.flatMap((f) => fileMap.get(f)!);
+
+      setFileProgress((prev) => prev.map((fp) =>
+        batchSet.has(fp.file) && fp.status === "pending" ? { ...fp, status: "fixing" } : fp,
+      ));
+
+      try {
+        const res = await fetch("/api/scan/fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repoUrl, issues: batchIssues }),
+        });
+        const data = await res.json() as FixResult;
+        accumulated.failedFiles = [...(accumulated.failedFiles ?? []), ...(data.failedFiles ?? [])];
+        accumulated.errors = [...(accumulated.errors ?? []), ...(data.errors ?? [])];
+        accumulated.filesFixed = (accumulated.filesFixed ?? 0) + (data.filesFixed ?? 0);
+        accumulated.issuesFixed = (accumulated.issuesFixed ?? 0) + (data.issuesFixed ?? 0);
+        if (data.prUrl) accumulated.prUrl = data.prUrl;
+        if (data.prNumber) accumulated.prNumber = data.prNumber;
+        setFileProgress((prev) => applyFixResultForBatch(prev, data, batchSet));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "request failed";
+        accumulated.errors = [...(accumulated.errors ?? []), `Batch failed: ${msg}`];
+        setFileProgress((prev) => prev.map((fp) =>
+          batchSet.has(fp.file) && fp.status !== "done" ? { ...fp, status: "failed", error: msg } : fp,
+        ));
+      }
+    }
+
+    setFixResult(accumulated);
+    setFixing(false);
   }
 
   async function retryFailedFiles() {
     if (!fixResult?.failedFiles?.length || !repoUrl) return;
-    const issues = fixResult.failedFiles.flatMap((ff) =>
-      ff.issues.map((i) => ({ file: ff.file, issue: i, module: "retry" })),
-    );
-    const retryFiles = fixResult.failedFiles.map((ff) => ({ file: ff.file, status: "pending" as FileFixStatus }));
-    setFileProgress((prev) => {
-      const retrySet = new Set(retryFiles.map((f) => f.file));
-      return prev.map((fp) => retrySet.has(fp.file) ? { ...fp, status: "pending", error: undefined } : fp);
-    });
+
+    const BATCH_SIZE = 5;
+    const failedFiles = fixResult.failedFiles;
+    const retrySet = new Set(failedFiles.map((ff) => ff.file));
+    setFileProgress((prev) => prev.map((fp) => retrySet.has(fp.file) ? { ...fp, status: "pending", error: undefined } : fp));
     setFixing(true);
     setError("");
 
-    let idx = 0;
-    const ticker = setInterval(() => {
-      idx += 1;
-      setFileProgress((prev) => prev.map((fp, i) => {
-        if (i < idx && fp.status === "pending") return { ...fp, status: "fixing" };
-        return fp;
-      }));
-    }, Math.max(2000, (50_000 / Math.max(retryFiles.length, 1))));
+    const accumulated: FixResult = {
+      status: "complete",
+      failedFiles: [],
+      errors: [],
+      filesFixed: (fixResult.filesFixed ?? 0),
+      issuesFixed: (fixResult.issuesFixed ?? 0),
+      prUrl: fixResult.prUrl,
+      prNumber: fixResult.prNumber,
+    };
 
-    try {
-      const res = await fetch("/api/scan/fix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl, issues }),
-      });
-      const data = await res.json() as FixResult;
-      clearInterval(ticker);
-      setFileProgress((prev) => applyFixResult(prev, data));
-      setFixResult(data);
-    } catch (err) {
-      clearInterval(ticker);
-      setError(err instanceof Error ? err.message : "Retry failed");
-    } finally {
-      setFixing(false);
+    for (let start = 0; start < failedFiles.length; start += BATCH_SIZE) {
+      const batch = failedFiles.slice(start, start + BATCH_SIZE);
+      const batchSet = new Set(batch.map((ff) => ff.file));
+      const batchIssues = batch.flatMap((ff) => ff.issues.map((i) => ({ file: ff.file, issue: i, module: "retry" })));
+
+      setFileProgress((prev) => prev.map((fp) =>
+        batchSet.has(fp.file) && fp.status === "pending" ? { ...fp, status: "fixing" } : fp,
+      ));
+
+      try {
+        const res = await fetch("/api/scan/fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repoUrl, issues: batchIssues }),
+        });
+        const data = await res.json() as FixResult;
+        accumulated.failedFiles = [...(accumulated.failedFiles ?? []), ...(data.failedFiles ?? [])];
+        accumulated.errors = [...(accumulated.errors ?? []), ...(data.errors ?? [])];
+        accumulated.filesFixed = (accumulated.filesFixed ?? 0) + (data.filesFixed ?? 0);
+        accumulated.issuesFixed = (accumulated.issuesFixed ?? 0) + (data.issuesFixed ?? 0);
+        if (data.prUrl) accumulated.prUrl = data.prUrl;
+        setFileProgress((prev) => applyFixResultForBatch(prev, data, batchSet));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "request failed";
+        accumulated.failedFiles = [
+          ...(accumulated.failedFiles ?? []),
+          ...batch.map((ff) => ({ file: ff.file, issues: ff.issues, reason: msg })),
+        ];
+        setFileProgress((prev) => prev.map((fp) =>
+          batchSet.has(fp.file) && fp.status !== "done" ? { ...fp, status: "failed", error: msg } : fp,
+        ));
+      }
     }
+
+    setFixResult(accumulated);
+    setFixing(false);
   }
 
   async function initDb() {
