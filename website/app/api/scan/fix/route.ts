@@ -29,6 +29,160 @@ import {
   resolveRepoAuth,
   upsertFile,
 } from "../../../lib/gluecron-client";
+// Phase 1 of THE FIX-FIRST BUILD PLAN — N-attempt iterative loop with
+// structured per-attempt logging. The loop carries forward each previous
+// failure into the next prompt so Claude sees its own mistake. Pure JS
+// helper, tested standalone in tests/fix-attempt-loop.test.js.
+// Phase 1.2b — cross-fix scanner re-validation gate.
+import { runTier } from "@/app/lib/scan-modules";
+
+// Phase 2.2 — architecture annotator. Reads the codebase SHAPE (not
+// per-file) and produces a "design observations" report — layering
+// violations, duplicated logic, god objects, refactoring opportunities.
+// REPORTED only, never auto-refactored. Posts as a PR comment.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { annotateArchitecture, renderArchitectureComment } = require("@/app/lib/architecture-annotator") as {
+  annotateArchitecture: (opts: {
+    fileContents: Array<{ path: string; content: string }>;
+    askClaudeForArchitecture: (prompt: string) => Promise<string>;
+    repoUrl?: string;
+    sampleCount?: number;
+    maxFileBytes?: number;
+  }) => Promise<{
+    ok: boolean;
+    body: string | null;
+    summary: { sourceFiles: number; totalFiles: number; totalBytes: number; topDirectories: Array<{ dir: string; count: number }>; extensionCounts: Record<string, number>; largestFiles: Array<{ path: string; bytes: number }> } | null;
+    sampleFiles: Array<{ path: string; bytes: number }> | null;
+    reason: string | null;
+  }>;
+  renderArchitectureComment: (result: {
+    ok: boolean;
+    body: string | null;
+    summary?: { sourceFiles: number } | null;
+    sampleFiles?: Array<{ path: string; bytes: number }> | null;
+    reason?: string | null;
+  } | null) => string;
+};
+
+// Phase 2.1 — pair-review agent. Second Claude critiques each fix on a
+// 4-axis rubric (correctness / completeness / readability / testCoverage),
+// posts result as a PR comment.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { runPairReview, renderReviewComment } = require("@/app/lib/pair-review") as {
+  runPairReview: (opts: {
+    fixes: Array<{ file: string; original: string; fixed: string; issues: string[] }>;
+    testsBySourceFile?: Record<string, string> | Map<string, string>;
+    askClaudeForReview: (prompt: string) => Promise<string>;
+  }) => Promise<{
+    reviews: Array<{ file: string; ok: boolean; scores: { correctness: number; completeness: number; readability: number; testCoverage: number } | null; critique: string | null; reason: string | null }>;
+    averages: { correctness: number; completeness: number; readability: number; testCoverage: number } | null;
+    reviewed: number;
+    skipped: number;
+    summary: string;
+  }>;
+  renderReviewComment: (
+    reviews: Array<{ file: string; ok: boolean; scores: { correctness: number; completeness: number; readability: number; testCoverage: number } | null; critique: string | null; reason: string | null }>,
+    averages: { correctness: number; completeness: number; readability: number; testCoverage: number } | null
+  ) => string;
+};
+
+// Phase 1.4 — PR-body composer. Builds the structured markdown report
+// from every artifact this route collects (fixes, errors, attempt
+// history, gate results, before/after findings, regression tests).
+// Pure string composition.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { composePrBody } = require("@/app/lib/pr-composer") as {
+  composePrBody: (opts: {
+    fixes?: Array<{ file: string; original: string; fixed: string; issues: string[] }>;
+    errors?: string[];
+    attemptHistoryByFile?: Record<string, { attempts: Array<{ attemptNumber: number; durationMs: number; outcome: string }>; summary: string; success: boolean }>;
+    syntaxGate?: { summary?: string };
+    scannerGate?: { summary?: string; skipped?: boolean; reason?: string };
+    testGen?: { summary?: string };
+    originalFindingsByModule?: Record<string, string[]>;
+    postFixFindingsByModule?: Record<string, string[]>;
+    repoUrl?: string;
+  }) => string;
+};
+
+// Phase 1.3 — test generation per fix.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { generateTestsForFixes } = require("@/app/lib/test-generator") as {
+  generateTestsForFixes: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    askClaudeForTest: (prompt: string) => Promise<string>;
+    frameworkHint?: string;
+  }) => Promise<{
+    tests: Array<{ path: string; content: string; sourceFile: string }>;
+    skipped: Array<{ sourceFile: string; reason: string }>;
+    summary: string;
+  }>;
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gate") as {
+  validateFixesAgainstScanner: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    originalFileContents: Array<{ path: string; content: string }>;
+    originalFindingsByModule: Record<string, string[]>;
+    runTier: (tier: string, ctx: { owner: string; repo: string; files: string[]; fileContents: Array<{ path: string; content: string }> }) => Promise<{ modules: Array<{ name: string; details?: string[] }>; totalIssues: number }>;
+    owner: string;
+    repo: string;
+    tier?: string;
+  }) => Promise<{
+    accepted: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+    rolledBack: Array<{ file: string; fixed: string; original: string; issues: string[]; reason: string; newFindings: string[] }>;
+    unattributedFindings: Array<{ module: string; detail: string }>;
+    postFixFindingsByModule: Record<string, string[]>;
+    summary: string;
+  }>;
+};
+
+// Phase 1.2a — cross-fix syntax-validation gate. Sits between the
+// per-file iterative loop and PR creation. Catches Claude output that
+// passes shape + pattern checks but doesn't actually parse.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateFixesSyntax, summariseSyntaxGate } = require("@/app/lib/cross-fix-syntax-gate") as {
+  validateFixesSyntax: (opts: {
+    fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+  }) => {
+    accepted: Array<{ file: string; fixed: string; original: string; issues: string[]; language: string }>;
+    rejected: Array<{ file: string; fixed: string; original: string; issues: string[]; reason: string; language: string }>;
+  };
+  summariseSyntaxGate: (result: { accepted: unknown[]; rejected: unknown[] }) => string;
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-attempt-loop") as {
+  attemptFixWithRetries: (opts: {
+    askClaude: (issues: string[]) => Promise<string>;
+    validateFix: (original: string, fixed: string) => { ok: boolean; reason?: string };
+    verifyFixQuality: (fixed: string, filePath: string) => { clean: boolean; newIssues: string[] };
+    originalContent: string;
+    filePath: string;
+    issues: string[];
+    maxAttempts?: number;
+    now?: () => number;
+  }) => Promise<{
+    success: boolean;
+    fixed: string | null;
+    attempts: Array<{
+      attemptNumber: number;
+      startedAt: number;
+      durationMs: number;
+      outcome: "success" | "validation-fail" | "quality-fail" | "claude-error";
+      validationReason: string | null;
+      qualityIssues: string[];
+      claudeError: string | null;
+    }>;
+    finalReason: string | null;
+  }>;
+  summariseAttempts: (attempts: Array<{ outcome: string; durationMs: number }>) => string;
+};
+
+// Default attempt ceiling — set higher than the old hardcoded "1+1 retry"
+// so the loop has room to learn from its own mistakes. Configurable via
+// GATETEST_FIX_MAX_ATTEMPTS env var if a deployment wants tighter cost
+// control or more aggressive recovery.
+const DEFAULT_MAX_ATTEMPTS = Number(process.env.GATETEST_FIX_MAX_ATTEMPTS) || 3;
 
 // Vercel Pro allows up to 300s. Fix runs 44 issues across ~10 files, each file
 // needs a Claude call + GitHub read + commit. 300s gives headroom for retries
@@ -308,6 +462,27 @@ const MAX_FILE_BYTES = 400 * 1024;
  * Ask Claude to generate a NEW file (when it doesn't exist yet).
  * Used when the issue is "Missing X" and we need to create X.
  */
+/**
+ * Phase 1.3 — thin wrapper around anthropicCallWithRetry shaped for
+ * the test-generator's askClaudeForTest contract: takes a prompt,
+ * returns the raw text. Same model + retry behaviour as the main
+ * fix path.
+ */
+async function askClaudeForTest(prompt: string): Promise<string> {
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const res = await anthropicCallWithRetry(body);
+  if (res.status !== 200) {
+    const errSnippet = JSON.stringify(res.data).slice(0, 200);
+    throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
+  }
+  const content = res.data.content as Array<{ type: string; text: string }>;
+  return content?.[0]?.text || "";
+}
+
 async function askClaudeCreate(filePath: string, context: string[]): Promise<string> {
   const prompt = `You are an expert developer. Generate the COMPLETE contents of a new file.
 
@@ -415,8 +590,24 @@ interface IssueInput {
   module: string;
 }
 
+// Phase 1.2b — optional callers can pass the pre-fix workspace and the
+// pre-fix module findings so the scanner re-validation gate has a
+// baseline to diff against. When absent, the gate is skipped (the
+// per-file iterative loop + syntax gate still run; only cross-file
+// regression detection is missing).
+interface OriginalFileInput {
+  path: string;
+  content: string;
+}
+
 export async function POST(req: NextRequest) {
-  let input: { repoUrl?: string; issues?: IssueInput[] };
+  let input: {
+    repoUrl?: string;
+    issues?: IssueInput[];
+    originalFileContents?: OriginalFileInput[];
+    originalFindingsByModule?: Record<string, string[]>;
+    tier?: string;
+  };
   try {
     input = await req.json();
   } catch {
@@ -478,6 +669,21 @@ export async function POST(req: NextRequest) {
   const fixes: Fix[] = [];
   const errors: string[] = [];
 
+  // Phase 1: per-file attempt history. Each entry captures every attempt
+  // the iterative loop made — used in the PR body, surfaced in the API
+  // response, and logged so a human reviewer can see at a glance how many
+  // attempts each fix took and what each attempt's outcome was.
+  type AttemptLog = {
+    attemptNumber: number;
+    startedAt: number;
+    durationMs: number;
+    outcome: "success" | "validation-fail" | "quality-fail" | "claude-error";
+    validationReason: string | null;
+    qualityIssues: string[];
+    claudeError: string | null;
+  };
+  const attemptHistoryByFile: Record<string, { attempts: AttemptLog[]; summary: string; success: boolean }> = {};
+
   // Time budget — start the clock so per-file workers can bail early if the
   // remaining budget won't fit another Claude round-trip + retries.
   const startedAt = Date.now();
@@ -525,36 +731,41 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // First pass: generate fix
-      let fixedContent = await askClaude(originalContent, filePath, fileIssues);
-      let validation = validateFix(originalContent, fixedContent);
-      if (!validation.ok) {
-        errors.push(`Skipped ${filePath}: ${validation.reason}`);
+      // Phase 1: iterative fix loop with up to N attempts. Each attempt's
+      // outcome is logged; on quality-fail the next attempt sees explicit
+      // feedback about what was introduced. On total failure, all attempts
+      // are surfaced in the response so the UI can show the full trail.
+      const loopResult = await attemptFixWithRetries({
+        askClaude: (currentIssues: string[]) => askClaude(originalContent, filePath, currentIssues),
+        validateFix,
+        verifyFixQuality,
+        originalContent,
+        filePath,
+        issues: fileIssues,
+        maxAttempts: DEFAULT_MAX_ATTEMPTS,
+      });
+
+      attemptHistoryByFile[filePath] = {
+        attempts: loopResult.attempts,
+        summary: summariseAttempts(loopResult.attempts),
+        success: loopResult.success,
+      };
+
+      // If every attempt was a Claude API error, treat it the same as the
+      // outer catch would have — file gets queued for retry, not marked
+      // permanently failed, and the rolling network-error counter ticks
+      // so concurrency degrades. Other failure modes (validation /
+      // quality) just go in errors.
+      if (!loopResult.success) {
+        const allClaudeErrors = loopResult.attempts.length > 0 && loopResult.attempts.every((a) => a.outcome === "claude-error");
+        if (allClaudeErrors) {
+          throw new Error(loopResult.attempts[loopResult.attempts.length - 1].claudeError || "Claude API error");
+        }
+        errors.push(`Skipped ${filePath} (${loopResult.attempts.length} attempt${loopResult.attempts.length > 1 ? "s" : ""}): ${loopResult.finalReason}`);
         return;
       }
 
-      // Verify fix doesn't introduce new issues
-      let verify = verifyFixQuality(fixedContent, filePath);
-      if (!verify.clean) {
-        // Second pass: tell Claude to fix its own mistakes
-        const retryIssues = [
-          ...fileIssues,
-          ...verify.newIssues.map((i) => `YOUR FIX INTRODUCED: ${i} — fix this too`),
-        ];
-        fixedContent = await askClaude(originalContent, filePath, retryIssues);
-        validation = validateFix(originalContent, fixedContent);
-        if (!validation.ok) {
-          errors.push(`Skipped ${filePath} after retry: ${validation.reason}`);
-          return;
-        }
-        verify = verifyFixQuality(fixedContent, filePath);
-        if (!verify.clean) {
-          errors.push(`Skipped ${filePath}: fix still introduces issues after retry: ${verify.newIssues.join("; ")}`);
-          return;
-        }
-      }
-
-      fixes.push({ file: filePath, original: originalContent, fixed: fixedContent, issues: fileIssues });
+      fixes.push({ file: filePath, original: originalContent, fixed: loopResult.fixed!, issues: fileIssues });
       // Reset the rolling network-error counter on any success — only sustained
       // failure across multiple files should drop concurrency.
       state.consecutiveNetworkErrors = 0;
@@ -605,6 +816,114 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Phase 1.2 — cross-fix syntax gate. Ran ONCE on the full collected
+  // fix set after every per-file iterative loop completed. Anything that
+  // doesn't parse is dropped from the PR — the customer never sees a
+  // broken-syntax fix on their branch.
+  const syntaxGate = validateFixesSyntax({ fixes });
+  if (syntaxGate.rejected.length > 0) {
+    for (const r of syntaxGate.rejected) {
+      errors.push(`Rejected ${r.file} (${r.language}): ${r.reason}`);
+    }
+    // Replace the working fix list with the syntax-validated subset.
+    // The accepted entries carry the same shape as the originals plus
+    // a `language` field; downstream code reads `file`/`fixed`/etc.
+    fixes.length = 0;
+    for (const a of syntaxGate.accepted) {
+      fixes.push({ file: a.file, fixed: a.fixed, original: a.original, issues: a.issues });
+    }
+  }
+  const syntaxGateSummary = summariseSyntaxGate(syntaxGate);
+
+  if (fixes.length === 0) {
+    return NextResponse.json({
+      status: "no_fixes",
+      message: `Every fix failed the syntax gate — Claude returned content that doesn't parse. ${syntaxGateSummary}`,
+      errors,
+      skippedForBudget,
+      failedFiles,
+      syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
+    });
+  }
+
+  // Phase 1.2b — cross-file scanner re-validation. Only runs when the
+  // caller supplied the original workspace + findings. Without that
+  // baseline we can't tell which findings are NEW vs pre-existing, so
+  // skip silently — per-file iterative loop + syntax gate still ran.
+  let scannerGateSummary: string | undefined;
+  let scannerGateRolledBack: Array<{ file: string; reason: string; newFindings: string[] }> = [];
+  let postFixFindingsByModule: Record<string, string[]> | undefined;
+  if (
+    Array.isArray(input.originalFileContents) &&
+    input.originalFileContents.length > 0 &&
+    input.originalFindingsByModule &&
+    typeof input.originalFindingsByModule === "object"
+  ) {
+    const scannerGate = await validateFixesAgainstScanner({
+      fixes,
+      originalFileContents: input.originalFileContents,
+      originalFindingsByModule: input.originalFindingsByModule,
+      runTier,
+      owner,
+      repo,
+      tier: input.tier || "full",
+    });
+    scannerGateSummary = scannerGate.summary;
+    postFixFindingsByModule = scannerGate.postFixFindingsByModule;
+    if (scannerGate.rolledBack.length > 0) {
+      for (const rb of scannerGate.rolledBack) {
+        errors.push(`Rolled back ${rb.file}: ${rb.reason} — ${rb.newFindings.join("; ")}`);
+      }
+      scannerGateRolledBack = scannerGate.rolledBack.map((rb) => ({
+        file: rb.file,
+        reason: rb.reason,
+        newFindings: rb.newFindings,
+      }));
+      // Replace fix list with scanner-validated subset.
+      fixes.length = 0;
+      for (const a of scannerGate.accepted) {
+        fixes.push({ file: a.file, fixed: a.fixed, original: a.original, issues: a.issues });
+      }
+    }
+
+    if (fixes.length === 0) {
+      return NextResponse.json({
+        status: "no_fixes",
+        message: `Every fix failed the cross-file scanner gate — each one introduced a new finding. ${scannerGateSummary}`,
+        errors,
+        skippedForBudget,
+        failedFiles,
+        syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
+        scannerGate: { rolledBack: scannerGateRolledBack, summary: scannerGateSummary },
+      });
+    }
+  }
+
+  // Phase 1.3 — test generation per fix. For every successful,
+  // gate-passed fix, ask Claude to write a regression test that
+  // would have failed against the original code. Tests are added
+  // to `fixes` as new-file entries so the existing PR commit logic
+  // ships them in the same PR. Per-fix failures here NEVER block
+  // the underlying fix — a missing regression test is annoying but
+  // not destructive.
+  const testGen = await generateTestsForFixes({
+    fixes,
+    askClaudeForTest,
+  }).catch((err) => {
+    // Failing the WHOLE batch shouldn't kill the PR. Log and proceed
+    // with no generated tests.
+    const message = err instanceof Error ? err.message : "test generation failed";
+    errors.push(`Test generation failed (no regression tests added): ${message}`);
+    return { tests: [] as Array<{ path: string; content: string; sourceFile: string }>, skipped: [] as Array<{ sourceFile: string; reason: string }>, summary: `test generation: failed (${message})` };
+  });
+  for (const t of testGen.tests) {
+    fixes.push({ file: t.path, original: "", fixed: t.content, issues: [`Regression test for ${t.sourceFile}`] });
+  }
+  for (const s of testGen.skipped) {
+    errors.push(`No regression test for ${s.sourceFile}: ${s.reason}`);
+  }
+  const testGenSummary = testGen.summary;
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -647,39 +966,24 @@ export async function POST(req: NextRequest) {
       await upsertFile(owner, repo, fix.file, fix.fixed, message, branchName, existingSha, token);
     });
 
-    // Open PR with premium report
+    // Phase 1.4 — Compose the PR body from every artifact we collected.
+    // The composer renders header, before/after scan comparison, gate
+    // results, per-file attempt history, fixed-files list, regression
+    // tests, advisory section, how-it-works, next steps, and footer.
     const totalIssuesFixed = fixes.reduce((sum, f) => sum + f.issues.length, 0);
-    const prBody = `## GateTest Auto-Fix Report
-
-> **${totalIssuesFixed} issues fixed** across **${fixes.length} files** — verified before commit.
-
-Every fix in this PR was generated by Claude AI and verified against GateTest's 90-module scanner before being committed. Fixes that introduced new issues were automatically rejected and retried.
-
-### Fixed Files
-
-${fixes.map((f) => {
-  const issueList = f.issues.map((i) => `  - ✅ ${i}`).join("\n");
-  return `<details>\n<summary><strong>${f.file}</strong> — ${f.issues.length} fix${f.issues.length > 1 ? "es" : ""}</summary>\n\n${issueList}\n</details>`;
-}).join("\n\n")}
-
-${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`).join("\n")}` : ""}
-
-### How This Works
-
-1. **Scan** — GateTest scanned the repo with ${issues.length} checks
-2. **AI Fix** — Claude AI generated fixes for each issue
-3. **Verify** — Each fix was re-scanned before commit to prevent regressions
-4. **PR** — Clean fixes committed to this branch
-
-### Next Steps
-
-- Review the changes in the **Files Changed** tab
-- Merge when satisfied — GateTest never auto-merges
-- Re-scan after merge to confirm: \`gatetest --suite full\`
-
----
-
-<sub>Scanned and fixed by <a href="https://gatetest.ai">GateTest</a> — 90 modules, AI-powered, verify-before-commit</sub>`;
+    const prBody = composePrBody({
+      fixes,
+      errors,
+      attemptHistoryByFile,
+      syntaxGate: { summary: syntaxGateSummary },
+      scannerGate: scannerGateSummary
+        ? { summary: scannerGateSummary }
+        : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
+      testGen: { summary: testGenSummary },
+      originalFindingsByModule: input.originalFindingsByModule,
+      postFixFindingsByModule,
+      repoUrl,
+    });
 
     // Open the PR. NOTE: Gluecron uses `headBranch` / `baseBranch` (NOT
     // GitHub's `head` / `base`) — our openPullRequest helper handles the
@@ -727,6 +1031,66 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
       // Non-critical — PR was created successfully, comment failed
     }
 
+    // Phase 2.2 — architecture annotator. Runs only on the $199 tier.
+    // Posts a separate PR comment with design observations the
+    // per-file scanner cannot see (layering, god objects, etc.).
+    // Requires `originalFileContents` so it has the codebase shape;
+    // skipped silently if the caller didn't pass that.
+    let architectureSummary: string | undefined;
+    if (input.tier === "scan_fix" && Array.isArray(input.originalFileContents) && input.originalFileContents.length > 0) {
+      try {
+        const arch = await annotateArchitecture({
+          fileContents: input.originalFileContents,
+          askClaudeForArchitecture: askClaudeForTest,
+          repoUrl,
+        });
+        architectureSummary = arch.ok
+          ? `architecture: ${arch.summary?.sourceFiles ?? '?'} source files analysed, ${arch.sampleFiles?.length ?? 0} sampled, report posted`
+          : `architecture: skipped (${arch.reason})`;
+        const archMarkdown = renderArchitectureComment(arch);
+        await postPrComment(owner, repo, prNumber, archMarkdown, token);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "architecture annotator failed";
+        errors.push(`Architecture annotation failed (no report posted): ${message}`);
+        architectureSummary = `architecture: failed (${message})`;
+      }
+    }
+
+    // Phase 2.1 — pair-review agent. Runs only when the caller's tier
+    // is scan_fix (the $199 tier). For Quick / Full scans the loop +
+    // gates + test-gen + composer ship without pair-review. The
+    // critique posts as a separate PR comment so the customer sees
+    // a second pair of eyes on every fix.
+    let pairReviewSummary: string | undefined;
+    if (input.tier === "scan_fix") {
+      try {
+        // Build map: source-file → regression-test-content for the
+        // pair-review agent to see per-fix tests.
+        const testsBySourceFile: Record<string, string> = {};
+        for (const f of fixes) {
+          if (f.file.startsWith("tests/auto-generated/")) {
+            const sourceMatch = (f.issues || []).join(" ").match(/Regression test for (.+)/);
+            if (sourceMatch) testsBySourceFile[sourceMatch[1]] = f.fixed;
+          }
+        }
+        const review = await runPairReview({
+          fixes,
+          testsBySourceFile,
+          askClaudeForReview: askClaudeForTest, // same Claude wrapper, different prompt
+        });
+        pairReviewSummary = review.summary;
+        const reviewMarkdown = renderReviewComment(review.reviews, review.averages);
+        await postPrComment(owner, repo, prNumber, reviewMarkdown, token);
+      } catch (err) {
+        // Non-critical — PR + verification already posted. Pair review
+        // is a $199-tier value-add; if Claude is degraded, the rest
+        // of the deliverable still ships.
+        const message = err instanceof Error ? err.message : "pair review failed";
+        errors.push(`Pair review failed (no critique posted): ${message}`);
+        pairReviewSummary = `pair review: failed (${message})`;
+      }
+    }
+
     return NextResponse.json({
       status: "pr_created",
       prUrl,
@@ -738,6 +1102,18 @@ ${errors.length > 0 ? `\n### ⚠️ Could Not Fix\n${errors.map((e) => `- ${e}`)
       authSource,
       errors,
       failedFiles,
+      syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
+      scannerGate: scannerGateSummary
+        ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
+        : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
+      testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
+      pairReview: pairReviewSummary
+        ? { summary: pairReviewSummary }
+        : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
+      architecture: architectureSummary
+        ? { summary: architectureSummary }
+        : { skipped: true, reason: "tier is not scan_fix or originalFileContents not supplied — architecture annotation is a $199-tier value-add" },
+      attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {
     return NextResponse.json({

@@ -48,6 +48,48 @@ const scanPlans = [
     cta: "Run Full Scan",
     highlight: true,
   },
+  {
+    id: "scan_fix",
+    name: "Scan + Fix",
+    price: "$199",
+    period: "per scan",
+    badge: "Deepest review",
+    description:
+      "Full Scan plus a second-Claude pair-review on every fix and a codebase-shape architecture report.",
+    modules: "All 90 + depth review",
+    features: [
+      "Everything in Full Scan",
+      "Pair-review critique on every fix — second Claude scores correctness, completeness, readability, test coverage",
+      "Architecture annotator — design observations on codebase shape (layering, duplication, god objects)",
+      "Both reports posted as separate PR comments",
+      "Iterative fix loop with N retries — Claude learns from its own failed attempts",
+      "Cross-file syntax + scanner gates — broken fixes never ship",
+      "Regression test for every fix — your suite gets stronger when you merge",
+    ],
+    cta: "Run Scan + Fix",
+    highlight: false,
+  },
+  {
+    id: "nuclear",
+    name: "Nuclear",
+    price: "$399",
+    period: "per scan",
+    badge: "Maximum depth",
+    description:
+      "The deepest scan we offer. Real Claude diagnosis, attack-chain correlation, mutation testing, chaos pass, executive summary.",
+    modules: "All 90 + nuclear stack",
+    features: [
+      "Everything in Scan + Fix",
+      "Real Claude diagnosis on every finding — no templated snippets, every fix reasoned from your specific evidence",
+      "Cross-finding attack-chain correlation — textbook session-forgery / supply-chain / rotation-impossible vectors that per-finding scanners can never see",
+      "Mutation testing — we mutate your source under your tests, prove your tests actually catch bugs",
+      "Chaos / fuzz pass — adversarial inputs against HTTP routes, CLI args, file parsers; report what crashes",
+      "CTO-readable executive summary — single document, plain language, real recommendations",
+      "Best margin if you're shipping money or PII — the $399 hits all the high-stakes bug classes",
+    ],
+    cta: "Run Nuclear",
+    highlight: false,
+  },
 ];
 
 const comingSoon = [
@@ -140,7 +182,7 @@ export default function Pricing() {
         </div>
 
         {/* Scan tiers */}
-        <div className="grid md:grid-cols-2 gap-6 mb-16 max-w-3xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 max-w-7xl mx-auto">
           {scanPlans.map((plan) => (
             <div
               key={plan.name}

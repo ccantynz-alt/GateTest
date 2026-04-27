@@ -9,6 +9,79 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import https from "https";
+
+// Phase 3.5 — executive summary composer. Synthesises diagnoses +
+// chains + scan stats into a single CTO-readable report.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { composeExecutiveSummary, renderExecutiveSummary } = require("@/app/lib/executive-summary") as {
+  composeExecutiveSummary: (opts: {
+    scanStats?: { modulesPassed?: number; modulesTotal?: number; errors?: number; warnings?: number; checksPerformed?: number; durationMs?: number };
+    topFindings?: Array<{ detail: string; module?: string; severity?: string }>;
+    chains?: Array<{ title: string; severity: string; impact: string }>;
+    hostname?: string;
+    askClaudeForSummary: (prompt: string) => Promise<string>;
+  }) => Promise<{
+    ok: boolean;
+    sections: { headline: string; posture: string; topActions: string; workingWell: string; recommendedNext: string } | null;
+    reason: string | null;
+  }>;
+  renderExecutiveSummary: (
+    result: {
+      ok: boolean;
+      sections: { headline: string; posture: string; topActions: string; workingWell: string; recommendedNext: string } | null;
+      reason?: string | null;
+    } | null,
+    opts?: { hostname?: string }
+  ) => string;
+};
+
+// Phase 3.2 — cross-finding correlator. Identifies attack chains
+// across the full findings set — combinations that are materially
+// worse than the worst individual finding.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { correlateFindings, renderCorrelationReport } = require("@/app/lib/cross-finding-correlator") as {
+  correlateFindings: (opts: {
+    findings: Array<{ detail: string; module?: string; severity?: string }>;
+    hostname?: string;
+    askClaudeForCorrelation: (prompt: string) => Promise<string>;
+    maxFindings?: number;
+  }) => Promise<{
+    ok: boolean;
+    chains: Array<{ title: string; severity: string; findingNumbers: number[]; findingsInvolved: string[]; impact: string; fixOrder: string }>;
+    summary: string;
+    reason: string | null;
+  }>;
+  renderCorrelationReport: (result: {
+    ok: boolean;
+    chains: Array<{ title: string; severity: string; findingNumbers: number[]; findingsInvolved: string[]; impact: string; fixOrder: string }>;
+    summary?: string;
+    reason?: string | null;
+  } | null) => string;
+};
+
+// Phase 3.1 — Nuclear diagnoser. Replaces the category-matched
+// shell-command templates below with real Claude-driven diagnosis
+// when the caller is on the $399 Nuclear tier.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { diagnoseFindings, renderDiagnosesReport } = require("@/app/lib/nuclear-diagnoser") as {
+  diagnoseFindings: (opts: {
+    findings: Array<{ detail: string; module?: string; severity?: string }>;
+    hostname?: string;
+    scanContext?: { platform?: string; stack?: string[] };
+    askClaudeForDiagnosis: (prompt: string) => Promise<string>;
+    maxFindings?: number;
+  }) => Promise<{
+    diagnoses: Array<{ finding: { detail: string; module?: string; severity?: string }; ok: boolean; diagnosis: { explanation: string; rootCause: string; recommendation: string; platformNotes: Record<string, string> } | null; reason: string | null }>;
+    summary: string;
+  }>;
+  renderDiagnosesReport: (
+    diagnoses: Array<{ finding: { detail: string; module?: string; severity?: string }; ok: boolean; diagnosis: { explanation: string; rootCause: string; recommendation: string; platformNotes: Record<string, string> } | null; reason: string | null }>,
+    summary: string
+  ) => string;
+};
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 interface ModResult {
   name: string;
@@ -250,8 +323,76 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]`,
   return fixes;
 }
 
+/**
+ * Phase 3.1 — minimal Claude wrapper for the Nuclear diagnoser path.
+ * Inline rather than imported because this route was previously
+ * synchronous-template-only. Mirrors the retry behaviour of
+ * /api/scan/fix's anthropicCallWithRetry (jittered exp backoff,
+ * 6 attempts) without duplicating the full helper.
+ */
+async function askClaudeForDiagnosis(prompt: string): Promise<string> {
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
+  const body = JSON.stringify({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const doCall = () => new Promise<{ status: number; data: Record<string, unknown> }>((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.anthropic.com",
+      port: 443,
+      path: "/v1/messages",
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode || 0, data: JSON.parse(Buffer.concat(chunks).toString("utf-8")) }); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(60_000, () => { req.destroy(); reject(new Error("Anthropic request timed out")); });
+    req.write(body);
+    req.end();
+  });
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500)));
+    }
+    try {
+      const res = await doCall();
+      if (res.status === 200) {
+        const content = res.data.content as Array<{ type: string; text: string }>;
+        return content?.[0]?.text || "";
+      }
+      // Non-200 with non-retryable status — bail
+      if (res.status !== 429 && res.status < 500) {
+        throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(res.data).slice(0, 200)}`);
+      }
+    } catch (err) {
+      if (attempt === 3) throw err;
+    }
+  }
+  throw new Error("Anthropic API unreachable after retries");
+}
+
 export async function POST(req: NextRequest) {
-  let body: { hostname?: string; modules?: ModResult[] };
+  let body: {
+    hostname?: string;
+    modules?: ModResult[];
+    tier?: string;
+    scanContext?: { platform?: string; stack?: string[] };
+    scanStats?: { modulesPassed?: number; modulesTotal?: number; errors?: number; warnings?: number; checksPerformed?: number; durationMs?: number };
+  };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
@@ -259,6 +400,94 @@ export async function POST(req: NextRequest) {
   const hostname = body.hostname || "your-domain.com";
   const modules = body.modules || [];
 
+  // Phase 3.1 — Nuclear-tier diagnosis branch. When the caller's tier
+  // is `nuclear`, replace category-matched shell templates with
+  // Claude-driven evidence-tied diagnosis. The Quick / Full flows
+  // continue to use the legacy template generators below — they ship
+  // free with those tiers and their snippets are useful starting
+  // points for non-Nuclear customers.
+  if (body.tier === "nuclear" && ANTHROPIC_API_KEY) {
+    const findings: Array<{ detail: string; module: string; severity: string }> = [];
+    for (const mod of modules) {
+      if (mod.status === "passed") continue;
+      for (const detail of (mod.details || [])) {
+        findings.push({ detail, module: mod.name, severity: mod.status });
+      }
+    }
+    if (findings.length === 0) {
+      return NextResponse.json({
+        hostname,
+        tier: "nuclear",
+        categories: 0,
+        totalFixes: 0,
+        diagnoses: [],
+        summary: "Nuclear diagnoser: 0 findings (all modules passed)",
+        report: "## GateTest Nuclear Diagnosis Report\n\nNo error or warning findings to diagnose. All scanned modules passed.",
+      });
+    }
+    try {
+      // Run diagnosis + correlation in parallel — independent calls.
+      const [diagResult, corrResult] = await Promise.all([
+        diagnoseFindings({
+          findings,
+          hostname,
+          scanContext: body.scanContext,
+          askClaudeForDiagnosis,
+        }),
+        correlateFindings({
+          findings,
+          hostname,
+          askClaudeForCorrelation: askClaudeForDiagnosis, // same Claude wrapper, different prompt
+        }),
+      ]);
+      // Executive summary depends on diagnoses + chains, so it runs
+      // sequentially. Failures non-blocking — we still return the
+      // technical sections.
+      let execResult: Awaited<ReturnType<typeof composeExecutiveSummary>> | null = null;
+      try {
+        execResult = await composeExecutiveSummary({
+          scanStats: body.scanStats,
+          topFindings: findings.slice(0, 10),
+          chains: corrResult.chains,
+          hostname,
+          askClaudeForSummary: askClaudeForDiagnosis,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "executive summary failed";
+        execResult = { ok: false, sections: null, reason: message };
+      }
+      const execMarkdown = renderExecutiveSummary(execResult, { hostname });
+      return NextResponse.json({
+        hostname,
+        tier: "nuclear",
+        totalFindings: findings.length,
+        diagnosed: diagResult.diagnoses.filter((d) => d.ok).length,
+        skipped: diagResult.diagnoses.filter((d) => !d.ok).length,
+        chainsIdentified: corrResult.chains.length,
+        executiveSummary: execResult?.ok ? execResult.sections : null,
+        summary: `${diagResult.summary} · ${corrResult.summary}${execResult?.ok ? ' · executive summary generated' : ''}`,
+        diagnoses: diagResult.diagnoses,
+        chains: corrResult.chains,
+        // Order matters: executive first (CTO read), then technical detail.
+        report: execMarkdown
+          + "\n\n"
+          + renderDiagnosesReport(diagResult.diagnoses, diagResult.summary)
+          + "\n\n"
+          + renderCorrelationReport(corrResult),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "diagnosis failed";
+      return NextResponse.json({
+        error: `Nuclear diagnosis failed: ${message}`,
+        hostname,
+        tier: "nuclear",
+      }, { status: 500 });
+    }
+  }
+
+  // Quick / Full tier path — legacy templates. Kept because they're
+  // useful free starter snippets at lower tiers; the dishonest
+  // pattern only existed at Nuclear, which now branches above.
   const allFixes: Record<string, FixSnippet[]> = {};
 
   for (const mod of modules) {

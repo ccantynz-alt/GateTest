@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// Next 16 loads next.config.ts as an ESM module, so `__dirname` is
+// undefined. Recover it via import.meta.url so `path.resolve(__dirname)`
+// below resolves to this file's directory regardless of how the build
+// is invoked.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   turbopack: {

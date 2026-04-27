@@ -41,6 +41,31 @@ const TIERS: Record<string, ScanTier> = {
     description:
       "All 90 modules — security, supply chain, auth, CI hardening, AI review, and more. AI auto-fix PR included.",
   },
+  // Phase 2.3 — $199 Scan + Fix tier. Wired in once Phase 2.1 (pair-review),
+  // 2.2 (architecture annotator), and 2.4 (4/3 real-repo proofs validated:
+  // gatetest, Crontech, Gluecron, MarcoReid) shipped per the loosened Boss
+  // Rule. Same 90-module scan as Full, plus depth deliverables: pair-review
+  // critique on every fix and architecture-annotator design observations
+  // attached as separate PR comments.
+  scan_fix: {
+    name: "Scan + Fix",
+    priceInCents: 19900,
+    modules: "all-90+pair-review+architecture",
+    description:
+      "Everything in Full Scan, plus a second-Claude pair-review critique on every fix (correctness/completeness/readability/test-coverage rubric) and a separate architecture-annotator report on codebase-shape design observations. Same PR, deeper deliverable.",
+  },
+  // Phase 3.6 — $399 Nuclear tier. Wired in once 3.1 (Claude diagnoser),
+  // 3.2 (cross-finding correlator), 3.3 (mutation testing), 3.4 (chaos),
+  // 3.5 (executive summary), and 3.7 (4/3 real-repo proofs validated)
+  // all shipped. Stripe product already exists at $399 (Craig confirmed
+  // via screenshot earlier this session).
+  nuclear: {
+    name: "Nuclear",
+    priceInCents: 39900,
+    modules: "all-90+nuclear-stack",
+    description:
+      "Everything in Scan + Fix, PLUS: real Claude diagnosis on every finding (no templated snippets), cross-finding attack-chain correlation (textbook session-forgery / supply-chain vectors no per-finding scanner can see), mutation testing (proves your tests catch bugs), chaos / fuzz pass on entry points, and a CTO-readable executive summary report.",
+  },
 };
 
 function stripeRequest(
