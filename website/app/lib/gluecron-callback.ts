@@ -145,33 +145,40 @@ export async function postGluecronResult(
   }
 }
 
-/**
- * Adapter used by scan/run and scan/worker/tick. Converts a raw GateTest
- * summary object into a GluecronPayload and posts it. Never throws.
- */
-export async function sendGluecronCallback(args: {
+export interface SendGluecronCallbackArgs {
   repository: string;
   sha: string;
+  status?: GluecronStatus;
   ref?: string;
-  scanResult: unknown;
-}): Promise<GluecronResponse> {
-  const { repository, sha, ref, scanResult } = args;
-  const sr = scanResult as Record<string, unknown> | null | undefined;
-  const rawStatus = (typeof sr?.gateStatus === "string" ? sr.gateStatus : "").toLowerCase();
-  const status: GluecronStatus =
-    rawStatus === "passed" ? "passed"
-    : rawStatus === "blocked" ? "failed"
-    : "error";
-
-  return postGluecronResult({
-    repository,
-    sha,
-    ref,
-    status,
-    durationMs: typeof sr?.duration === "number" ? sr.duration : undefined,
-    details: sr ?? undefined,
-  });
+  pullRequestNumber?: number;
+  summary?: string;
+  details?: unknown;
+  durationMs?: number;
+  scanResult?: { error?: string; totalIssues?: number; status?: string } | null;
 }
+
+/**
+ * Alias used by scan/run and scan/worker/tick to send a Gluecron callback.
+ * Accepts a superset of GluecronPayload — extra fields (scanResult etc.) are
+ * stripped and status is derived from scanResult when not provided.
+ */
+export async function sendGluecronCallback(payload: SendGluecronCallbackArgs): Promise<GluecronResponse> {
+  const status: GluecronStatus =
+    payload.status ||
+    (payload.scanResult?.error ? "failed" : payload.scanResult?.status === "complete" ? "passed" : "failed");
+  const clean: GluecronPayload = {
+    repository: payload.repository,
+    sha: payload.sha,
+    status,
+    ref: payload.ref,
+    pullRequestNumber: payload.pullRequestNumber,
+    summary: payload.summary,
+    details: payload.details ?? payload.scanResult ?? undefined,
+    durationMs: payload.durationMs,
+  };
+  return postGluecronResult(clean);
+}
+
 
 /**
  * Liveness probe against GlueCron's unauthenticated /api/hooks/ping. Useful

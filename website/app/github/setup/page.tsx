@@ -21,7 +21,7 @@ export default function GitHubSetup() {
           </h1>
           <p className="text-lg text-muted max-w-xl mx-auto">
             One click. Every push and PR gets scanned automatically.
-            90 modules. Results posted right on your pull requests.
+            67 modules. Results posted right on your pull requests.
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export default function GitHubSetup() {
             {
               step: "2",
               title: "Push code or open a PR",
-              desc: "GateTest automatically scans with 90 quality modules.",
+              desc: "GateTest automatically scans with 67 quality modules.",
             },
             {
               step: "3",

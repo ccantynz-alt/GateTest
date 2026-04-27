@@ -139,7 +139,7 @@ export default function Modules() {
             What We Check
           </span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-4 mb-4 text-foreground">
-            90 modules. <span className="gradient-text">Every scan.</span>
+            67 modules. <span className="gradient-text">Every scan.</span>
           </h2>
           <p className="text-muted text-lg max-w-2xl mx-auto">
             Source code analysis, AI review, infrastructure hardening, supply chain,
@@ -178,14 +178,6 @@ export default function Modules() {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {comingSoonModules.map((mod) => (
-            <div key={mod.name} className="card p-4 opacity-60">
-              <span className="text-sm font-semibold text-foreground">{mod.name}</span>
-              <p className="text-xs text-muted mt-1">{mod.description}</p>
-            </div>
-          ))}
-        </div>
 
       </div>
     </section>

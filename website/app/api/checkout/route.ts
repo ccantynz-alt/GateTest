@@ -65,6 +65,7 @@ const TIERS: Record<string, ScanTier> = {
     modules: "all-90+nuclear-stack",
     description:
       "Everything in Scan + Fix, PLUS: real Claude diagnosis on every finding (no templated snippets), cross-finding attack-chain correlation (textbook session-forgery / supply-chain vectors no per-finding scanner can see), mutation testing (proves your tests catch bugs), chaos / fuzz pass on entry points, and a CTO-readable executive summary report.",
+
   },
 };
 

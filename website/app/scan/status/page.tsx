@@ -15,6 +15,12 @@ interface ModuleResult {
   skipped?: string;
 }
 
+interface FixableIssue {
+  file: string;
+  issue: string;
+  module: string;
+}
+
 interface ScanResult {
   status: "complete" | "failed" | "expired";
   modules: ModuleResult[];
@@ -27,6 +33,7 @@ interface ScanResult {
   tier?: string;
   error?: string;
   canRetry?: boolean;
+  fixableIssues?: FixableIssue[];
 }
 
 interface FixResult {
@@ -257,6 +264,7 @@ export default function ScanStatus() {
     runFix();
   }, [scanResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
   const isComplete = scanResult?.status === "complete";
   const isFailed = scanResult?.status === "failed";
   const isExpired = scanResult?.status === "expired";
@@ -485,6 +493,7 @@ export default function ScanStatus() {
                     <div>
                       <p className="text-sm font-semibold text-amber-800">Claude is reading your code and generating fixes…</p>
                       <p className="text-xs text-amber-700 mt-0.5">Typically 30&ndash;90 seconds. Each fix is re-scanned before commit.</p>
+
                     </div>
                   </div>
                 )}
@@ -546,6 +555,7 @@ export default function ScanStatus() {
                           Try again
                         </button>
                       </>
+
                     )}
                   </div>
                 )}
@@ -554,6 +564,7 @@ export default function ScanStatus() {
                   <p className="mt-4 text-xs text-muted">
                     Want every module scanned, not just 4? <Link href="/#pricing" className="text-accent font-medium hover:underline">Upgrade to Full Scan</Link> &mdash; AI fix included.
                   </p>
+
                 )}
               </div>
             )}
@@ -564,6 +575,7 @@ export default function ScanStatus() {
                   {params.tier === "quick"
                     ? "Passed the Quick Scan. Want to go deeper with all 90 modules?"
                     : "Clean across all 90 modules."}
+
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {params.tier === "quick" && (

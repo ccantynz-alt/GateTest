@@ -32,6 +32,7 @@ const scanPlans = [
     description:
       "Every module. Security, accessibility, SEO, AI code review, and more.",
     modules: "All 90 modules",
+
     features: [
       "Everything in Quick Scan",
       "Security (OWASP, XSS, SQLi, SSRF, ReDoS, TLS, cookies)",

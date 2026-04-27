@@ -461,34 +461,30 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const stats = dbData?.stats;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0f172a] via-[#0d1424] to-[#0a0f1e] relative">
-      {/* Soft brand accent so the panel reads as 'control room', not 'horror movie' */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,rgba(45,212,191,0.08),transparent_70%)]"
-      />
-      {/* Dark command center header */}
-      <div className="relative border-b border-white/8 px-6 py-5">
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-              <span className="text-white font-bold text-lg font-[var(--font-mono)]">G</span>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center shadow-sm">
+              <span className="text-white font-bold text-base font-[var(--font-mono)]">G</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">Command Center</h1>
-              <p className="text-xs text-white/40">
-                Signed in as <span className="font-mono text-emerald-400">{adminLogin}</span>
+              <h1 className="text-lg font-semibold text-gray-900">GateTest Admin</h1>
+              <p className="text-xs text-gray-500">
+                Signed in as <span className="font-mono text-emerald-600 font-medium">{adminLogin}</span>
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <a
               href="/admin/health"
-              className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors font-medium"
+              className="text-xs px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium"
             >
               Self-Test
             </a>
-            <Link href="/" className="text-xs text-white/30 hover:text-white/60 transition-colors">
+            <Link href="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
               &larr; Site
             </Link>
           </div>
@@ -499,38 +495,38 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Stats bar */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.total_scans}</p>
-              <p className="text-xs text-white/40">Total Scans</p>
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{stats.total_scans}</p>
+              <p className="text-xs text-gray-500">Total Scans</p>
             </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.total_customers}</p>
-              <p className="text-xs text-white/40">Customers</p>
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{stats.total_customers}</p>
+              <p className="text-xs text-gray-500">Customers</p>
             </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-400">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 text-center">
+              <p className="text-2xl font-bold text-emerald-600">
                 ${Number(stats.total_revenue || 0).toFixed(0)}
               </p>
-              <p className="text-xs text-white/40">Revenue</p>
+              <p className="text-xs text-gray-500">Revenue</p>
             </div>
-            <div className="rounded-xl bg-white/[0.04] border border-white/8 p-4 text-center">
-              <p className="text-2xl font-bold text-white">{stats.avg_score || 0}</p>
-              <p className="text-xs text-white/40">Avg Score</p>
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{stats.avg_score || 0}</p>
+              <p className="text-xs text-gray-500">Avg Score</p>
             </div>
           </div>
         )}
 
-        {/* Tab navigation — dark themed */}
-        <div className="flex gap-1 mb-6 border-b border-white/10 overflow-x-auto">
+        {/* Tab navigation */}
+        <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
           {(["scan", "server", "nuclear", "watchdog", "scans", "customers", "keys"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab
-                  ? "border-emerald-400 text-white"
-                  : "border-transparent text-white/40 hover:text-white/70"
-              } ${tab === "nuclear" ? "font-bold text-red-400" : ""}`}
+                  ? "border-emerald-600 text-gray-900"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              } ${tab === "nuclear" ? "font-bold text-red-600" : ""}`}
             >
               {tab === "scan"
                 ? "Repo Scan"
@@ -551,8 +547,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* DB init notice */}
         {dbData?.note && (
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 mb-6 border-l-4 border-l-yellow-400">
-            <p className="text-sm text-white/50">{dbData.note}</p>
+          <div className="rounded-xl bg-white border border-yellow-200 shadow-sm p-4 mb-6 border-l-4 border-l-yellow-400">
+            <p className="text-sm text-gray-600">{dbData.note}</p>
             <button onClick={initDb} className="btn-primary px-4 py-2 text-xs mt-2">
               Initialize Database
             </button>
@@ -562,19 +558,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: Run Scan */}
         {activeTab === "scan" && (
           <>
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-8">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 mb-6">
               <div className="grid sm:grid-cols-[1fr,auto,auto] gap-3">
                 <input
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm w-full"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm w-full"
                 />
                 <select
                   value={tier}
                   onChange={(e) => setTier(e.target.value)}
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:border-emerald-500 focus:outline-none text-sm"
                 >
                   <option value="quick">Quick (39 modules)</option>
                   <option value="full">Full (90 modules)</option>
@@ -619,18 +615,18 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
             {result && !scanning && (
               <div className="space-y-4">
-                <div className={`rounded-xl bg-white/[0.04] border ${totalIssues === 0 ? "border-emerald-500/50" : "border-emerald-500/30"} p-6`}>
+                <div className={`rounded-xl bg-white border shadow-sm p-6 ${totalIssues === 0 ? "border-emerald-300" : "border-amber-300"}`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold">
                         {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
                       </h2>
-                      <p className="text-sm text-white/50">
+                      <p className="text-sm text-gray-500">
                         {modules.length} modules &middot; {result.duration as number}ms
                       </p>
                     </div>
                     <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                      totalIssues === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                      totalIssues === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                     }`}>
                       {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
                     </span>
@@ -721,12 +717,12 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
                 {/* Manual guidance for unfixable issues */}
                 {guidance && guidance.length > 0 && (
-                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 mt-4 border-l-4 border-l-accent">
+                  <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 mt-4 border-l-4 border-l-accent">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-bold">Step-by-step fix guide ({guidance.length} issues)</h3>
                       <button
                         onClick={() => setGuidance(null)}
-                        className="text-white/50 hover:text-white text-lg px-2"
+                        className="text-gray-500 hover:text-gray-900 text-lg px-2"
                         aria-label="Close guide"
                       >
                         &times;
@@ -734,21 +730,21 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     </div>
                     <div className="space-y-4">
                       {guidance.map((g, i) => (
-                        <div key={i} className="rounded-lg border border-white/10 p-4 bg-white/[0.03]">
+                        <div key={i} className="rounded-lg border border-gray-200 p-4 bg-gray-50">
                           <div className="flex items-baseline gap-2 mb-1">
                             <span className="text-xs font-mono text-accent font-bold">{g.module}</span>
                             <h4 className="font-semibold text-sm">{g.title}</h4>
                           </div>
-                          <p className="text-xs text-white/50 mb-3">{g.why}</p>
+                          <p className="text-xs text-gray-500 mb-3">{g.why}</p>
                           <ol className="text-sm space-y-1 list-decimal list-inside">
                             {g.steps.map((s, j) => (
-                              <li key={j} className="text-white/80">{s}</li>
+                              <li key={j} className="text-gray-800">{s}</li>
                             ))}
                           </ol>
                           {g.commands && g.commands.length > 0 && (
                             <div className="mt-3 space-y-1">
                               {g.commands.map((cmd, j) => (
-                                <pre key={j} className="bg-[#0a0a12] text-emerald-400 text-xs font-mono p-2 rounded overflow-x-auto">{cmd}</pre>
+                                <pre key={j} className="bg-gray-900 text-emerald-400 text-xs font-mono p-2 rounded overflow-x-auto">{cmd}</pre>
                               ))}
                             </div>
                           )}
@@ -759,90 +755,120 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                 )}
 
                 {/* Fix result */}
-                {/* Live fix progress — shows during and after the fix run */}
-                {fileProgress.length > 0 && (
-                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
-                    {/* Header bar */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                      <div className="flex items-center gap-2">
-                        {fixing && <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />}
-                        <span className="text-sm font-semibold">
-                          {fixing ? "Fixing files with Claude AI..." : fixResult?.prUrl ? "✓ Pull request created" : "Fix complete"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-white/40">
-                        <span className="text-emerald-400">{fileProgress.filter((f) => f.status === "done").length} done</span>
-                        {fileProgress.filter((f) => f.status === "timeout" || f.status === "failed").length > 0 && (
-                          <span className="text-amber-400">{fileProgress.filter((f) => f.status === "timeout" || f.status === "failed").length} retry</span>
-                        )}
-                        <span>{fileProgress.length} total</span>
-                      </div>
-                    </div>
+                {fixing && (
+                  <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 text-center">
+                    <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                    <p className="font-medium">AI is reading your code and generating fixes...</p>
+                    <p className="text-xs text-gray-500 mt-1">This may take 30-60 seconds depending on the number of issues</p>
+                  </div>
+                )}
 
-                    {/* Progress bar */}
-                    {fixing && (
-                      <div className="h-1 bg-white/[0.06]">
-                        <div
-                          className="h-1 bg-accent transition-all duration-700"
-                          style={{ width: `${Math.round((fileProgress.filter((f) => f.status !== "pending").length / fileProgress.length) * 100)}%` }}
-                        />
-                      </div>
-                    )}
-
-                    {/* Per-file list */}
-                    <div className="divide-y divide-white/[0.04] max-h-72 overflow-y-auto">
-                      {fileProgress.map((fp) => (
-                        <div key={fp.file} className="flex items-start gap-3 px-4 py-2.5">
-                          <span className="mt-0.5 w-4 shrink-0 text-center text-xs">
-                            {fp.status === "done" && <span className="text-emerald-400">✓</span>}
-                            {fp.status === "fixing" && <span className="inline-block w-3 h-3 border border-accent border-t-transparent rounded-full animate-spin" />}
-                            {fp.status === "pending" && <span className="text-white/20">·</span>}
-                            {fp.status === "timeout" && <span className="text-amber-400">⏱</span>}
-                            {fp.status === "failed" && <span className="text-red-400">✗</span>}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-mono text-white/80 truncate block">{fp.file}</span>
-                            {fp.error && <span className="text-xs text-white/40 truncate block">{fp.error}</span>}
-                          </div>
-                          <span className={`text-xs shrink-0 font-mono ${
-                            fp.status === "done" ? "text-emerald-400" :
-                            fp.status === "fixing" ? "text-accent" :
-                            fp.status === "timeout" ? "text-amber-400" :
-                            fp.status === "failed" ? "text-red-400" : "text-white/20"
-                          }`}>
-                            {fp.status === "fixing" ? "fixing…" : fp.status}
-                          </span>
+                {fixResult && (
+                  <div className={`rounded-xl bg-white border shadow-sm p-5 ${fixResult.prUrl ? "border-emerald-300" : "border-gray-200"}`}>
+                    {fixResult.prUrl ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-success text-lg">&#10003;</span>
+                          <h3 className="font-bold">Pull Request Created</h3>
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Result footer */}
-                    {fixResult && !fixing && (
-                      <div className="px-4 py-3 border-t border-white/[0.06] flex flex-wrap items-center gap-3">
-                        {fixResult.prUrl && (
-                          <>
-                            <a href={fixResult.prUrl} target="_blank" rel="noopener noreferrer"
-                              className="btn-primary px-4 py-2 text-xs" style={{ background: "#059669" }}>
-                              View PR on GitHub →
-                            </a>
-                            <span className="text-xs text-white/40">
-                              Fixed {fixResult.issuesFixed} issues across {fixResult.filesFixed} files
-                            </span>
-                          </>
-                        )}
-                        {(fixResult.failedFiles?.length ?? 0) > 0 && (
-                          <>
-                            <button onClick={retryFailedFiles} disabled={fixing}
-                              className="btn-secondary px-4 py-2 text-xs font-semibold disabled:opacity-50">
-                              {fixing ? "Retrying…" : `Retry ${fixResult.failedFiles!.length} timed-out file${fixResult.failedFiles!.length !== 1 ? "s" : ""}`}
+                        <p className="text-sm text-gray-500 mb-3">
+                          Fixed <strong>{fixResult.issuesFixed} issues</strong> across {fixResult.filesFixed} files
+                          {totalIssues > (fixResult.issuesFixed || 0) && (
+                            <> — <strong>{totalIssues - (fixResult.issuesFixed || 0)} remaining</strong> need manual review (not auto-fixable)</>
+                          )}.
+                        </p>
+                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 mb-3">
+                          <strong>Important:</strong> Fixes are on a new branch &mdash; <strong>main still has all {totalIssues} issues</strong> until you merge the PR. Re-scanning main will show the same issues. After merging, re-scan to verify.
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href={fixResult.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary px-4 py-2 text-xs"
+                            style={{ background: "#059669" }}
+                          >
+                            View PR on GitHub &rarr;
+                          </a>
+                          {fixResult.prUrl && (
+                            <button
+                              onClick={() => {
+                                // Scan the fix branch to verify
+                                const prUrl = fixResult.prUrl || "";
+                                const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+                                if (match) {
+                                  window.open(
+                                    `${prUrl}/files`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="btn-secondary px-4 py-2 text-xs"
+                            >
+                              View Changes
                             </button>
-                            <span className="text-xs text-white/40">Files above marked ⏱ or ✗ will be retried</span>
-                          </>
+                          )}
+                        </div>
+                      </>
+                    ) : fixResult.status === "api_unavailable" ? (
+                      <>
+                        <p className="font-semibold text-warning text-sm">Anthropic API Temporarily Degraded</p>
+                        <p className="text-sm text-gray-500 mt-1">{fixResult.message}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-gray-500">
+                              <strong className="text-gray-900">{fixResult.failedFiles.length}</strong> file{fixResult.failedFiles.length !== 1 ? "s" : ""} queued for retry
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
                         )}
-                        {!fixResult.prUrl && !fixResult.failedFiles?.length && (
-                          <span className="text-xs text-white/50">{fixResult.message || fixResult.error || "No changes generated"}</span>
+                      </>
+                    ) : fixResult.status === "no_fixes" ? (
+                      <>
+                        <p className="text-sm text-gray-500">{fixResult.message || "No fixes could be generated"}</p>
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="text-xs text-gray-500">{fixResult.failedFiles.length} network failure{fixResult.failedFiles.length !== 1 ? "s" : ""}</p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-primary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
                         )}
-                      </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium text-accent">{fixResult.error || "Fix partially completed"}</p>
+                        {fixResult.errors && fixResult.errors.length > 0 && (
+                          <ul className="mt-2 text-xs text-gray-500 space-y-1">
+                            {fixResult.errors.map((e, i) => <li key={i}>&rarr; {e}</li>)}
+                          </ul>
+                        )}
+                        {fixResult.failedFiles && fixResult.failedFiles.length > 0 && (
+                          <div className="mt-3 flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                            <p className="text-xs text-gray-500">
+                              <strong className="text-gray-900">{fixResult.failedFiles.length}</strong> additional file{fixResult.failedFiles.length !== 1 ? "s" : ""} failed with API errors
+                            </p>
+                            <button
+                              onClick={retryFailedFiles}
+                              disabled={fixing}
+                              className="btn-secondary px-4 py-2 text-xs font-semibold"
+                            >
+                              {fixing ? "Retrying..." : "Retry Failed"}
+                            </button>
+                          </div>
+                        )}
+                      </>
+
                     )}
                   </div>
                 )}
@@ -851,24 +877,24 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   const status = mod.status as string;
                   const details = (mod.details as string[]) || [];
                   return (
-                    <div key={mod.name as string} className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${status === "failed" ? "border-l-4 border-l-red-500" : status === "passed" ? "border-l-4 border-l-emerald-500" : ""}`}>
+                    <div key={mod.name as string} className={`rounded-xl bg-white border shadow-sm p-4 ${status === "failed" ? "border-l-4 border-l-red-500 border-red-200" : status === "passed" ? "border-l-4 border-l-emerald-500 border-emerald-200" : "border-gray-200"}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <span className={`text-sm font-bold ${
-                            status === "passed" ? "text-emerald-400" : status === "failed" ? "text-red-400" : "text-white/40"
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            status === "passed" ? "bg-emerald-100 text-emerald-700" : status === "failed" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"
                           }`}>
                             {status === "passed" ? "PASS" : status === "failed" ? "FAIL" : "SKIP"}
                           </span>
-                          <span className="font-semibold text-sm">{mod.name as string}</span>
+                          <span className="font-semibold text-sm text-gray-900">{mod.name as string}</span>
                         </div>
-                        <div className="text-xs text-white/40">
+                        <div className="text-xs text-gray-400">
                           {mod.checks as number} checks &middot; {mod.issues as number} issues &middot; {mod.duration as number}ms
                         </div>
                       </div>
                       {details.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {details.map((d, i) => (
-                            <li key={i} className="text-xs text-white/50 font-mono pl-14">
+                            <li key={i} className="text-xs text-gray-600 font-mono pl-14">
                               &rarr; {d}
                             </li>
                           ))}
@@ -880,6 +906,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             )}
           </>
+        )}
+
+        {/* Tab: Watchdog */}
+        {activeTab === "watchdog" && (
+          <WatchdogPanel />
         )}
 
         {/* Tab: Server Scan */}
@@ -1099,43 +1130,43 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab: Recent Scans */}
         {activeTab === "scans" && (
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
+          <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
             {dbLoading ? (
-              <div className="p-8 text-center text-white/40">Loading...</div>
+              <div className="p-8 text-center text-gray-400">Loading...</div>
             ) : !dbData?.scans?.length ? (
-              <div className="p-8 text-center text-white/40">No scans recorded yet.</div>
+              <div className="p-8 text-center text-gray-400">No scans recorded yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Repo</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Tier</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Score</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Customer</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Date</th>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Repo</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Tier</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Status</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Score</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Customer</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dbData.scans.map((scan) => (
-                      <tr key={scan.id} className="border-b border-white/[0.06] last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs text-white/70 max-w-[200px] truncate">
+                      <tr key={scan.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[200px] truncate">
                           {scan.repo_url?.replace("https://github.com/", "") || "-"}
                         </td>
-                        <td className="px-4 py-3 text-white/70">{scan.tier}</td>
+                        <td className="px-4 py-3 text-gray-700">{scan.tier}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                            scan.status === "completed" ? "bg-emerald-500/20 text-emerald-400" :
-                            scan.status === "failed" ? "bg-red-500/20 text-red-400" :
-                            "bg-amber-500/20 text-amber-400"
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            scan.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                            scan.status === "failed" ? "bg-red-100 text-red-700" :
+                            "bg-amber-100 text-amber-700"
                           }`}>
                             {scan.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-white/70">{scan.score ?? "-"}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">{scan.customer_email || "-"}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">
+                        <td className="px-4 py-3 text-gray-700 font-medium">{scan.score ?? "-"}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{scan.customer_email || "-"}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
                           {scan.created_at ? new Date(scan.created_at).toLocaleDateString() : "-"}
                         </td>
                       </tr>
@@ -1150,9 +1181,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         {/* Tab: API Keys */}
         {activeTab === "keys" && (
           <div className="space-y-6">
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
               <h2 className="text-lg font-bold mb-1">Issue an API key</h2>
-              <p className="text-xs text-white/50 mb-4">
+              <p className="text-xs text-gray-500 mb-4">
                 For external platforms calling <code className="font-mono">POST /api/v1/scan</code>.
                 The plaintext key is shown ONCE after creation — copy it immediately.
               </p>
@@ -1162,19 +1193,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   value={keyName}
                   onChange={(e) => setKeyName(e.target.value)}
                   placeholder="Key name (e.g. Platform A prod)"
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm"
                 />
                 <input
                   type="email"
                   value={keyCustomer}
                   onChange={(e) => setKeyCustomer(e.target.value)}
                   placeholder="customer@example.com (optional)"
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm"
                 />
                 <select
                   value={keyTier}
                   onChange={(e) => setKeyTier(e.target.value as "quick" | "full")}
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm"
                 >
                   <option value="quick">quick</option>
                   <option value="full">full</option>
@@ -1184,7 +1215,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   value={keyRate}
                   onChange={(e) => setKeyRate(Math.max(1, Number(e.target.value) || 60))}
                   placeholder="60"
-                  className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm w-24"
+                  className="px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm w-24"
                 />
                 <button onClick={createKey} className="btn-primary px-6 py-3 text-sm">
                   Create Key
@@ -1193,16 +1224,16 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               {keyError && <p className="text-danger text-sm mt-3">{keyError}</p>}
 
               {newKey && (
-                <div className="mt-4 p-4 border-l-4 border-l-emerald-500 bg-emerald-900/20 rounded">
-                  <p className="text-sm font-bold text-emerald-300 mb-1">
+                <div className="mt-4 p-4 border-l-4 border-l-emerald-500 bg-emerald-50 rounded">
+                  <p className="text-sm font-bold text-emerald-700 mb-1">
                     Key created — copy it now, it will not be shown again.
                   </p>
-                  <p className="text-xs text-emerald-300 mb-2">
+                  <p className="text-xs text-emerald-700 mb-2">
                     <strong>{newKey.name}</strong> · tier {newKey.tier_allowed} ·{" "}
                     {newKey.rate_limit_per_hour}/hr
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 font-mono text-xs bg-white/5 border border-white/10 rounded px-3 py-2 break-all text-white/80">
+                    <code className="flex-1 font-mono text-xs bg-white border border-gray-200 rounded px-3 py-2 break-all text-gray-800">
                       {newKey.plaintext_key}
                     </code>
                     <button
@@ -1218,48 +1249,48 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               )}
             </div>
 
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Name</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Prefix</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Tier</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Rate/hr</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Calls</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Status</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Last used</th>
-                      <th className="text-right px-4 py-3 font-medium text-white/40">Action</th>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Name</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Prefix</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Tier</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Rate/hr</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Calls</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Status</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Last used</th>
+                      <th className="text-right px-4 py-3 font-medium text-gray-400">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {apiKeys === null ? (
                       <tr>
-                        <td colSpan={8} className="p-6 text-center text-white/40">Loading...</td>
+                        <td colSpan={8} className="p-6 text-center text-gray-400">Loading...</td>
                       </tr>
                     ) : apiKeys.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="p-6 text-center text-white/40">
+                        <td colSpan={8} className="p-6 text-center text-gray-400">
                           No keys issued yet. Create one above.
                         </td>
                       </tr>
                     ) : (
                       apiKeys.map((k) => (
-                        <tr key={k.id} className="border-b border-white/[0.06] last:border-0">
-                          <td className="px-4 py-3 text-white/70">{k.name}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-white/70">{k.key_prefix}…</td>
-                          <td className="px-4 py-3 text-white/70">{k.tier_allowed}</td>
-                          <td className="px-4 py-3 text-white/70">{k.rate_limit_per_hour}</td>
-                          <td className="px-4 py-3 text-white/70">{k.total_calls}</td>
+                        <tr key={k.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-900 font-medium">{k.name}</td>
+                          <td className="px-4 py-3 font-mono text-xs text-gray-600">{k.key_prefix}…</td>
+                          <td className="px-4 py-3 text-gray-700">{k.tier_allowed}</td>
+                          <td className="px-4 py-3 text-gray-700">{k.rate_limit_per_hour}</td>
+                          <td className="px-4 py-3 text-gray-700">{k.total_calls}</td>
                           <td className="px-4 py-3">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
-                              k.active ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-white/40"
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              k.active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
                             }`}>
                               {k.active ? "active" : "revoked"}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-xs text-white/40">
+                          <td className="px-4 py-3 text-xs text-gray-400">
                             {k.last_used_at ? new Date(k.last_used_at).toLocaleString() : "never"}
                           </td>
                           <td className="px-4 py-3 text-right">
@@ -1280,7 +1311,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
               </div>
             </div>
 
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 text-xs text-white/50">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 text-xs text-gray-500">
               Docs: <a href="/docs/api" className="text-accent hover:underline">/docs/api</a> ·
               Endpoint: <code className="font-mono">POST /api/v1/scan</code>
             </div>
@@ -1289,31 +1320,31 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
 
         {/* Tab: Customers */}
         {activeTab === "customers" && (
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] overflow-hidden">
+          <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
             {dbLoading ? (
-              <div className="p-8 text-center text-white/40">Loading...</div>
+              <div className="p-8 text-center text-gray-400">Loading...</div>
             ) : !dbData?.customers?.length ? (
-              <div className="p-8 text-center text-white/40">No customers yet.</div>
+              <div className="p-8 text-center text-gray-400">No customers yet.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/[0.06] bg-white/[0.04]">
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Email</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">GitHub</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Scans</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Spent</th>
-                      <th className="text-left px-4 py-3 font-medium text-white/40">Joined</th>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Email</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">GitHub</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Scans</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Spent</th>
+                      <th className="text-left px-4 py-3 font-medium text-gray-400">Joined</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dbData.customers.map((c) => (
-                      <tr key={c.id} className="border-b border-white/[0.06] last:border-0">
-                        <td className="px-4 py-3 text-xs text-white/70">{c.email}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-white/70">{c.github_login || "-"}</td>
-                        <td className="px-4 py-3 text-white/70">{c.total_scans}</td>
-                        <td className="px-4 py-3 text-white/70">${Number(c.total_spent_usd || 0).toFixed(0)}</td>
-                        <td className="px-4 py-3 text-xs text-white/40">
+                      <tr key={c.id} className="border-b border-gray-100 last:border-0">
+                        <td className="px-4 py-3 text-xs text-gray-700">{c.email}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-700">{c.github_login || "-"}</td>
+                        <td className="px-4 py-3 text-gray-700">{c.total_scans}</td>
+                        <td className="px-4 py-3 text-gray-700">${Number(c.total_spent_usd || 0).toFixed(0)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400">
                           {c.created_at ? new Date(c.created_at).toLocaleDateString() : "-"}
                         </td>
                       </tr>
@@ -1325,6 +1356,329 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Watchdog Panel — multi-repo CI health + batch scan-and-fix
+// ---------------------------------------------------------------------------
+
+interface RepoInfo {
+  id: number;
+  full_name: string;
+  name: string;
+  html_url: string;
+  private: boolean;
+  pushed_at: string;
+  default_branch: string;
+  latestRun: { conclusion: string | null; status: string; created_at: string; html_url: string; head_branch: string; name: string } | null;
+  ciStatus: "passing" | "failing" | "pending" | "none";
+}
+
+interface RepoScanState {
+  status: "idle" | "scanning" | "fixing" | "done" | "error";
+  prUrl?: string;
+  error?: string;
+  issues?: number;
+}
+
+function WatchdogPanel() {
+  const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"all" | "failing">("failing");
+  const [scanStates, setScanStates] = useState<Record<string, RepoScanState>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/repos");
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error || `HTTP ${res.status}`);
+        return;
+      }
+      const d = await res.json();
+      setRepos(d.repos || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load repos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function scanAndFix(repo: RepoInfo) {
+    setScanStates((s) => ({ ...s, [repo.full_name]: { status: "scanning" } }));
+    try {
+      // Step 1: scan
+      const scanRes = await fetch("/api/scan/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: repo.html_url, tier: "full" }),
+      });
+      const scanData = await scanRes.json();
+      const issues = (scanData.totalIssues as number) || 0;
+
+      if (issues === 0) {
+        setScanStates((s) => ({ ...s, [repo.full_name]: { status: "done", issues: 0 } }));
+        return;
+      }
+
+      // Step 2: fix
+      setScanStates((s) => ({ ...s, [repo.full_name]: { status: "fixing", issues } }));
+      const fixableIssues = (scanData.fixableIssues as Array<{ file: string; issue: string; module: string }>) || [];
+
+      if (fixableIssues.length === 0) {
+        setScanStates((s) => ({ ...s, [repo.full_name]: { status: "done", issues, error: "No auto-fixable issues" } }));
+        return;
+      }
+
+      const fixRes = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: repo.html_url, issues: fixableIssues }),
+      });
+      const fixData = await fixRes.json();
+      setScanStates((s) => ({
+        ...s,
+        [repo.full_name]: {
+          status: "done",
+          issues,
+          prUrl: fixData.prUrl,
+          error: fixData.prUrl ? undefined : (fixData.error || fixData.message),
+        },
+      }));
+    } catch (err) {
+      setScanStates((s) => ({
+        ...s,
+        [repo.full_name]: { status: "error", error: err instanceof Error ? err.message : "Failed" },
+      }));
+    }
+  }
+
+  async function fixAllFailing() {
+    const failing = repos.filter((r) => r.ciStatus === "failing");
+    setBatchRunning(true);
+    for (const repo of failing) {
+      const current = scanStates[repo.full_name];
+      if (current?.status === "scanning" || current?.status === "fixing") continue;
+      await scanAndFix(repo);
+    }
+    setBatchRunning(false);
+  }
+
+  const displayed = filter === "failing" ? repos.filter((r) => r.ciStatus === "failing") : repos;
+  const failCount = repos.filter((r) => r.ciStatus === "failing").length;
+  const passCount = repos.filter((r) => r.ciStatus === "passing").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Header bar */}
+      <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">CI Watchdog</h2>
+            <p className="text-xs text-gray-500 mt-0.5">All your repos. Failing ones first. GateTest fixes them.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={load} disabled={loading} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
+              {loading ? "Loading…" : "Refresh"}
+            </button>
+            {failCount > 0 && (
+              <button
+                onClick={fixAllFailing}
+                disabled={batchRunning || loading}
+                className="btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                style={{ background: "#059669" }}
+              >
+                {batchRunning ? "Fixing…" : `⚡ Fix All ${failCount} Failing`}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Stats row */}
+        {!loading && repos.length > 0 && (
+          <div className="flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-400" />
+              <span className="text-gray-700"><strong className="text-red-600">{failCount}</strong> failing</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-gray-700"><strong className="text-emerald-600">{passCount}</strong> passing</span>
+            </span>
+            <span className="text-gray-400">{repos.length} total repos</span>
+          </div>
+        )}
+      </div>
+
+      {/* Filter tabs */}
+      {!loading && repos.length > 0 && (
+        <div className="flex gap-1">
+          {(["failing", "all"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-4 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                filter === f
+                  ? "bg-gray-200 text-gray-900"
+                  : "text-gray-400 hover:text-gray-700"
+              }`}
+            >
+              {f === "failing" ? `Failing (${failCount})` : `All repos (${repos.length})`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700">
+          <strong>Could not load repos:</strong> {error}
+          {error.includes("token") && (
+            <p className="mt-2 text-xs text-red-700/70">Set <code className="font-mono">GATETEST_GITHUB_TOKEN</code> or <code className="font-mono">GITHUB_TOKEN</code> in your Vercel environment variables.</p>
+          )}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-gray-200" />
+                <div className="h-4 bg-gray-200 rounded w-48" />
+                <div className="ml-auto h-3 bg-gray-200 rounded w-20" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Repo list */}
+      {!loading && displayed.length === 0 && !error && (
+        <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-8 text-center text-gray-400">
+          {filter === "failing" ? "No failing workflows — all green! 🎉" : "No repos found."}
+        </div>
+      )}
+
+      {!loading && displayed.map((repo) => {
+        const state = scanStates[repo.full_name];
+        const isWorking = state?.status === "scanning" || state?.status === "fixing";
+
+        const ciDot =
+          repo.ciStatus === "failing" ? "bg-red-400" :
+          repo.ciStatus === "passing" ? "bg-emerald-400" :
+          repo.ciStatus === "pending" ? "bg-amber-400 animate-pulse" :
+          "bg-gray-300";
+
+        const ciLabel =
+          repo.ciStatus === "failing" ? "FAILING" :
+          repo.ciStatus === "passing" ? "PASSING" :
+          repo.ciStatus === "pending" ? "PENDING" : "NO CI";
+
+        const ciColor =
+          repo.ciStatus === "failing" ? "text-red-600" :
+          repo.ciStatus === "passing" ? "text-emerald-600" :
+          repo.ciStatus === "pending" ? "text-amber-600" : "text-gray-400";
+
+        return (
+          <div
+            key={repo.id}
+            className={`rounded-xl bg-white border shadow-sm p-4 ${
+              repo.ciStatus === "failing" ? "border-l-4 border-l-red-500 border-red-200" :
+              repo.ciStatus === "passing" ? "border-l-4 border-l-emerald-500 border-emerald-200" : "border-gray-200"
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Status dot */}
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${ciDot}`} />
+
+              {/* Repo name */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href={repo.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-sm font-semibold text-gray-900 hover:text-emerald-700 transition-colors"
+                  >
+                    {repo.full_name}
+                  </a>
+                  {repo.private && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">private</span>
+                  )}
+                  <span className={`text-[11px] font-bold font-mono ${ciColor}`}>{ciLabel}</span>
+                </div>
+                {repo.latestRun && (
+                  <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>{repo.latestRun.name}</span>
+                    <span>·</span>
+                    <span>{repo.latestRun.head_branch}</span>
+                    <span>·</span>
+                    <span>{new Date(repo.latestRun.created_at).toLocaleDateString()}</span>
+                    <a href={repo.latestRun.html_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      view run →
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Action area */}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Scan state feedback */}
+                {state?.status === "scanning" && (
+                  <span className="text-xs text-teal-700 font-medium animate-pulse">Scanning…</span>
+                )}
+                {state?.status === "fixing" && (
+                  <span className="text-xs text-emerald-600 animate-pulse font-medium">AI fixing {state.issues} issues…</span>
+                )}
+                {state?.status === "done" && state.prUrl && (
+                  <a
+                    href={state.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors font-medium"
+                  >
+                    View Fix PR →
+                  </a>
+                )}
+                {state?.status === "done" && !state.prUrl && state.issues === 0 && (
+                  <span className="text-xs text-emerald-600 font-medium">✓ No issues found</span>
+                )}
+                {state?.status === "done" && !state.prUrl && (state.issues || 0) > 0 && (
+                  <span className="text-xs text-gray-400">{state.error || "No auto-fixable issues"}</span>
+                )}
+                {state?.status === "error" && (
+                  <span className="text-xs text-red-600">{state.error}</span>
+                )}
+
+                {/* Scan button */}
+                {!isWorking && (
+                  <button
+                    onClick={() => scanAndFix(repo)}
+                    disabled={isWorking}
+                    className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+                  >
+                    {state?.status === "done" ? "Re-scan" : "Scan & Fix"}
+                  </button>
+                )}
+
+                {isWorking && (
+                  <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1389,8 +1743,8 @@ function ServerScanPanel() {
 
   return (
     <>
-      <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-8">
-        <p className="text-sm text-white/50 mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
+      <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 mb-8">
+        <p className="text-sm text-gray-500 mb-3">Scan a live URL for SSL, security headers, DNS, and performance.</p>
         <div className="flex gap-3">
           <input
             type="url"
@@ -1398,7 +1752,7 @@ function ServerScanPanel() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") runServerScan(); }}
             placeholder="https://example.com"
-            className="flex-1 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm"
           />
           <button onClick={runServerScan} disabled={scanning} className="btn-primary px-6 py-3 text-sm disabled:opacity-50">
             {scanning ? "Scanning..." : "Scan Server"}
@@ -1408,26 +1762,26 @@ function ServerScanPanel() {
       </div>
 
       {scanning && (
-        <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-8 text-center">
+        <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-8 text-center">
           <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-white/50">Checking SSL, headers, DNS, performance...</p>
+          <p className="text-gray-500">Checking SSL, headers, DNS, performance...</p>
         </div>
       )}
 
       {result && !scanning && (
         <div className="space-y-4">
-          <div className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 ${totalIssues === 0 ? "border-l-4 border-l-emerald-500" : "border-l-4 border-l-amber-500"}`}>
+          <div className={`rounded-xl bg-white border border-gray-200 shadow-sm p-6 ${totalIssues === 0 ? "border-l-4 border-l-emerald-500" : "border-l-4 border-l-amber-500"}`}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">
                   {totalIssues === 0 ? "All Clear" : `${totalIssues} Issues Found`}
                 </h2>
-                <p className="text-sm text-white/50">
+                <p className="text-sm text-gray-500">
                   {result.hostname as string} &middot; {modules.length} modules &middot; {result.duration as number}ms
                 </p>
               </div>
               <span className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                totalIssues === 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                totalIssues === 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
               }`}>
                 {totalIssues === 0 ? "PASSED" : `${totalIssues} ISSUES`}
               </span>
@@ -1454,7 +1808,7 @@ function ServerScanPanel() {
 
           {/* Generated fixes — ready-to-paste configs */}
           {fixes && Object.keys(fixes).length > 0 && (
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 border-l-4 border-l-accent">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 border-l-4 border-l-accent">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-accent text-lg">⚡</span>
                 <h3 className="font-bold">Ready-to-paste fixes</h3>
@@ -1462,16 +1816,16 @@ function ServerScanPanel() {
               <div className="space-y-5">
                 {Object.entries(fixes).map(([category, fixList]) => (
                   <div key={category}>
-                    <h4 className="font-semibold text-sm text-white/80 mb-2">{category}</h4>
+                    <h4 className="font-semibold text-sm text-gray-800 mb-2">{category}</h4>
                     <div className="space-y-3">
                       {fixList.map((f, idx) => {
                         const id = `${category}-${idx}`;
                         return (
-                          <div key={id} className="rounded-lg border border-white/10 bg-white/[0.03] overflow-hidden">
-                            <div className="flex items-center justify-between px-3 py-2 bg-white/[0.04] border-b border-white/10">
+                          <div key={id} className="rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
                               <div>
-                                <div className="text-xs font-bold text-white/80">{f.platform}</div>
-                                <div className="text-xs text-white/50">{f.title}</div>
+                                <div className="text-xs font-bold text-gray-800">{f.platform}</div>
+                                <div className="text-xs text-gray-500">{f.title}</div>
                               </div>
                               <button
                                 onClick={() => copyCode(f.code, id)}
@@ -1480,8 +1834,8 @@ function ServerScanPanel() {
                                 {copiedCode === id ? "Copied!" : "Copy"}
                               </button>
                             </div>
-                            <pre className="p-3 text-xs font-mono text-white/70 overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
-                            <p className="px-3 py-2 bg-amber-900/30 text-xs text-amber-300 border-t border-amber-500/30">
+                            <pre className="p-3 text-xs font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                            <p className="px-3 py-2 bg-amber-50 text-xs text-amber-700 border-t border-amber-200">
                               {f.instructions}
                             </p>
                           </div>
@@ -1495,8 +1849,8 @@ function ServerScanPanel() {
           )}
 
           {fixes && Object.keys(fixes).length === 0 && (
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 border-l-4 border-l-amber-500">
-              <p className="text-sm text-white/50">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 border-l-4 border-l-amber-500">
+              <p className="text-sm text-gray-500">
                 No automated fixes available for these specific issues. They require manual review or infrastructure access.
               </p>
             </div>
@@ -1506,15 +1860,15 @@ function ServerScanPanel() {
             const status = mod.status as string;
             const details = (mod.details as string[]) || [];
             return (
-              <div key={mod.name as string} className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${
+              <div key={mod.name as string} className={`rounded-xl bg-white border border-gray-200 shadow-sm p-4 ${
                 status === "passed" ? "border-l-4 border-l-emerald-500" :
                 status === "warning" ? "border-l-4 border-l-amber-500" :
                 "border-l-4 border-l-red-500"
               }`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-sm text-white/80">{mod.label as string || mod.name as string}</span>
+                  <span className="font-semibold text-sm text-gray-800">{mod.label as string || mod.name as string}</span>
                   <span className={`text-xs font-bold ${
-                    status === "passed" ? "text-emerald-400" : status === "warning" ? "text-amber-400" : "text-red-400"
+                    status === "passed" ? "text-emerald-600" : status === "warning" ? "text-amber-600" : "text-red-600"
                   }`}>
                     {status === "passed" ? "PASS" : status === "warning" ? "WARN" : "FAIL"}
                   </span>
@@ -1523,10 +1877,10 @@ function ServerScanPanel() {
                   <ul className="space-y-1">
                     {details.map((d, i) => (
                       <li key={i} className={`text-xs font-mono ${
-                        d.startsWith("error") ? "text-red-400" :
-                        d.startsWith("warning") ? "text-amber-400" :
-                        d.startsWith("pass") ? "text-emerald-400" :
-                        "text-white/50"
+                        d.startsWith("error") ? "text-red-600" :
+                        d.startsWith("warning") ? "text-amber-600" :
+                        d.startsWith("pass") ? "text-emerald-600" :
+                        "text-gray-500"
                       }`}>
                         {d}
                       </li>
@@ -1547,6 +1901,63 @@ interface NuclearFinding {
   severity: "error" | "warning" | "info" | "pass";
   title: string;
   detail: string;
+}
+
+function NuclearFixSnippets({ fixResult }: { fixResult: Record<string, unknown> }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const fixes = fixResult.fixes as Record<string, ServerFix[]> || {};
+  const total = (fixResult.totalFixes as number) || 0;
+  const cats = (fixResult.categories as number) || 0;
+
+  function copySnippet(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-emerald-600 text-lg font-bold">⚡</span>
+        <h3 className="font-bold text-gray-900">
+          {total} ready-to-paste fix{total !== 1 ? "es" : ""} across {cats} categor{cats !== 1 ? "ies" : "y"}
+        </h3>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">Copy each snippet and apply it to your server config. No SSH credentials needed — paste and deploy.</p>
+      <div className="space-y-5">
+        {Object.entries(fixes).map(([category, fixList]) => (
+          <div key={category}>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">{category}</h4>
+            <div className="space-y-3">
+              {fixList.map((f, idx) => {
+                const id = `nuclear-${category}-${idx}`;
+                return (
+                  <div key={id} className="rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                      <div>
+                        <span className="text-xs font-bold text-gray-800">{f.platform}</span>
+                        <span className="text-xs text-gray-500 ml-2">{f.title}</span>
+                      </div>
+                      <button
+                        onClick={() => copySnippet(f.code, id)}
+                        className="text-xs px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors"
+                      >
+                        {copiedId === id ? "✓ Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <pre className="p-3 text-xs font-mono text-gray-700 bg-white overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                    <p className="px-3 py-2 bg-amber-50 text-xs text-amber-700 border-t border-amber-200">
+                      {f.instructions}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function NuclearScanPanel() {
@@ -1637,12 +2048,12 @@ function NuclearScanPanel() {
 
   return (
     <>
-      <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-6 border-l-4 border-l-red-500">
+      <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 mb-6 border-l-4 border-l-red-500">
         <div className="flex items-start gap-3 mb-3">
           <span className="text-2xl">☢</span>
           <div>
             <h3 className="font-bold text-lg">Nuclear Scan</h3>
-            <p className="text-sm text-white/50">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
+            <p className="text-sm text-gray-500">Find <strong>anything</strong> and <strong>everything</strong> wrong with a domain. Full stack diagnosis — DNS, ports, SSL, headers, performance, availability, redirects, email auth. Root-cause pinpointed automatically.</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -1652,7 +2063,7 @@ function NuclearScanPanel() {
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") runNuclear(); }}
             placeholder="https://crontech.ai"
-            className="flex-1 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder:text-white/30 focus:border-emerald-500/50 focus:outline-none text-sm"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 text-sm"
           />
           <button
             onClick={runNuclear}
@@ -1667,39 +2078,39 @@ function NuclearScanPanel() {
       </div>
 
       {scanning && (
-        <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-8 text-center">
+        <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-8 text-center">
           <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="font-bold">Running full-stack diagnosis...</p>
-          <p className="text-xs text-white/50 mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
+          <p className="text-xs text-gray-500 mt-1">DNS · Ports · SSL · Headers · Performance · Redirects · Email</p>
         </div>
       )}
 
       {result && !scanning && (
         <>
           {/* Diagnosis */}
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-6 mb-4 border-l-4 border-l-red-500">
+          <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6 mb-4 border-l-4 border-l-red-500">
             <h3 className="font-bold mb-3">Diagnosis</h3>
             {diagnosis.map((d, i) => (
-              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-400 font-bold" : d.startsWith("FIX") ? "text-accent font-medium" : "text-white/80"}`}>
+              <p key={i} className={`text-sm mb-1 ${d.startsWith("ROOT CAUSE") ? "text-red-700 font-bold" : d.startsWith("FIX") ? "text-emerald-700 font-medium" : "text-gray-800"}`}>
                 {d}
               </p>
             ))}
             <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-              <div className="p-2 bg-red-500/10 rounded border border-red-500/20">
-                <div className="text-2xl font-bold text-red-400">{summary?.errors ?? 0}</div>
-                <div className="text-xs text-white/40">Errors</div>
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <div className="text-2xl font-bold text-red-600">{summary?.errors ?? 0}</div>
+                <div className="text-xs text-gray-500">Errors</div>
               </div>
-              <div className="p-2 bg-amber-500/10 rounded border border-amber-500/20">
-                <div className="text-2xl font-bold text-amber-400">{summary?.warnings ?? 0}</div>
-                <div className="text-xs text-white/40">Warnings</div>
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="text-2xl font-bold text-amber-600">{summary?.warnings ?? 0}</div>
+                <div className="text-xs text-gray-500">Warnings</div>
               </div>
-              <div className="p-2 bg-emerald-500/10 rounded border border-emerald-500/20">
-                <div className="text-2xl font-bold text-emerald-400">{summary?.passes ?? 0}</div>
-                <div className="text-xs text-white/40">Passes</div>
+              <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                <div className="text-2xl font-bold text-emerald-600">{summary?.passes ?? 0}</div>
+                <div className="text-xs text-gray-500">Passes</div>
               </div>
-              <div className="p-2 bg-white/[0.04] rounded border border-white/10">
-                <div className="text-2xl font-bold text-white/70">{summary?.total ?? 0}</div>
-                <div className="text-xs text-white/40">Total Checks</div>
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-2xl font-bold text-gray-700">{summary?.total ?? 0}</div>
+                <div className="text-xs text-gray-500">Total Checks</div>
               </div>
             </div>
             {(summary?.errors ?? 0) + (summary?.warnings ?? 0) > 0 && (
@@ -1712,7 +2123,7 @@ function NuclearScanPanel() {
                 >
                   {fixing ? "Generating fix plan..." : "⚡ Fix Everything Automatically"}
                 </button>
-                <p className="text-xs text-white/40 text-center mt-2">
+                <p className="text-xs text-gray-400 text-center mt-2">
                   Generates ready-to-apply fixes for every issue found. Code fixes go to a PR; config fixes produce Vercel/Nginx/DNS snippets.
                 </p>
               </div>
@@ -1721,13 +2132,13 @@ function NuclearScanPanel() {
 
           {/* Fixes */}
           {fixResult && (
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5 mb-4 border-l-4 border-l-accent">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 mb-4">
               {/* SSH auto-heal result */}
               {(fixResult as Record<string, unknown>).actions ? (
                 <>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xl">{(fixResult as Record<string, unknown>).status === "healed" ? "✅" : "⚡"}</span>
-                    <h3 className="font-bold">
+                    <h3 className="font-bold text-gray-900">
                       {(fixResult as Record<string, unknown>).status === "healed"
                         ? "Server Healed"
                         : (fixResult as Record<string, unknown>).status === "partial"
@@ -1735,49 +2146,43 @@ function NuclearScanPanel() {
                           : "Heal Attempted"}
                     </h3>
                   </div>
-                  <p className="text-sm text-white/50 mb-3">
+                  <p className="text-sm text-gray-500 mb-3">
                     {(fixResult as Record<string, unknown>).message as string}
                   </p>
                   <div className="space-y-2">
                     {((fixResult as Record<string, unknown>).actions as Array<{ issue: string; command: string; output: string; status: string }>).map((a, i) => (
                       <div key={i} className={`rounded-lg border p-3 text-xs ${
-                        a.status === "fixed" ? "border-emerald-500/30 bg-emerald-900/20" : "border-red-500/30 bg-red-900/20"
+                        a.status === "fixed" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"
                       }`}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={a.status === "fixed" ? "text-emerald-400" : "text-red-400"}>
+                          <span className={a.status === "fixed" ? "text-emerald-600" : "text-red-600"}>
                             {a.status === "fixed" ? "✓" : "✗"}
                           </span>
-                          <span className="font-medium text-white/80">{a.issue}</span>
+                          <span className="font-medium text-gray-800">{a.issue}</span>
                         </div>
-                        <pre className="font-mono text-xs bg-black/20 text-white/60 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
+                        <pre className="font-mono text-xs bg-gray-900 text-gray-300 p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">{a.output || "(no output)"}</pre>
                       </div>
                     ))}
                   </div>
                 </>
               ) : (fixResult as Record<string, unknown>).fixes && Object.keys((fixResult as Record<string, unknown>).fixes as Record<string, unknown>).length > 0 ? (
-                <>
-                  <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
-                  <p className="text-sm text-white/50 mb-3">
-                    {((fixResult as Record<string, unknown>).totalFixes as number) || 0} fixes across {((fixResult as Record<string, unknown>).categories as number) || 0} categories.
-                  </p>
-                  <details className="text-xs font-mono bg-white/[0.03] border border-white/10 p-3 rounded max-h-96 overflow-auto">
-                    <summary className="cursor-pointer font-semibold text-white/70">View all fix snippets</summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-white/60">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
-                  </details>
-                </>
+                <NuclearFixSnippets fixResult={fixResult as Record<string, unknown>} />
               ) : (
                 <div>
-                  <h3 className="font-bold mb-2">⚡ Fix attempted</h3>
-                  <p className="text-sm text-white/50">
-                    To enable autonomous server repair, set these in Vercel env vars:
-                  </p>
-                  <ul className="text-xs font-mono text-white/50 mt-2 space-y-1">
-                    <li>GATETEST_SSH_HOST — server IP (e.g. 45.76.171.37)</li>
-                    <li>GATETEST_SSH_USER — username (default: root)</li>
-                    <li>GATETEST_SSH_PASSWORD — server password</li>
+                  <h3 className="font-bold mb-2 text-gray-900">⚡ Fix attempted</h3>
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
+                    <p className="text-sm text-amber-800 font-medium">SSH credentials not found</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Set these env vars in Vercel, then <strong>trigger a new deployment</strong> — env vars only take effect after redeployment.
+                    </p>
+                  </div>
+                  <ul className="text-xs font-mono bg-gray-50 border border-gray-200 rounded p-3 space-y-1.5 text-gray-700">
+                    <li><span className="text-emerald-700 font-bold">GATETEST_SSH_HOST</span> — server IP (e.g. 45.76.171.37)</li>
+                    <li><span className="text-gray-500 font-bold">GATETEST_SSH_USER</span> — username (default: root)</li>
+                    <li><span className="text-emerald-700 font-bold">GATETEST_SSH_PASSWORD</span> — server password</li>
                   </ul>
-                  <p className="text-xs text-white/40 mt-2">
-                    Once set, &quot;Fix Everything&quot; will SSH into the server and run fix commands automatically.
+                  <p className="text-xs text-gray-400 mt-2">
+                    Or use <span className="font-mono">GATETEST_SSH_KEY</span> (PEM private key) instead of a password.
                   </p>
                 </div>
               )}
@@ -1791,19 +2196,19 @@ function NuclearScanPanel() {
               return acc;
             }, {});
             return Object.entries(byCategory).map(([cat, items]) => (
-              <div key={cat} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 mb-3">
-                <h4 className="font-bold text-sm mb-2 text-white/80">{cat}</h4>
+              <div key={cat} className="rounded-xl bg-white border border-gray-200 shadow-sm p-4 mb-3">
+                <h4 className="font-bold text-sm mb-2 text-gray-800">{cat}</h4>
                 <div className="space-y-1">
                   {items.map((f, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs">
                       <span className={`font-bold shrink-0 w-16 ${
-                        f.severity === "error" ? "text-red-400" :
-                        f.severity === "warning" ? "text-amber-400" :
-                        f.severity === "pass" ? "text-emerald-400" :
-                        "text-white/40"
+                        f.severity === "error" ? "text-red-600" :
+                        f.severity === "warning" ? "text-amber-600" :
+                        f.severity === "pass" ? "text-emerald-600" :
+                        "text-gray-400"
                       }`}>{f.severity.toUpperCase()}</span>
-                      <span className="font-medium shrink-0 min-w-[140px] text-white/70">{f.title}</span>
-                      <span className="text-white/40">{f.detail}</span>
+                      <span className="font-medium shrink-0 min-w-[140px] text-gray-700">{f.title}</span>
+                      <span className="text-gray-400">{f.detail}</span>
                     </div>
                   ))}
                 </div>

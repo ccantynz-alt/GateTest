@@ -43,6 +43,98 @@ function getToken(): string {
   return process.env.GLUECRON_API_TOKEN || "";
 }
 
+function getGithubToken(): string {
+  return process.env.GITHUB_TOKEN || process.env.GATETEST_GITHUB_TOKEN || "";
+}
+
+export function isGitHubToken(token: string): boolean {
+  if (!token) return false;
+  const ghToken = getGithubToken();
+  return (
+    !getToken() ||
+    token.startsWith("ghp_") ||
+    token.startsWith("gho_") ||
+    token.startsWith("github_pat_") ||
+    (ghToken !== "" && token === ghToken)
+  );
+}
+
+/**
+ * GitHub REST API wrapper — mirrors gluecronApi signature.
+ * Used as a fallback when the resolved token is a GitHub PAT.
+ */
+export async function githubRestApi(
+  method: string,
+  path: string,
+  token: string,
+  body?: Record<string, unknown>
+): Promise<GluecronApiResponse> {
+  const payload = body ? JSON.stringify(body) : undefined;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "User-Agent": "GateTest/1.2.0",
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (payload) {
+    headers["Content-Type"] = "application/json";
+  }
+  const res = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers,
+    body: payload,
+  });
+  let data: Record<string, unknown>;
+  try {
+    data = await res.json() as Record<string, unknown>;
+  } catch {
+    data = {};
+  }
+  return { status: res.status, data };
+}
+
+/**
+ * Get the default branch name of a repo.
+ */
+export async function getDefaultBranch(
+  owner: string,
+  repo: string,
+  token: string
+): Promise<string> {
+  if (isGitHubToken(token) && token) {
+    const res = await githubRestApi("GET", `/repos/${owner}/${repo}`, token);
+    if (res.status === 200) {
+      return (res.data.default_branch as string) || "main";
+    }
+  }
+  const res = await gluecronApi("GET", `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+  if (res.status === 200) {
+    return (res.data.defaultBranch as string) || (res.data.default_branch as string) || "main";
+  }
+  return "main";
+}
+
+/**
+ * Get the SHA at the tip of a branch.
+ */
+export async function getBranchSha(
+  owner: string,
+  repo: string,
+  branch: string,
+  token: string
+): Promise<string | null> {
+  if (isGitHubToken(token) && token) {
+    const res = await githubRestApi("GET", `/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, token);
+    if (res.status === 200) {
+      return ((res.data as { object?: { sha?: string } }).object?.sha) || null;
+    }
+  }
+  const res = await gluecronApi("GET", `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(branch)}?recursive=0`);
+  if (res.status === 200) {
+    return (res.data.sha as string) || null;
+  }
+  return null;
+}
+
 export interface GluecronApiResponse {
   status: number;
   data: Record<string, unknown>;
@@ -278,20 +370,6 @@ export async function fetchBlob(
 }
 
 /**
- * Returns true if the token looks like a GitHub credential (PAT, OAuth token,
- * fine-grained PAT, or app installation token). Used to route helpers to the
- * GitHub API when a Gluecron token is unavailable but a GitHub PAT exists.
- */
-function isGitHubToken(token: string): boolean {
-  if (!token) return false;
-  if (token.startsWith("ghp_") || token.startsWith("gho_")) return true;
-  if (token.startsWith("github_pat_") || token.startsWith("ghs_")) return true;
-  if (token === (process.env.GITHUB_TOKEN || "")) return true;
-  if (token === (process.env.GATETEST_GITHUB_TOKEN || "")) return true;
-  return false;
-}
-
-/**
  * Resolve the tip SHA of a branch. Tries Gluecron's tree endpoint first
  * (which carries the branch-tip sha on the response per its wire contract),
  * then falls back to GitHub's git-ref endpoint. Returns null if neither
@@ -398,6 +476,7 @@ export async function fetchFileSha(
         return ghData.sha || "";
       }
       // 404 = file doesn't exist yet — caller treats empty sha as "create"
+
       if (ghRes.status === 404) return "";
     } catch { /* fall through to gluecron */ }
   }
@@ -471,6 +550,7 @@ export async function postPrComment(
       const data = await ghRes.json().catch(() => ({}));
       return { status: ghRes.status, data: data as Record<string, unknown> };
     } catch { /* fall through to gluecron */ }
+
   }
   return gluecronApi(
     "POST",
@@ -504,6 +584,7 @@ export async function createBranch(
       const data = await ghRes.json().catch(() => ({}));
       return { status: ghRes.status, data: data as Record<string, unknown> };
     } catch { /* fall through to gluecron */ }
+
   }
   return gluecronApi(
     "POST",
@@ -517,7 +598,7 @@ export async function createBranch(
 
 /**
  * Upsert a file on a branch. If `existingSha` is given, this is an update;
- * otherwise Gluecron treats it as a create.
+ * otherwise treat as a create.
  */
 export async function upsertFile(
   owner: string,
@@ -551,11 +632,13 @@ export async function upsertFile(
       const data = await ghRes.json().catch(() => ({}));
       return { status: ghRes.status, data: data as Record<string, unknown> };
     } catch { /* fall through to gluecron */ }
+
   }
 
   const body: Record<string, unknown> = {
     message,
     content: contentBase64,
+
     branch,
   };
   if (existingSha) body.sha = existingSha;
@@ -576,6 +659,7 @@ export async function upsertFile(
  * NOTE: Gluecron takes `baseBranch` / `headBranch` in the body (NOT
  * GitHub's `base` / `head`). The GitHub fallback here translates to
  * GitHub's `head` / `base` shape transparently.
+
  */
 export async function openPullRequest(
   owner: string,
@@ -601,6 +685,7 @@ export async function openPullRequest(
       const data = await ghRes.json().catch(() => ({}));
       return { status: ghRes.status, data: data as Record<string, unknown> };
     } catch { /* fall through to gluecron */ }
+
   }
   return gluecronApi(
     "POST",

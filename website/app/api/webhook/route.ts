@@ -28,6 +28,7 @@ import { NextRequest, NextResponse } from "next/server";
 // the module stays in the bundle. eslint-disable keeps the warning silent.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { postGluecronResult } from "@/app/lib/gluecron-callback";
+
 import { getDb } from "@/app/lib/db";
 
 // CommonJS interop — helpers are .js using require-style exports.
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ status: "processing" });
 }
+
 
 
 // GET health shim — lets ops dashboards confirm the webhook is live.

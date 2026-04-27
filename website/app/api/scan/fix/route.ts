@@ -23,6 +23,7 @@ import {
   createBranch,
   fetchBlob,
   fetchFileSha,
+
   openPullRequest,
   postPrComment,
   resolveBaseBranchSha,
@@ -721,6 +722,7 @@ export async function POST(req: NextRequest) {
       // fetchBlob already routes through Gluecron-first / GitHub-fallback so
       // a GitHub PAT can read files when Gluecron is unavailable.
       const originalContent = await fetchBlob(owner, repo, filePath, "", token);
+
       if (!originalContent) {
         errors.push(`Could not read ${filePath}`);
         return;
@@ -941,6 +943,7 @@ export async function POST(req: NextRequest) {
         hint: "Confirm the repo is reachable and GLUECRON_API_TOKEN / GITHUB_TOKEN has read access.",
         defaultBranch,
       }, { status: 500 });
+
     }
 
     // Create branch via Gluecron.

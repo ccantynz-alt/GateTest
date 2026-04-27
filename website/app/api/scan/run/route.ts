@@ -306,6 +306,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Build structured fixable-issue list from module details for the Fix Agent.
+  const fixableIssues: { file: string; issue: string; module: string }[] = [];
+  const FILE_DETAIL = /^([A-Za-z0-9_./@\-+]+?\.[A-Za-z0-9]{1,8})\s*[:—\-]\s*(.+)$/;
+  const MISSING_FILE = /^repo:\s*missing\s+(.+)/i;
+  for (const mod of result.modules) {
+    for (const detail of (mod.details || [])) {
+      const stripped = detail.replace(/^(?:error|warn(?:ing)?|info)\s*:\s*/i, "").trim();
+      const fileMatch = stripped.match(FILE_DETAIL);
+      if (fileMatch) {
+        fixableIssues.push({ file: fileMatch[1], issue: fileMatch[2], module: mod.name });
+      }
+      const missingMatch = stripped.match(MISSING_FILE);
+      if (missingMatch) {
+        fixableIssues.push({ file: missingMatch[1].trim(), issue: `CREATE_FILE: ${stripped}`, module: mod.name });
+      }
+    }
+  }
+
   return NextResponse.json({
     status: result.error ? "failed" : "complete",
     modules: result.modules,
@@ -319,5 +337,6 @@ export async function POST(req: NextRequest) {
     admin: isAdmin,
     authSource: result.authSource,
     error: result.error,
+    fixableIssues,
   });
 }

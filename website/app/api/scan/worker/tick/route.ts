@@ -41,6 +41,7 @@ interface CallbackArgs {
   pullRequestNumber?: number | null;
   host?: string;
   scanResult: unknown;
+
 }
 
 async function dispatchCallback(args: CallbackArgs): Promise<void> {
@@ -51,13 +52,14 @@ async function dispatchCallback(args: CallbackArgs): Promise<void> {
       ref: args.ref ?? null,
       pullRequestNumber: args.pullRequestNumber ?? null,
       scanResult: args.scanResult as object,
+
     });
   } else {
     await sendGluecronCallback({
       repository: args.repository,
       sha: args.sha,
       ref: args.ref ?? undefined,
-      scanResult: args.scanResult,
+      scanResult: args.scanResult as { error?: string; totalIssues?: number; status?: string } | null,
     });
   }
 }
