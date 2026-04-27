@@ -156,7 +156,27 @@ class GateTestRunner extends EventEmitter {
       this.options.changedFiles = this._getChangedFiles();
     }
 
-    const modulesToRun = moduleNames || Array.from(this.modules.keys());
+    const requestedModules = moduleNames || Array.from(this.modules.keys());
+
+    // Honour per-module `enabled: false` in the project's gatetest.config.json.
+    // BUG FIX 2026-04-27: previously `--suite full` ran every module in the
+    // tier regardless of project-level `modules.<name>.enabled = false`. A
+    // real customer (Crontech) had `mutation.enabled = false` for safety
+    // reasons, but `--suite full` overrode it and ran the destructive
+    // mutation module anyway, leaving mutated source on disk when the
+    // process was killed mid-loop. Suite membership now respects the
+    // per-module disable flag.
+    const modulesToRun = requestedModules.filter((name) => {
+      if (!this.config || typeof this.config.getModuleConfig !== 'function') return true;
+      const cfg = this.config.getModuleConfig(name);
+      // Explicit `enabled: false` blocks the module even when a suite includes it.
+      // `enabled` undefined or true → run as normal.
+      return !(cfg && cfg.enabled === false);
+    });
+    const skippedByConfig = requestedModules.filter((n) => !modulesToRun.includes(n));
+    if (skippedByConfig.length > 0) {
+      this.emit('modules:skipped-by-config', { skipped: skippedByConfig });
+    }
 
     this.emit('suite:start', { modules: modulesToRun, diffOnly: this.options.diffOnly });
 

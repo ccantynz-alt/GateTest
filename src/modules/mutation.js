@@ -27,6 +27,32 @@ class MutationModule extends BaseModule {
     const threshold = (mutationConfig && mutationConfig.threshold) || 80;
     const maxMutants = (mutationConfig && mutationConfig.maxMutants) || 50;
 
+    // SAFETY GATE — mutation testing writes the mutated source to disk
+    // (mutate → run tests → restore). If the gatetest process is killed
+    // mid-loop (SIGKILL, OOM, agent kill), the try/finally restore step
+    // never runs and files are left mutated. This is a destructive side
+    // effect that must NEVER happen by default. We require explicit
+    // opt-in via env var or per-project config before any write happens.
+    //
+    // Real-repo dogfood (2026-04-27) caught this when mutation was in the
+    // default `full` tier. Two unauthorised "fixes" landed in a customer
+    // working tree (||→&& in arg validation, ===0→!==0 in cleanup logic)
+    // because the cycle was interrupted before restore. Both removed
+    // from the default tier, AND this gate added so even Nuclear-tier
+    // customers must opt in.
+    const optedIn =
+      (mutationConfig && mutationConfig.enabled === true) ||
+      process.env.GATETEST_ALLOW_MUTATION === 'true' ||
+      process.env.GATETEST_ALLOW_MUTATION === '1';
+    if (!optedIn) {
+      result.addCheck('mutation:opt-in-required', true, {
+        severity: 'info',
+        message: 'Mutation testing skipped — destructive side effects require opt-in',
+        suggestion: 'Set GATETEST_ALLOW_MUTATION=true OR add `modules.mutation.enabled = true` to .gatetest/config.json. Be aware: mutation testing writes mutated source to disk and restores it; if the process is killed mid-loop, files may be left mutated.',
+      });
+      return;
+    }
+
     // Detect test command
     const testCmd = this._detectTestCommand(projectRoot);
     if (!testCmd) {

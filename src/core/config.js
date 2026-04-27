@@ -144,6 +144,7 @@ const DEFAULT_CONFIG = {
       'dataIntegrity',
       'documentation',
       'dependencies',
+      'sbom',
       'dockerfile',
       'ciSecurity',
       'shell',
@@ -178,7 +179,11 @@ const DEFAULT_CONFIG = {
       'tlsSecurity',
       'cookieSecurity',
       'crossFileTaint',
-      'mutation',
+      // 'mutation' REMOVED from default `full` tier 2026-04-27 after a
+      // real-repo dogfood found it was silently mutating files in
+      // customer working trees when killed mid-loop (the try/finally
+      // restore step never runs on SIGKILL). Now Nuclear-only AND
+      // gated by explicit opt-in (see src/modules/mutation.js).
       'python',
       'go',
       'rust',
@@ -216,6 +221,7 @@ const DEFAULT_CONFIG = {
       'dataIntegrity',
       'documentation',
       'dependencies',
+      'sbom',
       'dockerfile',
       'ciSecurity',
       'shell',
