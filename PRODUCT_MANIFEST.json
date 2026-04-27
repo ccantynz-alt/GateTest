@@ -1,0 +1,61 @@
+{
+  "product": "GateTest",
+  "tagline": "AI-powered test gate for every commit",
+  "version": "2.0.0",
+  "type": "standalone-product",
+  "category": "developer-tooling",
+  "purpose": "Intelligent test orchestration, code quality gating, and CI/CD intelligence layer for every product in the stack",
+  "standalone": true,
+  "replaces": [
+    "GitHub Actions basic CI",
+    "manual QA",
+    "dumb jest/vitest runners",
+    "static test reporters"
+  ],
+  "integrates_with_via_api_only": {
+    "crontech": {
+      "webhook": "POST /api/gate/result",
+      "purpose": "Block or allow deployments based on test outcomes"
+    },
+    "gluecron": {
+      "webhook": "POST /api/gate/result",
+      "purpose": "PR quality gate — AI diagnosis posted as PR comment"
+    },
+    "alecrae": {
+      "webhook": "POST /api/gate/result",
+      "purpose": "Site deploy gating and build status badges"
+    }
+  },
+  "deployment": {
+    "platform": "self-hosted or SaaS",
+    "runtime": "Node.js 22+",
+    "infra_dependency": "none — fully independent",
+    "deploy_target": "any VPS, bare metal, or cloud",
+    "recommended_host": "Crontech bare metal via API"
+  },
+  "ai_flywheel": {
+    "enabled": true,
+    "models": {
+      "analysis": "claude-sonnet-4-6",
+      "triage": "claude-haiku-4-5"
+    },
+    "learns_from": [
+      "test_results",
+      "flaky_test_patterns",
+      "build_durations",
+      "failure_signatures",
+      "fix_outcomes",
+      "accepted_vs_rejected_suggestions"
+    ],
+    "improves": [
+      "failure_diagnosis_accuracy",
+      "fix_suggestion_relevance",
+      "test_prioritization",
+      "flakiness_detection",
+      "build_time_prediction"
+    ],
+    "feedback_loop": "on_every_run",
+    "context_window": "last_90_days_of_run_history"
+  },
+  "competitive_position": "The test intelligence layer that replaces dumb CI runners with AI that learns your codebase — every failure makes the next diagnosis sharper"
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gatetest.dev/schemas/telemetry-run-event.json",
+  "title": "GateTest Run Telemetry Event",
+  "description": "Schema for a single test run event emitted to the AI flywheel",
+  "type": "object",
+  "required": ["run_id", "timestamp", "repo", "branch", "commit_sha", "test_suite", "totals", "failures"],
+  "properties": {
+    "run_id": { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "repo": { "type": "string", "description": "owner/repo" },
+    "branch": { "type": "string" },
+    "commit_sha": { "type": "string", "minLength": 40, "maxLength": 40 },
+    "author": { "type": "string" },
+    "ci_runner": { "type": "string", "enum": ["github-actions", "woodpecker", "gatetest-runner", "local"] },
+    "test_suite": { "type": "string" },
+    "totals": {
+      "type": "object",
+      "required": ["total", "passed", "failed", "skipped", "duration_ms"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["test_name", "error_message", "file_path"],
+        "properties": {
+          "test_name": { "type": "string" },
+          "error_message": { "type": "string" },
+          "stack_trace": { "type": "string" },
+          "file_path": { "type": "string" },
+          "line_number": { "type": "integer" },
+          "flakiness_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "0 = deterministic failure, 1 = purely flaky"
+          },
+          "times_seen_last_30d": { "type": "integer", "minimum": 0 },
+          "ai_diagnosis": {
+            "type": "string",
+            "description": "AI-generated plain-language explanation of why this test failed"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "AI-generated code or config change to fix the failure"
+          },
+          "fix_accepted": {
+            "type": ["boolean", "null"],
+            "description": "null = not yet rated, true = dev applied fix, false = dev ignored"
+          },
+          "fix_resolved_issue": {
+            "type": ["boolean", "null"],
+            "description": "null = not yet known, true = test passed after fix, false = still failing"
+          }
+        }
+      }
+    },
+    "flywheel_meta": {
+      "type": "object",
+      "properties": {
+        "schema_version": { "type": "string", "default": "1.0.0" },
+        "emitted_at": { "type": "string", "format": "date-time" },
+        "gatetest_version": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "version": "1.0.0",
+  "product": "gatetest",
+  "description": "AI flywheel configuration — defines signal collection, learning cycles, and improvement targets",
+
+  "signal_collection": {
+    "on_run_complete": [
+      "run_id",
+      "timestamp",
+      "repo",
+      "branch",
+      "commit_sha",
+      "author",
+      "test_suite",
+      "total_tests",
+      "passed",
+      "failed",
+      "skipped",
+      "duration_ms",
+      "failures"
+    ],
+    "per_failure": [
+      "test_name",
+      "error_message",
+      "stack_trace",
+      "file_path",
+      "line_number",
+      "times_seen_last_30d",
+      "flakiness_score",
+      "ai_diagnosis",
+      "suggested_fix",
+      "fix_accepted",
+      "fix_resolved_issue"
+    ],
+    "per_session": [
+      "ci_runner_type",
+      "node_version",
+      "dependencies_hash",
+      "env_vars_hash"
+    ]
+  },
+
+  "learning_cycles": {
+    "on_commit": {
+      "action": "update_failure_frequency_index",
+      "model": "claude-haiku-4-5",
+      "latency_budget_ms": 500
+    },
+    "on_failure": {
+      "action": "generate_diagnosis_and_fix_suggestion",
+      "model": "claude-sonnet-4-6",
+      "latency_budget_ms": 3000,
+      "context": "last_10_similar_failures_with_outcomes"
+    },
+    "daily_batch": {
+      "action": "retrain_flakiness_scores_and_update_test_priority_index",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 3 * * *",
+      "lookback_days": 30
+    },
+    "weekly_digest": {
+      "action": "generate_codebase_health_report",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 9 * * 1",
+      "output": "health_report_webhook"
+    }
+  },
+
+  "improvement_targets": [
+    {
+      "metric": "failure_diagnosis_accuracy",
+      "measure": "pct_of_ai_diagnoses_rated_correct_by_dev",
+      "baseline": 0.0,
+      "target": 0.85
+    },
+    {
+      "metric": "fix_suggestion_acceptance_rate",
+      "measure": "pct_of_suggested_fixes_applied_by_dev",
+      "baseline": 0.0,
+      "target": 0.60
+    },
+    {
+      "metric": "flakiness_detection_precision",
+      "measure": "pct_of_flagged_flaky_tests_confirmed_flaky",
+      "baseline": 0.0,
+      "target": 0.90
+    },
+    {
+      "metric": "test_prioritization_efficiency",
+      "measure": "pct_of_failures_caught_in_top_20pct_of_test_run",
+      "baseline": 0.0,
+      "target": 0.75
+    }
+  ],
+
+  "feedback_reward": {
+    "positive": [
+      "dev_marked_diagnosis_correct",
+      "dev_applied_suggested_fix",
+      "suggested_fix_resolved_the_failure",
+      "flagged_flaky_test_confirmed_flaky"
+    ],
+    "negative": [
+      "dev_marked_diagnosis_wrong",
+      "dev_ignored_suggested_fix",
+      "fix_did_not_resolve_failure",
+      "false_positive_flakiness_flag"
+    ]
+  },
+
+  "data_retention": {
+    "hot_cache_days": 30,
+    "cold_storage_days": 90,
+    "delete_after_days": 90
+  },
+
+  "api_endpoints": {
+    "ingest_run": "POST /api/flywheel/run",
+    "ingest_feedback": "POST /api/flywheel/feedback",
+    "get_diagnosis": "GET /api/flywheel/diagnose/:run_id",
+    "get_flakiness_report": "GET /api/flywheel/flakiness/:repo"
+  }
+}

@@ -1,0 +1,131 @@
+name: GateTest Standalone CI + Flywheel
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test:
+    name: Run Tests + Feed Flywheel
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (JSON output for flywheel)
+        id: run_tests
+        run: |
+          npm test -- --json --outputFile=test-results.json 2>&1 | tee test-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Generate flywheel telemetry event
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+            const event = {
+              run_id: require('crypto').randomUUID(),
+              timestamp: new Date().toISOString(),
+              repo: '${{ github.repository }}',
+              branch: '${{ github.ref_name }}',
+              commit_sha: '${{ github.sha }}',
+              author: '${{ github.actor }}',
+              ci_runner: 'github-actions',
+              test_suite: 'jest',
+              totals: {
+                total: results.numTotalTests || 0,
+                passed: results.numPassedTests || 0,
+                failed: results.numFailedTests || 0,
+                skipped: results.numPendingTests || 0,
+                duration_ms: results.testResults?.reduce((a,t) => a + (t.perfStats?.runtime || 0), 0) || 0
+              },
+              failures: (results.testResults || [])
+                .flatMap(s => s.testResults || [])
+                .filter(t => t.status === 'failed')
+                .map(t => ({
+                  test_name: t.fullName,
+                  error_message: (t.failureMessages || []).join('\\n').slice(0, 2000),
+                  file_path: t.ancestorTitles?.[0] || '',
+                  flakiness_score: null,
+                  fix_accepted: null,
+                  fix_resolved_issue: null
+                })),
+              flywheel_meta: {
+                schema_version: '1.0.0',
+                emitted_at: new Date().toISOString(),
+                gatetest_version: '2.0.0'
+              }
+            };
+            fs.writeFileSync('flywheel-event.json', JSON.stringify(event, null, 2));
+            console.log('Flywheel event generated:', event.run_id);
+          "
+
+      - name: Send to GateTest AI flywheel
+        if: always() && env.GATETEST_API_URL != ''
+        env:
+          GATETEST_API_URL: ${{ secrets.GATETEST_API_URL }}
+          FLYWHEEL_API_KEY: ${{ secrets.FLYWHEEL_API_KEY }}
+        run: |
+          curl -s -X POST "${GATETEST_API_URL}/api/flywheel/run" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${FLYWHEEL_API_KEY}" \
+            -d @flywheel-event.json \
+            --max-time 10 || echo "Flywheel ingest failed (non-blocking)"
+
+      - name: Get AI diagnosis for failures
+        if: failure() && env.GATETEST_API_URL != ''
+        id: ai_diagnosis
+        env:
+          GATETEST_API_URL: ${{ secrets.GATETEST_API_URL }}
+          FLYWHEEL_API_KEY: ${{ secrets.FLYWHEEL_API_KEY }}
+        run: |
+          RUN_ID=$(jq -r '.run_id' flywheel-event.json)
+          DIAGNOSIS=$(curl -s "${GATETEST_API_URL}/api/flywheel/diagnose/${RUN_ID}" \
+            -H "Authorization: Bearer ${FLYWHEEL_API_KEY}" \
+            --max-time 15 | jq -r '.diagnosis // "No diagnosis available"')
+          echo "diagnosis<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIAGNOSIS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post AI diagnosis as PR comment
+        if: failure() && github.event_name == 'pull_request' && steps.ai_diagnosis.outputs.diagnosis != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## GateTest AI Diagnosis\n\n${{ steps.ai_diagnosis.outputs.diagnosis }}\n\n*Powered by GateTest flywheel — this diagnosis improves with every run.*`
+            })
+
+      - name: Upload test artifacts + flywheel event
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gatetest-run-${{ github.sha }}
+          path: |
+            test-results.json
+            test-output.txt
+            flywheel-event.json
+          retention-days: 30
+
+      - name: Fail job if tests failed
+        if: steps.run_tests.outputs.exit_code != '0'
+        run: exit 1
