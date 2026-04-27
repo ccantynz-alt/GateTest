@@ -164,6 +164,7 @@ export async function GET(req: NextRequest) {
             body: JSON.stringify({
               repoUrl: `https://github.com/${watch.target}`,
               issues: fixableIssues,
+              tier: "full",
             }),
           });
           const fixData = await fixRes.json();
