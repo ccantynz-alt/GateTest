@@ -46,21 +46,37 @@ jobs:
           node-version: '20'
 
       - name: Clone GateTest (single source of truth)
+        env:
+          # Optional: set GATETEST_TOKEN in repo secrets if this repo is private
+          GATETEST_TOKEN: ${{ secrets.GATETEST_TOKEN }}
         run: |
-          git clone --depth 1 https://github.com/ccantynz-alt/gatetest.git "$RUNNER_TEMP/gatetest"
+          if [ -n "$GATETEST_TOKEN" ]; then
+            git clone --depth 1 "https://x-access-token:${GATETEST_TOKEN}@github.com/ccantynz-alt/gatetest.git" "$RUNNER_TEMP/gatetest"
+          else
+            git clone --depth 1 "https://github.com/ccantynz-alt/gatetest.git" "$RUNNER_TEMP/gatetest"
+          fi
           echo "GATETEST_HOME=$RUNNER_TEMP/gatetest" >> $GITHUB_ENV
           echo "$RUNNER_TEMP/gatetest/bin" >> $GITHUB_PATH
           chmod +x "$RUNNER_TEMP/gatetest/bin/gatetest.js"
+
+      - name: Install GateTest dependencies
+        run: |
+          cd "$RUNNER_TEMP/gatetest"
+          npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --production --ignore-scripts 2>/dev/null || true
 
       - name: Verify GateTest installed
         run: node "$GATETEST_HOME/bin/gatetest.js" --version
 
       - name: GateTest — Quick (diff-mode) on PRs
         if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node "$GATETEST_HOME/bin/gatetest.js" --suite quick --diff --sarif --junit --project "$GITHUB_WORKSPACE"
 
       - name: GateTest — Full on main push
         if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node "$GATETEST_HOME/bin/gatetest.js" --suite full --sarif --junit --project "$GITHUB_WORKSPACE"
 
       - name: Upload SARIF to GitHub Security
