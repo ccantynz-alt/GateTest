@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "GateTest vs Snyk — Beyond Dependency Scanning in 2026",
   description:
-    "Snyk only scans dependencies. GateTest scans your actual code — 90 modules covering security, quality, performance, accessibility, and AI safety. Auto-fixes included.",
+    "Snyk only scans dependencies. GateTest scans your actual code — 91 modules covering security, quality, performance, accessibility, and AI safety. Auto-fixes included.",
   keywords: [
     "Snyk alternative",
     "Snyk vs GateTest",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GateTest vs Snyk — Beyond Dependency Scanning in 2026",
     description:
-      "Snyk only scans dependencies. GateTest scans your actual code — 90 modules covering security, quality, performance, accessibility, and AI safety.",
+      "Snyk only scans dependencies. GateTest scans your actual code — 91 modules covering security, quality, performance, accessibility, and AI safety.",
     url: "https://gatetest.ai/compare/snyk",
     siteName: "GateTest",
     type: "website",
@@ -38,7 +38,7 @@ const faqItems = [
   },
   {
     q: "How does GateTest pricing compare to Snyk?",
-    a: "Snyk charges per developer seat per month — pricing scales with headcount and enterprise contracts can reach thousands monthly. GateTest charges per scan: $99 for all 90 modules. No seat licensing, no annual contracts, no per-developer billing. A 100-person team pays the same per scan as a solo developer.",
+    a: "Snyk charges per developer seat per month — pricing scales with headcount and enterprise contracts can reach thousands monthly. GateTest charges per scan: $99 for all 91 modules. No seat licensing, no annual contracts, no per-developer billing. A 100-person team pays the same per scan as a solo developer.",
   },
   {
     q: "Does GateTest include AI safety and prompt injection scanning like Snyk doesn't?",
@@ -145,7 +145,7 @@ export default function SnykPage() {
               href="/"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 90 Modules
+              See All 91 Modules
             </Link>
           </div>
         </div>
@@ -233,8 +233,8 @@ export default function SnykPage() {
                 body: "Snyk can open a PR to bump a dependency version. GateTest writes a fix for the source code bug — adds the SSRF validation guard, removes the TLS bypass, restructures the N+1 query into a batched lookup — and opens the PR for your review.",
               },
               {
-                title: "One bill, 90 modules",
-                body: "Snyk's seat-based pricing means security costs scale with team size. GateTest is $99 for all 90 modules per scan. Run it daily on a 100-person team or run it once before a major release — the price is the same.",
+                title: "One bill, 91 modules",
+                body: "Snyk's seat-based pricing means security costs scale with team size. GateTest is $99 for all 91 modules per scan. Run it daily on a 100-person team or run it once before a major release — the price is the same.",
               },
             ].map((card) => (
               <div
@@ -272,7 +272,7 @@ export default function SnykPage() {
             Scan your code, not just your packages.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            Get 90 modules of source code analysis — security, quality, performance, accessibility —
+            Get 91 modules of source code analysis — security, quality, performance, accessibility —
             in one scan. Pay only when results are delivered.
           </p>
           <Link

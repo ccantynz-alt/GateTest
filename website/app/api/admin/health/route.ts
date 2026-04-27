@@ -14,7 +14,7 @@
  *   3. GitHub App auth (mints a JWT + verifies signing key is valid)
  *   4. Stripe API reachable (hits /v1/balance)
  *   5. Anthropic API reachable (hits /v1/messages with 1-token probe)
- *   6. All 90 scan modules loaded and callable
+ *   6. All 91 scan modules loaded and callable
  *   7. Real scan on a tiny public repo (octocat/Hello-World)
  *
  * This endpoint makes real network calls. Expect 5-10s total runtime.
