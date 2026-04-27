@@ -42,7 +42,7 @@ const faqItems = [
   },
   {
     q: "Can GateTest auto-fix issues like ESLint --fix?",
-    a: "ESLint --fix handles formatting and simple pattern replacements. GateTest's AI auto-fix (Scan + Fix, $199) handles actual bug fixes — adding validation guards, restructuring dangerous code patterns, fixing security misconfigurations — and opens a pull request with the changes for your review.",
+    a: "ESLint --fix handles formatting and simple pattern replacements. GateTest's AI auto-fix (Scan + Fix, $199) handles actual bug fixes — adding validation guards, restructuring dangerous code patterns, fixing security misconfigurations — and opens a pull request with the changes for your review. The Nuclear tier ($399) goes deeper: Claude-driven per-finding diagnosis, attack-chain correlation, mutation testing on your existing tests, and an executive summary.",
   },
   {
     q: "What does GateTest catch that ESLint misses?",

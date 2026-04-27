@@ -46,7 +46,7 @@ const faqItems = [
   },
   {
     q: "Can GateTest fix vulnerabilities automatically?",
-    a: "Yes. The Scan + Fix tier ($199) uses AI to create pull requests with working code changes that address the issues found. Snyk can suggest fix PRs for dependency upgrades in its paid tiers; GateTest auto-fixes source code vulnerabilities — SSRF guards, TLS config fixes, cookie security flags, and more.",
+    a: "Yes. The Scan + Fix tier ($199) uses AI to create pull requests with working code changes that address the issues found. Snyk can suggest fix PRs for dependency upgrades in its paid tiers; GateTest auto-fixes source code vulnerabilities — SSRF guards, TLS config fixes, cookie security flags, and more. The Nuclear tier ($399) adds Claude-driven diagnosis on every finding, cross-finding attack-chain correlation, mutation testing, and a CTO-readable executive summary.",
   },
   {
     q: "Does GateTest work with private repos?",

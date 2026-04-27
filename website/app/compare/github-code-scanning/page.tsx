@@ -50,7 +50,7 @@ const faqItems = [
   },
   {
     q: "Can GateTest auto-fix the issues it finds?",
-    a: "Yes. The Scan + Fix tier ($199) creates a pull request with code changes that fix the issues found. GitHub Code Scanning shows you security alerts and leaves fixing to you. GateTest writes the fix.",
+    a: "Yes. The Scan + Fix tier ($199) creates a pull request with code changes that fix the issues found. GitHub Code Scanning shows you security alerts and leaves fixing to you. GateTest writes the fix. The Nuclear tier ($399) adds Claude-driven per-finding diagnosis, cross-finding attack-chain correlation, mutation testing, and a CTO-readable executive summary.",
   },
 ];
 
@@ -233,7 +233,7 @@ export default function GitHubCodeScanningPage() {
               },
               {
                 title: "Auto-fix, not just alerts",
-                body: "GitHub Code Scanning shows you security alerts. You investigate, understand the issue, write the fix, test it. GateTest writes the fix and opens a pull request. The Scan + Fix tier covers both finding and fixing — security issues, code quality problems, configuration misconfigurations.",
+                body: "GitHub Code Scanning shows you security alerts. You investigate, understand the issue, write the fix, test it. GateTest writes the fix and opens a pull request. The Scan + Fix tier covers both finding and fixing — security issues, code quality problems, configuration misconfigurations. The Nuclear tier adds attack-chain correlation, mutation testing, and a CTO-readable executive summary on top.",
               },
               {
                 title: "Host-agnostic by design",

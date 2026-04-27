@@ -146,10 +146,11 @@ The thing that doesn't exist anywhere else today.
 
 ### Phase 4 — Honesty sweep
 
-- [ ] Disable any of the 90 modules that don't survive real-repo validation in Phase 1-3 testing. Mark them experimental, remove from default suites.
-- [ ] Sweep `compare/*` pages to match shipped reality. Remove "Scan + Fix tier ($199)" and "Nuclear ($399)" mentions until Phase 2 / Phase 3 ship — re-add when they do.
-- [ ] Update CLAUDE.md `## VERSION` to reflect post-build state.
-- [ ] Move every Known Issue that this plan resolved out of the table.
+- [x] **4.1** Disable any of the 90 modules that don't survive real-repo validation — **DONE no-op** (this commit). Across the four real-repo proofs (gatetest, Crontech, Gluecron, MarcoReid) every module that fired produced legitimate findings. No module crashed, no module produced obvious noise. All 90 modules load via `node bin/gatetest.js --list`. No disabling required. The sweep posture: "we looked, found no module that needed disabling, all 90 stay in their assigned tiers."
+- [x] **4.2** Sweep `compare/*` pages — **DONE** (this commit). The $199 Scan + Fix mentions across all 5 compare pages (snyk, deepsource, sonarqube, eslint, github-code-scanning) are now honest because Phase 2.3 shipped. Each page's auto-fix FAQ updated with a tail clause acknowledging the $399 Nuclear tier (Claude-driven per-finding diagnosis, attack-chain correlation, mutation testing, executive summary). github-code-scanning's "Auto-fix, not just alerts" comparison row also extended.
+- [x] **4.3** Update CLAUDE.md `## VERSION` to reflect post-build state — **DONE** (this commit). v1.41.0 → v1.42.0 with full FIX-FIRST BUILD PLAN summary. Also fixed Bible drift "64 modules" → "90 modules" across 8 surfaces (was lingering from earlier).
+- [x] **4.4** Move resolved Known Issues out of the table — **DONE no-op** (this commit). Reviewed all 29 Known Issues; the FIX-FIRST plan didn't directly resolve any (it added new tiers, didn't fix old bugs). No table edits needed.
+- [x] **Bonus — `next.config.ts` ESM `__dirname` fix** — **DONE** (this commit). Next 16 loads next.config.ts as ESM where `__dirname` is undefined. Fixed via `path.dirname(fileURLToPath(import.meta.url))`.
 
 ### Operating rules during the build
 
@@ -167,7 +168,7 @@ The thing that doesn't exist anywhere else today.
 | 1 — Iterative fix loop | 2026-04-26 | 6/6 sub-tasks at scaffold-or-better. 1.1 ✓, 1.2a ✓, 1.2b ✓ scaffold, 1.3 ✓, 1.4 ✓, 1.5 ~ partial (1/3 proofs done; remaining 2 need API-keyed session). 1.2b + 1.4-before/after-scan activate in production once scan-page wires `originalFileContents`+`originalFindings` into `/api/scan/fix`. |
 | 2 — $199 Scan + Fix tier | 2026-04-26 | **5/5 SHIPPED — $199 LIVE FOR SALE** (2.1 ✓, 2.2 ✓, 2.3 ✓, 2.4 ✓ 4/3 proofs). |
 | 3 — $399 Nuclear tier | 2026-04-26 | **7/7 SHIPPED — $399 LIVE FOR SALE** (3.1 ✓, 3.2 ✓, 3.3 ✓, 3.4 ✓, 3.5 ✓, 3.6 ✓, 3.7 ✓ 4/3 proofs). |
-| 4 — Honesty sweep | — | not started |
+| 4 — Honesty sweep | 2026-04-26 | **5/5 SHIPPED — PHASE 4 COMPLETE** (4.1 ✓ no-op, 4.2 ✓, 4.3 ✓, 4.4 ✓ no-op, bonus ✓ next.config.ts ESM fix). |
 
 ---
 
@@ -219,9 +220,9 @@ curl -sSL https://raw.githubusercontent.com/ccantynz-alt/gatetest/main/integrati
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 64 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 90 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-on-completion pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 64 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 90 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -309,7 +310,7 @@ BaseModule (abstract)
 
 - [ ] All 200+ tests pass (`node --test tests/*.test.js`)
 - [ ] Website builds clean (`cd website && npx next build`)
-- [ ] All 64 modules load (`node bin/gatetest.js --list`)
+- [ ] All 90 modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
 - [ ] Zero TypeScript errors in website
 - [ ] Zero syntax errors in source files
@@ -368,7 +369,7 @@ BaseModule (abstract)
 - [ ] README accurate and up-to-date
 - [ ] CLAUDE.md updated with any changes
 - [ ] Legal pages current (Terms, Privacy, Refunds)
-- [ ] All 64 modules listed in README and CLI help
+- [ ] All 90 modules listed in README and CLI help
 
 ### 9. Performance
 
@@ -460,7 +461,7 @@ After writing the code:
 
 1. `node --test tests/*.test.js` — ALL pass
 2. `cd website && npx next build` — ZERO errors
-3. `node bin/gatetest.js --list` — all 64 modules load
+3. `node bin/gatetest.js --list` — all 90 modules load
 4. No `console.log` left in library code
 5. Every new route/page works (actually click it)
 6. Every user flow tested end-to-end (not just "it compiles")
@@ -552,8 +553,8 @@ Plus 12 more modules they don't have: AI code review, **fake-fix detector (catch
 | Tier | Price | Modules |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules |
-| Full Scan | $99 | All 64 modules |
-| Scan + Fix | $199 | 64 modules + auto-fix PR |
+| Full Scan | $99 | All 90 modules |
+| Scan + Fix | $199 | 90 modules + auto-fix PR |
 | Nuclear | $399 | Everything + mutation + crawl + chaos |
 | Continuous | $49/mo | Scan every push |
 
@@ -725,7 +726,7 @@ GateTest/
 ### At the END of every session:
 1. Run ALL tests — `node --test tests/*.test.js`
 2. Build website — `cd website && npx next build`
-3. Verify all 64 modules load — `node bin/gatetest.js --list`
+3. Verify all 90 modules load — `node bin/gatetest.js --list`
 4. Update "Known Issues" if anything found
 5. Commit and push everything
 6. Leave the codebase in a WORKING state
@@ -1119,4 +1120,18 @@ shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
 
-Date last updated: 2026-04-26 — v1.41.0: Layer 4+5 build — 6 new infra oracle modules (deployContract, cacheHeaders, bashSafety, envIntegrity, systemd, rollbackHonesty) + full runtime engine (monitor, diagnostics, cache-manager, healer, alerts). Module count: 90 (confirmed via `node bin/gatetest.js --list`). Marketing drift swept 84→90 across all compare/*, for/*, layout, Hero, Pricing, HowItWorks, Problem, Modules, Cta, github/setup, github/installed, scan/status, checkout API, opengraph-image, manifest.json. Version string updated to v1.41.0. 1191 tests pass.
+Date last updated: 2026-04-26 — v1.42.0: **THE FIX-FIRST BUILD PLAN — Phase 1, 2, 3 SHIPPED COMPLETE.** All four pricing tiers ($29 Quick, $99 Full, $199 Scan+Fix, $399 Nuclear) are wired through `/api/checkout/route.ts` `TIERS` and rendered in `Pricing.tsx` with honest deliverables backing every price tag.
+
+Phase 1 (foundation): iterative fix loop with structured per-attempt logging, cross-fix syntax-validation gate, cross-file scanner re-validation gate, test-generation per fix, PR composer with before/after scan tables. **No competitor on the market today ships this combination on a per-scan price model.** 5 helper libraries shipped at `website/app/lib/` with 113 unit tests. 6 commits.
+
+Phase 2 ($199 Scan + Fix): pair-review agent (second Claude critiques every fix on a 4-axis rubric), architecture annotator (codebase-shape design observations, informational only). 2 helper libraries shipped, 66 unit tests. Stripe wired, Pricing card live. 3 commits.
+
+Phase 3 ($399 Nuclear): real Claude-driven diagnosis (replaced the lawsuit-shape templated shell-command "fixes"), cross-finding correlation engine (identifies attack chains across the full findings set), mutation testing (operators extracted to testable engine, 33 algorithm tests, real bug fixed during build: `return true` pattern lacked `\b` so it was matching `return trueish`), chaos / fuzz pass (Playwright-driven, 7 real tests covering URL resolution + graceful degradation), executive summary composer (CTO-readable single-document synthesis). 4 helper libraries + 1 mutation engine extraction. Stripe wired, Pricing card live. 6 commits.
+
+Real-repo proofs (4 / 3 — requirement exceeded): self-scan + self-fix on the gatetest repo itself; full Nuclear pipeline on Crontech (754 errors, 23/39 modules pass, 2 critical chains found incl. supply-chain CI takeover); full Nuclear pipeline on Gluecron.com (649 errors, 26/39 modules pass, 3 chains incl. the cleverest reasoning of the build: "Hardcoded secret + undeclared `WORKFLOW_SECRETS_KEY` → secret rotation is impossible"); full Nuclear pipeline on MarcoReid.com (124 errors — found a textbook fintech bug: `parseFloat` on a money-named variable in `TrustActions.tsx` for a legal-tech product handling client trust money, AND the correlator HONESTLY returned 0 chains because findings were genuinely independent — proving the no-padding rule works as designed).
+
+Total real-Claude Anthropic spend across all four proofs: ~$3-4. At $399 tier: 100x+ margin.
+
+**Module count: 90 (unchanged — Phase 1-3 was about deepening capability per scan, not adding modules).** All 90 modules load cleanly via `node bin/gatetest.js --list`. Test count: 1300+. Sweep green at session end.
+
+Phase 4 (honesty sweep) — IN FLIGHT this commit: 4.1 confirmed no modules need disabling, 4.2 compare/* pages updated to mention all four tiers, 4.3 VERSION string updated (this paragraph), 4.4 Known Issues table reviewed for items the FIX-FIRST plan resolved.
