@@ -266,25 +266,20 @@ class SyntaxModule extends BaseModule {
   }
 
   _checkTypeScript(projectRoot, result) {
-    // Find the directory that actually has a tsconfig.json.
-    // Some repos put TypeScript in a subdirectory (e.g. website/) with no
-    // root-level tsconfig — running tsc from the wrong directory produces
-    // spurious "No inputs were found" errors.
-    const tscDirs = [projectRoot];
-    const subdirs = ['website', 'app', 'client', 'frontend', 'src'];
-    for (const sub of subdirs) {
-      const candidate = path.join(projectRoot, sub);
-      if (fs.existsSync(path.join(candidate, 'tsconfig.json'))) {
-        tscDirs.push(candidate);
-      }
-    }
+    // Discover every tsconfig.json in the workspace (depth-limited so we
+    // don't walk node_modules). Then run tsc only in directories where
+    // the tsconfig is "real" — i.e. has compilerOptions configured. Stub
+    // tsconfigs at monorepo roots (Crontech, Turborepo, etc.) often
+    // exist only as `extends`-only or empty-shell configs; running
+    // `npx tsc` against them produces TS6142 "jsx not set" / TS6053 "no
+    // inputs found" noise that drowns out real findings.
+    const tscDirs = this._discoverRealTsconfigs(projectRoot);
 
     let anyRan = false;
     let allPass = true;
     const allErrors = [];
 
     for (const dir of tscDirs) {
-      if (!fs.existsSync(path.join(dir, 'tsconfig.json'))) continue;
       anyRan = true;
       const { exitCode, stdout, stderr } = this._exec('npx tsc --noEmit 2>&1', {
         cwd: dir,
@@ -299,7 +294,7 @@ class SyntaxModule extends BaseModule {
     }
 
     if (!anyRan) {
-      result.addCheck('typescript-strict', true, { message: 'No tsconfig.json found', severity: 'info' });
+      result.addCheck('typescript-strict', true, { message: 'No real tsconfig.json found (stub configs without compilerOptions are skipped)', severity: 'info' });
     } else if (allPass) {
       result.addCheck('typescript-strict', true);
     } else {
@@ -309,6 +304,61 @@ class SyntaxModule extends BaseModule {
         suggestion: 'Run "npx tsc --noEmit" to see all errors',
       });
     }
+  }
+
+  /**
+   * Discover directories containing a "real" tsconfig.json — one that
+   * sets `compilerOptions` (with at least one of jsx / target / module /
+   * lib). Stub configs (empty, extends-only, or missing compilerOptions)
+   * are deliberately skipped because running tsc against them produces
+   * noise that obscures real findings.
+   *
+   * Walks subdirectories one and two levels deep to cover monorepo
+   * patterns (apps/web, apps/api, packages/*, services/*) without
+   * descending into node_modules / build output.
+   */
+  _discoverRealTsconfigs(projectRoot) {
+    const found = new Set();
+    const skip = new Set([
+      'node_modules', '.git', 'dist', 'build', 'coverage',
+      '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
+      '.gatetest', '.claude', 'out', 'vendor', '__pycache__',
+    ]);
+
+    const isRealConfig = (configPath) => {
+      try {
+        const raw = fs.readFileSync(configPath, 'utf-8');
+        // Strip block + line comments (tsconfig is JSONC).
+        const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+        const cfg = JSON.parse(stripped);
+        const co = cfg && cfg.compilerOptions;
+        if (!co || typeof co !== 'object') return false;
+        // A real config sets at least one of these. Stub configs that
+        // only exist to extend a base get filtered out.
+        return Boolean(co.target || co.module || co.jsx || co.lib || co.outDir || co.rootDir);
+      } catch { return false; }
+    };
+
+    const visit = (dir, depth) => {
+      if (depth > 2) return;
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+
+      const tsconfigPath = path.join(dir, 'tsconfig.json');
+      if (fs.existsSync(tsconfigPath) && isRealConfig(tsconfigPath)) {
+        found.add(dir);
+      }
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (skip.has(entry.name)) continue;
+        if (entry.name.startsWith('.')) continue; // .claude, .git already in skip; this catches others
+        visit(path.join(dir, entry.name), depth + 1);
+      }
+    };
+
+    visit(projectRoot, 0);
+    return [...found];
   }
 
   _checkImportResolution(projectRoot, jsFiles, result) {
