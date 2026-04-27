@@ -779,6 +779,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
           </>
         )}
 
+        {/* Tab: Watchdog */}
+        {activeTab === "watchdog" && (
+          <WatchdogPanel />
+        )}
+
         {/* Tab: Server Scan */}
         {activeTab === "server" && (
           <ServerScanPanel />
@@ -1017,6 +1022,329 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Watchdog Panel — multi-repo CI health + batch scan-and-fix
+// ---------------------------------------------------------------------------
+
+interface RepoInfo {
+  id: number;
+  full_name: string;
+  name: string;
+  html_url: string;
+  private: boolean;
+  pushed_at: string;
+  default_branch: string;
+  latestRun: { conclusion: string | null; status: string; created_at: string; html_url: string; head_branch: string; name: string } | null;
+  ciStatus: "passing" | "failing" | "pending" | "none";
+}
+
+interface RepoScanState {
+  status: "idle" | "scanning" | "fixing" | "done" | "error";
+  prUrl?: string;
+  error?: string;
+  issues?: number;
+}
+
+function WatchdogPanel() {
+  const [repos, setRepos] = useState<RepoInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"all" | "failing">("failing");
+  const [scanStates, setScanStates] = useState<Record<string, RepoScanState>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/repos");
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error || `HTTP ${res.status}`);
+        return;
+      }
+      const d = await res.json();
+      setRepos(d.repos || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load repos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function scanAndFix(repo: RepoInfo) {
+    setScanStates((s) => ({ ...s, [repo.full_name]: { status: "scanning" } }));
+    try {
+      // Step 1: scan
+      const scanRes = await fetch("/api/scan/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: repo.html_url, tier: "full" }),
+      });
+      const scanData = await scanRes.json();
+      const issues = (scanData.totalIssues as number) || 0;
+
+      if (issues === 0) {
+        setScanStates((s) => ({ ...s, [repo.full_name]: { status: "done", issues: 0 } }));
+        return;
+      }
+
+      // Step 2: fix
+      setScanStates((s) => ({ ...s, [repo.full_name]: { status: "fixing", issues } }));
+      const fixableIssues = (scanData.fixableIssues as Array<{ file: string; issue: string; module: string }>) || [];
+
+      if (fixableIssues.length === 0) {
+        setScanStates((s) => ({ ...s, [repo.full_name]: { status: "done", issues, error: "No auto-fixable issues" } }));
+        return;
+      }
+
+      const fixRes = await fetch("/api/scan/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl: repo.html_url, issues: fixableIssues }),
+      });
+      const fixData = await fixRes.json();
+      setScanStates((s) => ({
+        ...s,
+        [repo.full_name]: {
+          status: "done",
+          issues,
+          prUrl: fixData.prUrl,
+          error: fixData.prUrl ? undefined : (fixData.error || fixData.message),
+        },
+      }));
+    } catch (err) {
+      setScanStates((s) => ({
+        ...s,
+        [repo.full_name]: { status: "error", error: err instanceof Error ? err.message : "Failed" },
+      }));
+    }
+  }
+
+  async function fixAllFailing() {
+    const failing = repos.filter((r) => r.ciStatus === "failing");
+    setBatchRunning(true);
+    for (const repo of failing) {
+      const current = scanStates[repo.full_name];
+      if (current?.status === "scanning" || current?.status === "fixing") continue;
+      await scanAndFix(repo);
+    }
+    setBatchRunning(false);
+  }
+
+  const displayed = filter === "failing" ? repos.filter((r) => r.ciStatus === "failing") : repos;
+  const failCount = repos.filter((r) => r.ciStatus === "failing").length;
+  const passCount = repos.filter((r) => r.ciStatus === "passing").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Header bar */}
+      <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">CI Watchdog</h2>
+            <p className="text-xs text-white/50 mt-0.5">All your repos. Failing ones first. GateTest fixes them.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={load} disabled={loading} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
+              {loading ? "Loading…" : "Refresh"}
+            </button>
+            {failCount > 0 && (
+              <button
+                onClick={fixAllFailing}
+                disabled={batchRunning || loading}
+                className="btn-primary px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                style={{ background: "#059669" }}
+              >
+                {batchRunning ? "Fixing…" : `⚡ Fix All ${failCount} Failing`}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Stats row */}
+        {!loading && repos.length > 0 && (
+          <div className="flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-400" />
+              <span className="text-white/70"><strong className="text-red-400">{failCount}</strong> failing</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-white/70"><strong className="text-emerald-400">{passCount}</strong> passing</span>
+            </span>
+            <span className="text-white/40">{repos.length} total repos</span>
+          </div>
+        )}
+      </div>
+
+      {/* Filter tabs */}
+      {!loading && repos.length > 0 && (
+        <div className="flex gap-1">
+          {(["failing", "all"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-4 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                filter === f
+                  ? "bg-white/10 text-white"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              {f === "failing" ? `Failing (${failCount})` : `All repos (${repos.length})`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl bg-red-900/20 border border-red-500/30 p-4 text-sm text-red-300">
+          <strong>Could not load repos:</strong> {error}
+          {error.includes("token") && (
+            <p className="mt-2 text-xs text-red-300/70">Set <code className="font-mono">GATETEST_GITHUB_TOKEN</code> or <code className="font-mono">GITHUB_TOKEN</code> in your Vercel environment variables.</p>
+          )}
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-white/10" />
+                <div className="h-4 bg-white/10 rounded w-48" />
+                <div className="ml-auto h-3 bg-white/10 rounded w-20" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Repo list */}
+      {!loading && displayed.length === 0 && !error && (
+        <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-8 text-center text-white/40">
+          {filter === "failing" ? "No failing workflows — all green! 🎉" : "No repos found."}
+        </div>
+      )}
+
+      {!loading && displayed.map((repo) => {
+        const state = scanStates[repo.full_name];
+        const isWorking = state?.status === "scanning" || state?.status === "fixing";
+
+        const ciDot =
+          repo.ciStatus === "failing" ? "bg-red-400" :
+          repo.ciStatus === "passing" ? "bg-emerald-400" :
+          repo.ciStatus === "pending" ? "bg-amber-400 animate-pulse" :
+          "bg-white/20";
+
+        const ciLabel =
+          repo.ciStatus === "failing" ? "FAILING" :
+          repo.ciStatus === "passing" ? "PASSING" :
+          repo.ciStatus === "pending" ? "PENDING" : "NO CI";
+
+        const ciColor =
+          repo.ciStatus === "failing" ? "text-red-400" :
+          repo.ciStatus === "passing" ? "text-emerald-400" :
+          repo.ciStatus === "pending" ? "text-amber-400" : "text-white/30";
+
+        return (
+          <div
+            key={repo.id}
+            className={`rounded-xl bg-white/[0.04] border border-white/[0.08] p-4 ${
+              repo.ciStatus === "failing" ? "border-l-4 border-l-red-500" :
+              repo.ciStatus === "passing" ? "border-l-4 border-l-emerald-500" : ""
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Status dot */}
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${ciDot}`} />
+
+              {/* Repo name */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href={repo.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-sm font-semibold text-white hover:text-accent-light transition-colors"
+                  >
+                    {repo.full_name}
+                  </a>
+                  {repo.private && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/40 font-medium">private</span>
+                  )}
+                  <span className={`text-[11px] font-bold font-mono ${ciColor}`}>{ciLabel}</span>
+                </div>
+                {repo.latestRun && (
+                  <div className="text-xs text-white/40 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span>{repo.latestRun.name}</span>
+                    <span>·</span>
+                    <span>{repo.latestRun.head_branch}</span>
+                    <span>·</span>
+                    <span>{new Date(repo.latestRun.created_at).toLocaleDateString()}</span>
+                    <a href={repo.latestRun.html_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      view run →
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Action area */}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Scan state feedback */}
+                {state?.status === "scanning" && (
+                  <span className="text-xs text-accent animate-pulse">Scanning…</span>
+                )}
+                {state?.status === "fixing" && (
+                  <span className="text-xs text-emerald-400 animate-pulse">AI fixing {state.issues} issues…</span>
+                )}
+                {state?.status === "done" && state.prUrl && (
+                  <a
+                    href={state.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors font-medium"
+                  >
+                    View Fix PR →
+                  </a>
+                )}
+                {state?.status === "done" && !state.prUrl && state.issues === 0 && (
+                  <span className="text-xs text-emerald-400">✓ No issues found</span>
+                )}
+                {state?.status === "done" && !state.prUrl && (state.issues || 0) > 0 && (
+                  <span className="text-xs text-white/40">{state.error || "No auto-fixable issues"}</span>
+                )}
+                {state?.status === "error" && (
+                  <span className="text-xs text-red-400">{state.error}</span>
+                )}
+
+                {/* Scan button */}
+                {!isWorking && (
+                  <button
+                    onClick={() => scanAndFix(repo)}
+                    disabled={isWorking}
+                    className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+                  >
+                    {state?.status === "done" ? "Re-scan" : "Scan & Fix"}
+                  </button>
+                )}
+
+                {isWorking && (
+                  <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
