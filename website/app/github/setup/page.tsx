@@ -21,7 +21,7 @@ export default function GitHubSetup() {
           </h1>
           <p className="text-lg text-muted max-w-xl mx-auto">
             One click. Every push and PR gets scanned automatically.
-            22 modules. Results posted right on your pull requests.
+            67 modules. Results posted right on your pull requests.
           </p>
         </div>
 
