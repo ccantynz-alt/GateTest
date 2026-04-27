@@ -269,6 +269,8 @@ function composePrBody(opts) {
 
   // Next steps
   sections.push('');
+  sections.push('> **AI-generated fixes — review every change before merging.** GateTest validates each fix through three gates (syntax, scanner, regression test), but Claude can still write code that\'s plausibly correct yet semantically wrong. Treat this PR like any other untrusted PR: read the diff.');
+  sections.push('');
   sections.push('### Next steps');
   sections.push('');
   sections.push('- Review the changes in the **Files Changed** tab');
@@ -279,7 +281,7 @@ function composePrBody(opts) {
   sections.push('');
   sections.push('---');
   sections.push('');
-  sections.push('<sub>Scanned and fixed by <a href="https://gatetest.ai">GateTest</a> — 90 modules · AI-powered · verify-before-commit · pay-on-completion</sub>');
+  sections.push('<sub>Scanned and fixed by <a href="https://gatetest.ai">GateTest</a> — 91 modules · AI-powered · verify-before-commit · pay-on-completion</sub>');
 
   return sections.join('\n');
 }

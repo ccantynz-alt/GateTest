@@ -8,6 +8,7 @@ const scanPlans = [
     name: "Quick Scan",
     price: "$29",
     period: "per scan",
+    badge: "Beta",
     description:
       "Essential checks. Syntax, linting, secrets, and code quality.",
     modules: "4 modules",
@@ -28,10 +29,10 @@ const scanPlans = [
     name: "Full Scan",
     price: "$99",
     period: "per scan",
-    badge: "Most Popular",
+    badge: "Beta · Most Popular",
     description:
       "Every module. Security, accessibility, SEO, AI code review, and more.",
-    modules: "All 90 modules",
+    modules: "All 91 modules",
     features: [
       "Everything in Quick Scan",
       "Security (OWASP, XSS, SQLi, SSRF, ReDoS, TLS, cookies)",
@@ -53,10 +54,10 @@ const scanPlans = [
     name: "Scan + Fix",
     price: "$199",
     period: "per scan",
-    badge: "Deepest review",
+    badge: "Beta · Deepest review",
     description:
       "Full Scan plus a second-Claude pair-review on every fix and a codebase-shape architecture report.",
-    modules: "All 90 + depth review",
+    modules: "All 91 + depth review",
     features: [
       "Everything in Full Scan",
       "Pair-review critique on every fix — second Claude scores correctness, completeness, readability, test coverage",
@@ -74,10 +75,10 @@ const scanPlans = [
     name: "Nuclear",
     price: "$399",
     period: "per scan",
-    badge: "Maximum depth",
+    badge: "Beta · Maximum depth",
     description:
       "The deepest scan we offer. Real Claude diagnosis, attack-chain correlation, mutation testing, chaos pass, executive summary.",
-    modules: "All 90 + nuclear stack",
+    modules: "All 91 + nuclear stack",
     features: [
       "Everything in Scan + Fix",
       "Real Claude diagnosis on every finding — no templated snippets, every fix reasoned from your specific evidence",
@@ -86,6 +87,7 @@ const scanPlans = [
       "Chaos / fuzz pass — adversarial inputs against HTTP routes, CLI args, file parsers; report what crashes",
       "CTO-readable executive summary — single document, plain language, real recommendations",
       "Best margin if you're shipping money or PII — the $399 hits all the high-stakes bug classes",
+      "Mutation testing + chaos pass run via the GateTest CLI locally — the serverless scan delivers diagnoser, correlator, executive summary",
     ],
     cta: "Run Nuclear",
     highlight: false,
@@ -192,7 +194,7 @@ export default function Pricing() {
                   : "card"
               }`}
             >
-              {plan.highlight && (
+              {plan.badge && (
                 <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-3">
                   {plan.badge}
                 </div>
