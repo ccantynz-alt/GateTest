@@ -113,6 +113,18 @@ export async function runTier(
         details: [`Module "${name}" is listed in the tier but has no runner`],
       };
     }
+    // Skip modules that would start after the deadline — return partial
+    // results rather than letting Vercel kill the whole function.
+    if (ctx.deadlineMs && Date.now() > ctx.deadlineMs) {
+      return {
+        name,
+        status: "skipped",
+        checks: 0,
+        issues: 0,
+        duration: 0,
+        skipped: "scan time budget exceeded",
+      };
+    }
     try {
       const out = await runner(ctx);
       if (out.skipped) {

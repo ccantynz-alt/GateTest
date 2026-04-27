@@ -49,10 +49,10 @@ async function scanServer(target: string, baseUrl: string): Promise<ScanResult |
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const total = Number(data.totalIssues || 0);
+    const issueCount = Number(data.totalIssues || 0);
     return {
-      totalIssues: total,
-      status: total === 0 ? "healthy" : total > 5 ? "down" : "degraded",
+      totalIssues: issueCount,
+      status: issueCount === 0 ? "healthy" : issueCount > 5 ? "down" : "degraded",
     };
   } catch {
     return null;

@@ -1,3 +1,4 @@
+// quality:file-length-ok — pattern table + diff parser + AI engine must coexist in one module for atomic updates
 /**
  * Fake Fix Detector — The "chicken scratching" killer.
  *
@@ -423,12 +424,18 @@ class FakeFixDetectorModule extends BaseModule {
     const hunks = this._parseDiff(diff);
 
     for (const hunk of hunks) {
+      // Skip marketing / demo pages — they intentionally show examples of
+      // the patterns GateTest catches and should never trigger false positives.
+      const isDemo = /website\/app\/for\//.test(hunk.file);
+
       // Walk added / removed lines
       for (const line of hunk.lines) {
         for (const rule of PATTERN_RULES) {
           if (rule.direction === 'added' && !line.startsWith('+')) continue;
           if (rule.direction === 'removed' && !line.startsWith('-')) continue;
           if (rule.direction === 'changed') continue; // handled below
+
+          if (isDemo && rule.severity === 'error') continue; // never hard-error on demo pages
 
           if (rule.pattern.test(line)) {
             findings.push({

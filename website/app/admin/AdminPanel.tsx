@@ -279,23 +279,6 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       .map((i) => ({ file: i.file, status: "pending" as FileFixStatus }));
   }
 
-  function applyFixResult(progress: FileProgress[], data: FixResult): FileProgress[] {
-    const failedSet = new Set<string>((data.failedFiles || []).map((f) => f.file));
-    const timeoutSet = new Set<string>();
-    for (const e of data.errors || []) {
-      const m = e.match(/^([\w./\-@+]+?\.[\w]{1,8}):\s*(request timed out|Anthropic API)/);
-      if (m) timeoutSet.add(m[1]);
-    }
-    return progress.map((fp) => {
-      if (timeoutSet.has(fp.file)) return { ...fp, status: "timeout", error: "timed out — queued for retry" };
-      if (failedSet.has(fp.file)) {
-        const ff = (data.failedFiles || []).find((f) => f.file === fp.file);
-        return { ...fp, status: "failed", error: ff?.reason || "api error" };
-      }
-      return { ...fp, status: "done" };
-    });
-  }
-
   function applyFixResultForBatch(progress: FileProgress[], data: FixResult, batchFiles: Set<string>): FileProgress[] {
     const failedSet = new Set<string>((data.failedFiles || []).map((f) => f.file));
     const timeoutSet = new Set<string>();

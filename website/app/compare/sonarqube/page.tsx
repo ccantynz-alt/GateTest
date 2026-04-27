@@ -166,7 +166,7 @@ export default function SonarQubePage() {
                 </tr>
               </thead>
               <tbody>
-                {comparisonRows.map((row, i) => (
+                {comparisonRows.map((row) => (
                   <tr
                     key={row.feature}
                     className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.02] transition-colors"

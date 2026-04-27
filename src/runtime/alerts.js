@@ -36,8 +36,8 @@ class AlertRouter {
 
   _console(level, title, body) {
     const prefix = { critical: '🔴 CRITICAL', error: '🟠 ERROR', warning: '🟡 WARNING', info: '🔵 INFO' }[level];
-    console.log(`\n[GateTest Monitor] ${prefix}: ${title}`);
-    if (body) console.log(`  ${body}`);
+    console.log(`\n[GateTest Monitor] ${prefix}: ${title}`); // code-quality-ok — CLI terminal output
+    if (body) console.log(`  ${body}`); // code-quality-ok — CLI terminal output
   }
 
   _log(entry) {

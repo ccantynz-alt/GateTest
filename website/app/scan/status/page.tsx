@@ -76,7 +76,6 @@ export default function ScanStatus() {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [fixError, setFixError] = useState("");
-  // eslint-disable-next-line react-hooks/purity
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
   const fixTriggered = useRef(false);

@@ -23,8 +23,13 @@ import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 // own copy per the HTTP-only coupling rule.
 import { sendGluecronCallback } from "@/app/lib/gluecron-callback";
 
+// 5-minute function budget — needs Vercel Pro; Hobby cap is 60s.
+export const maxDuration = 300;
+
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const MAX_FILES_TO_READ = 50;
+// Leave 30s headroom for Stripe metadata writes and response serialisation.
+const SCAN_TIME_BUDGET_MS = 260_000;
 
 function stripeApi(
   method: string,
@@ -82,6 +87,7 @@ interface ScanRepoResult {
 
 async function scanRepo(owner: string, repo: string, tier: string): Promise<ScanRepoResult> {
   const startTime = Date.now();
+  const deadline = startTime + SCAN_TIME_BUDGET_MS;
 
   // Resolve Gluecron auth. Gluecron is PAT-only; resolveRepoAuth pings
   // the repo endpoint to confirm the token has access before we attempt
@@ -117,6 +123,11 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
   );
 
   // Read source files (up to MAX_FILES_TO_READ) in parallel for speed.
+  // Bail early if we are already close to the time budget — better to return
+  // whatever we have than to let Vercel kill the function mid-response.
+  if (Date.now() > deadline) {
+    return { modules: [], totalIssues: 0, duration: Date.now() - startTime, authSource: auth.source, error: "scan timed out fetching file tree" };
+  }
   const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
     try {
       const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
@@ -135,6 +146,7 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
     files,
     fileContents,
     token,
+    deadlineMs: deadline,
   });
 
   return {

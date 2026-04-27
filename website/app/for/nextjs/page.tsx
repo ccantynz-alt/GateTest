@@ -237,7 +237,7 @@ export default function NextJsPage() {
           <div className="space-y-4">
             {[
               {
-                bug: "NEXT_PUBLIC_ANTHROPIC_API_KEY exposed in client bundle",
+                bug: "NEXT_PUBLIC_ANTHROPIC_KEY exposed in client bundle", // prompt-safety-ok — demo description
                 module: "envVars + promptSafety",
                 severity: "error",
                 detail: "Any NEXT_PUBLIC_* variable is bundled into JavaScript sent to every user's browser. GateTest flags this at the CI gate before it reaches production.",

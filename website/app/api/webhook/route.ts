@@ -24,6 +24,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// postGluecronResult used by scan-worker for github-host jobs; imported here so
+// the module stays in the bundle. eslint-disable keeps the warning silent.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { postGluecronResult } from "@/app/lib/gluecron-callback";
 import { getDb } from "@/app/lib/db";
 
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_BASE_URL ||
     (req.nextUrl.origin ? req.nextUrl.origin : "");
 
-  const result = await githubEvents.processGitHubEvent({
+  await githubEvents.processGitHubEvent({
     rawBody,
     eventType,
     delivery,

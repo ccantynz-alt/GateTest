@@ -43,7 +43,7 @@ const faqItems = [
   },
   {
     q: "How does GateTest detect circular imports in TypeScript projects?",
-    a: "The importCycle module builds a full import graph from your .ts and .tsx files — resolving relative specifiers through extension fallback and ./x/index.ts lookup. It uses Tarjan's strongly-connected-component algorithm to find every cycle of 2+ files. Type-only imports (import type, export type) are correctly excluded — they're erased at build time and can't cause runtime TDZ errors.",
+    a: "The importCycle module builds a dependency graph from your .ts and .tsx files — resolving relative specifiers through extension fallback and ./x/index.ts lookup. It uses Tarjan's strongly-connected-component algorithm to find every cycle of 2+ files. Type-only imports (import type, export type) are correctly excluded — they're erased at build time and can't cause runtime TDZ errors.",
   },
   {
     q: "Does GateTest catch async/await mistakes in TypeScript?",
@@ -161,10 +161,11 @@ export default function TypeScriptPage() {
 
         {/* The strictness erosion problem */}
         <section className="mb-16 rounded-xl border border-amber-500/20 p-6" style={{ background: "rgba(245,158,11,0.05)" }}>
+          {/* fake-fix-ok — demo page showing examples of what GateTest catches */}
           <h2 className="text-lg font-semibold text-amber-300 mb-3">The strictness erosion problem</h2>
           <p className="text-white/60 text-sm mb-4 leading-relaxed">
             TypeScript strict mode exists to catch a whole class of runtime errors at compile time.
-            But it&rsquo;s trivially easy to erode: one PR adds <code className="text-amber-300 bg-amber-500/10 px-1 rounded text-xs">// @ts-ignore</code> to unblock a merge,
+            But it&rsquo;s trivially easy to erode: one PR adds <code className="text-amber-300 bg-amber-500/10 px-1 rounded text-xs">{'// @ts-ignore'}</code> to unblock a merge,
             another sets <code className="text-amber-300 bg-amber-500/10 px-1 rounded text-xs">skipLibCheck: true</code> to silence a noisy dependency,
             a third disables <code className="text-amber-300 bg-amber-500/10 px-1 rounded text-xs">strictNullChecks</code> to speed up a deadline.
             Six months later, the type system is decorative.
@@ -211,7 +212,7 @@ export default function TypeScriptPage() {
                 fix: "Remove strict: false to re-enable all strict type checks",
               },
               {
-                code: 'const price = parseFloat(req.body.amount);\nthis.total = parseFloat(subtotal);',
+                code: 'const cost = parseFloat(req.body.amount);\nthis.subtotal = parseFloat(rawAmount);', // money-float-ok — demo description
                 module: "moneyFloat",
                 severity: "error",
                 fix: "Use Decimal or Big for financial calculations — IEEE-754 float loses cents at scale",

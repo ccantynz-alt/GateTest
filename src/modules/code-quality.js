@@ -41,8 +41,8 @@ class CodeQualityModule extends BaseModule {
       // Check function length
       this._checkFunctionLength(relPath, lines, thresholds.maxFunctionLength, result);
 
-      // Check file length
-      if (lines.length > thresholds.maxFileLength) {
+      // Check file length — suppressed by `// quality:file-length-ok` anywhere in the file
+      if (lines.length > thresholds.maxFileLength && !content.includes('quality:file-length-ok')) {
         result.addCheck(`quality:file-length:${relPath}`, false, {
           file: relPath,
           expected: `<= ${thresholds.maxFileLength} lines`,

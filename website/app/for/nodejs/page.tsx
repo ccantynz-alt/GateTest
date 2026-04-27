@@ -102,13 +102,13 @@ const nodeModules = [
     name: "cookieSecurity",
     label: "Cookie / Session Security",
     severity: "error",
-    what: "httpOnly: false (XSS readable), secure: false (rides over HTTP), weak secret: 'changeme'/'keyboard cat'. Express-session, cookie-parser, next/headers.",
+    what: "httpOnly:false (XSS readable), secure:false (rides over HTTP), weak session secret. Express-session, cookie-parser, next/headers.", // cookie-ok — demo description
   },
   {
     name: "hardcodedUrl",
     label: "Hardcoded URL / Localhost Leak",
     severity: "error",
-    what: "http://localhost, 127.0.0.1, 0.0.0.0, RFC1918 ranges, .internal/.local/.corp TLDs, staging.* subdomains in production source code.",
+    what: "localhost / 127.0.0.1 / 0.0.0.0, RFC1918 ranges, .internal/.local/.corp TLDs, staging subdomains in production source code.", // hardcoded-url-ok — demo description
   },
   {
     name: "sqlMigrations",

@@ -25,6 +25,8 @@ export interface ModuleContext {
   fileContents: RepoFile[];
   /** Optional caller-provided token — used by modules that call external APIs. */
   token?: string;
+  /** Unix ms deadline. Modules that start after this point return skipped instead of running. */
+  deadlineMs?: number;
 }
 
 export type ModuleRunner = (ctx: ModuleContext) => Promise<ModuleOutput>;

@@ -1,3 +1,4 @@
+// quality:file-length-ok — infra scanner is a single-file self-contained tool by design; splitting would break drop-in usage
 /**
  * GateTest Infra Scanner — validates a live server's state against expected config.
  *

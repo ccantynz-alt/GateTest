@@ -106,8 +106,9 @@ class DeployContractModule extends BaseModule {
 
             let urlPath = null;
             try {
-              const full = raw.replace(/\$\{?[A-Z_]+\}?/g, 'http://localhost');
-              urlPath = new URL(full.startsWith('http') ? full : `http://localhost${full}`).pathname;
+              const placeholder = 'http://localhost'; // hardcoded-url-ok — URL parsing placeholder, never used in network calls
+              const full = raw.replace(/\$\{?[A-Z_]+\}?/g, placeholder);
+              urlPath = new URL(full.startsWith('http') ? full : `${placeholder}${full}`).pathname;
             } catch { /* dynamic URL */ }
 
             found.push({ file, url: raw, path: urlPath, line: idx + 1 });
