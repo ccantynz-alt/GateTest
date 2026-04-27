@@ -12,29 +12,9 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-
-/** Mutation operators — each transforms source code in a way that should break tests. */
-const MUTATIONS = [
-  { name: 'negate-conditional', pattern: /===\s/g, replace: '!== ', desc: 'Negated conditional' },
-  { name: 'negate-conditional-eq', pattern: /!==\s/g, replace: '=== ', desc: 'Negated conditional' },
-  { name: 'boundary-lt', pattern: /<\s/g, replace: '<= ', desc: 'Changed boundary condition' },
-  { name: 'boundary-lte', pattern: /<=\s/g, replace: '< ', desc: 'Changed boundary condition' },
-  { name: 'boundary-gt', pattern: />\s/g, replace: '>= ', desc: 'Changed boundary condition' },
-  { name: 'boundary-gte', pattern: />=\s/g, replace: '> ', desc: 'Changed boundary condition' },
-  { name: 'math-add', pattern: /\+(?!=)/g, replace: '-', desc: 'Swapped + for -' },
-  { name: 'math-sub', pattern: /(?<!=)-(?!=)/g, replace: '+', desc: 'Swapped - for +' },
-  { name: 'return-true', pattern: /return true/g, replace: 'return false', desc: 'Flipped return true' },
-  { name: 'return-false', pattern: /return false/g, replace: 'return true', desc: 'Flipped return false' },
-  { name: 'remove-return', pattern: /return\s+(?!;)/g, replace: 'return void ', desc: 'Voided return value' },
-  { name: 'empty-string', pattern: /return ['"](.+?)['"]/g, replace: 'return ""', desc: 'Emptied return string' },
-  { name: 'zero-constant', pattern: /return\s+(\d+)/g, replace: 'return 0', desc: 'Zeroed return constant' },
-  { name: 'null-return', pattern: /return\s+\{/g, replace: 'return null && {', desc: 'Nulled return object' },
-  { name: 'array-empty', pattern: /return\s+\[/g, replace: 'return [] && [', desc: 'Emptied return array' },
-  { name: 'increment-swap', pattern: /\+\+/g, replace: '--', desc: 'Swapped ++ for --' },
-  { name: 'decrement-swap', pattern: /--/g, replace: '++', desc: 'Swapped -- for ++' },
-  { name: 'and-to-or', pattern: /&&/g, replace: '||', desc: 'Swapped && for ||' },
-  { name: 'or-to-and', pattern: /\|\|/g, replace: '&&', desc: 'Swapped || for &&' },
-];
+// Mutation operators extracted to a testable engine module so they can
+// be unit-tested independently of the test-runner orchestration.
+const { MUTATIONS, shouldSkipLine } = require('../core/mutation-engine');
 
 class MutationModule extends BaseModule {
   constructor() {
@@ -104,9 +84,9 @@ class MutationModule extends BaseModule {
           if (totalMutants >= maxMutants) break;
 
           const line = lines[i];
-          // Skip comments, imports, requires
-          if (line.trim().startsWith('//') || line.trim().startsWith('*') ||
-              line.includes('require(') || line.includes('import ')) continue;
+          // Skip comments, imports, requires — delegated to mutation-engine
+          // helper so the rule lives in one place (tested in isolation).
+          if (shouldSkipLine(line)) continue;
 
           mutation.pattern.lastIndex = 0;
           if (!mutation.pattern.test(line)) continue;

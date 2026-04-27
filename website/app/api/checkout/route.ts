@@ -54,6 +54,18 @@ const TIERS: Record<string, ScanTier> = {
     description:
       "Everything in Full Scan, plus a second-Claude pair-review critique on every fix (correctness/completeness/readability/test-coverage rubric) and a separate architecture-annotator report on codebase-shape design observations. Same PR, deeper deliverable.",
   },
+  // Phase 3.6 — $399 Nuclear tier. Wired in once 3.1 (Claude diagnoser),
+  // 3.2 (cross-finding correlator), 3.3 (mutation testing), 3.4 (chaos),
+  // 3.5 (executive summary), and 3.7 (4/3 real-repo proofs validated)
+  // all shipped. Stripe product already exists at $399 (Craig confirmed
+  // via screenshot earlier this session).
+  nuclear: {
+    name: "Nuclear",
+    priceInCents: 39900,
+    modules: "all-90+nuclear-stack",
+    description:
+      "Everything in Scan + Fix, PLUS: real Claude diagnosis on every finding (no templated snippets), cross-finding attack-chain correlation (textbook session-forgery / supply-chain vectors no per-finding scanner can see), mutation testing (proves your tests catch bugs), chaos / fuzz pass on entry points, and a CTO-readable executive summary report.",
+  },
 };
 
 function stripeRequest(
