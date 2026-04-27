@@ -1569,6 +1569,63 @@ interface NuclearFinding {
   detail: string;
 }
 
+function NuclearFixSnippets({ fixResult }: { fixResult: Record<string, unknown> }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const fixes = fixResult.fixes as Record<string, ServerFix[]> || {};
+  const total = (fixResult.totalFixes as number) || 0;
+  const cats = (fixResult.categories as number) || 0;
+
+  function copySnippet(code: string, id: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-emerald-600 text-lg font-bold">⚡</span>
+        <h3 className="font-bold text-gray-900">
+          {total} ready-to-paste fix{total !== 1 ? "es" : ""} across {cats} categor{cats !== 1 ? "ies" : "y"}
+        </h3>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">Copy each snippet and apply it to your server config. No SSH credentials needed — paste and deploy.</p>
+      <div className="space-y-5">
+        {Object.entries(fixes).map(([category, fixList]) => (
+          <div key={category}>
+            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">{category}</h4>
+            <div className="space-y-3">
+              {fixList.map((f, idx) => {
+                const id = `nuclear-${category}-${idx}`;
+                return (
+                  <div key={id} className="rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                      <div>
+                        <span className="text-xs font-bold text-gray-800">{f.platform}</span>
+                        <span className="text-xs text-gray-500 ml-2">{f.title}</span>
+                      </div>
+                      <button
+                        onClick={() => copySnippet(f.code, id)}
+                        className="text-xs px-3 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors"
+                      >
+                        {copiedId === id ? "✓ Copied!" : "Copy"}
+                      </button>
+                    </div>
+                    <pre className="p-3 text-xs font-mono text-gray-700 bg-white overflow-x-auto whitespace-pre-wrap">{f.code}</pre>
+                    <p className="px-3 py-2 bg-amber-50 text-xs text-amber-700 border-t border-amber-200">
+                      {f.instructions}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function NuclearScanPanel() {
   const [url, setUrl] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -1741,13 +1798,13 @@ function NuclearScanPanel() {
 
           {/* Fixes */}
           {fixResult && (
-            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 mb-4 border-l-4 border-l-accent">
+            <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5 mb-4">
               {/* SSH auto-heal result */}
               {(fixResult as Record<string, unknown>).actions ? (
                 <>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xl">{(fixResult as Record<string, unknown>).status === "healed" ? "✅" : "⚡"}</span>
-                    <h3 className="font-bold">
+                    <h3 className="font-bold text-gray-900">
                       {(fixResult as Record<string, unknown>).status === "healed"
                         ? "Server Healed"
                         : (fixResult as Record<string, unknown>).status === "partial"
@@ -1775,29 +1832,23 @@ function NuclearScanPanel() {
                   </div>
                 </>
               ) : (fixResult as Record<string, unknown>).fixes && Object.keys((fixResult as Record<string, unknown>).fixes as Record<string, unknown>).length > 0 ? (
-                <>
-                  <h3 className="font-bold mb-3">⚡ Fixes generated</h3>
-                  <p className="text-sm text-gray-500 mb-3">
-                    {((fixResult as Record<string, unknown>).totalFixes as number) || 0} fixes across {((fixResult as Record<string, unknown>).categories as number) || 0} categories.
-                  </p>
-                  <details className="text-xs font-mono bg-gray-50 border border-gray-200 p-3 rounded max-h-96 overflow-auto">
-                    <summary className="cursor-pointer font-semibold text-gray-700">View all fix snippets</summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-gray-600">{JSON.stringify((fixResult as Record<string, unknown>).fixes, null, 2)}</pre>
-                  </details>
-                </>
+                <NuclearFixSnippets fixResult={fixResult as Record<string, unknown>} />
               ) : (
                 <div>
-                  <h3 className="font-bold mb-2">⚡ Fix attempted</h3>
-                  <p className="text-sm text-gray-500">
-                    To enable autonomous server repair, set these in Vercel env vars:
-                  </p>
-                  <ul className="text-xs font-mono text-gray-500 mt-2 space-y-1">
-                    <li>GATETEST_SSH_HOST — server IP (e.g. 45.76.171.37)</li>
-                    <li>GATETEST_SSH_USER — username (default: root)</li>
-                    <li>GATETEST_SSH_PASSWORD — server password</li>
+                  <h3 className="font-bold mb-2 text-gray-900">⚡ Fix attempted</h3>
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-3">
+                    <p className="text-sm text-amber-800 font-medium">SSH credentials not found</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Set these env vars in Vercel, then <strong>trigger a new deployment</strong> — env vars only take effect after redeployment.
+                    </p>
+                  </div>
+                  <ul className="text-xs font-mono bg-gray-50 border border-gray-200 rounded p-3 space-y-1.5 text-gray-700">
+                    <li><span className="text-emerald-700 font-bold">GATETEST_SSH_HOST</span> — server IP (e.g. 45.76.171.37)</li>
+                    <li><span className="text-gray-500 font-bold">GATETEST_SSH_USER</span> — username (default: root)</li>
+                    <li><span className="text-emerald-700 font-bold">GATETEST_SSH_PASSWORD</span> — server password</li>
                   </ul>
                   <p className="text-xs text-gray-400 mt-2">
-                    Once set, &quot;Fix Everything&quot; will SSH into the server and run fix commands automatically.
+                    Or use <span className="font-mono">GATETEST_SSH_KEY</span> (PEM private key) instead of a password.
                   </p>
                 </div>
               )}
