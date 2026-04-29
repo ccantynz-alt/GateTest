@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import FindingsPanel from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
 
 interface ModuleResult {
   name: string;
@@ -464,12 +465,29 @@ export default function ScanStatus() {
               <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
             )}
 
+            {/* AI-builder handoff — always visible when there are findings,
+                so the customer has a useful next step even if our own fix
+                loop fails (Anthropic outage, tier restriction, etc.). */}
+            {(scanResult?.totalIssues || 0) > 0 && scanResult && (
+              <AIBuilderHandoff
+                modules={scanResult.modules}
+                repoUrl={params.repo}
+                tier={params.tier}
+                fixFailed={Boolean(fixResult && !fixResult.prUrl)}
+                fixFailureReason={
+                  fixResult && !fixResult.prUrl
+                    ? (fixResult.error || fixResult.message || undefined)
+                    : undefined
+                }
+              />
+            )}
+
             {/* What's next — AI fix is the primary CTA */}
             {(scanResult?.totalIssues || 0) > 0 && (
               <div className="p-5 rounded-xl border border-border bg-white">
-                <h3 className="font-bold text-foreground mb-2">Fix everything automatically</h3>
+                <h3 className="font-bold text-foreground mb-2">Or let GateTest fix it for you</h3>
                 <p className="text-sm text-muted mb-4">
-                  GateTest can hand the issue list to Claude, generate the fixes, verify each one against the scanner, and open a pull request on your repo. Included with every scan.
+                  Skip the copy-paste — Claude reads each finding, generates the fix, re-validates against the scanner, writes a regression test, and opens a pull request on your repo. Included with every scan.
                 </p>
 
                 {!fixResult && !fixing && (

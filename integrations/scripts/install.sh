@@ -63,3 +63,13 @@ echo "  2. Commit:         git add .github .husky .gatetest.json && git commit -
 echo "  3. Push:           git push"
 echo
 echo "On the next push or PR, GateTest will run the full quality gate."
+echo
+echo "AUTO-REPAIR is ON BY DEFAULT when ANTHROPIC_API_KEY is available:"
+echo "  • Failing runs automatically open a 'gatetest/auto-repair-<run-id>'"
+echo "    PR with Claude-generated fixes. The original PR stays untouched."
+echo "  • To set the secret ONCE for ALL repos in your org:"
+echo "      https://github.com/organizations/<your-org>/settings/secrets/actions"
+echo "      → New organization secret → ANTHROPIC_API_KEY → All repositories"
+echo "  • To DISABLE auto-repair for THIS repo:"
+echo "      Settings → Secrets and variables → Actions → Variables tab"
+echo "      → New repository variable → GATETEST_AUTOFIX = off"
