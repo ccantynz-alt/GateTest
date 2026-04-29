@@ -243,7 +243,7 @@ The thing that doesn't exist anywhere else today and that compounds with every c
 
 Without this, the brain in 5.1 plateaus at first-day quality. With it, every customer interaction makes the next one smarter.
 
-- [ ] **5.2.1** Dissent capture — `dissent` table tracking: rolled-back fixes, "this isn't a bug" PR comments, fix PRs closed without merge, customer-clicked "false positive" buttons. Hooks into existing `/api/scan/fix` rollback path + new "thumbs down" UX in FindingsPanel.
+- [x] **5.2.1** Dissent capture storage — **DONE 2026-04-29** commit `ddb61cf`. `website/app/lib/dissent-store.js` with 4-index schema, 5-kind enum (ROLLED_BACK / PR_CLOSED_UNMERGED / FALSE_POSITIVE / FIX_REJECTED / COMMENT_DOWNVOTE), helpers for record / aggregate-by-module-pattern / list-for-repo / kinds-summary. Privacy: cleartext repo URL hashed via scan-fingerprint-store's hashRepoUrl, reviewer identity hashed (case-insensitive), notes capped at 500 chars. 27 tests green including PRIVACY CONTRACT suite. Storage layer ready; UI hooks (FindingsPanel thumbs-down, /api/scan/fix rollback recording) come in next session as the front half of 5.2.1.
 - [ ] **5.2.2** Per-module FP scorer — weekly cron job aggregates dissent by (module, fingerprint), produces a confidence score for every (module, pattern) pair. Stored in `module_confidence` table.
 - [ ] **5.2.3** Confidence-aware reporting — modules with low confidence on a given fingerprint get downgraded (error → warning → info → suppressed) for that customer. Customer never sees noise the system has already learned to suppress.
 - [ ] **5.2.4** Operator dashboard — `/admin/learning` surfaces which modules are improving, which are stagnating, which are introducing FPs. Surface drift before it hurts customers.
@@ -306,7 +306,7 @@ These ride alongside every sub-phase, not after:
 | Sub-phase | Status |
 | --- | --- |
 | 5.1 — Cross-repo intelligence | **4/5 SHIPPED + 1 partial** (5.1.1 ✓, 5.1.2 ✓, 5.1.3 ✓, 5.1.4 ✓, 5.1.5 ~ methodology + stubs shipped, 3 real-cohort fills pending). 177 tests green. Brain is wired end-to-end; awaits cohort population + $599 tier wire-up (Boss Rule). |
-| 5.2 — Closed feedback loop | 0/5 — not started |
+| 5.2 — Closed feedback loop | **1/5 storage shipped** (5.2.1 ✓ storage; UI hooks + scorer + dashboard + proof remain). 27 tests green. |
 | 5.3 — Live observability fusion | 0/5 — not started |
 | 5.4 — Architectural surgery | 0/5 — not started |
 | 5.5 — Cross-language unified semantics | 0/5 — not started |
