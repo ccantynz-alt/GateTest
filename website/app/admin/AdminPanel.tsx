@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
 
 interface FailedFile {
   file: string;
@@ -714,6 +715,27 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                     )}
                   </div>
                 </div>
+
+                {/* AI-builder handoff — always available so the operator
+                    has a usable export even if our own fix loop hits an
+                    Anthropic/network outage. Sits ABOVE the manual-guide
+                    block so it's the first thing visible after the action
+                    row. */}
+                {totalIssues > 0 && (
+                  <div className="mt-4">
+                    <AIBuilderHandoff
+                      modules={modules as Array<{ name: string; status: string; details?: string[] }>}
+                      repoUrl={repoUrl}
+                      tier={tier}
+                      fixFailed={Boolean(fixResult && !fixResult.prUrl && (fixResult.errors?.length || fixResult.failedFiles?.length))}
+                      fixFailureReason={
+                        fixResult && !fixResult.prUrl
+                          ? (fixResult.error || fixResult.message || "request failed")
+                          : undefined
+                      }
+                    />
+                  </div>
+                )}
 
                 {/* Manual guidance for unfixable issues */}
                 {guidance && guidance.length > 0 && (
