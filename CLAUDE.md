@@ -210,7 +210,7 @@ The thing that doesn't exist anywhere else today.
 | 2 — $199 Scan + Fix tier | 2026-04-26 | **5/5 SHIPPED — $199 LIVE FOR SALE** (2.1 ✓, 2.2 ✓, 2.3 ✓, 2.4 ✓ 4/3 proofs). |
 | 3 — $399 Nuclear tier | 2026-04-26 | **7/7 SHIPPED — $399 LIVE FOR SALE** (3.1 ✓, 3.2 ✓, 3.3 ✓, 3.4 ✓, 3.5 ✓, 3.6 ✓, 3.7 ✓ 4/3 proofs). |
 | 4 — Honesty sweep | 2026-04-26 | **5/5 SHIPPED — PHASE 4 COMPLETE** (4.1 ✓ no-op, 4.2 ✓, 4.3 ✓, 4.4 ✓ no-op, bonus ✓ next.config.ts ESM fix). |
-| 5 — THE 110% MANDATE | 2026-04-29 | 0/5 sub-phases — ACTIVE BUILD. Fills the 5 worst gaps against the theoretical "best AI diagnostic/fix tool ever made" scorecard. Each sub-phase is a multi-week build, each compounds on the prior. |
+| 5 — THE 110% MANDATE | 2026-04-29 | **5.1 SHIPPED 4/5 + 1 partial** — brain end-to-end, 177 tests, /dashboard/intelligence live. 5.1.5 awaits cohort population. 5.2-5.5 not started. |
 
 ---
 
@@ -232,12 +232,12 @@ Five sub-phases, ranked by impact × feasibility × compounding value:
 
 The thing that doesn't exist anywhere else today and that compounds with every customer.
 
-- [ ] **5.1.1** Schema + storage — `scan_fingerprint` table in Neon: { id, scanned_at, host, framework_versions, language_mix, module_findings_hash, fix_outcomes }. Privacy-respecting: NO source code stored, only hashed pattern fingerprints + framework metadata + module-level statistics. Migration script + integration tests for insert/query.
-- [ ] **5.1.2** Pattern fingerprint extractor — given a module's findings, emit a stable fingerprint (e.g. "Next 16 + Stripe + serverless N+1 in /api/checkout"). Pure function, 30+ unit tests covering each finding shape.
-- [ ] **5.1.3** Cross-repo lookup at scan time — when a new scan runs, query: "show me the top 5 fix patterns for repos with this fingerprint signature." Returns the prior-art context the per-finding diagnoser injects into Claude's prompt. Adds 1-2s to scan time, expected to drop FP rate by 30%+ and surface "preventive" findings (issues that haven't tripped yet but did on similar repos).
-- [ ] **5.1.4** Customer dashboard — `/dashboard/intelligence` shows the customer "your stack is in the 87th percentile of similar codebases" + "23% of repos with your fingerprint shipped this exact bug last quarter, here's what they fixed." Compounding-moat made visible.
-- [ ] **5.1.5** Real-repo proof on 3 stacks — Next 16 + Stripe, Express + Postgres, FastAPI + React. Document in `docs/proofs/phase-5-1-cross-repo-<stack>.md` with before/after diagnosis quality.
-- [ ] **Definition of done:** every box ticked AND a new $599 "Brain" tier wired into Stripe + Pricing.tsx with proof that customers on Brain get measurably better diagnoses than $399 customers (FP-rate delta on the proof repos).
+- [x] **5.1.1** Schema + storage — **DONE 2026-04-29** commit `afd9f53`. `scan_fingerprint` table in Neon with 6 indexes (time-series, repo-history, GIN on framework_versions, GIN on module_findings, tier aggregates, signature lookup). `website/app/lib/scan-fingerprint-store.js`. Privacy contract enforced by tests: cleartext repo URL is hashed before SQL binding, NO source code stored, NO file paths stored. 31 tests in `tests/scan-fingerprint-store.test.js`.
+- [x] **5.1.2** Pattern fingerprint extractor — **DONE 2026-04-29** commit `a52f16f`. Pure function at `website/app/lib/scan-fingerprint.js`. Four-layer shape: framework versions, language mix (per-extension byte share), per-module {count, deduped+sorted patternHashes}, fingerprint signature (sha256 of canonical-stringified layers). Pattern hash design: (module, ruleId, file-extension) — same hash across files, same hash across repos for the same rule, different hash when language context changes. Bug found + fixed during build: my first canonical-stringify used `JSON.stringify(x, allowedKeys)` (filter form) which only keeps top-level keys and zeroed out nested objects — replaced with recursive canonical-stringify that sorts keys at every depth. 46 tests in `tests/scan-fingerprint.test.js`.
+- [x] **5.1.3** Cross-repo lookup wired into nuclear diagnoser — **DONE 2026-04-29** commit `69b32d0`. `website/app/lib/cross-repo-lookup.js` (summariseSimilarScans, renderPriorArtPrompt, fetchPriorArt) + threading priorArt through nuclear-diagnoser's buildDiagnosisPrompt + diagnoseFinding + diagnoseFindings. Anti-template guard added: prompt explicitly tells Claude "Do not copy from prior-art." Defensive: returns null when sample is below MIN_SAMPLE_SIZE (3) or no module fires above 25%, never blocks the diagnoser. Bug found + fixed: percentile() off-by-one (Math.floor(p * (n-1)) → Math.floor(p * n)). 35+ tests across cross-repo-lookup + nuclear-diagnoser regression.
+- [x] **5.1.4** Customer dashboard — **DONE 2026-04-29** commit `099bc02`. `/api/dashboard/intelligence` route + `/dashboard/intelligence` page. Headline 'You are X percentile' card with positioning chip (leader / above_average / median / below_average / lagging), side-by-side 'Your stack' + 'Cohort' cards with framework versions + language mix bars, module-fire-rate bars across the cohort, cohort fix-success-rate bars per module, recent similar scans table (deidentified — only frameworks + counts shown). Auth: same admin-cookie + GitHub-OAuth pattern as other admin routes. Customer-facing variant for $599 Brain tier comes when that tier's checkout wires up (Boss Rule). Type bug fixed during build: cohortStats response mixed `count` and `sampleSize` — now exposes both for UI parity. 177 tests green across all of 5.1, website builds clean.
+- [~] **5.1.5** Real-repo proof on 3 stacks — **PARTIAL 2026-04-29**. Methodology + verification doc shipped at `docs/proofs/phase-5-1-brain-methodology.md` (177 tests, 6 layers, 5-rule privacy contract, synthetic-cohort verification). Three per-stack stub docs shipped: `phase-5-1-next-stripe.md`, `phase-5-1-express-pg.md`, `phase-5-1-fastapi-react.md` — each with the SQL queries, capture sections, and honest-assessment template. Stubs need to be filled in by the next session with DB + ANTHROPIC_API_KEY access. Architecture is proven; cohort population is the remaining work.
+- [ ] **Definition of done:** every box ticked AND a new $599 "Brain" tier wired into Stripe + Pricing.tsx with proof that customers on Brain get measurably better diagnoses than $399 customers (FP-rate delta on the proof repos). **Stripe wire-up is Boss Rule territory** — pre-authorised when 5.1.5 ships with all three real-cohort proofs.
 
 ### Phase 5.2 — Closed feedback loop (self-improving)
 
@@ -305,7 +305,7 @@ These ride alongside every sub-phase, not after:
 
 | Sub-phase | Status |
 | --- | --- |
-| 5.1 — Cross-repo intelligence | 0/5 — not started |
+| 5.1 — Cross-repo intelligence | **4/5 SHIPPED + 1 partial** (5.1.1 ✓, 5.1.2 ✓, 5.1.3 ✓, 5.1.4 ✓, 5.1.5 ~ methodology + stubs shipped, 3 real-cohort fills pending). 177 tests green. Brain is wired end-to-end; awaits cohort population + $599 tier wire-up (Boss Rule). |
 | 5.2 — Closed feedback loop | 0/5 — not started |
 | 5.3 — Live observability fusion | 0/5 — not started |
 | 5.4 — Architectural surgery | 0/5 — not started |
