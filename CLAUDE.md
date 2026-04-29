@@ -85,6 +85,47 @@ This rule does NOT override **THE BOSS RULE**. The Boss Rule's 9 items still req
 
 ---
 
+## CONTINUOUS-BUILD MODE — DO NOT STOP (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-29 — *"Please don't stop just continue until finished please make that a rule otherwise if you stop you stop production and you hurt the production."*
+
+### The rule
+
+Within a single session, **DO NOT stop after completing one task and check in.** Pick up the next task in the active build plan and continue. Repeat until forced to stop by one of the explicit stop conditions below. Stopping mid-build hurts production.
+
+### Continue-the-build defaults
+
+- After finishing a sub-task, **immediately start the next unchecked sub-task** in the current phase.
+- Commit at every meaningful milestone. Don't batch into giant end-of-session commits.
+- Push the branch as you go so the work is visible to Craig in real time.
+- Update CLAUDE.md status trackers + version block as boxes tick green.
+- Run the sweep checklist between sub-tasks (tests / build / module load), not just at session end.
+
+### Explicit stop conditions
+
+The ONLY reasons to stop and report back without continuing:
+
+1. **Boss Rule item hit.** Anything on the BOSS RULE list (pricing / DNS / Stripe config / production deploy / new external API integration / brand copy / new dependency / anything touching money or user data or public-facing comms). Report → escalate → do not act.
+2. **Hard blocker.** A test failure I cannot diagnose, a build break I cannot fix, a missing credential / env var, an external dependency outage. Report what's blocking → ask for the unblocker.
+3. **Context budget exhausted.** When the session has materially less remaining than is needed to safely finish a sub-task + its sweep + its commit. In that case: commit what's done, push, write a one-paragraph handoff note pointing at the next unchecked box, end gracefully.
+4. **Sweep red and unfixable.** If the sweep fails AND the failure is not from work I just did, report the regression — don't paper over a pre-existing break by continuing.
+5. **Craig sends a new instruction mid-session.** Always honour the new instruction; don't queue it behind the auto-build.
+
+### What this rule changes
+
+- Don't ask "want me to draft X next?" if X is the next box on the active plan. Just draft it.
+- Don't ask "should I add tests?" if the Bible's Quality Bar already requires them. Just add them.
+- Don't end a turn with "ready when you are" unless one of the stop conditions above is true.
+
+### Cross-session continuity
+
+Between sessions I literally don't run (no daemon). The closest equivalents until a Layer-3 operator service is authorised:
+- The Phase 5 status tracker tells the next session exactly which box to pick up.
+- The CLAUDE.md "Date last updated" line tells the next session what shipped last.
+- The most recent commit message points at the next unchecked sub-task.
+
+---
+
 ## STRATEGIC DIRECTION — DUAL-HOST, GLUECRON-LONG-TERM (READ THIS EVERY SESSION)
 
 **Gluecron.com is the future git host for Craig's stack — but GitHub is the distribution channel NOW.** Since 2026-04-22 GateTest is DUAL-HOST: push / PR events arrive from either GitHub App webhooks (`/api/webhook`) or Gluecron's Signal Bus (`/api/events/push`), both landing in the same `scan_queue`. Shutting off GitHub before Gluecron had paying customers was a commercial misstep; the webhook is alive again and will stay alive until Gluecron reaches revenue parity.
