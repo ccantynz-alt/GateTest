@@ -139,13 +139,30 @@ export async function runTier(
         };
       }
       const passed = out.issues === 0 && out.checks > 0;
+      // Per-module detail cap — was 20 (which silently dropped the bottom of
+      // every long report and meant the AI fix loop only ever saw "the top
+      // half"). Raised to 200 so every finding reaches the UI / fix path /
+      // AI-builder export. 200 × ~22 modules × ~150 bytes = ~660KB worst-case
+      // JSON response, comfortably inside Vercel's 4.5MB ceiling. If a single
+      // module ever exceeds 200, append an honest overflow line so the
+      // customer knows what was held back instead of believing the report
+      // is complete.
+      const DETAIL_CAP = 200;
+      const detailsOut: string[] | undefined = (() => {
+        if (!out.details || out.details.length === 0) return undefined;
+        if (out.details.length <= DETAIL_CAP) return out.details;
+        return [
+          ...out.details.slice(0, DETAIL_CAP),
+          `info: ${out.details.length - DETAIL_CAP} more finding(s) not shown — re-scan with the CLI for the full list (gatetest --module ${name} --reporter json)`,
+        ];
+      })();
       return {
         name,
         status: passed ? "passed" : out.checks === 0 ? "skipped" : "failed",
         checks: out.checks,
         issues: out.issues,
         duration: Date.now() - started,
-        details: out.details.length > 0 ? out.details.slice(0, 20) : undefined,
+        details: detailsOut,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown error";
