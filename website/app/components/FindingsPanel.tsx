@@ -142,6 +142,10 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Phase 5.2.1 — dissent state. Tracked per-finding-id so the panel
+  // can show a "thanks, recorded" indicator and prevent double-submits.
+  const [dissentedIds, setDissentedIds] = useState<Set<string>>(() => new Set());
+  const [pendingDissentId, setPendingDissentId] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const c = { error: 0, warning: 0, info: 0, total: findings.length };
@@ -178,6 +182,44 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
     copyToClipboard(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId((curr) => (curr === id ? null : curr)), 1400);
+  }
+
+  // Phase 5.2.1 — dissent thumbs-down. Records a FALSE_POSITIVE dissent
+  // so the 5.2.2 FP scorer can downgrade noisy modules. State is local
+  // (per-finding) so the button shows immediate feedback without
+  // re-fetching. Failures fall silent so a brain outage doesn't break
+  // the panel.
+  async function handleDissent(f: Finding) {
+    if (dissentedIds.has(f.id) || pendingDissentId === f.id) return;
+    setPendingDissentId(f.id);
+    try {
+      const res = await fetch("/api/dissent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoUrl: repoUrl || "",
+          module: f.module,
+          // The findings panel doesn't have the (module, ruleId, ext)
+          // pattern hash on hand — use the finding's stable id as a
+          // fallback signature. The 5.2.2 scorer treats null
+          // patternHash as "module-level" and aggregates accordingly.
+          patternHash: null,
+          kind: "false_positive",
+          notes: f.message?.slice(0, 200),
+        }),
+      });
+      if (res.ok) {
+        setDissentedIds((s) => {
+          const next = new Set(s);
+          next.add(f.id);
+          return next;
+        });
+      }
+    } catch {
+      // Brain unavailable — never block the panel.
+    } finally {
+      setPendingDissentId(null);
+    }
   }
 
   if (findings.length === 0) {
@@ -373,6 +415,38 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
                       {f.message}
                     </p>
                   </div>
+                  {/* Phase 5.2.1 — false-positive thumbs-down. Records a dissent
+                      signal that flows into the per-module FP scorer in 5.2.2 */}
+                  <button
+                    type="button"
+                    onClick={() => handleDissent(f)}
+                    disabled={dissentedIds.has(f.id) || pendingDissentId === f.id}
+                    className={`shrink-0 self-start mt-1 ml-2 inline-flex items-center justify-center w-6 h-6 rounded-md border text-xs transition-colors ${
+                      dissentedIds.has(f.id)
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 cursor-default"
+                        : pendingDissentId === f.id
+                          ? "bg-background-alt border-border text-muted cursor-wait"
+                          : "bg-white border-border text-muted hover:border-amber-300 hover:text-amber-700 hover:bg-amber-50"
+                    }`}
+                    title={
+                      dissentedIds.has(f.id)
+                        ? "Recorded as false positive — thanks, this signal feeds the brain"
+                        : pendingDissentId === f.id
+                          ? "Recording…"
+                          : "This is a false positive — flag for the brain"
+                    }
+                    aria-label="Mark as false positive"
+                  >
+                    {dissentedIds.has(f.id) ? (
+                      <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
+                        <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
               </li>
             );

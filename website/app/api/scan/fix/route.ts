@@ -854,6 +854,50 @@ export async function POST(req: NextRequest) {
         reason: rb.reason,
         newFindings: rb.newFindings,
       }));
+      // Phase 5.2.1 — record FIX_REJECTED dissent for every rolled-back
+      // fix so the FP scorer (5.2.2) sees the signal. Best-effort:
+      // failures here never block the PR. Each unattributed finding
+      // also surfaces as a module-level dissent so we capture
+      // module-wide noise patterns even when we can't tie a new finding
+      // to a specific fixer's input.
+      try {
+        // Lazy import to avoid pulling the store into the hot path of
+        // routes that never roll anything back.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const dissentStore = require("@/app/lib/dissent-store.js") as {
+          DISSENT_KINDS: Record<string, string>;
+          ensureDissentTable: (sql: unknown) => Promise<void>;
+          recordDissent: (opts: {
+            sql: unknown;
+            repoUrl: string;
+            module: string;
+            kind: string;
+            patternHash?: string | null;
+            notes?: string | null;
+            fixPrNumber?: number | null;
+          }) => Promise<{ id: number | null }>;
+        };
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getDb } = require("@/app/lib/db") as { getDb: () => unknown };
+        const sql = getDb();
+        await dissentStore.ensureDissentTable(sql);
+        for (const rb of scannerGate.rolledBack) {
+          // Map each rolled-back fix to one or more dissent rows. The
+          // module is unknown at this layer (the original issue list
+          // didn't preserve it), so we use the scanner-gate's reason
+          // string as the module signal, prefixed so the operator
+          // dashboard can tell rollback dissent apart from explicit FP.
+          await dissentStore.recordDissent({
+            sql,
+            repoUrl,
+            module: `scanner-gate:${(rb.reason || "regression").slice(0, 32)}`,
+            kind: dissentStore.DISSENT_KINDS.FIX_REJECTED,
+            notes: `${rb.file} — ${(rb.newFindings || []).slice(0, 3).join("; ")}`.slice(0, 500),
+          }).catch(() => null);
+        }
+      } catch {
+        // Brain unavailable — never block fix flow.
+      }
       // Replace fix list with scanner-validated subset.
       fixes.length = 0;
       for (const a of scannerGate.accepted) {

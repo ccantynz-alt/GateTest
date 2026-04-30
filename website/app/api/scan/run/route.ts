@@ -324,12 +324,55 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Phase 5.2.3 — confidence-aware reporting. Adjust per-finding severity
+  // based on the brain's per-(module, pattern) confidence scores.
+  // Customers never see noise the system has already learned to suppress.
+  // Best-effort: brain unavailable → fall through with original modules,
+  // never blocks the response.
+  let confidenceAdjustments: { suppressedCount: number; downgradedCount: number; perModule: unknown[] } = {
+    suppressedCount: 0, downgradedCount: 0, perModule: [],
+  };
+  let finalModules = result.modules;
+  let finalTotalIssues = result.totalIssues;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const confidenceReport = require("@/app/lib/confidence-aware-report.js");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const moduleConfidence = require("@/app/lib/module-confidence.js");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getDb } = require("@/app/lib/db");
+    const sqlForConfidence = getDb();
+    const resolveAction = confidenceReport.buildResolveAction({
+      sql: sqlForConfidence,
+      getConfidenceScore: moduleConfidence.getConfidenceScore,
+    });
+    // The transform is per-module here (no per-finding pattern hash on
+    // hand at this layer). resolveAction is async, but the transform
+    // function is sync — so resolve actions for all modules first, then
+    // pass a sync resolver into applyConfidenceToScan.
+    const moduleActionMap = new Map<string, string>();
+    for (const m of result.modules) {
+      // eslint-disable-next-line no-await-in-loop
+      const action = await resolveAction(m.name, null);
+      moduleActionMap.set(m.name, action);
+    }
+    const adjusted = confidenceReport.applyConfidenceToScan(
+      { modules: result.modules, totalIssues: result.totalIssues },
+      (mod: string) => moduleActionMap.get(mod) || "trust"
+    );
+    finalModules = adjusted.scanResult.modules;
+    finalTotalIssues = adjusted.scanResult.totalIssues;
+    confidenceAdjustments = adjusted.adjustments;
+  } catch {
+    // Brain unavailable — surface unmodified results.
+  }
+
   return NextResponse.json({
     status: result.error ? "failed" : "complete",
-    modules: result.modules,
-    totalModules: result.modules.length,
-    completedModules: result.modules.length,
-    totalIssues: result.totalIssues,
+    modules: finalModules,
+    totalModules: finalModules.length,
+    completedModules: finalModules.length,
+    totalIssues: finalTotalIssues,
     totalFixed: 0,
     duration: result.duration,
     repoUrl,
@@ -338,5 +381,11 @@ export async function POST(req: NextRequest) {
     authSource: result.authSource,
     error: result.error,
     fixableIssues,
+    // Honest disclosure of what the brain hid / softened. Operator
+    // dashboard (5.2.4) consumes the same shape via /admin/learning.
+    confidenceAdjustments: {
+      suppressed: confidenceAdjustments.suppressedCount,
+      downgraded: confidenceAdjustments.downgradedCount,
+    },
   });
 }

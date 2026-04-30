@@ -85,6 +85,47 @@ This rule does NOT override **THE BOSS RULE**. The Boss Rule's 9 items still req
 
 ---
 
+## CONTINUOUS-BUILD MODE — DO NOT STOP (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-29 — *"Please don't stop just continue until finished please make that a rule otherwise if you stop you stop production and you hurt the production."*
+
+### The rule
+
+Within a single session, **DO NOT stop after completing one task and check in.** Pick up the next task in the active build plan and continue. Repeat until forced to stop by one of the explicit stop conditions below. Stopping mid-build hurts production.
+
+### Continue-the-build defaults
+
+- After finishing a sub-task, **immediately start the next unchecked sub-task** in the current phase.
+- Commit at every meaningful milestone. Don't batch into giant end-of-session commits.
+- Push the branch as you go so the work is visible to Craig in real time.
+- Update CLAUDE.md status trackers + version block as boxes tick green.
+- Run the sweep checklist between sub-tasks (tests / build / module load), not just at session end.
+
+### Explicit stop conditions
+
+The ONLY reasons to stop and report back without continuing:
+
+1. **Boss Rule item hit.** Anything on the BOSS RULE list (pricing / DNS / Stripe config / production deploy / new external API integration / brand copy / new dependency / anything touching money or user data or public-facing comms). Report → escalate → do not act.
+2. **Hard blocker.** A test failure I cannot diagnose, a build break I cannot fix, a missing credential / env var, an external dependency outage. Report what's blocking → ask for the unblocker.
+3. **Context budget exhausted.** When the session has materially less remaining than is needed to safely finish a sub-task + its sweep + its commit. In that case: commit what's done, push, write a one-paragraph handoff note pointing at the next unchecked box, end gracefully.
+4. **Sweep red and unfixable.** If the sweep fails AND the failure is not from work I just did, report the regression — don't paper over a pre-existing break by continuing.
+5. **Craig sends a new instruction mid-session.** Always honour the new instruction; don't queue it behind the auto-build.
+
+### What this rule changes
+
+- Don't ask "want me to draft X next?" if X is the next box on the active plan. Just draft it.
+- Don't ask "should I add tests?" if the Bible's Quality Bar already requires them. Just add them.
+- Don't end a turn with "ready when you are" unless one of the stop conditions above is true.
+
+### Cross-session continuity
+
+Between sessions I literally don't run (no daemon). The closest equivalents until a Layer-3 operator service is authorised:
+- The Phase 5 status tracker tells the next session exactly which box to pick up.
+- The CLAUDE.md "Date last updated" line tells the next session what shipped last.
+- The most recent commit message points at the next unchecked sub-task.
+
+---
+
 ## STRATEGIC DIRECTION — DUAL-HOST, GLUECRON-LONG-TERM (READ THIS EVERY SESSION)
 
 **Gluecron.com is the future git host for Craig's stack — but GitHub is the distribution channel NOW.** Since 2026-04-22 GateTest is DUAL-HOST: push / PR events arrive from either GitHub App webhooks (`/api/webhook`) or Gluecron's Signal Bus (`/api/events/push`), both landing in the same `scan_queue`. Shutting off GitHub before Gluecron had paying customers was a commercial misstep; the webhook is alive again and will stay alive until Gluecron reaches revenue parity.
@@ -169,6 +210,106 @@ The thing that doesn't exist anywhere else today.
 | 2 — $199 Scan + Fix tier | 2026-04-26 | **5/5 SHIPPED — $199 LIVE FOR SALE** (2.1 ✓, 2.2 ✓, 2.3 ✓, 2.4 ✓ 4/3 proofs). |
 | 3 — $399 Nuclear tier | 2026-04-26 | **7/7 SHIPPED — $399 LIVE FOR SALE** (3.1 ✓, 3.2 ✓, 3.3 ✓, 3.4 ✓, 3.5 ✓, 3.6 ✓, 3.7 ✓ 4/3 proofs). |
 | 4 — Honesty sweep | 2026-04-26 | **5/5 SHIPPED — PHASE 4 COMPLETE** (4.1 ✓ no-op, 4.2 ✓, 4.3 ✓, 4.4 ✓ no-op, bonus ✓ next.config.ts ESM fix). |
+| 5 — THE 110% MANDATE | 2026-04-29 | **5.1 SHIPPED 4/5+1p, 5.2 SHIPPED 4/5+1p, 5.3 SHIPPED 1/5** — brain + closed feedback loop both end-to-end + Sentry integration dormant-ready. 318+ tests across all surfaces. /dashboard/intelligence + /admin/learning live. 5.1.5 + 5.2.5 await real-cohort/dissent volume; 5.3.1 awaits SENTRY_CLIENT_ID/_SECRET env vars. 5.3.2-5.3.5 + 5.4 + 5.5 not started. |
+
+---
+
+## THE 110% MANDATE — PHASE 5 BUILD PLAN (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-29 — *"we need to be at 110%."* Phase 5 is the move from 80-90th percentile (today's market) to 110% — beyond the theoretical ceiling of "the best AI diagnostic/fix tool ever made."
+
+This plan supersedes "pick the next Known Issue." Every session reads this section, picks up where the previous session stopped, and continues. Boss Rule's 9 items still need Craig's go-ahead — but routine code, scaffolds, schemas, helper modules, tests, and progressive wiring within the approved stack are pre-authorised.
+
+### The competitive thesis
+
+Phase 1-4 made GateTest honest at 4 price tiers. Phase 5 makes GateTest **structurally impossible to catch** by anyone who isn't already running 100,000 scans of customer code. Every sub-phase below either:
+- Adds a moat that compounds with usage (more customers → smarter product), or
+- Closes a category that today no shipping competitor handles end-to-end.
+
+Five sub-phases, ranked by impact × feasibility × compounding value:
+
+### Phase 5.1 — Cross-repo intelligence (the brain)
+
+The thing that doesn't exist anywhere else today and that compounds with every customer.
+
+- [x] **5.1.1** Schema + storage — **DONE 2026-04-29** commit `afd9f53`. `scan_fingerprint` table in Neon with 6 indexes (time-series, repo-history, GIN on framework_versions, GIN on module_findings, tier aggregates, signature lookup). `website/app/lib/scan-fingerprint-store.js`. Privacy contract enforced by tests: cleartext repo URL is hashed before SQL binding, NO source code stored, NO file paths stored. 31 tests in `tests/scan-fingerprint-store.test.js`.
+- [x] **5.1.2** Pattern fingerprint extractor — **DONE 2026-04-29** commit `a52f16f`. Pure function at `website/app/lib/scan-fingerprint.js`. Four-layer shape: framework versions, language mix (per-extension byte share), per-module {count, deduped+sorted patternHashes}, fingerprint signature (sha256 of canonical-stringified layers). Pattern hash design: (module, ruleId, file-extension) — same hash across files, same hash across repos for the same rule, different hash when language context changes. Bug found + fixed during build: my first canonical-stringify used `JSON.stringify(x, allowedKeys)` (filter form) which only keeps top-level keys and zeroed out nested objects — replaced with recursive canonical-stringify that sorts keys at every depth. 46 tests in `tests/scan-fingerprint.test.js`.
+- [x] **5.1.3** Cross-repo lookup wired into nuclear diagnoser — **DONE 2026-04-29** commit `69b32d0`. `website/app/lib/cross-repo-lookup.js` (summariseSimilarScans, renderPriorArtPrompt, fetchPriorArt) + threading priorArt through nuclear-diagnoser's buildDiagnosisPrompt + diagnoseFinding + diagnoseFindings. Anti-template guard added: prompt explicitly tells Claude "Do not copy from prior-art." Defensive: returns null when sample is below MIN_SAMPLE_SIZE (3) or no module fires above 25%, never blocks the diagnoser. Bug found + fixed: percentile() off-by-one (Math.floor(p * (n-1)) → Math.floor(p * n)). 35+ tests across cross-repo-lookup + nuclear-diagnoser regression.
+- [x] **5.1.4** Customer dashboard — **DONE 2026-04-29** commit `099bc02`. `/api/dashboard/intelligence` route + `/dashboard/intelligence` page. Headline 'You are X percentile' card with positioning chip (leader / above_average / median / below_average / lagging), side-by-side 'Your stack' + 'Cohort' cards with framework versions + language mix bars, module-fire-rate bars across the cohort, cohort fix-success-rate bars per module, recent similar scans table (deidentified — only frameworks + counts shown). Auth: same admin-cookie + GitHub-OAuth pattern as other admin routes. Customer-facing variant for $599 Brain tier comes when that tier's checkout wires up (Boss Rule). Type bug fixed during build: cohortStats response mixed `count` and `sampleSize` — now exposes both for UI parity. 177 tests green across all of 5.1, website builds clean.
+- [~] **5.1.5** Real-repo proof on 3 stacks — **PARTIAL 2026-04-29**. Methodology + verification doc shipped at `docs/proofs/phase-5-1-brain-methodology.md` (177 tests, 6 layers, 5-rule privacy contract, synthetic-cohort verification). Three per-stack stub docs shipped: `phase-5-1-next-stripe.md`, `phase-5-1-express-pg.md`, `phase-5-1-fastapi-react.md` — each with the SQL queries, capture sections, and honest-assessment template. Stubs need to be filled in by the next session with DB + ANTHROPIC_API_KEY access. Architecture is proven; cohort population is the remaining work.
+- [ ] **Definition of done:** every box ticked AND a new $599 "Brain" tier wired into Stripe + Pricing.tsx with proof that customers on Brain get measurably better diagnoses than $399 customers (FP-rate delta on the proof repos). **Stripe wire-up is Boss Rule territory** — pre-authorised when 5.1.5 ships with all three real-cohort proofs.
+
+### Phase 5.2 — Closed feedback loop (self-improving)
+
+Without this, the brain in 5.1 plateaus at first-day quality. With it, every customer interaction makes the next one smarter.
+
+- [x] **5.2.1** Dissent capture (storage + UI hooks) — **DONE 2026-04-29** commits `ddb61cf` (storage) + `101b26a` (UI hooks). `website/app/lib/dissent-store.js` with 4-index schema, 5-kind enum (ROLLED_BACK / PR_CLOSED_UNMERGED / FALSE_POSITIVE / FIX_REJECTED / COMMENT_DOWNVOTE), helpers for record / aggregate-by-module-pattern / list-for-repo / kinds-summary. POST `/api/dissent` route (admin-auth, idempotent table init, kind-enum validation). FindingsPanel thumbs-down button per-finding with idle/pending/recorded states. `/api/scan/fix` rollback hook records FIX_REJECTED on every cross-file-scanner-gate rollback. Privacy contract enforced by tests: cleartext URL never reaches SQL, reviewer identity hashed case-insensitively, notes capped at 500 chars, kind enum frozen. 27 tests in `tests/dissent-store.test.js`.
+- [x] **5.2.2** Per-module FP scorer + cron — **DONE 2026-04-29** commit `2c4370b`. `website/app/lib/module-confidence.js` with deterministic `computeConfidenceScore` (base × spread × volumeFloor + fixSuccessBonus, all clamped to [0,1]) + recommendedAction (trust/downgrade/double-down/suppress at 0.85/0.65/0.45 thresholds) + module_confidence table (UNIQUE on (module, pattern_hash), partial index on score < 0.65) + ON CONFLICT DO UPDATE upsert + getConfidenceScore with (module, pattern_hash) → (module, NULL) fallback + refreshModuleConfidence cron entry-point. POST `/api/admin/learning/refresh` (manual operator trigger), GET `/api/admin/learning/refresh` (last-refresh stats), GET `/api/admin/learning/cron` (Vercel-cron entry, weekly `0 6 * * 1`). 26 tests in `tests/module-confidence.test.js` covering scoring math, clamp behaviour, action thresholds, storage idempotence, refresh flow.
+- [x] **5.2.3** Confidence-aware reporting — **DONE 2026-04-29** commit `4018a83`. `website/app/lib/confidence-aware-report.js` with SEVERITY_TRANSFORM table per action, classifySeverity (mirrors ai-handoff.js heuristic), reprefixSeverity (idempotent severity rewrite), applyConfidenceToModule (per-module transform with full suppressed[] + downgraded[] audit trail), applyConfidenceToScan (scan-level wrapper, recomputes totalIssues), buildResolveAction (cached closure, falls through on error). Wired into `/api/scan/run` after `runTier` completes — looks up each module's action via cached resolver, transforms severities, includes confidenceAdjustments:{suppressed,downgraded} in response. Best-effort: brain outage falls through with original modules. 21 tests in `tests/confidence-aware-report.test.js`.
+- [x] **5.2.4** Operator dashboard — **DONE 2026-04-29** commit `d738af8`. GET `/api/admin/learning` returns trackedModules (50 lowest-score), kindsBreakdown (30d window), aggregateDissentByModulePattern, recentDissent (50). `/admin/learning` page with headline stats (Modules tracked / Lowest score / Highest score / Dissent 30d), manual 'Refresh confidence' button, kinds-breakdown horizontal bars, tracked-modules table sorted ascending by score (worst rises first), recent dissent events table. Pattern matches `/dashboard/intelligence` (5.1.4). Auth: same admin-cookie + GitHub-OAuth.
+- [~] **5.2.5** Real-cohort proof — **PARTIAL 2026-04-29**. Methodology + verification doc shipped at `docs/proofs/phase-5-2-feedback-loop-methodology.md`. Three per-module stub docs shipped: `phase-5-2-lint-noisy-module.md`, `phase-5-2-secrets-medium-noise.md`, `phase-5-2-syntax-low-noise.md` (the third is the integrity check — confirms the scorer leaves low-noise modules alone). Stubs need to be filled in by the next session with ≥30 dissent events accumulated. Architecture is proven; dissent volume is the remaining work.
+- [ ] **Definition of done:** every box ticked AND a published metric in `/admin/learning` showing FP rate trending down over time. (Awaits real customer dissent volume.)
+
+### Phase 5.3 — Live observability fusion
+
+Static + runtime + production = the killer triangle. Every other tool gives you 1 of 3.
+
+- [x] **5.3.1** Sentry integration — **DONE 2026-04-29** commit `17869ae`. Dormant-ready: ships fully tested; goes live when Craig adds SENTRY_CLIENT_ID + SENTRY_CLIENT_SECRET. `website/app/lib/external-integrations-store.js` (polymorphic store for ALL of 5.3, AES-256-GCM token encryption with INTEGRATIONS_SECRET key, fail-closed if secret < 32 chars), `website/app/lib/sentry-client.js` (OAuth code-exchange + fetchTopErrors + frame extraction with metadata.in_app_frames → metadata.frames → culprit fallback). OAuth routes: `/api/integrations/sentry/connect` (CSRF state cookie + redirect to sentry.io/oauth/authorize) + `/api/integrations/sentry/callback` (state verify, code exchange, encrypted token store). 24 + 19 = 43 new tests including PRIVACY CONTRACT suite that fails if cleartext tokens leak into SQL values.
+- [ ] **5.3.2** Datadog integration — same pattern, pulls APM trace samples for top error endpoints.
+- [ ] **5.3.3** Vercel Analytics integration — pulls page-load + serverless-function p95 latencies + error rates per route.
+- [ ] **5.3.4** Static-finding ↔ runtime correlator — when a scan finds an issue at `src/api/checkout.ts:42`, cross-reference Sentry/Datadog: did this exact line throw in prod last 7 days? If yes, finding gets a `🔥 LIVE` badge and jumps to top of priority. Pure function, 20+ unit tests with mocked observability data.
+- [ ] **5.3.5** Real-repo proof — pick a customer codebase with a live Sentry account, show 3 findings that matched real prod errors. Document in `docs/proofs/phase-5-3-live-fusion.md`.
+- [ ] **Definition of done:** every box ticked AND a $799 "Production" tier wired into Stripe + Pricing.tsx — pricing reflects the cost-saving of catching ACTIVE prod bugs faster than a runtime APM alone.
+
+### Phase 5.4 — Architectural surgery (multi-file refactors)
+
+The architecture annotator (Phase 2.2) reports — Phase 5.4 acts. Three canonical refactors, then expand.
+
+- [ ] **5.4.1** Refactor framework — same iterative-loop + 3-gate pipeline that powers per-file fixes, generalised to multi-file plans. Plan-then-apply: Claude proposes a 50-file diff, every file passes syntax gate + scanner gate + test-gen, then bundled into one PR. Hard time-budget for the planning phase (90s) + execution phase (240s).
+- [ ] **5.4.2** Canonical refactor #1: **polling → webhook**. Detects polling patterns (interval-based GETs to internal services), proposes webhook-driven equivalent, generates the webhook receiver + sender + tests. Single most-common refactor in modern codebases.
+- [ ] **5.4.3** Canonical refactor #2: **in-memory state → external store**. Detects `Map`/`Set`/`Object` global state on serverless paths, proposes Vercel KV / Redis / Postgres equivalent + migration path.
+- [ ] **5.4.4** Canonical refactor #3: **monolithic API route → typed client**. Detects untyped fetch calls, generates a typed client + zod schemas + updates every call site. Pairs naturally with Phase 5.5 cross-language semantics.
+- [ ] **5.4.5** Real-repo proof — pick 3 real codebases, ship one canonical refactor each as a real PR. Document in `docs/proofs/phase-5-4-architecture-<refactor>.md`.
+- [ ] **Definition of done:** every box ticked AND a $999 "Refactor" tier wired into Stripe + Pricing.tsx — priced to reflect "1 senior engineer × 3 days" replaced by "1 Nuclear scan + 1 GateTest refactor."
+
+### Phase 5.5 — Cross-language unified semantics
+
+The OpenAPI-drift module is the seed. Make the contract graph the centre of everything.
+
+- [ ] **5.5.1** Contract harvester — extends openapi-drift to also harvest GraphQL schemas (`*.graphql`, `*.gql`), protobuf (`*.proto`), tRPC routers, JSON Schema, and Zod schemas. Builds a unified contract graph: { contract_id, type, version, producers[], consumers[] }.
+- [ ] **5.5.2** Contract-drift detector — given the graph, detects: producer changes a field type that consumer depends on; consumer reads a field producer doesn't expose; version skew across services. New module `contractDrift` registered in TIERS.
+- [ ] **5.5.3** Cross-service taint — extends the existing cross-file-taint engine across language boundaries by following contract edges. JS frontend calls Python API → tracks taint into the Python handler.
+- [ ] **5.5.4** Visual contract map — `/dashboard/contracts` renders the graph as an interactive force-directed visualization. Customers see their entire system as one graph, click any edge to see the drift status.
+- [ ] **5.5.5** Real-repo proof — pick a polyglot repo (e.g. Next.js frontend + Python backend), introduce a deliberate contract drift, show GateTest catches it before it reaches CI. Document in `docs/proofs/phase-5-5-contract-drift.md`.
+- [ ] **Definition of done:** every box ticked AND `contractDrift` module loads via `node bin/gatetest.js --list` AND the visual map renders cleanly on a real polyglot repo.
+
+### Cross-cutting Phase 5 deliverables
+
+These ride alongside every sub-phase, not after:
+
+- **Tier expansion:** $29 / $99 / $199 / $399 / **$599 (Brain) / $799 (Production) / $999 (Refactor)**. Boss Rule applies on each Stripe wire-up, but the build is pre-authorised.
+- **Module count target:** 90 → 100+ as Phase 5.5 ships new modules (contractDrift, prodCorrelator, fingerprintMatcher, etc.).
+- **Test count target:** 1300+ → 2000+ as new helpers ship with proportional test coverage.
+- **Proof artifact target:** 3 proofs per sub-phase = 15 new files under `docs/proofs/phase-5-*/`.
+
+### Operating rules during Phase 5
+
+1. **Pick up from the last unchecked box.** Sessions read this list, find the first `- [ ]`, work it.
+2. **Commit at every meaningful milestone.** Bible's "no chicken scratchings" still applies — partial-progress commits with clear messages are encouraged so the next session has a clean handoff.
+3. **Real-repo proof is mandatory.** No sub-phase counts as done without the proof docs.
+4. **Boss Rule loosened for this plan.** Each tier's Stripe wire-up is pre-authorised when the preceding sub-tasks ship with proof. Nuclear-button items (DNS, new external API integrations beyond OAuth pattern, brand rewrites, money/user-data outside this plan) still require Craig's explicit go-ahead.
+5. **Update CLAUDE.md when a phase ships.** Tick the boxes. Move the version number. Add a date.
+6. **Tests stay green.** Sweep checklist runs every session.
+
+### Status tracker
+
+| Sub-phase | Status |
+| --- | --- |
+| 5.1 — Cross-repo intelligence | **4/5 SHIPPED + 1 partial** (5.1.1 ✓, 5.1.2 ✓, 5.1.3 ✓, 5.1.4 ✓, 5.1.5 ~ methodology + stubs shipped, 3 real-cohort fills pending). 177 tests green. Brain is wired end-to-end; awaits cohort population + $599 tier wire-up (Boss Rule). |
+| 5.2 — Closed feedback loop | **4/5 SHIPPED + 1 partial** (5.2.1 ✓ storage+UI, 5.2.2 ✓ scorer+cron, 5.2.3 ✓ reporting, 5.2.4 ✓ dashboard, 5.2.5 ~ methodology + 3 stubs awaiting dissent volume). 74 new tests + cron schedule + 4 admin routes + dashboard page. |
+| 5.3 — Live observability fusion | **1/5 SHIPPED** (5.3.1 ✓ Sentry storage + client + OAuth, dormant-ready). 43 new tests + 2 routes + AES-GCM token encryption. 5.3.2-5.3.5 next. |
+| 5.4 — Architectural surgery | 0/5 — not started |
+| 5.5 — Cross-language unified semantics | 0/5 — not started |
 
 ---
 
@@ -674,6 +815,14 @@ GateTest/
 | `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |
 | `ANTHROPIC_API_KEY` | Claude API for AI review |
 | `GATETEST_ADMIN_PASSWORD` | Admin console password for `/admin` (bypasses Stripe) |
+| `INTEGRATIONS_SECRET` | Phase 5.3 — encrypts customer-supplied access tokens at rest (≥32 chars; rotate to invalidate stored tokens) |
+| `SENTRY_CLIENT_ID` / `SENTRY_CLIENT_SECRET` | Phase 5.3.1 — customer-Sentry OAuth integration. Until set, `/api/integrations/sentry/connect` returns 503 with hint |
+| `NEXT_PUBLIC_SENTRY_DSN` | gatetest.ai's OWN Sentry — browser-side error capture. From Sentry project settings → Client Keys (DSN). Public-safe by design |
+| `SENTRY_DSN` | gatetest.ai's OWN Sentry — server-side. Same DSN as above (Sentry treats client/server keys identically) |
+| `SENTRY_AUTH_TOKEN` | Sourcemap upload at build time. From sentry.io/settings/auth-tokens with `project:releases` + `org:read` scopes. Only needed in CI/Vercel; locally the build skips upload |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Sentry org slug + project slug — required for sourcemap upload to find the right destination |
+| `SENTRY_RELEASE` / `NEXT_PUBLIC_SENTRY_RELEASE` | Optional commit SHA so errors are pinned to the right release |
+| `CRON_SECRET` | Vercel-cron auth for `/api/admin/learning/cron` (Phase 5.2.2 weekly FP-scorer refresh) |
 
 ---
 
@@ -1119,6 +1268,8 @@ integration plugs into one contract (canonical commit-status states,
 shared PR/MR markdown, registry-based bridge factory). `GitHubBridge`
 is the first concrete implementation; `GluecronBridge` will be the
 second.
+
+Date last updated: 2026-04-29 — v1.43.0: **PHASE 5 — THE 110% MANDATE OPENED.** Brutal-honest scorecard against the theoretical "best AI diagnostic/fix tool ever made" put GateTest at ~22% of the ceiling (despite ~85% against today's shipping market). Craig: *"we need to be at 110%."* Phase 5 is the move from on-spec to category-defining: cross-repo intelligence (the brain), closed feedback loop (self-improving), live observability fusion (Sentry / Datadog / Vercel Analytics correlation), architectural surgery (multi-file refactor pipeline), cross-language unified semantics (one contract graph across JS / Python / Rust / etc.). Five sub-phases, each with definitions of done + real-repo proof requirements. Three new tiers planned ($599 Brain / $799 Production / $999 Refactor), each pre-authorised on Stripe wire-up only after the underlying capability ships with proof. Status: 0/5 sub-phases — first build session begins next turn. **Plus: the AI-Builder Handoff component (6 export formats — Claude Code / Cursor / Cline+Aider / GitHub Issue / JSON / Markdown) shipped this session along with default-on CI auto-repair (peter-evans/create-pull-request when ANTHROPIC_API_KEY is present), and the silent 20-finding-per-module truncation cap was raised to 200 with an honest overflow line so every issue reaches the UI + fix path.**
 
 Date last updated: 2026-04-26 — v1.42.0: **THE FIX-FIRST BUILD PLAN — Phase 1, 2, 3 SHIPPED COMPLETE.** All four pricing tiers ($29 Quick, $99 Full, $199 Scan+Fix, $399 Nuclear) are wired through `/api/checkout/route.ts` `TIERS` and rendered in `Pricing.tsx` with honest deliverables backing every price tag.
 
