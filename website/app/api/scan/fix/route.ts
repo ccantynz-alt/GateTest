@@ -151,6 +151,34 @@ const { validateFixesSyntax, summariseSyntaxGate } = require("@/app/lib/cross-fi
   };
   summariseSyntaxGate: (result: { accepted: unknown[]; rejected: unknown[] }) => string;
 };
+// Day-2 — Surgical-diff fix mode. Sends Claude only the issue ± N lines of
+// context, gets back a replacement block, splices into the original. Bytes
+// outside the splice are byte-identical because we never sent them.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const surgicalFix = require("@/app/lib/surgical-fix") as {
+  extractIssueContext: (fileContent: string, lineNumber: number, contextLines?: number) => {
+    slice: string; startLine: number; endLine: number; totalLines: number; lineEnding: string;
+  };
+  buildSurgicalPrompt: (opts: { filePath: string; slice: string; startLine: number; endLine: number; issues: string[] }) => string;
+  parseReplacementBlock: (claudeResponse: string) => string;
+  spliceReplacement: (originalContent: string, startLine: number, endLine: number, replacement: string, lineEnding?: string) => string;
+  validateSurgicalFix: (opts: { originalContent: string; fixedContent: string; startLine: number; endLine: number; lineEnding?: string }) => {
+    ok: boolean; reason?: string; mutatedLines?: number[];
+  };
+};
+
+// Day-2 — Whole-file mutation guard. Used in the fallback path when an issue
+// has no parseable line number. Computes a line-level diff and rejects fixes
+// that change far more lines than the issue count justifies.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mutationGuard = require("@/app/lib/whole-file-mutation-guard") as {
+  evaluateMutation: (opts: {
+    original: string; fixed: string; issueCount: number;
+    maxChangePerIssue?: number; maxAbsoluteChange?: number; maxPercentChange?: number;
+  }) => { ok: boolean; reason?: string; stats: Record<string, number> };
+  summariseMutation: (result: { ok: boolean; reason?: string; stats: Record<string, number> }) => string;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-attempt-loop") as {
   attemptFixWithRetries: (opts: {
@@ -562,6 +590,10 @@ interface IssueInput {
   file: string;
   issue: string;
   module: string;
+  // Day-2: when the extractor parsed a line number out of the finding, it's
+  // forwarded here. Issues with `line` go through surgical-fix mode; issues
+  // without fall back to whole-file mode with the mutation guard.
+  line?: number;
 }
 
 // Phase 1.2b — optional callers can pass the pre-fix workspace and the
@@ -626,12 +658,14 @@ export async function POST(req: NextRequest) {
   const token = auth.token;
   const authSource = auth.source;
 
-  // Group issues by file
-  const issuesByFile = new Map<string, string[]>();
+  // Group issues by file. Day-2: retain `line` per issue so the per-file
+  // worker can choose surgical-fix vs whole-file mode.
+  type StructuredIssue = { text: string; line?: number };
+  const issuesByFile = new Map<string, StructuredIssue[]>();
   for (const issue of issues) {
     if (!issue.file) continue;
     const existing = issuesByFile.get(issue.file) || [];
-    existing.push(issue.issue);
+    existing.push({ text: issue.issue, line: issue.line });
     issuesByFile.set(issue.file, existing);
   }
 
@@ -675,13 +709,17 @@ export async function POST(req: NextRequest) {
       skippedForBudget += 1;
       return;
     }
+    // String-only view of the issues for legacy callers (CREATE_FILE,
+    // whole-file path, error reporting, fix.issues field).
+    const fileIssueTexts = fileIssues.map((i) => i.text);
+
     // Handle CREATE_FILE issues — the file doesn't exist, generate it from scratch
-    const createIssues = fileIssues.filter((i) => i.startsWith("CREATE_FILE:"));
+    const createIssues = fileIssueTexts.filter((i) => i.startsWith("CREATE_FILE:"));
     if (createIssues.length > 0) {
       try {
         const newContent = await askClaudeCreate(filePath, createIssues.map((i) => i.replace("CREATE_FILE: ", "")));
         if (newContent && newContent.length > 10) {
-          fixes.push({ file: filePath, original: "", fixed: newContent, issues: fileIssues });
+          fixes.push({ file: filePath, original: "", fixed: newContent, issues: fileIssueTexts });
         } else {
           errors.push(`Could not generate ${filePath}: empty response`);
         }
@@ -706,17 +744,121 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      // Phase 1: iterative fix loop with up to N attempts. Each attempt's
-      // outcome is logged; on quality-fail the next attempt sees explicit
-      // feedback about what was introduced. On total failure, all attempts
-      // are surfaced in the response so the UI can show the full trail.
+      // Day-2 — Surgical-fix path. Triggered when EVERY issue for this file
+      // has a parseable line number. Sends Claude only the issue's slice of
+      // the file; bytes outside the slice are byte-identical because they
+      // were never sent. Mutation becomes architecturally impossible.
+      const allHaveLines = fileIssues.every((i) => typeof i.line === "number" && i.line! > 0);
+      if (allHaveLines) {
+        const surgicalAttempts: AttemptLog[] = [];
+        let workingContent = originalContent;
+        let surgicalOk = true;
+        let surgicalFinalReason: string | null = null;
+        // Process bottom-up so earlier line numbers stay valid as we patch.
+        const sortedIssues = [...fileIssues].sort((a, b) => (b.line! - a.line!));
+        for (const issue of sortedIssues) {
+          const ctx = surgicalFix.extractIssueContext(workingContent, issue.line!, 20);
+          let issueOk = false;
+          for (let attempt = 1; attempt <= DEFAULT_MAX_ATTEMPTS; attempt++) {
+            const startedAtAttempt = Date.now();
+            try {
+              const prompt = surgicalFix.buildSurgicalPrompt({
+                filePath,
+                slice: ctx.slice,
+                startLine: ctx.startLine,
+                endLine: ctx.endLine,
+                issues: [issue.text],
+              });
+              const claudeText = await askClaudeForTest(prompt);
+              const replacement = surgicalFix.parseReplacementBlock(claudeText);
+              const newContent = surgicalFix.spliceReplacement(
+                workingContent,
+                ctx.startLine,
+                ctx.endLine,
+                replacement,
+                ctx.lineEnding
+              );
+              const v = surgicalFix.validateSurgicalFix({
+                originalContent: workingContent,
+                fixedContent: newContent,
+                startLine: ctx.startLine,
+                endLine: ctx.endLine,
+                lineEnding: ctx.lineEnding,
+              });
+              if (!v.ok) {
+                surgicalAttempts.push({
+                  attemptNumber: surgicalAttempts.length + 1,
+                  startedAt: startedAtAttempt,
+                  durationMs: Date.now() - startedAtAttempt,
+                  outcome: "validation-fail",
+                  validationReason: `mutation outside slice: ${v.reason || "unknown"}`,
+                  qualityIssues: [],
+                  claudeError: null,
+                });
+                continue;
+              }
+              workingContent = newContent;
+              surgicalAttempts.push({
+                attemptNumber: surgicalAttempts.length + 1,
+                startedAt: startedAtAttempt,
+                durationMs: Date.now() - startedAtAttempt,
+                outcome: "success",
+                validationReason: null,
+                qualityIssues: [],
+                claudeError: null,
+              });
+              issueOk = true;
+              break;
+            } catch (err) {
+              surgicalAttempts.push({
+                attemptNumber: surgicalAttempts.length + 1,
+                startedAt: startedAtAttempt,
+                durationMs: Date.now() - startedAtAttempt,
+                outcome: "claude-error",
+                validationReason: null,
+                qualityIssues: [],
+                claudeError: err instanceof Error ? err.message : "unknown",
+              });
+            }
+          }
+          if (!issueOk) {
+            surgicalOk = false;
+            surgicalFinalReason = `surgical fix failed at line ${issue.line} after ${DEFAULT_MAX_ATTEMPTS} attempts`;
+            break;
+          }
+        }
+
+        attemptHistoryByFile[filePath] = {
+          attempts: surgicalAttempts,
+          summary: summariseAttempts(surgicalAttempts),
+          success: surgicalOk,
+        };
+
+        if (!surgicalOk) {
+          const allClaudeErrors = surgicalAttempts.length > 0 && surgicalAttempts.every((a) => a.outcome === "claude-error");
+          if (allClaudeErrors) {
+            throw new Error(surgicalAttempts[surgicalAttempts.length - 1].claudeError || "Claude API error");
+          }
+          errors.push(`Skipped ${filePath} (surgical, ${surgicalAttempts.length} attempts): ${surgicalFinalReason}`);
+          return;
+        }
+
+        fixes.push({ file: filePath, original: originalContent, fixed: workingContent, issues: fileIssueTexts });
+        state.consecutiveNetworkErrors = 0;
+        return;
+      }
+
+      // Whole-file fallback path — used when one or more issues lack a line
+      // number (summary-shaped findings, multi-region issues, etc.). Same
+      // existing iterative loop, BUT the result is now run through the
+      // mutation guard before being accepted.
       const loopResult = await attemptFixWithRetries({
         askClaude: (currentIssues: string[]) => askClaude(originalContent, filePath, currentIssues),
         validateFix,
         verifyFixQuality,
         originalContent,
         filePath,
-        issues: fileIssues,
+        issues: fileIssueTexts,
         maxAttempts: DEFAULT_MAX_ATTEMPTS,
       });
 
@@ -726,11 +868,6 @@ export async function POST(req: NextRequest) {
         success: loopResult.success,
       };
 
-      // If every attempt was a Claude API error, treat it the same as the
-      // outer catch would have — file gets queued for retry, not marked
-      // permanently failed, and the rolling network-error counter ticks
-      // so concurrency degrades. Other failure modes (validation /
-      // quality) just go in errors.
       if (!loopResult.success) {
         const allClaudeErrors = loopResult.attempts.length > 0 && loopResult.attempts.every((a) => a.outcome === "claude-error");
         if (allClaudeErrors) {
@@ -740,9 +877,19 @@ export async function POST(req: NextRequest) {
         return;
       }
 
-      fixes.push({ file: filePath, original: originalContent, fixed: loopResult.fixed!, issues: fileIssues });
-      // Reset the rolling network-error counter on any success — only sustained
-      // failure across multiple files should drop concurrency.
+      // Day-2 — mutation guard on the whole-file path. Reject fixes that
+      // changed dramatically more lines than the issue count justifies.
+      const guardResult = mutationGuard.evaluateMutation({
+        original: originalContent,
+        fixed: loopResult.fixed!,
+        issueCount: fileIssueTexts.length,
+      });
+      if (!guardResult.ok) {
+        errors.push(`Rejected ${filePath} by mutation guard: ${guardResult.reason} — ${mutationGuard.summariseMutation(guardResult)}`);
+        return;
+      }
+
+      fixes.push({ file: filePath, original: originalContent, fixed: loopResult.fixed!, issues: fileIssueTexts });
       state.consecutiveNetworkErrors = 0;
     } catch (err) {
       const raw = err instanceof Error ? err.message : "unknown";
@@ -751,17 +898,13 @@ export async function POST(req: NextRequest) {
 
       if (isNetworkErr) {
         state.consecutiveNetworkErrors += 1;
-        // After 3 consecutive API network errors, drop concurrency to 1 — parallel
-        // requests against a degraded Anthropic endpoint just poison each other.
         if (state.consecutiveNetworkErrors === 3 && state.activeConcurrency > 1) {
           state.activeConcurrency = 1;
         }
-        // After 8 consecutive failures, halt the run — Anthropic is down, keep
-        // remaining files as a retryable queue so the UI can resume later.
         if (state.consecutiveNetworkErrors >= 8) {
           state.haltRun = true;
         }
-        failedFiles.push({ file: filePath, issues: fileIssues, reason: "api-unavailable" });
+        failedFiles.push({ file: filePath, issues: fileIssueTexts, reason: "api-unavailable" });
         const msg = isAbortErr
           ? `${filePath}: request timed out (file may be too large) — queued for retry`
           : `${filePath}: Anthropic API temporarily unavailable — queued for retry`;
