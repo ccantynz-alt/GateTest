@@ -815,6 +815,14 @@ GateTest/
 | `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |
 | `ANTHROPIC_API_KEY` | Claude API for AI review |
 | `GATETEST_ADMIN_PASSWORD` | Admin console password for `/admin` (bypasses Stripe) |
+| `INTEGRATIONS_SECRET` | Phase 5.3 — encrypts customer-supplied access tokens at rest (≥32 chars; rotate to invalidate stored tokens) |
+| `SENTRY_CLIENT_ID` / `SENTRY_CLIENT_SECRET` | Phase 5.3.1 — customer-Sentry OAuth integration. Until set, `/api/integrations/sentry/connect` returns 503 with hint |
+| `NEXT_PUBLIC_SENTRY_DSN` | gatetest.ai's OWN Sentry — browser-side error capture. From Sentry project settings → Client Keys (DSN). Public-safe by design |
+| `SENTRY_DSN` | gatetest.ai's OWN Sentry — server-side. Same DSN as above (Sentry treats client/server keys identically) |
+| `SENTRY_AUTH_TOKEN` | Sourcemap upload at build time. From sentry.io/settings/auth-tokens with `project:releases` + `org:read` scopes. Only needed in CI/Vercel; locally the build skips upload |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Sentry org slug + project slug — required for sourcemap upload to find the right destination |
+| `SENTRY_RELEASE` / `NEXT_PUBLIC_SENTRY_RELEASE` | Optional commit SHA so errors are pinned to the right release |
+| `CRON_SECRET` | Vercel-cron auth for `/api/admin/learning/cron` (Phase 5.2.2 weekly FP-scorer refresh) |
 
 ---
 
