@@ -210,7 +210,7 @@ The thing that doesn't exist anywhere else today.
 | 2 — $199 Scan + Fix tier | 2026-04-26 | **5/5 SHIPPED — $199 LIVE FOR SALE** (2.1 ✓, 2.2 ✓, 2.3 ✓, 2.4 ✓ 4/3 proofs). |
 | 3 — $399 Nuclear tier | 2026-04-26 | **7/7 SHIPPED — $399 LIVE FOR SALE** (3.1 ✓, 3.2 ✓, 3.3 ✓, 3.4 ✓, 3.5 ✓, 3.6 ✓, 3.7 ✓ 4/3 proofs). |
 | 4 — Honesty sweep | 2026-04-26 | **5/5 SHIPPED — PHASE 4 COMPLETE** (4.1 ✓ no-op, 4.2 ✓, 4.3 ✓, 4.4 ✓ no-op, bonus ✓ next.config.ts ESM fix). |
-| 5 — THE 110% MANDATE | 2026-04-29 | **5.1 SHIPPED 4/5+1p, 5.2 SHIPPED 4/5+1p** — brain + closed feedback loop both end-to-end. 270+ tests across both. /dashboard/intelligence + /admin/learning live. 5.1.5 + 5.2.5 await real-cohort/dissent volume. 5.3-5.5 not started. |
+| 5 — THE 110% MANDATE | 2026-04-29 | **5.1 SHIPPED 4/5+1p, 5.2 SHIPPED 4/5+1p, 5.3 SHIPPED 1/5** — brain + closed feedback loop both end-to-end + Sentry integration dormant-ready. 318+ tests across all surfaces. /dashboard/intelligence + /admin/learning live. 5.1.5 + 5.2.5 await real-cohort/dissent volume; 5.3.1 awaits SENTRY_CLIENT_ID/_SECRET env vars. 5.3.2-5.3.5 + 5.4 + 5.5 not started. |
 
 ---
 
@@ -254,7 +254,7 @@ Without this, the brain in 5.1 plateaus at first-day quality. With it, every cus
 
 Static + runtime + production = the killer triangle. Every other tool gives you 1 of 3.
 
-- [ ] **5.3.1** Sentry integration — `/api/integrations/sentry/connect` OAuth flow, store org credentials per customer, fetch top 100 errors + their stack frames + their frequencies. Pre-authorised within Boss Rule scope as long as Anthropic-equivalent OAuth pattern is followed (no money/user-data new external API).
+- [x] **5.3.1** Sentry integration — **DONE 2026-04-29** commit `17869ae`. Dormant-ready: ships fully tested; goes live when Craig adds SENTRY_CLIENT_ID + SENTRY_CLIENT_SECRET. `website/app/lib/external-integrations-store.js` (polymorphic store for ALL of 5.3, AES-256-GCM token encryption with INTEGRATIONS_SECRET key, fail-closed if secret < 32 chars), `website/app/lib/sentry-client.js` (OAuth code-exchange + fetchTopErrors + frame extraction with metadata.in_app_frames → metadata.frames → culprit fallback). OAuth routes: `/api/integrations/sentry/connect` (CSRF state cookie + redirect to sentry.io/oauth/authorize) + `/api/integrations/sentry/callback` (state verify, code exchange, encrypted token store). 24 + 19 = 43 new tests including PRIVACY CONTRACT suite that fails if cleartext tokens leak into SQL values.
 - [ ] **5.3.2** Datadog integration — same pattern, pulls APM trace samples for top error endpoints.
 - [ ] **5.3.3** Vercel Analytics integration — pulls page-load + serverless-function p95 latencies + error rates per route.
 - [ ] **5.3.4** Static-finding ↔ runtime correlator — when a scan finds an issue at `src/api/checkout.ts:42`, cross-reference Sentry/Datadog: did this exact line throw in prod last 7 days? If yes, finding gets a `🔥 LIVE` badge and jumps to top of priority. Pure function, 20+ unit tests with mocked observability data.
@@ -307,7 +307,7 @@ These ride alongside every sub-phase, not after:
 | --- | --- |
 | 5.1 — Cross-repo intelligence | **4/5 SHIPPED + 1 partial** (5.1.1 ✓, 5.1.2 ✓, 5.1.3 ✓, 5.1.4 ✓, 5.1.5 ~ methodology + stubs shipped, 3 real-cohort fills pending). 177 tests green. Brain is wired end-to-end; awaits cohort population + $599 tier wire-up (Boss Rule). |
 | 5.2 — Closed feedback loop | **4/5 SHIPPED + 1 partial** (5.2.1 ✓ storage+UI, 5.2.2 ✓ scorer+cron, 5.2.3 ✓ reporting, 5.2.4 ✓ dashboard, 5.2.5 ~ methodology + 3 stubs awaiting dissent volume). 74 new tests + cron schedule + 4 admin routes + dashboard page. |
-| 5.3 — Live observability fusion | 0/5 — not started |
+| 5.3 — Live observability fusion | **1/5 SHIPPED** (5.3.1 ✓ Sentry storage + client + OAuth, dormant-ready). 43 new tests + 2 routes + AES-GCM token encryption. 5.3.2-5.3.5 next. |
 | 5.4 — Architectural surgery | 0/5 — not started |
 | 5.5 — Cross-language unified semantics | 0/5 — not started |
 
