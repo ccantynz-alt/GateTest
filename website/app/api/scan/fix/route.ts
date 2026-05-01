@@ -653,9 +653,57 @@ export async function POST(req: NextRequest) {
   const token = auth.token;
   const authSource = auth.source;
 
-  // Group issues by file
+  // Phase Nuclear-coupling — when tier=nuclear, diagnose every issue
+  // FIRST and enrich the issue text with the diagnoser's rootCause +
+  // recommendation BEFORE feeding it into the per-file fix loop. This
+  // is what turns $399 from "diagnose, then ship a per-line fix" into
+  // "ship a fix that knows what the architect-Claude said the fix
+  // should be."
+  //
+  // Reliability contract: any failure in the diagnosis step falls
+  // through with the ORIGINAL issues. The fix loop never gets blocked
+  // on the diagnoser; it just gets richer input when the brain is
+  // healthy. Tested in tests/diagnosis-enricher.test.js.
+  let workingIssues: IssueInput[] = issues;
+  let nuclearEnrichmentSummary: string | undefined;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { shipDiagnosisAwareFix } = require("@/app/lib/diagnosis-enricher.js") as {
+        shipDiagnosisAwareFix: (opts: {
+          issues: IssueInput[];
+          askClaudeForDiagnosis: (prompt: string) => Promise<string>;
+          hostname?: string;
+        }) => Promise<{
+          enrichedIssues: IssueInput[];
+          diagnoses: unknown[];
+          summary: string;
+          enrichedCount: number;
+        }>;
+      };
+      const hostname = (() => {
+        try { return new URL(repoUrl).hostname; } catch { return "your-domain.com"; }
+      })();
+      const enrichResult = await shipDiagnosisAwareFix({
+        issues,
+        askClaudeForDiagnosis: askClaudeForTest, // same Claude wrapper, different prompt
+        hostname,
+      });
+      workingIssues = enrichResult.enrichedIssues as IssueInput[];
+      nuclearEnrichmentSummary = enrichResult.summary;
+    } catch (err) {
+      // Best-effort: log + fall through with original issues. The
+      // shipDiagnosisAwareFix helper already has its own try/catch for
+      // diagnoser-side errors; this outer guard catches any contract-
+      // violation unexpected throw.
+      const message = err instanceof Error ? err.message : "unknown";
+      nuclearEnrichmentSummary = `nuclear enrichment skipped: ${message}`;
+    }
+  }
+
+  // Group issues by file (using the possibly-enriched workingIssues)
   const issuesByFile = new Map<string, string[]>();
-  for (const issue of issues) {
+  for (const issue of workingIssues) {
     if (!issue.file) continue;
     const existing = issuesByFile.get(issue.file) || [];
     existing.push(issue.issue);
@@ -1160,6 +1208,9 @@ export async function POST(req: NextRequest) {
       architecture: architectureSummary
         ? { summary: architectureSummary }
         : { skipped: true, reason: "tier is not scan_fix or originalFileContents not supplied — architecture annotation is a $199-tier value-add" },
+      nuclearEnrichment: nuclearEnrichmentSummary
+        ? { summary: nuclearEnrichmentSummary }
+        : { skipped: true, reason: "tier is not nuclear — enrichment is a $399-tier value-add" },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {
