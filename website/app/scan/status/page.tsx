@@ -4,6 +4,9 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import FindingsPanel from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
+import FixSelectionPanel from "@/app/components/FixSelectionPanel";
+import DiffViewer from "@/app/components/DiffViewer";
 import { extractIssuesFromModules, type UnparseableIssue } from "@/app/lib/issue-extractor";
 
 interface ModuleResult {
@@ -48,6 +51,8 @@ interface FixResult {
   error?: string;
   errors?: string[];
   failedFiles?: Array<{ file: string; issues: string[]; reason: string }>;
+  // Phase 6.1.3 — DiffViewer source data
+  fixes?: Array<{ file: string; issues: string[]; before?: string; after?: string }>;
 }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -222,6 +227,18 @@ export default function ScanStatus() {
       setFixError("No auto-fixable issues — these need manual review (config / infrastructure / architectural).");
       return;
     }
+    await runFixWithIssues(issues);
+  }
+
+  // Phase 6.1.2 — invoked by FixSelectionPanel when the customer
+  // submits a partial selection. Same network call as runFix, just
+  // with a caller-supplied issue subset.
+  async function runFixWithIssues(issues: FixableIssue[]) {
+    if (!scanResult || !params.repo) return;
+    if (!issues || issues.length === 0) {
+      setFixError("Pick at least one finding before fixing.");
+      return;
+    }
     setFixing(true);
     setFixResult(null);
     setFixError("");
@@ -229,7 +246,7 @@ export default function ScanStatus() {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier || "full" }),
+        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier }),
       });
       const data = await res.json() as FixResult;
       setFixResult(data);
@@ -452,28 +469,32 @@ export default function ScanStatus() {
               <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
             )}
 
-            {/* Manual-review surfacing — findings whose file location couldn't
-                be parsed go HERE rather than being silently dropped. The
-                customer sees the honest delivery scope: what we will auto-fix
-                vs. what they need to triage themselves. */}
-            {scanResult && extractUnparseableIssues(scanResult.modules).length > 0 && (
-              <div className="p-5 rounded-xl border border-slate-200 bg-slate-50">
-                <h3 className="font-bold text-foreground mb-1">
-                  {extractUnparseableIssues(scanResult.modules).length} issue
-                  {extractUnparseableIssues(scanResult.modules).length > 1 ? "s" : ""} need manual review
-                </h3>
-                <p className="text-xs text-muted mb-3">
-                  No file location could be parsed from the finding text — these
-                  won&apos;t be in the auto-fix PR. Triage manually:
-                </p>
-                <ul className="space-y-1 text-xs font-mono text-slate-700 max-h-48 overflow-auto">
-                  {extractUnparseableIssues(scanResult.modules).map((u, i) => (
-                    <li key={i} className="truncate">
-                      <span className="text-slate-500">[{u.module}]</span> {u.detail}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* Phase 6.1.2 — pick the fixes you want before triggering
+                the AI fix loop. Lowers "what if I disagree with one
+                fix?" objection. Hidden when scan has no findings. */}
+            {scanResult && (scanResult.totalIssues || 0) > 0 && (
+              <FixSelectionPanel
+                modules={scanResult.modules}
+                onFix={runFixWithIssues}
+                fixing={fixing}
+              />
+            )}
+
+            {/* AI-builder handoff — always visible when there are findings,
+                so the customer has a useful next step even if our own fix
+                loop fails (Anthropic outage, tier restriction, etc.). */}
+            {(scanResult?.totalIssues || 0) > 0 && scanResult && (
+              <AIBuilderHandoff
+                modules={scanResult.modules}
+                repoUrl={params.repo}
+                tier={params.tier}
+                fixFailed={Boolean(fixResult && !fixResult.prUrl)}
+                fixFailureReason={
+                  fixResult && !fixResult.prUrl
+                    ? (fixResult.error || fixResult.message || undefined)
+                    : undefined
+                }
+              />
             )}
 
             {/* What's next — AI fix is the primary CTA */}
@@ -548,6 +569,32 @@ export default function ScanStatus() {
                             <ul className="mt-2 space-y-0.5 pl-3 list-disc">
                               {fixResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                             </ul>
+                          </details>
+                        )}
+                        {/* Phase 6.1.3 — inline before/after diffs per fix.
+                            Visible BEFORE the customer clicks through to
+                            the PR, so $99 customers (who see the fixes
+                            but won't merge a PR they didn't authorise)
+                            can still SEE what changed. */}
+                        {fixResult.fixes && fixResult.fixes.some((f) => f.before && f.after) && (
+                          <details className="mt-4" open>
+                            <summary className="cursor-pointer text-sm font-bold text-green-800 mb-2">
+                              View patches ({fixResult.fixes.filter((f) => f.before && f.after).length} files)
+                            </summary>
+                            <div className="space-y-2 mt-2">
+                              {fixResult.fixes
+                                .filter((f) => f.before && f.after)
+                                .map((f) => (
+                                  <DiffViewer
+                                    key={f.file}
+                                    fileLabel={f.file}
+                                    before={f.before || ""}
+                                    after={f.after || ""}
+                                    issues={f.issues}
+                                    defaultCollapsed={(fixResult.fixes?.length || 0) > 3}
+                                  />
+                                ))}
+                            </div>
                           </details>
                         )}
                       </>

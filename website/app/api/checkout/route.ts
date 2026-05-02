@@ -151,9 +151,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Create Stripe Checkout Session with manual capture
+    // Create Stripe Checkout Session with manual capture.
+    //
+    // Apple Pay / Google Pay / Stripe Link: Stripe automatically surfaces
+    // these wallet methods in the Checkout sheet when the browser supports
+    // them (Safari for Apple Pay, Chrome for Google Pay) and the Stripe
+    // account has them enabled in the Dashboard. They ride on the `card`
+    // payment method type — no separate enum value needed. Adding `link`
+    // explicitly so a returning customer with a saved Stripe Link payment
+    // gets one-tap checkout. This is the "tap to pay with Apple/Google
+    // account" UX the Claude-distribution flow needs.
+    //
+    // Reference: https://docs.stripe.com/payments/apple-pay
+    //            https://docs.stripe.com/payments/link
     const params = new URLSearchParams({
       "payment_method_types[0]": "card",
+      "payment_method_types[1]": "link",
       mode: "payment",
       "payment_intent_data[capture_method]": "manual",
       "payment_intent_data[metadata][tier]": input.tier || "",
@@ -167,6 +180,10 @@ export async function POST(req: NextRequest) {
       "line_items[0][price_data][product_data][name]": `GateTest ${tier.name}`,
       "line_items[0][price_data][product_data][description]": tier.description,
       "line_items[0][quantity]": "1",
+      // Mobile-friendly: Stripe shows wallet buttons (Apple Pay, Google
+      // Pay) above the card form when the browser advertises them.
+      // `submit_type=pay` makes the button say "Pay" instead of "Subscribe".
+      submit_type: "pay",
       success_url: `${BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/checkout/cancel`,
     });

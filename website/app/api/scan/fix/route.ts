@@ -626,9 +626,57 @@ export async function POST(req: NextRequest) {
   const token = auth.token;
   const authSource = auth.source;
 
-  // Group issues by file
+  // Phase Nuclear-coupling — when tier=nuclear, diagnose every issue
+  // FIRST and enrich the issue text with the diagnoser's rootCause +
+  // recommendation BEFORE feeding it into the per-file fix loop. This
+  // is what turns $399 from "diagnose, then ship a per-line fix" into
+  // "ship a fix that knows what the architect-Claude said the fix
+  // should be."
+  //
+  // Reliability contract: any failure in the diagnosis step falls
+  // through with the ORIGINAL issues. The fix loop never gets blocked
+  // on the diagnoser; it just gets richer input when the brain is
+  // healthy. Tested in tests/diagnosis-enricher.test.js.
+  let workingIssues: IssueInput[] = issues;
+  let nuclearEnrichmentSummary: string | undefined;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { shipDiagnosisAwareFix } = require("@/app/lib/diagnosis-enricher.js") as {
+        shipDiagnosisAwareFix: (opts: {
+          issues: IssueInput[];
+          askClaudeForDiagnosis: (prompt: string) => Promise<string>;
+          hostname?: string;
+        }) => Promise<{
+          enrichedIssues: IssueInput[];
+          diagnoses: unknown[];
+          summary: string;
+          enrichedCount: number;
+        }>;
+      };
+      const hostname = (() => {
+        try { return new URL(repoUrl).hostname; } catch { return "your-domain.com"; }
+      })();
+      const enrichResult = await shipDiagnosisAwareFix({
+        issues,
+        askClaudeForDiagnosis: askClaudeForTest, // same Claude wrapper, different prompt
+        hostname,
+      });
+      workingIssues = enrichResult.enrichedIssues as IssueInput[];
+      nuclearEnrichmentSummary = enrichResult.summary;
+    } catch (err) {
+      // Best-effort: log + fall through with original issues. The
+      // shipDiagnosisAwareFix helper already has its own try/catch for
+      // diagnoser-side errors; this outer guard catches any contract-
+      // violation unexpected throw.
+      const message = err instanceof Error ? err.message : "unknown";
+      nuclearEnrichmentSummary = `nuclear enrichment skipped: ${message}`;
+    }
+  }
+
+  // Group issues by file (using the possibly-enriched workingIssues)
   const issuesByFile = new Map<string, string[]>();
-  for (const issue of issues) {
+  for (const issue of workingIssues) {
     if (!issue.file) continue;
     const existing = issuesByFile.get(issue.file) || [];
     existing.push(issue.issue);
@@ -935,6 +983,54 @@ export async function POST(req: NextRequest) {
     errors.push(`Test generation failed (no regression tests added): ${message}`);
     return { tests: [] as Array<{ path: string; content: string; sourceFile: string }>, skipped: [] as Array<{ sourceFile: string; reason: string }>, summary: `test generation: failed (${message})` };
   });
+
+  // Phase 6.2.8 — mutation-driven test strengthening. Runs ONLY on the
+  // Nuclear tier ($399). Generates mutation candidates against each
+  // fixed source, asks Claude to strengthen the regression test so it
+  // catches every mutation. Replaces the weak test with the strong one
+  // BEFORE the test gets appended to the fixes array. Non-blocking:
+  // any failure leaves the original test intact.
+  let strengthenSummary: string | undefined;
+  let strengthenedCount = 0;
+  if (input.tier === "nuclear" && testGen.tests.length > 0) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { strengthenRegressionTests } = require("@/app/lib/mutation-driven-test-strengthener.js") as {
+        strengthenRegressionTests: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          regressionTests: Array<{ path: string; content: string; sourceFile: string }>;
+          askClaudeForStrengthen: (prompt: string) => Promise<string>;
+        }) => Promise<{
+          strengthened: Array<{ path: string; content: string; sourceFile: string; mutationsChecked: number }>;
+          skipped: Array<{ sourceFile: string; testPath: string; reason: string; mutationsChecked?: number }>;
+          summary: string;
+        }>;
+      };
+      const strengthenResult = await strengthenRegressionTests({
+        fixes,
+        regressionTests: testGen.tests,
+        askClaudeForStrengthen: askClaudeForTest, // same Claude wrapper, different prompt
+      });
+      // Replace the strengthened tests in-place so the appendix loop
+      // below picks up the strong version, not the weak one.
+      const strongByPath = new Map(strengthenResult.strengthened.map((s) => [s.path, s]));
+      for (const t of testGen.tests) {
+        const strong = strongByPath.get(t.path);
+        if (strong) {
+          t.content = strong.content;
+          strengthenedCount += 1;
+        }
+      }
+      for (const s of strengthenResult.skipped) {
+        errors.push(`(info) Mutation-strengthen skipped ${s.testPath}: ${s.reason}`);
+      }
+      strengthenSummary = strengthenResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "mutation strengthening failed";
+      errors.push(`Mutation-driven test strengthening failed: ${message}`);
+      strengthenSummary = `mutation-strengthen: failed (${message})`;
+    }
+  }
   for (const t of testGen.tests) {
     fixes.push({ file: t.path, original: "", fixed: t.content, issues: [`Regression test for ${t.sourceFile}`] });
   }
@@ -942,6 +1038,109 @@ export async function POST(req: NextRequest) {
     errors.push(`No regression test for ${s.sourceFile}: ${s.reason}`);
   }
   const testGenSummary = testGen.summary;
+
+  // Phase 6.2.7 — property-based test generation per fix. Runs ONLY
+  // on the Nuclear tier ($399) so $99/$199 customers don't pay for
+  // the extra Claude calls. Property tests sit alongside the
+  // regression tests we already write — fuzzers that exercise
+  // invariants under random inputs (idempotency, type-shape, edge
+  // cases). Non-blocking: any failure here logs into errors[] and
+  // ships the fix anyway. This is the differentiator nobody else
+  // ships at fix-time.
+  let propTestSummary: string | undefined;
+  let propTestsWritten = 0;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { generatePropTestsForFixes } = require("@/app/lib/property-test-generator.js") as {
+        generatePropTestsForFixes: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          askClaudeForTest: (prompt: string) => Promise<string>;
+          maxFixes?: number;
+        }) => Promise<{
+          tests: Array<{ path: string; content: string; sourceFile: string; language: string }>;
+          skipped: Array<{ sourceFile: string; reason: string }>;
+          summary: string;
+        }>;
+      };
+      // Only generate prop tests for the ORIGINAL fixes, not the
+      // regression-test files we just appended (those start with
+      // tests/auto-generated/). Filter by source extension.
+      const sourceFixes = fixes.filter((f) => !f.file.startsWith("tests/auto-generated/"));
+      const propResult = await generatePropTestsForFixes({
+        fixes: sourceFixes,
+        askClaudeForTest,
+      });
+      for (const t of propResult.tests) {
+        fixes.push({
+          file: t.path,
+          original: "",
+          fixed: t.content,
+          issues: [`Property test for ${t.sourceFile}`],
+        });
+      }
+      for (const s of propResult.skipped) {
+        // Property tests are bonus — skip-reasons go in errors as
+        // info, not as a "this thing broke" signal.
+        errors.push(`(info) No property test for ${s.sourceFile}: ${s.reason}`);
+      }
+      propTestsWritten = propResult.tests.length;
+      propTestSummary = propResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "property test generation failed";
+      errors.push(`Property test generation failed (no property tests added): ${message}`);
+      propTestSummary = `property test generation: failed (${message})`;
+    }
+  }
+
+  // Phase 6.2.10 — performance benchmark before/after on hot-path fixes.
+  // Nuclear-tier only ($399). Generates a tinybench file per fix that
+  // touches a hot path (loops / await / fetch / regex / DB calls). The
+  // file inlines BOTH original and fixed implementations as
+  // originalFn / fixedFn so customers run it locally and paste the
+  // numbers into the PR. Non-blocking: failures log + ship the fix.
+  let benchSummary: string | undefined;
+  let benchmarksWritten = 0;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { generateBenchmarksForFixes } = require("@/app/lib/perf-benchmark-generator.js") as {
+        generateBenchmarksForFixes: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          askClaudeForBench: (prompt: string) => Promise<string>;
+          maxFixes?: number;
+        }) => Promise<{
+          benchmarks: Array<{ path: string; content: string; sourceFile: string }>;
+          skipped: Array<{ sourceFile: string | null; reason: string }>;
+          summary: string;
+        }>;
+      };
+      // Source fixes only — exclude the regression-test, property-test,
+      // and any other tests/auto-generated/ entries we just appended.
+      const sourceFixes = fixes.filter((f) => !f.file.startsWith("tests/auto-generated/"));
+      const benchResult = await generateBenchmarksForFixes({
+        fixes: sourceFixes,
+        askClaudeForBench: askClaudeForTest, // same Claude wrapper, different prompt
+      });
+      for (const b of benchResult.benchmarks) {
+        fixes.push({
+          file: b.path,
+          original: "",
+          fixed: b.content,
+          issues: [`Performance benchmark for ${b.sourceFile}`],
+        });
+      }
+      for (const s of benchResult.skipped) {
+        errors.push(`(info) No benchmark for ${s.sourceFile || "(unknown)"}: ${s.reason}`);
+      }
+      benchmarksWritten = benchResult.benchmarks.length;
+      benchSummary = benchResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "benchmark generation failed";
+      errors.push(`Benchmark generation failed: ${message}`);
+      benchSummary = `benchmark generation: failed (${message})`;
+    }
+  }
 
   // Create a branch, commit fixes, open PR
   try {
@@ -1118,7 +1317,18 @@ export async function POST(req: NextRequest) {
       branch: branchName,
       filesFixed: fixes.length,
       issuesFixed: totalIssuesFixed,
-      fixes: fixes.map((f) => ({ file: f.file, issues: f.issues })),
+      // Phase 6.1.3 — include before/after content + a precomputed
+      // unified-diff string per fix so the customer-facing UI can
+      // render inline diffs WITHOUT re-fetching files. Capped at 200KB
+      // per file each side to keep the response under Vercel's 4.5MB
+      // ceiling even with large fix batches. Anything bigger renders
+      // as the "open the PR for the full patch" fallback in DiffViewer.
+      fixes: fixes.map((f) => {
+        const MAX_BYTES_PER_SIDE = 200 * 1024;
+        const before = (f.original || "").slice(0, MAX_BYTES_PER_SIDE);
+        const after = (f.fixed || "").slice(0, MAX_BYTES_PER_SIDE);
+        return { file: f.file, issues: f.issues, before, after };
+      }),
       authSource,
       errors,
       failedFiles,
@@ -1127,12 +1337,24 @@ export async function POST(req: NextRequest) {
         ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
         : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
       testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
+      propertyTestGeneration: propTestSummary
+        ? { testsWritten: propTestsWritten, summary: propTestSummary }
+        : { skipped: true, reason: "tier is not nuclear — property tests are a $399-tier value-add" },
+      mutationStrengthening: strengthenSummary
+        ? { testsStrengthened: strengthenedCount, summary: strengthenSummary }
+        : { skipped: true, reason: "tier is not nuclear or no regression tests — mutation strengthening is a $399-tier value-add" },
+      perfBenchmarks: benchSummary
+        ? { benchmarksWritten, summary: benchSummary }
+        : { skipped: true, reason: "tier is not nuclear — perf benchmarks are a $399-tier value-add" },
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
       architecture: architectureSummary
         ? { summary: architectureSummary }
         : { skipped: true, reason: "tier is not scan_fix or originalFileContents not supplied — architecture annotation is a $199-tier value-add" },
+      nuclearEnrichment: nuclearEnrichmentSummary
+        ? { summary: nuclearEnrichmentSummary }
+        : { skipped: true, reason: "tier is not nuclear — enrichment is a $399-tier value-add" },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {

@@ -45,6 +45,28 @@ interface LearningData {
   error?: string;
 }
 
+interface TrendBucket {
+  date: string;
+  totalDissent: number;
+  byModule: Record<string, number>;
+  byKind: Record<string, number>;
+  distinctRepos: number;
+  fpRate: number | null;
+}
+
+interface TrendData {
+  ok: boolean;
+  meta?: { daysBack: number; bucketDays: number; totalDissentRows: number };
+  buckets?: TrendBucket[];
+  summary?: {
+    firstBucketRate: number | null;
+    lastBucketRate: number | null;
+    deltaPercent: number;
+    direction: "no-data" | "insufficient-data" | "improving" | "regressing" | "flat";
+  };
+  error?: string;
+}
+
 interface RefreshStatus {
   ok: boolean;
   lastUpdated: string | null;
@@ -73,6 +95,7 @@ const KIND_LABEL: Record<string, string> = {
 export default function LearningDashboard() {
   const [data, setData] = useState<LearningData | null>(null);
   const [status, setStatus] = useState<RefreshStatus | null>(null);
+  const [trend, setTrend] = useState<TrendData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -82,9 +105,10 @@ export default function LearningDashboard() {
     setLoading(true);
     setError("");
     try {
-      const [learningRes, statusRes] = await Promise.all([
+      const [learningRes, statusRes, trendRes] = await Promise.all([
         fetch("/api/admin/learning").then((r) => r.json() as Promise<LearningData>),
         fetch("/api/admin/learning/refresh").then((r) => r.json() as Promise<RefreshStatus>),
+        fetch("/api/admin/learning/trend").then((r) => r.json() as Promise<TrendData>),
       ]);
       if (!learningRes.ok) {
         setError(learningRes.error || "Failed to load learning data");
@@ -92,6 +116,7 @@ export default function LearningDashboard() {
         setData(learningRes);
       }
       if (statusRes.ok) setStatus(statusRes);
+      if (trendRes.ok) setTrend(trendRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "request failed");
     } finally {
@@ -189,6 +214,23 @@ export default function LearningDashboard() {
 
         {data && (
           <div className="space-y-6">
+            {/* Phase 6.2.5 — FP-rate trend chart. Proves the closed
+                feedback loop is working: dissent volume + computed
+                FP rate over time, with a one-line headline summary. */}
+            {trend && trend.ok && trend.buckets && trend.buckets.length > 0 && (
+              <Card title={`FP-rate trend (${trend.meta?.daysBack || 90}d, ${trend.meta?.bucketDays || 7}d buckets)`}>
+                <TrendSummary summary={trend.summary} totalDissent={trend.meta?.totalDissentRows || 0} />
+                <TrendChart buckets={trend.buckets} />
+                <p className="mt-3 text-[11px] text-muted">
+                  Each bar = one bucket. Bar height = total dissent in that bucket.
+                  Dotted line = computed FP-rate (right axis). Lower = better. The
+                  scoring math intentionally floors at 20% for any bucket with dissent
+                  (matches the conservative 5× multiplier in module-confidence.js) —
+                  the SHAPE of the trend is the signal, not the absolute number.
+                </p>
+              </Card>
+            )}
+
             {/* Kinds breakdown */}
             {data.kindsBreakdown && data.kindsBreakdown.length > 0 && (
               <Card title={`Dissent by kind (${data.meta?.windowDays || 30}d window)`}>
@@ -308,6 +350,99 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
         <h3 className="text-sm font-bold text-foreground">{title}</h3>
       </div>
       <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function TrendSummary({
+  summary,
+  totalDissent,
+}: {
+  summary: TrendData["summary"];
+  totalDissent: number;
+}) {
+  if (!summary || summary.direction === "no-data") {
+    return (
+      <p className="text-sm text-muted mb-3">
+        No dissent recorded yet — ship a few customer scans, the trend will populate.
+      </p>
+    );
+  }
+  if (summary.direction === "insufficient-data") {
+    return (
+      <p className="text-sm text-muted mb-3">
+        {totalDissent} dissent event{totalDissent === 1 ? "" : "s"} recorded so far —
+        need at least two non-empty buckets before a trend can be drawn.
+      </p>
+    );
+  }
+  const tone =
+    summary.direction === "improving"
+      ? "text-emerald-700"
+      : summary.direction === "regressing"
+        ? "text-amber-700"
+        : "text-foreground";
+  const arrow =
+    summary.direction === "improving" ? "↓" : summary.direction === "regressing" ? "↑" : "→";
+  return (
+    <div className="flex items-baseline gap-3 mb-3">
+      <span className={`text-2xl font-bold tabular-nums ${tone}`}>
+        {arrow} {Math.abs(summary.deltaPercent)}%
+      </span>
+      <span className="text-sm text-muted">
+        FP rate {summary.direction === "regressing" ? "regressed" : summary.direction === "improving" ? "improved" : "stayed flat"} vs the start of the window
+        {" "}
+        ({(summary.firstBucketRate ?? 0).toFixed(2)} → {(summary.lastBucketRate ?? 0).toFixed(2)}).
+        {totalDissent > 0 && ` Based on ${totalDissent} dissent event${totalDissent === 1 ? "" : "s"}.`}
+      </span>
+    </div>
+  );
+}
+
+function TrendChart({ buckets }: { buckets: TrendBucket[] }) {
+  // Pure-CSS bar+line chart — no chart-library dep. Bars = dissent
+  // count (left axis); a tinted overlay band = computed FP rate
+  // (right axis, 0-100%).
+  const maxDissent = Math.max(1, ...buckets.map((b) => b.totalDissent));
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex items-end gap-1 min-h-[120px] pt-2">
+        {buckets.map((b) => {
+          const heightPct = b.totalDissent === 0 ? 0 : Math.max(2, (b.totalDissent / maxDissent) * 100);
+          const ratePct = b.fpRate == null ? 0 : Math.round(b.fpRate * 100);
+          return (
+            <div
+              key={b.date}
+              className="flex flex-col items-center min-w-[24px] flex-1 group"
+              title={`${b.date} · dissent=${b.totalDissent} · FP=${b.fpRate ?? "n/a"} · repos=${b.distinctRepos}`}
+            >
+              <div className="relative w-full flex items-end" style={{ height: 110 }}>
+                <div
+                  className="w-full rounded-t transition-all"
+                  style={{
+                    height: `${heightPct}%`,
+                    background:
+                      b.fpRate == null
+                        ? "var(--color-surface-light, #f1f5f9)"
+                        : "linear-gradient(180deg, #14b8a6 0%, #0f766e 100%)",
+                    opacity: b.fpRate == null ? 0.3 : 0.85,
+                  }}
+                />
+                {b.fpRate != null && (
+                  <span
+                    className="absolute -top-1 left-1/2 -translate-x-1/2 text-[9px] font-mono font-bold text-foreground bg-white/80 backdrop-blur rounded px-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    {ratePct}%
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] text-muted mt-1 font-mono truncate w-full text-center">
+                {b.date.slice(5)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

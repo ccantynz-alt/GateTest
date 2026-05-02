@@ -313,6 +313,165 @@ These ride alongside every sub-phase, not after:
 
 ---
 
+## PHASE 6 — THE 100-MOVES MASTER PLAN (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-30 — *"Lets do it"* in response to the brutal-honest 100-move list. This plan supersedes "pick the next thing." Every session reads this section, finds the first unchecked Tier 1 item, ships it, then continues into Tier 2/3/4 as Tier 1 closes.
+
+### The competitive thesis
+
+Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo brain, closed feedback loop, observability fusion, multi-file refactors, cross-language semantics). Phase 6 is the move from "best AI diagnostic/fix tool" to **the platform every developer eventually uses** — distribution, ecosystem, compliance, language depth, AI-app safety, supply-chain trust, and the brutal moats only GateTest can build.
+
+100 items, organised in 8 tiers. Tier 1-2 = ~25 items = best-in-class for sale. Tiers 3-4 = +45 items = uncatchable in the market. Tiers 5-8 = +30 items = category, not product.
+
+### Tier 1 — Launch-essential (1-10): the credibility floor
+
+- [x] **6.1.1** Couple Nuclear diagnoser → fix loop — **DONE 2026-04-30** commit `ca62637`. `website/app/lib/diagnosis-enricher.js` runs diagnoseFindings against fix issues at tier=nuclear, prepends rootCause + recommendation + platformNotes to each issue text BEFORE the fix loop sees it. 21 enricher tests + 8 reliability tests.
+- [x] **6.1.2** Per-finding fix preview + selection UI — **DONE 2026-04-30** commit `(this commit)`. New `<FixSelectionPanel>` component sits between FindingsPanel and AIBuilderHandoff on `/scan/status`. Three layers of selection control: header chips (all-fixable / errors-only / warnings-only / clear), per-module quick-select, per-finding checkbox grid grouped by file with indeterminate-state file-level toggles. Pure-function backing helper `selectable-findings.js` with 32 tests covers parser, severity classifier, group-by-file, count summaries, filter→selection, selection→IssueInput[] conversion, and CTA-label rendering. `runFixWithIssues(issues)` route handler in `/scan/status/page.tsx` accepts the partial subset and threads tier through (so $399 nuclear coupling still fires). Honest documented limitation: bare ".gitignore" findings stay unfixable (regex needs path-prefix shape) — surfaced in the "manual" bucket of the panel.
+- [x] **6.1.3** Inline before/after diff in every report — **DONE 2026-04-30** commit `(this commit)`. Pure-function `inline-diff.js` (LCS-based line-diff, 1-indexed hunks matching `diff -u` convention, 5000-line cap with graceful oversize fallback, 29 tests covering identical-input/oversize/context-merging/determinism). New `<DiffViewer>` component renders hunks side-by-side with red-`-` / green-`+` highlighting, file-level expand/collapse (auto-collapse when >3 files), per-fix issue context list, inline CopyButton for the unified-diff text. Wired into `/scan/status` PR-success block as a `<details>` block — customers see the patches BEFORE clicking through to GitHub. `/api/scan/fix` now returns `before`/`after` content per fix (capped at 200KB per side to stay under Vercel's 4.5MB response ceiling).
+- [x] **6.1.4** Universal copy-everywhere — **DONE 2026-04-30** commit `(this commit)`. New `<CopyButton>` component (icon/label/inline variants) + shared `copy-formatters.js` helper. Wired into FindingsPanel (per-finding rows + bulk-header markdown checklist) and LiveScanTerminal (full-transcript copy). 20 formatter tests, modern clipboard API + textarea fallback for older browsers / iframe contexts.
+- [x] **6.1.5** Fix-loop reliability test in CI — **DONE 2026-04-30** commit `ca62637`. `tests/fix-loop-reliability.test.js` fails the build if `attemptFixWithRetries` ever silently returns success=false on deterministic happy-path input. Catches the "0 done · 14 retry" bug shape before it ships.
+- [ ] **6.1.6** Hero + landing-page facelift — drop the all-black hero, gradient flow into the rest of the page, lighter weight. ~1 day. Boss Rule (#8 brand) — needs Craig's mock approval before push.
+- [ ] **6.1.7** GitHub Marketplace listing live — distribution is the bottleneck. 2-3 hr listing-prep + 2-3 week GitHub approval. Boss Rule (#8 public-facing comms). I draft copy + screenshots; Craig submits.
+- [ ] **6.1.8** Apple Pay / Google Pay activated in Stripe Dashboard — wallet-first checkout. ~2 min Craig action. Code already supports it (commit `854244c`).
+- [ ] **6.1.9** First 10 paying customers — sales not engineering. HN / Twitter DMs / OSS-maintainer outreach / Crontech & Gluecron customer offers / Product Hunt launch.
+- [ ] **6.1.10** Public "fixed by GateTest" registry — every shipped PR publicly logged at `gatetest.ai/fixes` as proof. Marketing flywheel.
+
+### Tier 2 — Compounding moats (11-25): uncatchable in 6 months
+
+- [ ] **6.2.1** Phase 5.4 multi-file architectural refactor pipeline (polling→webhook, in-memory→Redis, untyped→typed-client). 1-2 weeks. Single highest-leverage move for the $999 tier.
+- [ ] **6.2.2** Cross-repo intelligence cohort population — 30-min Craig action: scan 10 popular Next/Stripe + Express/pg + FastAPI/React repos to seed the brain.
+- [ ] **6.2.3** Phase 5.3.2 + 5.3.3 + 5.3.4 — Datadog + Vercel Analytics + static↔runtime correlator. Killer feature for $799 Production tier.
+- [ ] **6.2.4** Phase 5.5 cross-language contract graph — JS↔Python↔Rust as ONE program. Polyglot drift detection no competitor has.
+- [x] **6.2.5** Closed-feedback FP-rate trending in `/admin/learning` — **DONE 2026-04-30** commit `(this commit)`. Pure-function `fp-trend.js` (bucketKeyFor + bucketDissentRows + computeFpRateTrend + summariseTrend, deterministic, frozen-now-aware for tests, fills empty buckets so chart has no gaps). 20 tests covering bucket-key snapping, fill-empty-window, distinct-repos counting, "improving/regressing/flat/no-data/insufficient-data" headline classification, determinism. New `/api/admin/learning/trend` route (admin-auth, default 90d window with 7d buckets, query-param overrides). `/admin/learning` page gets a "FP-rate trend" Card above the kinds breakdown — headline "↓ N% FP rate improved" with arrow + tone (emerald/amber/foreground) + range + dissent-event count, plus a pure-CSS bar+overlay chart (no chart-library dep). Hover shows date · dissent count · FP% · distinct repos.
+- [ ] **6.2.6** Layer-3 Operator (autonomous overnight Claude) — Vercel cron picks up Phase 5/6 boxes 24/7. Boss Rule for budget cap + kill switch.
+- [x] **6.2.7** Property-based test generation per fix — **DONE 2026-04-30** commit `(this commit)`. New `property-test-generator.js` mirrors `test-generator.js` shape but emits PROPERTY tests (fast-check for JS/TS, hypothesis for Python) alongside the regression tests. Per-language prompt with explicit asks for 2-5 properties covering type-shape invariants, idempotency, boundary cases (empty/large/unicode/negative). Sanity-checks Claude's output references the property lib (rejects bare smoke tests). Output filename `tests/auto-generated/<flat>.prop.<ext>` so it sits alongside regression tests without colliding. Wired into `/api/scan/fix` ONLY when `tier === "nuclear"` (\$99/\$199 customers don't pay for the extra spend). Non-blocking — any failure logs into errors[] and ships the fix anyway. Skip-reasons surface as `(info)` rather than failures since property tests are bonus. 28 tests covering testability gate, language detection, path generation, prompt shape (JS + Python), Claude-throw resilience, fence stripping, mixed-batch behaviour, maxFixes cap with "deferred" summary line.
+- [x] **6.2.8** Mutation-test-driven test strengthening — **DONE 2026-04-30** commit `(this commit)`. New `mutation-driven-test-strengthener.js` takes each (fix, regression test) pair, generates mutation candidates against the fixed source via an inlined 12-operator mutation engine (eq-flip / neq-flip / boundary swaps / math swaps / true-false / logical-op swaps / inc-dec — minimal subset of `src/core/mutation-engine.js` mirrored into the website tree because Turbopack root is locked to /website), feeds the mutations + the regression test to Claude with an explicit "your strengthened test must FAIL on each mutation but PASS on the fixed source" ask. Replaces the weak regression test in-place BEFORE the fix-list loop appends it, so the PR ships the strong version. Wired into `/api/scan/fix` ONLY when `tier === "nuclear"` AND `testGen.tests.length > 0` ($99/$199 don't pay for the strengthening pass). Non-blocking — any failure leaves the original test intact and skip-reasons surface as `(info)` errors. 29 tests covering eligibility gate, mutation engine inlined operators (12), prompt shape, Claude SKIP / identical / no-assertions / fence-stripping / throw-resilience paths, and batch maxFixes=5 cap with "deferred" summary.
+- [ ] **6.2.9** Chaos-test-driven resilience fixes — chaos shows 3G failure → AI adds retry/backoff → ship.
+- [x] **6.2.10** Performance benchmark before/after on every PR — **DONE 2026-04-30** commit `(this commit)`. New `perf-benchmark-generator.js` mirrors prior generators' shape but emits `tinybench` benchmark files for fixes that touch hot paths. Hot-path heuristic tests for loops / await / Promise / array-method / regex / fetch / DB-shaped calls (16 patterns) — pure-constants files correctly skip. Generated benchmark inlines BOTH original and fixed implementations as `originalFn` / `fixedFn` so it runs without before/after import resolution; asks for ≥2 input sizes (small + large) so complexity differences surface. Output sanity-checked: must include `tinybench` import OR `new Bench(` (regex tightened so a comment "// no Bench" doesn't false-pass), AND must include both fn names. Wired into `/api/scan/fix` Nuclear-tier only ($99/$199 don't pay). Filename `tests/auto-generated/benchmarks/<flat>.bench.<ext>` so it's separate from the regression-test + property-test surfaces. 32 tests covering heuristic positives/negatives across 9 hot-path classes + benchmarkability gate + path generation + prompt shape + Claude SKIP / lacking-tinybench / lacking-fn-names / fence-stripping / throw-resilience + batch maxFixes=5 cap with "deferred" summary.
+- [ ] **6.2.11** Dependency-upgrade + breaking-change patcher — bump React, fix every call site. Single most common refactor in modern codebases.
+- [ ] **6.2.12** Test coverage backfill — write missing tests for already-fine code, not just fixes.
+- [ ] **6.2.13** Security policy applier — add CSP / CSRF / rate-limit middleware as one-shot patches.
+- [ ] **6.2.14** CISO-ready PDF per Nuclear scan — SOC2/OWASP/CIS-mapped, hand-to-board artifact.
+- [ ] **6.2.15** Live PII flow tracer — *"this email field flows from /api/signup to logs/loki/grafana"*.
+
+### Tier 3 — Distribution channels (26-45): every developer touchpoint
+
+- [x] **6.3.1** Cursor MCP tool — works today via existing MCP server (commit `854244c`).
+- [x] **6.3.2** Claude Code MCP tool — works today.
+- [x] **6.3.3** Cline / Aider MCP integration — works today.
+- [ ] **6.3.4** v0 / Lovable / Bolt.new / Replit Agent integrations — they generate code; we fix what they generate.
+- [ ] **6.3.5** VS Code extension — inline-as-you-type findings + fix-on-save.
+- [ ] **6.3.6** JetBrains plugin — IntelliJ / WebStorm / PyCharm / GoLand / RubyMine.
+- [ ] **6.3.7** Slack app — `/gatetest scan github.com/...` in any channel.
+- [ ] **6.3.8** Discord bot — same shape for OSS communities.
+- [ ] **6.3.9** Microsoft Teams app — enterprise channel.
+- [ ] **6.3.10** Stripe Apps marketplace — *"installed GateTest"* surfaces to Stripe customers.
+- [ ] **6.3.11** GitLab Marketplace listing — not just GitHub.
+- [ ] **6.3.12** Bitbucket integration — Atlassian customer base.
+- [ ] **6.3.13** Sourcegraph integration — code-search → inline gate findings.
+- [ ] **6.3.14** Sentry integration consumer side — *"the issue you opened — here's the fix"*.
+- [ ] **6.3.15** Linear / Jira integration — every finding → ticket + fix attached.
+- [ ] **6.3.16** Notion / Coda export — paste a report straight into a doc.
+- [ ] **6.3.17** Browser extension on github.com — *"GateTest passed/failed"* badge inline on every PR.
+- [ ] **6.3.18** CLI auto-update + push notifications — `gatetest update` with new module alerts.
+- [ ] **6.3.19** One-line install per stack — `npx gatetest --init nextjs`, etc.
+- [ ] **6.3.20** Public REST API + Postman collection — programmatic access for partners.
+
+### Tier 4 — Trust / compliance unlocks (46-60): B2B gating mechanism
+
+- [ ] **6.4.1** SOC2 Type II self-evidence package — auditor-friendly artifacts auto-generated.
+- [ ] **6.4.2** ISO 27001 mapping per finding.
+- [ ] **6.4.3** PCI-DSS mapping — *"this commit makes you non-compliant"*.
+- [ ] **6.4.4** HIPAA mapping — for medical / health customers.
+- [ ] **6.4.5** FedRAMP / FISMA mapping — gov customers.
+- [ ] **6.4.6** CIS Benchmark mapping — every infra finding tagged.
+- [ ] **6.4.7** NIST CSF mapping — security framework reference.
+- [ ] **6.4.8** OWASP ASVS mapping — application-security verification standard.
+- [ ] **6.4.9** GDPR Article 5/6/32 mapping — privacy compliance.
+- [ ] **6.4.10** CCPA mapping — US-side privacy.
+- [ ] **6.4.11** Cyber-insurance partnership — Coalition / At-Bay / Cowbell lower premium for GateTest customers.
+- [ ] **6.4.12** Scan-results signed with Sigstore — cryptographically verifiable "this was scanned".
+- [ ] **6.4.13** Customer-facing public scorecard — `gatetest.ai/score/<repo>` shows trend.
+- [ ] **6.4.14** Enterprise audit log API — every scan / fix / PR / dissent traceable.
+- [ ] **6.4.15** DPA template + sub-processor list — enterprise procurement-ready.
+
+### Tier 5 — Language / runtime depth (61-75): no codebase is unscannable
+
+- [ ] **6.5.1** Rust deep-fix — Cargo.toml + unsafe blocks + lifetime issues.
+- [ ] **6.5.2** Go deep-fix — go.mod + goroutine leaks + nil-deref.
+- [ ] **6.5.3** Java deep-fix — Spring Boot + Maven + Hibernate N+1.
+- [ ] **6.5.4** Python deep-fix — pip + asyncio + Django ORM.
+- [ ] **6.5.5** Kotlin deep-fix — Gradle + Coroutines + Compose.
+- [ ] **6.5.6** Swift deep-fix — Package.swift + ARC + SwiftUI.
+- [ ] **6.5.7** C / C++ scan — buffer overflows, use-after-free, integer overflow.
+- [ ] **6.5.8** Solidity smart-contract scan — re-entrancy, overflow, access control.
+- [ ] **6.5.9** Move (Aptos / Sui) smart-contract scan.
+- [ ] **6.5.10** WASM module scan.
+- [ ] **6.5.11** Lua / Nginx config scan — for OpenResty deployments.
+- [ ] **6.5.12** Bash deep-fix — `set -euo pipefail`, quoting, traps.
+- [ ] **6.5.13** Dockerfile + Compose deep-fix — already partial; deepen.
+- [ ] **6.5.14** Helm chart drift — values.yaml ↔ template parity.
+- [ ] **6.5.15** Kustomize overlay audit.
+
+### Tier 6 — AI-specific killer modules (76-85): the AI-app safety category we own
+
+- [ ] **6.6.1** Prompt-injection canary insertion — runtime detection of jailbreaks.
+- [ ] **6.6.2** LLM cost-DoS deep audit — per-route token-budget enforcement.
+- [ ] **6.6.3** Vector DB query audit — embedding leak / context-stuffing attacks.
+- [ ] **6.6.4** RAG corpus poisoning detection — adversarial document detection.
+- [ ] **6.6.5** Model versioning drift — production using deprecated model.
+- [ ] **6.6.6** Output filter coverage check — every LLM output passes through filters?
+- [ ] **6.6.7** Function-calling permission audit — what tools can the agent invoke?
+- [ ] **6.6.8** Agent loop-protection — bounded recursion verified.
+- [ ] **6.6.9** Embedding cost-per-request analysis.
+- [ ] **6.6.10** Fine-tune dataset PII leakage scan.
+
+### Tier 7 — Supply chain / ecosystem (86-95): the trust layer
+
+- [ ] **6.7.1** Real-time CVE feed correlation — *"a CVE was just published for `lodash@4.17.20`, you're on it"*.
+- [ ] **6.7.2** Typo-squat package detection — `lodahs` instead of `lodash`.
+- [ ] **6.7.3** Malicious-author tracking — npm-publisher reputation system.
+- [ ] **6.7.4** SBOM generation — Software Bill of Materials in every PR.
+- [ ] **6.7.5** License compatibility audit — GPL contagion in commercial products.
+- [ ] **6.7.6** Open-source health score per dep — abandonment risk.
+- [ ] **6.7.7** Tarball-byte reanalysis — what's actually in the .tgz, not just package.json.
+- [ ] **6.7.8** Lockfile diff narration — *"this PR upgrades 47 deps; here's what changed in each"*.
+- [ ] **6.7.9** Build-reproducibility check — same source → same artifact.
+- [ ] **6.7.10** Container image SBOM + CVE diff per push.
+
+### Tier 8 — The brutal moats (96-100): things only GateTest can do
+
+- [ ] **6.8.1** Cross-customer learning fabric (privacy-preserving) — federated learning on dissent without seeing customer code.
+- [ ] **6.8.2** "Fixed by GateTest" badge insurance underwriters trust — Coalition / Munich Re tier partnership.
+- [ ] **6.8.3** Self-deploying Operator service customers run inside their own VPC — for regulated industries.
+- [ ] **6.8.4** AI-builder reverse channel — Cursor / v0 / Lovable webhook us, we pre-emptively fix common issues before the user even sees them.
+- [ ] **6.8.5** The "GateTest score" — GitHub-stars-equivalent for code quality. Every repo has one, every employer asks for it, every founder optimises for it.
+
+### Operating rules during Phase 6
+
+1. **Pick up from the last unchecked box.** Sessions read this list, find the first `- [ ]`, work it. Tier 1 first.
+2. **Commit at every meaningful milestone.** Same rule as Phases 1-5.
+3. **Boss Rule still applies.** Tier 1.6 (hero), 1.7 (Marketplace listing), 1.8 (Stripe wallet activation), 4.* (compliance-mapping with regulatory implications), 8.2 (insurance partnership), 6.3.10 (Stripe Apps Marketplace) are all explicitly Boss Rule.
+4. **Real-repo proof when relevant** — not all 100 items need proof docs (UI items don't), but anything that makes a customer-visible promise does.
+5. **Update CLAUDE.md when an item ships** — tick the box, add the commit ref, update the Phase 6 status tracker below.
+6. **Tests stay green.** Sweep checklist runs every session.
+
+### Phase 6 status tracker
+
+| Tier | Status |
+| --- | --- |
+| 1 — Launch-essential (10 items) | **5/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.2 ✓ per-finding selection, 6.1.3 ✓ inline diff, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.6 (hero — Boss Rule), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
+| 2 — Compounding moats (15 items) | **4/15 SHIPPED** (6.2.5 ✓ FP-rate trending, 6.2.7 ✓ property-based test generation, 6.2.8 ✓ mutation-driven test strengthening, 6.2.10 ✓ perf benchmark before/after). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6 (Layer-3 Operator — Boss Rule), 6.2.9 (chaos), 6.2.11-6.2.15. |
+| 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
+| 4 — Compliance unlocks (15 items) | 0/15 — not started. |
+| 5 — Language depth (15 items) | 0/15 — not started. |
+| 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
+| 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
+| 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
+| **Phase 6 total** | **12/100 shipped** (this commit + previous Tier-1 + Tier-2 work). |
+
+---
+
 ## PROTECTED PLATFORMS — PERMANENT INTEGRATIONS (READ THIS EVERY SESSION)
 
 **GateTest protects the following Craig-owned platforms. These integrations are PERMANENT. They must survive every future Claude session. They cannot be removed, weakened, or "simplified" without Craig's explicit authorization.**
