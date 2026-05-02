@@ -70,6 +70,21 @@ function callMcp(method, params = {}, timeoutMs = 60000) {
       if (!settled) { settled = true; clearTimeout(timer); reject(err); }
     });
 
+    // Without this, a server that crashes at import (e.g. ERR_MODULE_NOT_FOUND
+    // because @modelcontextprotocol/sdk isn't installed) emits no stdout and
+    // the test waits the full timeoutMs per call — a single missing dep
+    // turns the suite into a 7+ minute hang. Reject immediately on exit
+    // before stdout has produced a JSON-RPC line.
+    proc.on('exit', (code, signal) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        const msg = `MCP server exited (code=${code}, signal=${signal}) before responding to ${method}.`;
+        const detail = stderr.trim() ? ` stderr: ${stderr.slice(0, 500)}` : '';
+        reject(new Error(msg + detail));
+      }
+    });
+
     const id = Math.floor(Math.random() * 100000);
     const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
     proc.stdin.write(msg);
