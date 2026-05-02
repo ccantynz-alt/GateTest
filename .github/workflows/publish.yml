@@ -1,0 +1,96 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run only (no actual publish)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # for creating the GitHub Release on tag push
+  id-token: write   # for npm provenance
+
+jobs:
+  publish:
+    name: Test + Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify NPM_TOKEN is configured
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set."
+            echo ""
+            echo "  HOW TO FIX (one-time setup, ~2 minutes):"
+            echo ""
+            echo "  1. On your laptop (with npm logged in):"
+            echo "       npm token create"
+            echo ""
+            echo "  2. Copy the npm_xxxxxxxx string."
+            echo ""
+            echo "  3. In this repo on GitHub:"
+            echo "       Settings -> Secrets and variables -> Actions"
+            echo "       -> New repository secret"
+            echo "       Name:  NPM_TOKEN"
+            echo "       Value: (paste the npm_xxxxxxxx string)"
+            echo ""
+            echo "  4. Re-run this workflow."
+            echo ""
+            echo "  After that, every 'git push --tags' auto-publishes."
+            exit 1
+          fi
+          echo "NPM_TOKEN is set ✓"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Verify all 90 modules load
+        run: node bin/gatetest.js --list >/dev/null
+
+      - name: Run test suite
+        run: node --test tests/*.test.js
+
+      - name: Verify package version matches the git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            echo "Run: npm version $TAG_VERSION --no-git-tag-version  (then commit + retag)"
+            exit 1
+          fi
+          echo "Tag matches package.json version ✓"
+
+      - name: npm publish (dry-run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --dry-run
+
+      - name: npm publish
+        if: "!(github.event_name == 'workflow_dispatch' && inputs.dry_run == true)"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') && !cancelled()
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

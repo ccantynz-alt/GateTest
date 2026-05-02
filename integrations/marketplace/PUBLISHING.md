@@ -10,20 +10,47 @@
 
 **Why:** lets anyone run `npm install -g gatetest` or `npx gatetest`.
 
-**One-time setup (once per Craig laptop):**
+### Path A — automated via GitHub Actions (recommended)
+
+`.github/workflows/publish.yml` runs `npm publish` on every `v*` tag push.
+`prepublishOnly` runs `--list` + the full test suite first, so a broken
+state can't reach the registry. `--provenance` is enabled so the npm
+listing shows the GitHub-Actions-signed build.
+
+**One-time setup (~2 minutes):**
+
+1. On your laptop (still requires `npm login` ONCE, ever):
+   ```bash
+   npm login
+   npm token create        # outputs: npm_xxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+2. In GitHub: repo → Settings → Secrets and variables → Actions → New
+   repository secret:
+   - Name:  `NPM_TOKEN`
+   - Value: the `npm_xxxxxxxx` string from step 1
+
+That's it. From then on, every release is one command:
+
 ```bash
-npm login                       # use the GateTest npm account
+npm version patch               # 1.0.0 -> 1.0.1, creates tag, commits
+git push --follow-tags          # actions runs: test -> publish -> release
 ```
 
-**Every release:**
-```bash
-# bump version (pick one)
-npm version patch               # 1.0.0 -> 1.0.1
-npm version minor               # 1.0.0 -> 1.1.0
-npm version major               # 1.0.0 -> 2.0.0
+The workflow also creates a GitHub Release with auto-generated notes
+from commit messages between tags.
 
-# prepublishOnly will run --list and the test suite automatically
-npm publish --access public
+**Manual trigger / dry-run:** Actions tab → "Publish to npm" → Run
+workflow → tick "Dry-run only" if you want to verify without publishing.
+
+### Path B — fully manual from your laptop
+
+If you ever need to bypass GitHub Actions (account migration, registry
+URL change, etc.):
+
+```bash
+npm login                       # if not already logged in
+npm version patch               # bump
+npm publish --access public     # prepublishOnly still runs the gate
 ```
 
 **Verify:**
