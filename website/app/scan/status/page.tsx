@@ -5,6 +5,7 @@ import Link from "next/link";
 import FindingsPanel from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
+import FixSelectionPanel from "@/app/components/FixSelectionPanel";
 
 interface ModuleResult {
   name: string;
@@ -235,6 +236,18 @@ export default function ScanStatus() {
       setFixError("No auto-fixable issues — these need manual review (config / infrastructure / architectural).");
       return;
     }
+    await runFixWithIssues(issues);
+  }
+
+  // Phase 6.1.2 — invoked by FixSelectionPanel when the customer
+  // submits a partial selection. Same network call as runFix, just
+  // with a caller-supplied issue subset.
+  async function runFixWithIssues(issues: FixableIssue[]) {
+    if (!scanResult || !params.repo) return;
+    if (!issues || issues.length === 0) {
+      setFixError("Pick at least one finding before fixing.");
+      return;
+    }
     setFixing(true);
     setFixResult(null);
     setFixError("");
@@ -242,7 +255,7 @@ export default function ScanStatus() {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: params.repo, issues }),
+        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier }),
       });
       const data = await res.json() as FixResult;
       setFixResult(data);
@@ -463,6 +476,17 @@ export default function ScanStatus() {
             {/* Beautiful findings panel — severity, file:line, filter, search */}
             {scanResult && scanResult.modules.length > 0 && (
               <FindingsPanel modules={scanResult.modules} repoUrl={params.repo} />
+            )}
+
+            {/* Phase 6.1.2 — pick the fixes you want before triggering
+                the AI fix loop. Lowers "what if I disagree with one
+                fix?" objection. Hidden when scan has no findings. */}
+            {scanResult && (scanResult.totalIssues || 0) > 0 && (
+              <FixSelectionPanel
+                modules={scanResult.modules}
+                onFix={runFixWithIssues}
+                fixing={fixing}
+              />
             )}
 
             {/* AI-builder handoff — always visible when there are findings,

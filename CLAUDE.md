@@ -326,7 +326,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 ### Tier 1 — Launch-essential (1-10): the credibility floor
 
 - [x] **6.1.1** Couple Nuclear diagnoser → fix loop — **DONE 2026-04-30** commit `ca62637`. `website/app/lib/diagnosis-enricher.js` runs diagnoseFindings against fix issues at tier=nuclear, prepends rootCause + recommendation + platformNotes to each issue text BEFORE the fix loop sees it. 21 enricher tests + 8 reliability tests.
-- [ ] **6.1.2** Per-finding fix preview + selection UI — pick which fixes to apply, regenerate per-fix with different prompts. Lowers "what if I disagree with one fix?" objection. ~1 day.
+- [x] **6.1.2** Per-finding fix preview + selection UI — **DONE 2026-04-30** commit `(this commit)`. New `<FixSelectionPanel>` component sits between FindingsPanel and AIBuilderHandoff on `/scan/status`. Three layers of selection control: header chips (all-fixable / errors-only / warnings-only / clear), per-module quick-select, per-finding checkbox grid grouped by file with indeterminate-state file-level toggles. Pure-function backing helper `selectable-findings.js` with 32 tests covers parser, severity classifier, group-by-file, count summaries, filter→selection, selection→IssueInput[] conversion, and CTA-label rendering. `runFixWithIssues(issues)` route handler in `/scan/status/page.tsx` accepts the partial subset and threads tier through (so $399 nuclear coupling still fires). Honest documented limitation: bare ".gitignore" findings stay unfixable (regex needs path-prefix shape) — surfaced in the "manual" bucket of the panel.
 - [ ] **6.1.3** Inline before/after diff in every report — show the patch, not just the description. Massive perceived-value lift, especially for $29-$99 customers who don't get a PR. ~1 day.
 - [x] **6.1.4** Universal copy-everywhere — **DONE 2026-04-30** commit `(this commit)`. New `<CopyButton>` component (icon/label/inline variants) + shared `copy-formatters.js` helper. Wired into FindingsPanel (per-finding rows + bulk-header markdown checklist) and LiveScanTerminal (full-transcript copy). 20 formatter tests, modern clipboard API + textarea fallback for older browsers / iframe contexts.
 - [x] **6.1.5** Fix-loop reliability test in CI — **DONE 2026-04-30** commit `ca62637`. `tests/fix-loop-reliability.test.js` fails the build if `attemptFixWithRetries` ever silently returns success=false on deterministic happy-path input. Catches the "0 done · 14 retry" bug shape before it ships.
@@ -460,7 +460,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 
 | Tier | Status |
 | --- | --- |
-| 1 — Launch-essential (10 items) | **3/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.2 (per-finding selection), 6.1.3 (inline diff), 6.1.6 (hero), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
+| 1 — Launch-essential (10 items) | **4/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.2 ✓ per-finding selection, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.3 (inline diff), 6.1.6 (hero), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
 | 2 — Compounding moats (15 items) | 0/15 — Phase 5 work (5.4, 5.5, 5.3 completion) feeds directly into this. |
 | 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
 | 4 — Compliance unlocks (15 items) | 0/15 — not started. |
@@ -468,7 +468,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 | 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
 | 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
 | 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
-| **Phase 6 total** | **6/100 shipped** (this commit + previous Tier-1 work). |
+| **Phase 6 total** | **7/100 shipped** (this commit + previous Tier-1 work). |
 
 ---
 
