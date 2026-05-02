@@ -27,23 +27,60 @@ This file is read at the start of every session. It is referenced before every a
 
 ---
 
-## THE BOSS RULE — CRAIG MUST AUTHORIZE
+## THE BOSS RULE — RELAXED (READ THIS EVERY SESSION)
 
-The following actions require **explicit authorization from Craig BEFORE execution**:
+**Authorization:** Granted by Craig 2026-05-02 — *"I think we need to remove boss file its stopping us from building a great product. If an update helps as improve the product then we must do it... we must be on npm it's ridiculous that we're not."*
 
-1. **Major architectural changes** — swapping frameworks, changing core stack
-2. **New dependencies not already approved** — we don't add bloat
-3. **Pricing changes** — any modification to plans, tiers, or billing logic
-4. **Domain or DNS changes** — anything touching gatetest.ai
-5. **Production deployments** — first-time deploy and any rollback
-6. **Stripe configuration** — webhook URLs, price IDs, plan structures
-7. **External API integrations** — adding new third-party services
-8. **Brand/marketing changes** — copy on landing page, logos, taglines
-9. **Anything that touches money, users' data, or public-facing communication**
+The old 9-item BOSS RULE was creating drag on every product-improvement
+action — npm publishing, marketplace listings, hero modernization,
+version bumps, package metadata. Craig's call: **if it improves the
+product, ship it.** Friction was costing more than it was protecting.
 
-**The rule:** When in doubt, ask Craig. Cost of asking = 30 seconds. Cost of acting wrong = days of damage.
+### What's now PRE-AUTHORIZED (just do it)
 
-**The exception:** Craig has pre-authorized continuous building of features within the existing build plan and stack. Routine code, bug fixes, refactors within the approved architecture, and committing/pushing to main do NOT require additional authorization.
+- **Publish to npm / Homebrew / any public registry** — the package is
+  the product; getting it in front of developers is the priority
+- **Marketplace listings** (GitHub Marketplace, Stripe Apps, VS Code,
+  JetBrains) — distribution is leverage
+- **Brand / marketing copy improvements** — clearer hero, better
+  taglines, fixing module-count drift, modernizing visuals
+- **Version bumps** (`npm version patch|minor|major` + tag + push)
+- **New dependencies that materially improve the product** — but tighten
+  the bar: prefer zero-dep, only add when the value is obvious
+- **External API integrations that ride the existing OAuth pattern** —
+  Datadog / Vercel Analytics / Sourcegraph / etc. follow the same shape
+  as the Sentry integration that already shipped
+- **Routine code, bug fixes, refactors, commits, pushes to main** —
+  unchanged from before
+
+### What still requires CRAIG'S EXPLICIT GO-AHEAD
+
+The list shrank from 9 to 4. These are the items where the cost of
+acting wrong is genuinely days-of-damage or money-out-the-door:
+
+1. **Stripe pricing / billing-logic changes** — modifying live price IDs,
+   plan structures, webhook URLs, or anything that affects what an
+   existing customer is charged. New tiers added to a list at known
+   prices Craig already set is fine; mutating an existing price isn't.
+2. **DNS changes touching gatetest.ai** — production domain config has
+   no undo button. Subdomain pointers / Vercel routing / DNS record
+   types stay Craig-only.
+3. **Deleting user data** — even on request, even from the admin
+   dashboard. If a user asks to be deleted, surface the request, don't
+   execute silently.
+4. **Force-pushes to main / rewriting shared history / `git reset --hard`
+   on shared branches** — destructive git ops on protected branches.
+
+Everything else: **ship it.**
+
+### The replacement principle
+
+> *If an update helps improve the product, do it. If you'd be embarrassed
+> to find Craig didn't know about it after the fact, surface it first.*
+
+Cost of asking unnecessarily = lost build velocity, missed distribution.
+Cost of acting on the 4 items above without auth = real damage. The new
+rule front-loads the velocity and back-stops the damage.
 
 ---
 
@@ -346,7 +383,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 - [ ] **6.2.6** Layer-3 Operator (autonomous overnight Claude) — Vercel cron picks up Phase 5/6 boxes 24/7. Boss Rule for budget cap + kill switch.
 - [x] **6.2.7** Property-based test generation per fix — **DONE 2026-04-30** commit `(this commit)`. New `property-test-generator.js` mirrors `test-generator.js` shape but emits PROPERTY tests (fast-check for JS/TS, hypothesis for Python) alongside the regression tests. Per-language prompt with explicit asks for 2-5 properties covering type-shape invariants, idempotency, boundary cases (empty/large/unicode/negative). Sanity-checks Claude's output references the property lib (rejects bare smoke tests). Output filename `tests/auto-generated/<flat>.prop.<ext>` so it sits alongside regression tests without colliding. Wired into `/api/scan/fix` ONLY when `tier === "nuclear"` (\$99/\$199 customers don't pay for the extra spend). Non-blocking — any failure logs into errors[] and ships the fix anyway. Skip-reasons surface as `(info)` rather than failures since property tests are bonus. 28 tests covering testability gate, language detection, path generation, prompt shape (JS + Python), Claude-throw resilience, fence stripping, mixed-batch behaviour, maxFixes cap with "deferred" summary line.
 - [x] **6.2.8** Mutation-test-driven test strengthening — **DONE 2026-04-30** commit `(this commit)`. New `mutation-driven-test-strengthener.js` takes each (fix, regression test) pair, generates mutation candidates against the fixed source via an inlined 12-operator mutation engine (eq-flip / neq-flip / boundary swaps / math swaps / true-false / logical-op swaps / inc-dec — minimal subset of `src/core/mutation-engine.js` mirrored into the website tree because Turbopack root is locked to /website), feeds the mutations + the regression test to Claude with an explicit "your strengthened test must FAIL on each mutation but PASS on the fixed source" ask. Replaces the weak regression test in-place BEFORE the fix-list loop appends it, so the PR ships the strong version. Wired into `/api/scan/fix` ONLY when `tier === "nuclear"` AND `testGen.tests.length > 0` ($99/$199 don't pay for the strengthening pass). Non-blocking — any failure leaves the original test intact and skip-reasons surface as `(info)` errors. 29 tests covering eligibility gate, mutation engine inlined operators (12), prompt shape, Claude SKIP / identical / no-assertions / fence-stripping / throw-resilience paths, and batch maxFixes=5 cap with "deferred" summary.
-- [ ] **6.2.9** Chaos-test-driven resilience fixes — chaos shows 3G failure → AI adds retry/backoff → ship.
+- [x] **6.2.9** Chaos-test-driven resilience fixes — **DONE 2026-04-30** commit `(this commit)`. New `chaos-test-generator.js` mirrors prior generators' shape but emits `node:test` files that mock `globalThis.fetch` / `setTimeout` / `fs` to inject failures (slow network, dropped responses, timeouts, intermittent errors, partial JSON) and assert the fix degrades gracefully — retries, backs off, returns a sensible fallback. Resilience-relevance heuristic tests for fetch / axios / got / await / Promise / setTimeout / fs / WebSocket / DB-shaped calls (18 patterns); pure-data sources skip silently. Output sanity-checked: must use a recognised test runner AND must include actual failure injection (mock / stub / throw / timer override) — bare smoke tests rejected. Wired into `/api/scan/fix` Nuclear-tier only ($99/$199 don't pay). Filename `tests/auto-generated/chaos/<flat>.chaos.<ext>` so it's separate from regression / property / benchmark surfaces. 28 tests covering heuristic positives across 5 resilience classes + benchmarkability gate + path generation + prompt shape + Claude SKIP / no-runner / no-failure-injection / fence-stripping / throw-resilience + batch maxFixes=4 cap with "deferred" summary.
 - [x] **6.2.10** Performance benchmark before/after on every PR — **DONE 2026-04-30** commit `(this commit)`. New `perf-benchmark-generator.js` mirrors prior generators' shape but emits `tinybench` benchmark files for fixes that touch hot paths. Hot-path heuristic tests for loops / await / Promise / array-method / regex / fetch / DB-shaped calls (16 patterns) — pure-constants files correctly skip. Generated benchmark inlines BOTH original and fixed implementations as `originalFn` / `fixedFn` so it runs without before/after import resolution; asks for ≥2 input sizes (small + large) so complexity differences surface. Output sanity-checked: must include `tinybench` import OR `new Bench(` (regex tightened so a comment "// no Bench" doesn't false-pass), AND must include both fn names. Wired into `/api/scan/fix` Nuclear-tier only ($99/$199 don't pay). Filename `tests/auto-generated/benchmarks/<flat>.bench.<ext>` so it's separate from the regression-test + property-test surfaces. 32 tests covering heuristic positives/negatives across 9 hot-path classes + benchmarkability gate + path generation + prompt shape + Claude SKIP / lacking-tinybench / lacking-fn-names / fence-stripping / throw-resilience + batch maxFixes=5 cap with "deferred" summary.
 - [ ] **6.2.11** Dependency-upgrade + breaking-change patcher — bump React, fix every call site. Single most common refactor in modern codebases.
 - [ ] **6.2.12** Test coverage backfill — write missing tests for already-fine code, not just fixes.
@@ -461,14 +498,14 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 | Tier | Status |
 | --- | --- |
 | 1 — Launch-essential (10 items) | **5/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.2 ✓ per-finding selection, 6.1.3 ✓ inline diff, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.6 (hero — Boss Rule), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
-| 2 — Compounding moats (15 items) | **4/15 SHIPPED** (6.2.5 ✓ FP-rate trending, 6.2.7 ✓ property-based test generation, 6.2.8 ✓ mutation-driven test strengthening, 6.2.10 ✓ perf benchmark before/after). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6 (Layer-3 Operator — Boss Rule), 6.2.9 (chaos), 6.2.11-6.2.15. |
+| 2 — Compounding moats (15 items) | **5/15 SHIPPED** (6.2.5 ✓ FP-rate trending, 6.2.7 ✓ property-based test generation, 6.2.8 ✓ mutation-driven test strengthening, 6.2.9 ✓ chaos-test resilience, 6.2.10 ✓ perf benchmark before/after). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6 (Layer-3 Operator — Boss Rule), 6.2.11-6.2.15. |
 | 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
 | 4 — Compliance unlocks (15 items) | 0/15 — not started. |
 | 5 — Language depth (15 items) | 0/15 — not started. |
 | 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
 | 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
 | 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
-| **Phase 6 total** | **12/100 shipped** (this commit + previous Tier-1 + Tier-2 work). |
+| **Phase 6 total** | **13/100 shipped** (this commit + previous Tier-1 + Tier-2 work). |
 
 ---
 

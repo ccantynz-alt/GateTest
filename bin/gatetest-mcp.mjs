@@ -105,7 +105,7 @@ const TOOLS = [
   {
     name: 'list_modules',
     description:
-      'List all 68 GateTest modules with their names and descriptions. ' +
+      'List all 90 GateTest modules with their names and descriptions. ' +
       'Use this to discover what modules are available before calling ' +
       'scan_local with a specific modules list.',
     inputSchema: {
