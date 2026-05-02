@@ -1093,6 +1093,55 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Phase 6.2.10 — performance benchmark before/after on hot-path fixes.
+  // Nuclear-tier only ($399). Generates a tinybench file per fix that
+  // touches a hot path (loops / await / fetch / regex / DB calls). The
+  // file inlines BOTH original and fixed implementations as
+  // originalFn / fixedFn so customers run it locally and paste the
+  // numbers into the PR. Non-blocking: failures log + ship the fix.
+  let benchSummary: string | undefined;
+  let benchmarksWritten = 0;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { generateBenchmarksForFixes } = require("@/app/lib/perf-benchmark-generator.js") as {
+        generateBenchmarksForFixes: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          askClaudeForBench: (prompt: string) => Promise<string>;
+          maxFixes?: number;
+        }) => Promise<{
+          benchmarks: Array<{ path: string; content: string; sourceFile: string }>;
+          skipped: Array<{ sourceFile: string | null; reason: string }>;
+          summary: string;
+        }>;
+      };
+      // Source fixes only — exclude the regression-test, property-test,
+      // and any other tests/auto-generated/ entries we just appended.
+      const sourceFixes = fixes.filter((f) => !f.file.startsWith("tests/auto-generated/"));
+      const benchResult = await generateBenchmarksForFixes({
+        fixes: sourceFixes,
+        askClaudeForBench: askClaudeForTest, // same Claude wrapper, different prompt
+      });
+      for (const b of benchResult.benchmarks) {
+        fixes.push({
+          file: b.path,
+          original: "",
+          fixed: b.content,
+          issues: [`Performance benchmark for ${b.sourceFile}`],
+        });
+      }
+      for (const s of benchResult.skipped) {
+        errors.push(`(info) No benchmark for ${s.sourceFile || "(unknown)"}: ${s.reason}`);
+      }
+      benchmarksWritten = benchResult.benchmarks.length;
+      benchSummary = benchResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "benchmark generation failed";
+      errors.push(`Benchmark generation failed: ${message}`);
+      benchSummary = `benchmark generation: failed (${message})`;
+    }
+  }
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -1294,6 +1343,9 @@ export async function POST(req: NextRequest) {
       mutationStrengthening: strengthenSummary
         ? { testsStrengthened: strengthenedCount, summary: strengthenSummary }
         : { skipped: true, reason: "tier is not nuclear or no regression tests — mutation strengthening is a $399-tier value-add" },
+      perfBenchmarks: benchSummary
+        ? { benchmarksWritten, summary: benchSummary }
+        : { skipped: true, reason: "tier is not nuclear — perf benchmarks are a $399-tier value-add" },
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
