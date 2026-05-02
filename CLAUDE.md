@@ -342,7 +342,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 - [ ] **6.2.2** Cross-repo intelligence cohort population — 30-min Craig action: scan 10 popular Next/Stripe + Express/pg + FastAPI/React repos to seed the brain.
 - [ ] **6.2.3** Phase 5.3.2 + 5.3.3 + 5.3.4 — Datadog + Vercel Analytics + static↔runtime correlator. Killer feature for $799 Production tier.
 - [ ] **6.2.4** Phase 5.5 cross-language contract graph — JS↔Python↔Rust as ONE program. Polyglot drift detection no competitor has.
-- [ ] **6.2.5** Closed-feedback FP-rate trending in `/admin/learning` — prove we self-improve over time.
+- [x] **6.2.5** Closed-feedback FP-rate trending in `/admin/learning` — **DONE 2026-04-30** commit `(this commit)`. Pure-function `fp-trend.js` (bucketKeyFor + bucketDissentRows + computeFpRateTrend + summariseTrend, deterministic, frozen-now-aware for tests, fills empty buckets so chart has no gaps). 20 tests covering bucket-key snapping, fill-empty-window, distinct-repos counting, "improving/regressing/flat/no-data/insufficient-data" headline classification, determinism. New `/api/admin/learning/trend` route (admin-auth, default 90d window with 7d buckets, query-param overrides). `/admin/learning` page gets a "FP-rate trend" Card above the kinds breakdown — headline "↓ N% FP rate improved" with arrow + tone (emerald/amber/foreground) + range + dissent-event count, plus a pure-CSS bar+overlay chart (no chart-library dep). Hover shows date · dissent count · FP% · distinct repos.
 - [ ] **6.2.6** Layer-3 Operator (autonomous overnight Claude) — Vercel cron picks up Phase 5/6 boxes 24/7. Boss Rule for budget cap + kill switch.
 - [ ] **6.2.7** Property-based test generation per fix — fast-check / hypothesis fuzzers automatic alongside the regression tests we already write.
 - [ ] **6.2.8** Mutation-test-driven test strengthening — wire the existing mutation engine into the fix loop. Weak test caught → AI strengthens it → ship.
@@ -461,14 +461,14 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 | Tier | Status |
 | --- | --- |
 | 1 — Launch-essential (10 items) | **5/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.2 ✓ per-finding selection, 6.1.3 ✓ inline diff, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.6 (hero — Boss Rule), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
-| 2 — Compounding moats (15 items) | 0/15 — Phase 5 work (5.4, 5.5, 5.3 completion) feeds directly into this. |
+| 2 — Compounding moats (15 items) | **1/15 SHIPPED** (6.2.5 ✓ FP-rate trending). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6-6.2.15. |
 | 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
 | 4 — Compliance unlocks (15 items) | 0/15 — not started. |
 | 5 — Language depth (15 items) | 0/15 — not started. |
 | 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
 | 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
 | 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
-| **Phase 6 total** | **8/100 shipped** (this commit + previous Tier-1 work). |
+| **Phase 6 total** | **9/100 shipped** (this commit + previous Tier-1 work). |
 
 ---
 
