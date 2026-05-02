@@ -27,23 +27,60 @@ This file is read at the start of every session. It is referenced before every a
 
 ---
 
-## THE BOSS RULE — CRAIG MUST AUTHORIZE
+## THE BOSS RULE — RELAXED (READ THIS EVERY SESSION)
 
-The following actions require **explicit authorization from Craig BEFORE execution**:
+**Authorization:** Granted by Craig 2026-05-02 — *"I think we need to remove boss file its stopping us from building a great product. If an update helps as improve the product then we must do it... we must be on npm it's ridiculous that we're not."*
 
-1. **Major architectural changes** — swapping frameworks, changing core stack
-2. **New dependencies not already approved** — we don't add bloat
-3. **Pricing changes** — any modification to plans, tiers, or billing logic
-4. **Domain or DNS changes** — anything touching gatetest.ai
-5. **Production deployments** — first-time deploy and any rollback
-6. **Stripe configuration** — webhook URLs, price IDs, plan structures
-7. **External API integrations** — adding new third-party services
-8. **Brand/marketing changes** — copy on landing page, logos, taglines
-9. **Anything that touches money, users' data, or public-facing communication**
+The old 9-item BOSS RULE was creating drag on every product-improvement
+action — npm publishing, marketplace listings, hero modernization,
+version bumps, package metadata. Craig's call: **if it improves the
+product, ship it.** Friction was costing more than it was protecting.
 
-**The rule:** When in doubt, ask Craig. Cost of asking = 30 seconds. Cost of acting wrong = days of damage.
+### What's now PRE-AUTHORIZED (just do it)
 
-**The exception:** Craig has pre-authorized continuous building of features within the existing build plan and stack. Routine code, bug fixes, refactors within the approved architecture, and committing/pushing to main do NOT require additional authorization.
+- **Publish to npm / Homebrew / any public registry** — the package is
+  the product; getting it in front of developers is the priority
+- **Marketplace listings** (GitHub Marketplace, Stripe Apps, VS Code,
+  JetBrains) — distribution is leverage
+- **Brand / marketing copy improvements** — clearer hero, better
+  taglines, fixing module-count drift, modernizing visuals
+- **Version bumps** (`npm version patch|minor|major` + tag + push)
+- **New dependencies that materially improve the product** — but tighten
+  the bar: prefer zero-dep, only add when the value is obvious
+- **External API integrations that ride the existing OAuth pattern** —
+  Datadog / Vercel Analytics / Sourcegraph / etc. follow the same shape
+  as the Sentry integration that already shipped
+- **Routine code, bug fixes, refactors, commits, pushes to main** —
+  unchanged from before
+
+### What still requires CRAIG'S EXPLICIT GO-AHEAD
+
+The list shrank from 9 to 4. These are the items where the cost of
+acting wrong is genuinely days-of-damage or money-out-the-door:
+
+1. **Stripe pricing / billing-logic changes** — modifying live price IDs,
+   plan structures, webhook URLs, or anything that affects what an
+   existing customer is charged. New tiers added to a list at known
+   prices Craig already set is fine; mutating an existing price isn't.
+2. **DNS changes touching gatetest.ai** — production domain config has
+   no undo button. Subdomain pointers / Vercel routing / DNS record
+   types stay Craig-only.
+3. **Deleting user data** — even on request, even from the admin
+   dashboard. If a user asks to be deleted, surface the request, don't
+   execute silently.
+4. **Force-pushes to main / rewriting shared history / `git reset --hard`
+   on shared branches** — destructive git ops on protected branches.
+
+Everything else: **ship it.**
+
+### The replacement principle
+
+> *If an update helps improve the product, do it. If you'd be embarrassed
+> to find Craig didn't know about it after the fact, surface it first.*
+
+Cost of asking unnecessarily = lost build velocity, missed distribution.
+Cost of acting on the 4 items above without auth = real damage. The new
+rule front-loads the velocity and back-stops the damage.
 
 ---
 
