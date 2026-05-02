@@ -1193,7 +1193,18 @@ export async function POST(req: NextRequest) {
       branch: branchName,
       filesFixed: fixes.length,
       issuesFixed: totalIssuesFixed,
-      fixes: fixes.map((f) => ({ file: f.file, issues: f.issues })),
+      // Phase 6.1.3 — include before/after content + a precomputed
+      // unified-diff string per fix so the customer-facing UI can
+      // render inline diffs WITHOUT re-fetching files. Capped at 200KB
+      // per file each side to keep the response under Vercel's 4.5MB
+      // ceiling even with large fix batches. Anything bigger renders
+      // as the "open the PR for the full patch" fallback in DiffViewer.
+      fixes: fixes.map((f) => {
+        const MAX_BYTES_PER_SIDE = 200 * 1024;
+        const before = (f.original || "").slice(0, MAX_BYTES_PER_SIDE);
+        const after = (f.fixed || "").slice(0, MAX_BYTES_PER_SIDE);
+        return { file: f.file, issues: f.issues, before, after };
+      }),
       authSource,
       errors,
       failedFiles,

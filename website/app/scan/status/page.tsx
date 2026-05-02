@@ -6,6 +6,7 @@ import FindingsPanel from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
 import FixSelectionPanel from "@/app/components/FixSelectionPanel";
+import DiffViewer from "@/app/components/DiffViewer";
 
 interface ModuleResult {
   name: string;
@@ -49,6 +50,8 @@ interface FixResult {
   error?: string;
   errors?: string[];
   failedFiles?: Array<{ file: string; issues: string[]; reason: string }>;
+  // Phase 6.1.3 — DiffViewer source data
+  fixes?: Array<{ file: string; issues: string[]; before?: string; after?: string }>;
 }
 
 const MODULE_LABELS: Record<string, string> = {
@@ -578,6 +581,32 @@ export default function ScanStatus() {
                             <ul className="mt-2 space-y-0.5 pl-3 list-disc">
                               {fixResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                             </ul>
+                          </details>
+                        )}
+                        {/* Phase 6.1.3 — inline before/after diffs per fix.
+                            Visible BEFORE the customer clicks through to
+                            the PR, so $99 customers (who see the fixes
+                            but won't merge a PR they didn't authorise)
+                            can still SEE what changed. */}
+                        {fixResult.fixes && fixResult.fixes.some((f) => f.before && f.after) && (
+                          <details className="mt-4" open>
+                            <summary className="cursor-pointer text-sm font-bold text-green-800 mb-2">
+                              View patches ({fixResult.fixes.filter((f) => f.before && f.after).length} files)
+                            </summary>
+                            <div className="space-y-2 mt-2">
+                              {fixResult.fixes
+                                .filter((f) => f.before && f.after)
+                                .map((f) => (
+                                  <DiffViewer
+                                    key={f.file}
+                                    fileLabel={f.file}
+                                    before={f.before || ""}
+                                    after={f.after || ""}
+                                    issues={f.issues}
+                                    defaultCollapsed={(fixResult.fixes?.length || 0) > 3}
+                                  />
+                                ))}
+                            </div>
                           </details>
                         )}
                       </>
