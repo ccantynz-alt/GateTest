@@ -313,6 +313,165 @@ These ride alongside every sub-phase, not after:
 
 ---
 
+## PHASE 6 — THE 100-MOVES MASTER PLAN (READ THIS EVERY SESSION)
+
+**Authorization:** Granted by Craig 2026-04-30 — *"Lets do it"* in response to the brutal-honest 100-move list. This plan supersedes "pick the next thing." Every session reads this section, finds the first unchecked Tier 1 item, ships it, then continues into Tier 2/3/4 as Tier 1 closes.
+
+### The competitive thesis
+
+Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo brain, closed feedback loop, observability fusion, multi-file refactors, cross-language semantics). Phase 6 is the move from "best AI diagnostic/fix tool" to **the platform every developer eventually uses** — distribution, ecosystem, compliance, language depth, AI-app safety, supply-chain trust, and the brutal moats only GateTest can build.
+
+100 items, organised in 8 tiers. Tier 1-2 = ~25 items = best-in-class for sale. Tiers 3-4 = +45 items = uncatchable in the market. Tiers 5-8 = +30 items = category, not product.
+
+### Tier 1 — Launch-essential (1-10): the credibility floor
+
+- [x] **6.1.1** Couple Nuclear diagnoser → fix loop — **DONE 2026-04-30** commit `ca62637`. `website/app/lib/diagnosis-enricher.js` runs diagnoseFindings against fix issues at tier=nuclear, prepends rootCause + recommendation + platformNotes to each issue text BEFORE the fix loop sees it. 21 enricher tests + 8 reliability tests.
+- [ ] **6.1.2** Per-finding fix preview + selection UI — pick which fixes to apply, regenerate per-fix with different prompts. Lowers "what if I disagree with one fix?" objection. ~1 day.
+- [ ] **6.1.3** Inline before/after diff in every report — show the patch, not just the description. Massive perceived-value lift, especially for $29-$99 customers who don't get a PR. ~1 day.
+- [x] **6.1.4** Universal copy-everywhere — **DONE 2026-04-30** commit `(this commit)`. New `<CopyButton>` component (icon/label/inline variants) + shared `copy-formatters.js` helper. Wired into FindingsPanel (per-finding rows + bulk-header markdown checklist) and LiveScanTerminal (full-transcript copy). 20 formatter tests, modern clipboard API + textarea fallback for older browsers / iframe contexts.
+- [x] **6.1.5** Fix-loop reliability test in CI — **DONE 2026-04-30** commit `ca62637`. `tests/fix-loop-reliability.test.js` fails the build if `attemptFixWithRetries` ever silently returns success=false on deterministic happy-path input. Catches the "0 done · 14 retry" bug shape before it ships.
+- [ ] **6.1.6** Hero + landing-page facelift — drop the all-black hero, gradient flow into the rest of the page, lighter weight. ~1 day. Boss Rule (#8 brand) — needs Craig's mock approval before push.
+- [ ] **6.1.7** GitHub Marketplace listing live — distribution is the bottleneck. 2-3 hr listing-prep + 2-3 week GitHub approval. Boss Rule (#8 public-facing comms). I draft copy + screenshots; Craig submits.
+- [ ] **6.1.8** Apple Pay / Google Pay activated in Stripe Dashboard — wallet-first checkout. ~2 min Craig action. Code already supports it (commit `854244c`).
+- [ ] **6.1.9** First 10 paying customers — sales not engineering. HN / Twitter DMs / OSS-maintainer outreach / Crontech & Gluecron customer offers / Product Hunt launch.
+- [ ] **6.1.10** Public "fixed by GateTest" registry — every shipped PR publicly logged at `gatetest.ai/fixes` as proof. Marketing flywheel.
+
+### Tier 2 — Compounding moats (11-25): uncatchable in 6 months
+
+- [ ] **6.2.1** Phase 5.4 multi-file architectural refactor pipeline (polling→webhook, in-memory→Redis, untyped→typed-client). 1-2 weeks. Single highest-leverage move for the $999 tier.
+- [ ] **6.2.2** Cross-repo intelligence cohort population — 30-min Craig action: scan 10 popular Next/Stripe + Express/pg + FastAPI/React repos to seed the brain.
+- [ ] **6.2.3** Phase 5.3.2 + 5.3.3 + 5.3.4 — Datadog + Vercel Analytics + static↔runtime correlator. Killer feature for $799 Production tier.
+- [ ] **6.2.4** Phase 5.5 cross-language contract graph — JS↔Python↔Rust as ONE program. Polyglot drift detection no competitor has.
+- [ ] **6.2.5** Closed-feedback FP-rate trending in `/admin/learning` — prove we self-improve over time.
+- [ ] **6.2.6** Layer-3 Operator (autonomous overnight Claude) — Vercel cron picks up Phase 5/6 boxes 24/7. Boss Rule for budget cap + kill switch.
+- [ ] **6.2.7** Property-based test generation per fix — fast-check / hypothesis fuzzers automatic alongside the regression tests we already write.
+- [ ] **6.2.8** Mutation-test-driven test strengthening — wire the existing mutation engine into the fix loop. Weak test caught → AI strengthens it → ship.
+- [ ] **6.2.9** Chaos-test-driven resilience fixes — chaos shows 3G failure → AI adds retry/backoff → ship.
+- [ ] **6.2.10** Performance benchmark before/after on every PR — *"this fix is 23% faster"*. Tinybench microbenchmarks attached to fix PRs.
+- [ ] **6.2.11** Dependency-upgrade + breaking-change patcher — bump React, fix every call site. Single most common refactor in modern codebases.
+- [ ] **6.2.12** Test coverage backfill — write missing tests for already-fine code, not just fixes.
+- [ ] **6.2.13** Security policy applier — add CSP / CSRF / rate-limit middleware as one-shot patches.
+- [ ] **6.2.14** CISO-ready PDF per Nuclear scan — SOC2/OWASP/CIS-mapped, hand-to-board artifact.
+- [ ] **6.2.15** Live PII flow tracer — *"this email field flows from /api/signup to logs/loki/grafana"*.
+
+### Tier 3 — Distribution channels (26-45): every developer touchpoint
+
+- [x] **6.3.1** Cursor MCP tool — works today via existing MCP server (commit `854244c`).
+- [x] **6.3.2** Claude Code MCP tool — works today.
+- [x] **6.3.3** Cline / Aider MCP integration — works today.
+- [ ] **6.3.4** v0 / Lovable / Bolt.new / Replit Agent integrations — they generate code; we fix what they generate.
+- [ ] **6.3.5** VS Code extension — inline-as-you-type findings + fix-on-save.
+- [ ] **6.3.6** JetBrains plugin — IntelliJ / WebStorm / PyCharm / GoLand / RubyMine.
+- [ ] **6.3.7** Slack app — `/gatetest scan github.com/...` in any channel.
+- [ ] **6.3.8** Discord bot — same shape for OSS communities.
+- [ ] **6.3.9** Microsoft Teams app — enterprise channel.
+- [ ] **6.3.10** Stripe Apps marketplace — *"installed GateTest"* surfaces to Stripe customers.
+- [ ] **6.3.11** GitLab Marketplace listing — not just GitHub.
+- [ ] **6.3.12** Bitbucket integration — Atlassian customer base.
+- [ ] **6.3.13** Sourcegraph integration — code-search → inline gate findings.
+- [ ] **6.3.14** Sentry integration consumer side — *"the issue you opened — here's the fix"*.
+- [ ] **6.3.15** Linear / Jira integration — every finding → ticket + fix attached.
+- [ ] **6.3.16** Notion / Coda export — paste a report straight into a doc.
+- [ ] **6.3.17** Browser extension on github.com — *"GateTest passed/failed"* badge inline on every PR.
+- [ ] **6.3.18** CLI auto-update + push notifications — `gatetest update` with new module alerts.
+- [ ] **6.3.19** One-line install per stack — `npx gatetest --init nextjs`, etc.
+- [ ] **6.3.20** Public REST API + Postman collection — programmatic access for partners.
+
+### Tier 4 — Trust / compliance unlocks (46-60): B2B gating mechanism
+
+- [ ] **6.4.1** SOC2 Type II self-evidence package — auditor-friendly artifacts auto-generated.
+- [ ] **6.4.2** ISO 27001 mapping per finding.
+- [ ] **6.4.3** PCI-DSS mapping — *"this commit makes you non-compliant"*.
+- [ ] **6.4.4** HIPAA mapping — for medical / health customers.
+- [ ] **6.4.5** FedRAMP / FISMA mapping — gov customers.
+- [ ] **6.4.6** CIS Benchmark mapping — every infra finding tagged.
+- [ ] **6.4.7** NIST CSF mapping — security framework reference.
+- [ ] **6.4.8** OWASP ASVS mapping — application-security verification standard.
+- [ ] **6.4.9** GDPR Article 5/6/32 mapping — privacy compliance.
+- [ ] **6.4.10** CCPA mapping — US-side privacy.
+- [ ] **6.4.11** Cyber-insurance partnership — Coalition / At-Bay / Cowbell lower premium for GateTest customers.
+- [ ] **6.4.12** Scan-results signed with Sigstore — cryptographically verifiable "this was scanned".
+- [ ] **6.4.13** Customer-facing public scorecard — `gatetest.ai/score/<repo>` shows trend.
+- [ ] **6.4.14** Enterprise audit log API — every scan / fix / PR / dissent traceable.
+- [ ] **6.4.15** DPA template + sub-processor list — enterprise procurement-ready.
+
+### Tier 5 — Language / runtime depth (61-75): no codebase is unscannable
+
+- [ ] **6.5.1** Rust deep-fix — Cargo.toml + unsafe blocks + lifetime issues.
+- [ ] **6.5.2** Go deep-fix — go.mod + goroutine leaks + nil-deref.
+- [ ] **6.5.3** Java deep-fix — Spring Boot + Maven + Hibernate N+1.
+- [ ] **6.5.4** Python deep-fix — pip + asyncio + Django ORM.
+- [ ] **6.5.5** Kotlin deep-fix — Gradle + Coroutines + Compose.
+- [ ] **6.5.6** Swift deep-fix — Package.swift + ARC + SwiftUI.
+- [ ] **6.5.7** C / C++ scan — buffer overflows, use-after-free, integer overflow.
+- [ ] **6.5.8** Solidity smart-contract scan — re-entrancy, overflow, access control.
+- [ ] **6.5.9** Move (Aptos / Sui) smart-contract scan.
+- [ ] **6.5.10** WASM module scan.
+- [ ] **6.5.11** Lua / Nginx config scan — for OpenResty deployments.
+- [ ] **6.5.12** Bash deep-fix — `set -euo pipefail`, quoting, traps.
+- [ ] **6.5.13** Dockerfile + Compose deep-fix — already partial; deepen.
+- [ ] **6.5.14** Helm chart drift — values.yaml ↔ template parity.
+- [ ] **6.5.15** Kustomize overlay audit.
+
+### Tier 6 — AI-specific killer modules (76-85): the AI-app safety category we own
+
+- [ ] **6.6.1** Prompt-injection canary insertion — runtime detection of jailbreaks.
+- [ ] **6.6.2** LLM cost-DoS deep audit — per-route token-budget enforcement.
+- [ ] **6.6.3** Vector DB query audit — embedding leak / context-stuffing attacks.
+- [ ] **6.6.4** RAG corpus poisoning detection — adversarial document detection.
+- [ ] **6.6.5** Model versioning drift — production using deprecated model.
+- [ ] **6.6.6** Output filter coverage check — every LLM output passes through filters?
+- [ ] **6.6.7** Function-calling permission audit — what tools can the agent invoke?
+- [ ] **6.6.8** Agent loop-protection — bounded recursion verified.
+- [ ] **6.6.9** Embedding cost-per-request analysis.
+- [ ] **6.6.10** Fine-tune dataset PII leakage scan.
+
+### Tier 7 — Supply chain / ecosystem (86-95): the trust layer
+
+- [ ] **6.7.1** Real-time CVE feed correlation — *"a CVE was just published for `lodash@4.17.20`, you're on it"*.
+- [ ] **6.7.2** Typo-squat package detection — `lodahs` instead of `lodash`.
+- [ ] **6.7.3** Malicious-author tracking — npm-publisher reputation system.
+- [ ] **6.7.4** SBOM generation — Software Bill of Materials in every PR.
+- [ ] **6.7.5** License compatibility audit — GPL contagion in commercial products.
+- [ ] **6.7.6** Open-source health score per dep — abandonment risk.
+- [ ] **6.7.7** Tarball-byte reanalysis — what's actually in the .tgz, not just package.json.
+- [ ] **6.7.8** Lockfile diff narration — *"this PR upgrades 47 deps; here's what changed in each"*.
+- [ ] **6.7.9** Build-reproducibility check — same source → same artifact.
+- [ ] **6.7.10** Container image SBOM + CVE diff per push.
+
+### Tier 8 — The brutal moats (96-100): things only GateTest can do
+
+- [ ] **6.8.1** Cross-customer learning fabric (privacy-preserving) — federated learning on dissent without seeing customer code.
+- [ ] **6.8.2** "Fixed by GateTest" badge insurance underwriters trust — Coalition / Munich Re tier partnership.
+- [ ] **6.8.3** Self-deploying Operator service customers run inside their own VPC — for regulated industries.
+- [ ] **6.8.4** AI-builder reverse channel — Cursor / v0 / Lovable webhook us, we pre-emptively fix common issues before the user even sees them.
+- [ ] **6.8.5** The "GateTest score" — GitHub-stars-equivalent for code quality. Every repo has one, every employer asks for it, every founder optimises for it.
+
+### Operating rules during Phase 6
+
+1. **Pick up from the last unchecked box.** Sessions read this list, find the first `- [ ]`, work it. Tier 1 first.
+2. **Commit at every meaningful milestone.** Same rule as Phases 1-5.
+3. **Boss Rule still applies.** Tier 1.6 (hero), 1.7 (Marketplace listing), 1.8 (Stripe wallet activation), 4.* (compliance-mapping with regulatory implications), 8.2 (insurance partnership), 6.3.10 (Stripe Apps Marketplace) are all explicitly Boss Rule.
+4. **Real-repo proof when relevant** — not all 100 items need proof docs (UI items don't), but anything that makes a customer-visible promise does.
+5. **Update CLAUDE.md when an item ships** — tick the box, add the commit ref, update the Phase 6 status tracker below.
+6. **Tests stay green.** Sweep checklist runs every session.
+
+### Phase 6 status tracker
+
+| Tier | Status |
+| --- | --- |
+| 1 — Launch-essential (10 items) | **3/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.2 (per-finding selection), 6.1.3 (inline diff), 6.1.6 (hero), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
+| 2 — Compounding moats (15 items) | 0/15 — Phase 5 work (5.4, 5.5, 5.3 completion) feeds directly into this. |
+| 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
+| 4 — Compliance unlocks (15 items) | 0/15 — not started. |
+| 5 — Language depth (15 items) | 0/15 — not started. |
+| 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
+| 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
+| 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
+| **Phase 6 total** | **6/100 shipped** (this commit + previous Tier-1 work). |
+
+---
+
 ## PROTECTED PLATFORMS — PERMANENT INTEGRATIONS (READ THIS EVERY SESSION)
 
 **GateTest protects the following Craig-owned platforms. These integrations are PERMANENT. They must survive every future Claude session. They cannot be removed, weakened, or "simplified" without Craig's explicit authorization.**

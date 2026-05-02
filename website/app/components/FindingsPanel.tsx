@@ -1,6 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import CopyButton from "./CopyButton";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { formatFindingsAsMarkdown, formatFindingAsLine } = require("@/app/lib/copy-formatters.js") as {
+  formatFindingsAsMarkdown: (opts: { findings: unknown[]; totalCount?: number; repoUrl?: string }) => string;
+  formatFindingAsLine: (f: { severity: string; module: string; file?: string | null; line?: number | null; message?: string }) => string;
+};
 
 interface ModuleResult {
   name: string;
@@ -125,12 +131,6 @@ const SEV_BAR: Record<Finding["severity"], string> = {
   info: "border-l-slate-400",
 };
 
-function copyToClipboard(text: string): void {
-  if (typeof navigator !== "undefined" && navigator.clipboard) {
-    navigator.clipboard.writeText(text).catch(() => {}); // error-ok — clipboard write failure is non-fatal; user can copy manually
-  }
-}
-
 interface Props {
   modules: ModuleResult[];
   repoUrl?: string;
@@ -141,7 +141,6 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [moduleFilter, setModuleFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   // Phase 5.2.1 — dissent state. Tracked per-finding-id so the panel
   // can show a "thanks, recorded" indicator and prevent double-submits.
   const [dissentedIds, setDissentedIds] = useState<Set<string>>(() => new Set());
@@ -177,12 +176,6 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
     const m = repoUrl.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/|$)/);
     return m ? `https://github.com/${m[1]}/blob/HEAD` : null;
   }, [repoUrl]);
-
-  function handleCopy(id: string, text: string) {
-    copyToClipboard(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId((curr) => (curr === id ? null : curr)), 1400);
-  }
 
   // Phase 5.2.1 — dissent thumbs-down. Records a FALSE_POSITIVE dissent
   // so the 5.2.2 FP scorer can downgrade noisy modules. State is local
@@ -236,6 +229,15 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
     );
   }
 
+  // Universal-copy helper — formats the currently-filtered findings as a
+  // markdown checklist the customer can paste into any AI builder /
+  // ticket / Slack thread. Backed by the shared formatter so the same
+  // shape ships across panels and is unit-tested separately.
+  const bulkCopyText = useMemo(
+    () => formatFindingsAsMarkdown({ findings: filtered, totalCount: counts.total, repoUrl }),
+    [filtered, counts.total, repoUrl]
+  );
+
   return (
     <div className="rounded-2xl border border-border bg-white overflow-hidden">
       {/* Header bar */}
@@ -248,6 +250,14 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
+            {filtered.length > 0 && (
+              <CopyButton
+                text={bulkCopyText}
+                label={`${filtered.length} findings as markdown`}
+                variant="label"
+                title={`Copy all ${filtered.length} shown findings as a markdown checklist`}
+              />
+            )}
             <SevPill
               label="Errors"
               count={counts.error}
@@ -376,40 +386,24 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
                           ) : (
                             fileLine
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(f.id, fileLine)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted hover:text-accent"
-                            aria-label="Copy file and line"
-                            title="Copy"
-                          >
-                            {copiedId === f.id ? (
-                              <svg
-                                className="w-3 h-3"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                                aria-hidden
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            ) : (
-                              <svg
-                                className="w-3 h-3"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                                aria-hidden
-                              >
-                                <path d="M7 3a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2H7zm0 2h8v10H7V5z" />
-                                <path d="M3 7v10a2 2 0 002 2h8v-2H5V7H3z" />
-                              </svg>
-                            )}
-                          </button>
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <CopyButton
+                              text={fileLine}
+                              label={`file path ${fileLine}`}
+                              variant="icon"
+                            />
+                          </span>
                         </span>
                       )}
+                      {/* Per-row Copy-as-finding-text — always visible at edge */}
+                      <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                        <CopyButton
+                          text={formatFindingAsLine(f)}
+                          label="finding"
+                          variant="icon"
+                          title="Copy this finding as text"
+                        />
+                      </span>
                     </div>
                     <p className="text-sm text-foreground leading-snug break-words">
                       {f.message}
