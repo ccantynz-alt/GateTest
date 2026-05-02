@@ -991,6 +991,60 @@ export async function POST(req: NextRequest) {
   }
   const testGenSummary = testGen.summary;
 
+  // Phase 6.2.7 — property-based test generation per fix. Runs ONLY
+  // on the Nuclear tier ($399) so $99/$199 customers don't pay for
+  // the extra Claude calls. Property tests sit alongside the
+  // regression tests we already write — fuzzers that exercise
+  // invariants under random inputs (idempotency, type-shape, edge
+  // cases). Non-blocking: any failure here logs into errors[] and
+  // ships the fix anyway. This is the differentiator nobody else
+  // ships at fix-time.
+  let propTestSummary: string | undefined;
+  let propTestsWritten = 0;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { generatePropTestsForFixes } = require("@/app/lib/property-test-generator.js") as {
+        generatePropTestsForFixes: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          askClaudeForTest: (prompt: string) => Promise<string>;
+          maxFixes?: number;
+        }) => Promise<{
+          tests: Array<{ path: string; content: string; sourceFile: string; language: string }>;
+          skipped: Array<{ sourceFile: string; reason: string }>;
+          summary: string;
+        }>;
+      };
+      // Only generate prop tests for the ORIGINAL fixes, not the
+      // regression-test files we just appended (those start with
+      // tests/auto-generated/). Filter by source extension.
+      const sourceFixes = fixes.filter((f) => !f.file.startsWith("tests/auto-generated/"));
+      const propResult = await generatePropTestsForFixes({
+        fixes: sourceFixes,
+        askClaudeForTest,
+      });
+      for (const t of propResult.tests) {
+        fixes.push({
+          file: t.path,
+          original: "",
+          fixed: t.content,
+          issues: [`Property test for ${t.sourceFile}`],
+        });
+      }
+      for (const s of propResult.skipped) {
+        // Property tests are bonus — skip-reasons go in errors as
+        // info, not as a "this thing broke" signal.
+        errors.push(`(info) No property test for ${s.sourceFile}: ${s.reason}`);
+      }
+      propTestsWritten = propResult.tests.length;
+      propTestSummary = propResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "property test generation failed";
+      errors.push(`Property test generation failed (no property tests added): ${message}`);
+      propTestSummary = `property test generation: failed (${message})`;
+    }
+  }
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -1186,6 +1240,9 @@ export async function POST(req: NextRequest) {
         ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
         : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
       testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
+      propertyTestGeneration: propTestSummary
+        ? { testsWritten: propTestsWritten, summary: propTestSummary }
+        : { skipped: true, reason: "tier is not nuclear — property tests are a $399-tier value-add" },
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },

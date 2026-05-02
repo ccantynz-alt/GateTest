@@ -344,7 +344,7 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 - [ ] **6.2.4** Phase 5.5 cross-language contract graph — JS↔Python↔Rust as ONE program. Polyglot drift detection no competitor has.
 - [x] **6.2.5** Closed-feedback FP-rate trending in `/admin/learning` — **DONE 2026-04-30** commit `(this commit)`. Pure-function `fp-trend.js` (bucketKeyFor + bucketDissentRows + computeFpRateTrend + summariseTrend, deterministic, frozen-now-aware for tests, fills empty buckets so chart has no gaps). 20 tests covering bucket-key snapping, fill-empty-window, distinct-repos counting, "improving/regressing/flat/no-data/insufficient-data" headline classification, determinism. New `/api/admin/learning/trend` route (admin-auth, default 90d window with 7d buckets, query-param overrides). `/admin/learning` page gets a "FP-rate trend" Card above the kinds breakdown — headline "↓ N% FP rate improved" with arrow + tone (emerald/amber/foreground) + range + dissent-event count, plus a pure-CSS bar+overlay chart (no chart-library dep). Hover shows date · dissent count · FP% · distinct repos.
 - [ ] **6.2.6** Layer-3 Operator (autonomous overnight Claude) — Vercel cron picks up Phase 5/6 boxes 24/7. Boss Rule for budget cap + kill switch.
-- [ ] **6.2.7** Property-based test generation per fix — fast-check / hypothesis fuzzers automatic alongside the regression tests we already write.
+- [x] **6.2.7** Property-based test generation per fix — **DONE 2026-04-30** commit `(this commit)`. New `property-test-generator.js` mirrors `test-generator.js` shape but emits PROPERTY tests (fast-check for JS/TS, hypothesis for Python) alongside the regression tests. Per-language prompt with explicit asks for 2-5 properties covering type-shape invariants, idempotency, boundary cases (empty/large/unicode/negative). Sanity-checks Claude's output references the property lib (rejects bare smoke tests). Output filename `tests/auto-generated/<flat>.prop.<ext>` so it sits alongside regression tests without colliding. Wired into `/api/scan/fix` ONLY when `tier === "nuclear"` (\$99/\$199 customers don't pay for the extra spend). Non-blocking — any failure logs into errors[] and ships the fix anyway. Skip-reasons surface as `(info)` rather than failures since property tests are bonus. 28 tests covering testability gate, language detection, path generation, prompt shape (JS + Python), Claude-throw resilience, fence stripping, mixed-batch behaviour, maxFixes cap with "deferred" summary line.
 - [ ] **6.2.8** Mutation-test-driven test strengthening — wire the existing mutation engine into the fix loop. Weak test caught → AI strengthens it → ship.
 - [ ] **6.2.9** Chaos-test-driven resilience fixes — chaos shows 3G failure → AI adds retry/backoff → ship.
 - [ ] **6.2.10** Performance benchmark before/after on every PR — *"this fix is 23% faster"*. Tinybench microbenchmarks attached to fix PRs.
@@ -461,14 +461,14 @@ Phase 5 was the move from on-spec ($29-$399 honest delivery) to 110% (cross-repo
 | Tier | Status |
 | --- | --- |
 | 1 — Launch-essential (10 items) | **5/10 SHIPPED** (6.1.1 ✓ Nuclear coupling, 6.1.2 ✓ per-finding selection, 6.1.3 ✓ inline diff, 6.1.4 ✓ universal copy, 6.1.5 ✓ reliability test). Remaining: 6.1.6 (hero — Boss Rule), 6.1.7 (Marketplace), 6.1.8 (Apple/Google Pay activation — Craig action), 6.1.9 (sales), 6.1.10 (public registry). |
-| 2 — Compounding moats (15 items) | **1/15 SHIPPED** (6.2.5 ✓ FP-rate trending). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6-6.2.15. |
+| 2 — Compounding moats (15 items) | **2/15 SHIPPED** (6.2.5 ✓ FP-rate trending, 6.2.7 ✓ property-based test generation). Remaining: 6.2.1 (multi-file refactor), 6.2.2 (cohort population — Craig action), 6.2.3 (Datadog/Vercel/correlator), 6.2.4 (cross-language graph), 6.2.6 (Layer-3 Operator — Boss Rule), 6.2.8-6.2.15. |
 | 3 — Distribution channels (20 items) | **3/20 SHIPPED** (6.3.1 ✓ Cursor MCP, 6.3.2 ✓ Claude Code MCP, 6.3.3 ✓ Cline/Aider MCP — all from commit `854244c`). |
 | 4 — Compliance unlocks (15 items) | 0/15 — not started. |
 | 5 — Language depth (15 items) | 0/15 — not started. |
 | 6 — AI-app safety (10 items) | 0/10 — promptSafety module is a foundation but not in the Phase 6 expansion yet. |
 | 7 — Supply chain trust (10 items) | 0/10 — maliciousDeps + dependencyFreshness are foundations. |
 | 8 — Brutal moats (5 items) | 0/5 — multi-month builds. |
-| **Phase 6 total** | **9/100 shipped** (this commit + previous Tier-1 work). |
+| **Phase 6 total** | **10/100 shipped** (this commit + previous Tier-1 + Tier-2 work). |
 
 ---
 
