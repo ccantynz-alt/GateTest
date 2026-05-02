@@ -1,6 +1,22 @@
 /**
  * Base Module - Abstract base class for all GateTest test modules.
+ *
+ * Phase 6 launch hardening (gaps 1, 2, 3, 6, 7 from the audit):
+ *   - _collectFiles now delegates to src/core/safe-fs.walkFiles which:
+ *       * caps total files (default 5000, configurable via opts.maxFiles)
+ *       * caps recursion depth (default 25)
+ *       * traps EACCES / EPERM / EISDIR / ENOENT per-entry (one bad
+ *         file no longer kills the scan)
+ *       * follows symlinks via realpath with loop protection
+ *       * optionally respects .gitignore (opts.respectGitignore)
+ *   - _safeReadFile traps the same set of FS errors at read time and
+ *     refuses oversize / binary / non-utf8 files cleanly
+ *
+ * Old _collectFiles signature preserved (projectRoot, patterns, excludes)
+ * — every existing call site keeps working.
  */
+
+const safeFs = require('../core/safe-fs');
 
 class BaseModule {
   constructor(name, description) {
@@ -18,49 +34,66 @@ class BaseModule {
   }
 
   /**
-   * Collect files matching patterns from project root.
+   * Collect files matching extension patterns from projectRoot.
+   *
+   * @param {string} projectRoot
+   * @param {string[]} patterns — file extensions including dot (e.g. ['.js', '.ts'])
+   *   or ['*'] to match any extension
+   * @param {string[]} [excludes] — extra directory names to skip
+   * @param {object} [opts] — { maxFiles, maxDepth, respectGitignore }
+   *   maxFiles defaults to 5000; pass higher for monorepos that genuinely need
+   *   deeper scans, lower for routes with tight time budgets
+   * @returns {string[]} absolute paths
    */
-  _collectFiles(projectRoot, patterns, excludes = []) {
-    const fs = require('fs');
+  _collectFiles(projectRoot, patterns, excludes = [], opts = {}) {
     const path = require('path');
-    const files = [];
+    const allowAny = patterns.includes('*');
+    const allowedExts = new Set(patterns.map((p) => p.toLowerCase()));
 
-    const defaultExcludes = [
-      'node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage',
-      '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
-      '__pycache__', '.pytest_cache', 'target', 'vendor', '.cargo',
-      'out', 'public/build', '.cache', '.parcel-cache',
-      // .claude is the agent-coordination dir (worktrees, scratch state).
-      // Scanning .claude/worktrees/agent-* inflates findings with
-      // duplicate scans of the same code — every gatetest run on a
-      // repo with active agent worktrees would produce N× the noise.
-      '.claude',
-    ];
-    const allExcludes = [...defaultExcludes, ...excludes];
+    // Merge module's extra excludes into the default skip set.
+    // .gatetest, .claude (agent worktrees), .svelte-kit, .output, .vercel
+    // are GateTest-specific noise sources not in the safe-fs default list.
+    const skipDirs = new Set(safeFs.DEFAULT_SKIP_DIRS);
+    skipDirs.add('.gatetest');
+    skipDirs.add('.claude');
+    skipDirs.add('.svelte-kit');
+    skipDirs.add('.output');
+    skipDirs.add('.vercel');
+    skipDirs.add('public/build');
+    skipDirs.add('.cargo');
+    for (const e of excludes) skipDirs.add(e);
 
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (allExcludes.includes(entry.name)) continue;
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(fullPath);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (patterns.includes(ext) || patterns.includes('*')) {
-            files.push(fullPath);
-          }
-        }
-      }
-    };
+    const walk = safeFs.walkFiles(projectRoot, {
+      skipDirs,
+      maxFiles: typeof opts.maxFiles === 'number' ? opts.maxFiles : safeFs.DEFAULT_MAX_FILES,
+      maxDepth: typeof opts.maxDepth === 'number' ? opts.maxDepth : safeFs.DEFAULT_MAX_DEPTH,
+      respectGitignore: opts.respectGitignore === true,
+      filter: (rel) => {
+        const ext = path.extname(rel).toLowerCase();
+        return allowAny || allowedExts.has(ext);
+      },
+    });
 
-    walk(projectRoot);
-    return files;
+    // Surface the truncation as a side-channel field readable by callers
+    // that care to expose it (e.g. info-level "X files skipped over cap").
+    if (walk.truncatedAt !== null) {
+      this._lastWalkTruncated = walk.truncatedAt;
+    } else {
+      this._lastWalkTruncated = null;
+    }
+    this._lastWalkSkipped = walk.skipped;
+
+    return walk.files;
+  }
+
+  /**
+   * Read a single file safely. Returns { ok, content?, encoding?, reason?, size? }.
+   * Modules should prefer this over fs.readFileSync — callers don't need to
+   * wrap in try/catch and oversize/binary/encoding-mangled files are filtered
+   * out cleanly with a structured `reason`.
+   */
+  _safeReadFile(filePath, opts = {}) {
+    return safeFs.safeReadFile(filePath, opts);
   }
 
   /**

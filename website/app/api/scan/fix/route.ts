@@ -19,6 +19,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+const { classifyAnthropicError, formatAnthropicError } = require("@/app/lib/anthropic-error") as {
+  classifyAnthropicError: (status: number, body?: string) => { kind: string; status: number; message: string; action: string | null; raw: string };
+  formatAnthropicError: (c: { message: string; action: string | null }) => string;
+};
 import {
   createBranch,
   fetchBlob,
@@ -379,7 +383,7 @@ CRITICAL RULES — violations will cause re-scan failure:
     return fixedCode;
   }
   const errSnippet = JSON.stringify(res.data).slice(0, 200);
-  throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
+  throw new Error(formatAnthropicError(classifyAnthropicError(res.status, errSnippet)));
 }
 
 /**
@@ -486,7 +490,7 @@ async function askClaudeForTest(prompt: string): Promise<string> {
   const res = await anthropicCallWithRetry(body);
   if (res.status !== 200) {
     const errSnippet = JSON.stringify(res.data).slice(0, 200);
-    throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
+    throw new Error(formatAnthropicError(classifyAnthropicError(res.status, errSnippet)));
   }
   const content = res.data.content as Array<{ type: string; text: string }>;
   return content?.[0]?.text || "";
@@ -518,7 +522,7 @@ Rules:
 
   if (res.status !== 200) {
     const errSnippet = JSON.stringify(res.data).slice(0, 200);
-    throw new Error(`Claude API error ${res.status}: ${errSnippet}`);
+    throw new Error(formatAnthropicError(classifyAnthropicError(res.status, errSnippet)));
   }
 
   const content = res.data.content as Array<{ type: string; text: string }>;

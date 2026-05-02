@@ -15,6 +15,22 @@
  *   gatetest --init             Initialize GateTest in a project
  */
 
+// ---- Node version guard (Phase 6 launch hardening, item 4) ----
+// engines.node in package.json is advisory; npm warns but doesn't block.
+// A user on Node 18 hitting an `??` or top-level await would get a cryptic
+// SyntaxError far from the call site. Surface a clean message instead.
+const REQUIRED_MAJOR = 20;
+const currentMajor = parseInt(process.versions.node.split('.')[0], 10);
+if (Number.isFinite(currentMajor) && currentMajor < REQUIRED_MAJOR) {
+  process.stderr.write(
+    `\nGateTest requires Node.js ${REQUIRED_MAJOR}+ (found ${process.versions.node}).\n\n` +
+    `  Fix:\n` +
+    `    nvm install ${REQUIRED_MAJOR} && nvm use ${REQUIRED_MAJOR}\n` +
+    `    or download Node ${REQUIRED_MAJOR}+ from https://nodejs.org\n\n`
+  );
+  process.exit(1);
+}
+
 const path = require('path');
 const fs = require('fs');
 const { GateTest } = require('../src/index');

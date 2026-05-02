@@ -37,6 +37,20 @@
  * Google Pay one-tap → fix delivered. No site visit needed.
  */
 
+// Node version guard — same as bin/gatetest.js. The MCP SDK uses
+// optional chaining + ESM imports that crash on older Node with
+// SyntaxErrors thrown by the loader before any of our code runs, so
+// this guard sits before the imports.
+const _MCP_REQUIRED_MAJOR = 20;
+const _mcpMajor = parseInt(process.versions.node.split('.')[0], 10);
+if (Number.isFinite(_mcpMajor) && _mcpMajor < _MCP_REQUIRED_MAJOR) {
+  process.stderr.write(
+    `\nGateTest MCP server requires Node.js ${_MCP_REQUIRED_MAJOR}+ (found ${process.versions.node}).\n\n` +
+    `  Fix:\n    nvm install ${_MCP_REQUIRED_MAJOR} && nvm use ${_MCP_REQUIRED_MAJOR}\n\n`
+  );
+  process.exit(1);
+}
+
 import { createRequire } from 'module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
