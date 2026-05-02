@@ -1142,6 +1142,52 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Phase 6.2.9 — chaos-test generation. Nuclear-tier only ($399).
+  // Generates a node:test file per resilience-relevant fix that mocks
+  // fetch / setTimeout / fs to inject failures (slow network, dropped
+  // responses, timeouts) and asserts the fix degrades gracefully.
+  // Non-blocking: failures log + ship the fix.
+  let chaosSummary: string | undefined;
+  let chaosTestsWritten = 0;
+  if (input.tier === "nuclear") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { generateChaosTestsForFixes } = require("@/app/lib/chaos-test-generator.js") as {
+        generateChaosTestsForFixes: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          askClaudeForChaos: (prompt: string) => Promise<string>;
+          maxFixes?: number;
+        }) => Promise<{
+          tests: Array<{ path: string; content: string; sourceFile: string }>;
+          skipped: Array<{ sourceFile: string | null; reason: string }>;
+          summary: string;
+        }>;
+      };
+      const sourceFixes = fixes.filter((f) => !f.file.startsWith("tests/auto-generated/"));
+      const chaosResult = await generateChaosTestsForFixes({
+        fixes: sourceFixes,
+        askClaudeForChaos: askClaudeForTest,
+      });
+      for (const t of chaosResult.tests) {
+        fixes.push({
+          file: t.path,
+          original: "",
+          fixed: t.content,
+          issues: [`Chaos / resilience test for ${t.sourceFile}`],
+        });
+      }
+      for (const s of chaosResult.skipped) {
+        errors.push(`(info) No chaos test for ${s.sourceFile || "(unknown)"}: ${s.reason}`);
+      }
+      chaosTestsWritten = chaosResult.tests.length;
+      chaosSummary = chaosResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "chaos test generation failed";
+      errors.push(`Chaos test generation failed: ${message}`);
+      chaosSummary = `chaos test generation: failed (${message})`;
+    }
+  }
+
   // Create a branch, commit fixes, open PR
   try {
     // Resolve the default branch + its tip SHA. Tries Gluecron first, falls
@@ -1346,6 +1392,9 @@ export async function POST(req: NextRequest) {
       perfBenchmarks: benchSummary
         ? { benchmarksWritten, summary: benchSummary }
         : { skipped: true, reason: "tier is not nuclear — perf benchmarks are a $399-tier value-add" },
+      chaosTests: chaosSummary
+        ? { testsWritten: chaosTestsWritten, summary: chaosSummary }
+        : { skipped: true, reason: "tier is not nuclear — chaos tests are a $399-tier value-add" },
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
