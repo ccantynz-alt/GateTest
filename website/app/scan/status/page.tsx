@@ -173,7 +173,7 @@ export default function ScanStatus() {
     fetch("/api/scan/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier }),
+      body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier || "full" }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -246,7 +246,7 @@ export default function ScanStatus() {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier }),
+        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier || "full" }),
       });
       const data = await res.json() as FixResult;
       setFixResult(data);
