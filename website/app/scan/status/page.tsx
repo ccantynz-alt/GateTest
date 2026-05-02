@@ -205,36 +205,23 @@ export default function ScanStatus() {
   const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
 
   // Parse failed-module details into the {file, issue, module} shape that
-  // /api/scan/fix expects. Mirrors AdminPanel's parser so admin and customer
-  // paths produce identical fix-input payloads.
+  // /api/scan/fix expects. Delegates to the shared helper at
+  // `website/app/lib/issue-extractor.ts` so the customer page and the admin
+  // Command Center cannot drift apart again. The helper also returns a
+  // separate `unparseable` list so findings without a parseable file
+  // location are surfaced honestly to the customer instead of being
+  // silently filtered out.
   function extractFixableIssues(modules: ModuleResult[]) {
-    const failed = modules.filter((m) => m.status === "failed");
-    return failed.flatMap((m) => {
-      const details = m.details || [];
-      return details.map((d) => {
-        let file = "";
-        let issue = d;
-        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
-        if (fileLineMatch) {
-          file = fileLineMatch[1];
-          issue = fileLineMatch[3];
-        } else {
-          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
-          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
-        }
-        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
-        if (!file && missingMatch) {
-          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
-          issue = `CREATE_FILE: ${d}`;
-        }
-        return { file, issue, module: m.name };
-      }).filter((i) => i.file);
-    });
+    return extractIssuesFromModules(modules).fixable;
+  }
+
+  function extractUnparseableIssues(modules: ModuleResult[]): UnparseableIssue[] {
+    return extractIssuesFromModules(modules).unparseable;
   }
 
   async function runFix() {
     if (!scanResult || !params.repo) return;
-    const issues = extractFixableIssues(scanResult.modules);
+    const { fixable: issues } = extractIssuesFromModules(scanResult.modules);
     if (issues.length === 0) {
       setFixError("No auto-fixable issues — these need manual review (config / infrastructure / architectural).");
       return;

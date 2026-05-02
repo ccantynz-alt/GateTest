@@ -178,6 +178,14 @@ const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-atte
   }>;
   summariseAttempts: (attempts: Array<{ outcome: string; durationMs: number }>) => string;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { mapWithAdaptiveConcurrency } = require("@/app/lib/adaptive-concurrency") as {
+  mapWithAdaptiveConcurrency: <T, R>(
+    items: T[],
+    initialLimit: number,
+    fn: (item: T, state: AdaptiveState) => Promise<R>,
+  ) => Promise<R[]>;
+};
 
 // Default attempt ceiling — set higher than the old hardcoded "1+1 retry"
 // so the loop has room to learn from its own mistakes. Configurable via
@@ -541,48 +549,13 @@ async function mapWithConcurrency<T, R>(
 // with SSL alerts, parallel requests just poison each other. Drop to serial and
 // let the retry backoff do the work, rather than burning the whole budget in
 // parallel failures.
+//
+// `mapWithAdaptiveConcurrency` is implemented in
+// `website/app/lib/adaptive-concurrency.js` (pure JS for testability).
 interface AdaptiveState {
   consecutiveNetworkErrors: number;
   activeConcurrency: number;
   haltRun: boolean;
-}
-
-async function mapWithAdaptiveConcurrency<T, R>(
-  items: T[],
-  initialLimit: number,
-  fn: (item: T, state: AdaptiveState) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  const state: AdaptiveState = {
-    consecutiveNetworkErrors: 0,
-    activeConcurrency: initialLimit,
-    haltRun: false,
-  };
-  let cursor = 0;
-  let activeWorkers = 0;
-
-  async function worker() {
-    activeWorkers++;
-    while (cursor < items.length && !state.haltRun) {
-      // Respect dynamic throttling — if another worker dropped concurrency
-      // below our count, this worker exits until only `activeConcurrency`
-      // remain.
-      if (activeWorkers > state.activeConcurrency) {
-        activeWorkers--;
-        return;
-      }
-      const idx = cursor++;
-      results[idx] = await fn(items[idx], state);
-    }
-    activeWorkers--;
-  }
-
-  const workers = Array.from(
-    { length: Math.min(initialLimit, items.length) },
-    () => worker(),
-  );
-  await Promise.all(workers);
-  return results;
 }
 
 interface IssueInput {

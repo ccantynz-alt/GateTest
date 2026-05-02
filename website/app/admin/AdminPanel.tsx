@@ -3,7 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
-import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
+import {
+  extractIssuesFromModules,
+  type FixableIssue,
+  type UnparseableIssue,
+  type ModuleLike,
+} from "@/app/lib/issue-extractor";
 
 interface FailedFile {
   file: string;
@@ -108,6 +113,9 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
   const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
+  // Findings whose file location couldn't be parsed — surfaced to the operator
+  // instead of being silently dropped by the auto-fixer.
+  const [unparseableIssues, setUnparseableIssues] = useState<UnparseableIssue[]>([]);
   const [guidanceLoading, setGuidanceLoading] = useState(false);
   const [guidance, setGuidance] = useState<Array<{ module: string; detail: string; title: string; why: string; steps: string[]; commands?: string[] }> | null>(null);
   const [dbData, setDbData] = useState<DbData | null>(null);
@@ -246,31 +254,36 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     setResult(null);
     setFixResult(null);
     setGuidance(null);
+    setUnparseableIssues([]);
     setError("");
   }
 
-  function parseIssues(mods: typeof modules) {
-    return mods.flatMap((m) => {
-      const details = (m.details as string[]) || [];
-      return details.map((d) => {
-        let file = "";
-        let issue = d;
-        let line: number | undefined;
-        const fileLineMatch = d.match(/^([\w./\-@+]+?\.[\w]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/);
-        if (fileLineMatch) {
-          file = fileLineMatch[1]; line = Number(fileLineMatch[2]); issue = fileLineMatch[3];
-        } else {
-          const fileOnly = d.match(/^([\w./\-@+]+?\.[\w]{1,8})\s*[:—-]\s*(.+)$/);
-          if (fileOnly) { file = fileOnly[1]; issue = fileOnly[2]; }
-        }
-        const missingMatch = d.match(/(?:missing|no|needs)\s+([.\w/\-]+\.(?:md|json|yml|yaml|toml|gitignore|env|example))/i);
-        if (!file && missingMatch) {
-          file = missingMatch[1].toLowerCase() === "gitignore" ? ".gitignore" : missingMatch[1];
-          issue = `CREATE_FILE: ${d}`;
-        }
-        return { file, issue, module: m.name as string, line };
-      });
-    });
+  // Delegates to the shared helper at `website/app/lib/issue-extractor.ts`
+  // so the admin Command Center and the customer scan page parse module
+  // findings identically. The `failedOnly` flag is `false` here because the
+  // admin tooling sometimes pre-filters mods upstream; the helper still does
+  // the right thing for any module shape the caller hands it.
+  function parseIssues(mods: typeof modules): FixableIssue[] {
+    const moduleLikes: ModuleLike[] = mods.map((m) => ({
+      name: m.name as string,
+      status: m.status as string,
+      details: (m.details as string[]) || [],
+    }));
+    const { fixable } = extractIssuesFromModules(moduleLikes, { failedOnly: false });
+    return fixable;
+  }
+
+  // Returns the unparseable findings the auto-fixer can't act on so the
+  // operator can triage them by hand. Replaces the silent `.filter(i => i.file)`
+  // drop that hid 39% of real-world findings from the customer.
+  function parseUnparseableIssues(mods: typeof modules): UnparseableIssue[] {
+    const moduleLikes: ModuleLike[] = mods.map((m) => ({
+      name: m.name as string,
+      status: m.status as string,
+      details: (m.details as string[]) || [],
+    }));
+    const { unparseable } = extractIssuesFromModules(moduleLikes, { failedOnly: false });
+    return unparseable;
   }
 
   function buildFileProgress(fixableIssues: ReturnType<typeof parseIssues>): FileProgress[] {
@@ -307,15 +320,19 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
     } else {
       if (!result) return;
       const failedMods = modules.filter((m) => (m.status as string) === "failed");
-      const issues = parseIssues(failedMods);
-      fixable = issues.filter((i) => i.file);
-      const unfixable = issues.filter((i) => !i.file);
+      // The shared helper guarantees `i.file` is non-empty for every fixable;
+      // anything without a parseable file flows into `unparseable` and is
+      // surfaced to the operator via the manual-review block in the UI
+      // instead of being silently dropped. No `.filter(i => i.file)` here.
+      fixable = parseIssues(failedMods);
+      const unparseable = parseUnparseableIssues(failedMods);
+      setUnparseableIssues(unparseable);
       if (fixable.length === 0) {
-        setError(`No auto-fixable issues. ${unfixable.length} issue(s) need manual review.`);
+        setError(`No auto-fixable issues. ${unparseable.length} issue(s) need manual review.`);
         return;
       }
-      if (unfixable.length > 0) {
-        console.info(`[GateTest] ${fixable.length} auto-fixable, ${unfixable.length} need manual review`); // code-quality-ok
+      if (unparseable.length > 0) {
+        console.info(`[GateTest] ${fixable.length} auto-fixable, ${unparseable.length} need manual review`); // code-quality-ok
       }
     }
 
@@ -362,7 +379,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         const res = await fetch("/api/scan/fix", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repoUrl, issues: batchIssues }),
+          body: JSON.stringify({ repoUrl, issues: batchIssues, tier }),
         });
         const data = await res.json() as FixResult;
         accumulated.failedFiles = [...(accumulated.failedFiles ?? []), ...(data.failedFiles ?? [])];
@@ -418,7 +435,7 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         const res = await fetch("/api/scan/fix", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repoUrl, issues: batchIssues }),
+          body: JSON.stringify({ repoUrl, issues: batchIssues, tier }),
         });
         const data = await res.json() as FixResult;
         accumulated.failedFiles = [...(accumulated.failedFiles ?? []), ...(data.failedFiles ?? [])];
@@ -599,7 +616,11 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   const issues = (data.totalIssues as number) || 0;
                   if (issues > 0) {
                     const mods = (data.modules as Array<Record<string, unknown>>) || [];
-                    const fixable = parseIssues(mods).filter((i) => i.file);
+                    // parseIssues already returns only the entries the helper
+                    // could resolve a file for; unparseable findings flow
+                    // through parseUnparseableIssues for operator visibility.
+                    const fixable = parseIssues(mods);
+                    setUnparseableIssues(parseUnparseableIssues(mods));
                     if (fixable.length > 0) {
                       // Use fixIssues() with pre-extracted issues so the live
                       // progress panel shows — result state isn't updated yet here
@@ -716,24 +737,26 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
                   </div>
                 </div>
 
-                {/* AI-builder handoff — always available so the operator
-                    has a usable export even if our own fix loop hits an
-                    Anthropic/network outage. Sits ABOVE the manual-guide
-                    block so it's the first thing visible after the action
-                    row. */}
-                {totalIssues > 0 && (
-                  <div className="mt-4">
-                    <AIBuilderHandoff
-                      modules={modules as Array<{ name: string; status: string; details?: string[] }>}
-                      repoUrl={repoUrl}
-                      tier={tier}
-                      fixFailed={Boolean(fixResult && !fixResult.prUrl && (fixResult.errors?.length || fixResult.failedFiles?.length))}
-                      fixFailureReason={
-                        fixResult && !fixResult.prUrl
-                          ? (fixResult.error || fixResult.message || "request failed")
-                          : undefined
-                      }
-                    />
+                {/* Unparseable findings — surfaced honestly instead of being
+                    silently dropped by `.filter(i => i.file)`. The auto-fixer
+                    can't act on these (no file location parseable from the
+                    finding text), so the operator triages them by hand. */}
+                {unparseableIssues.length > 0 && (
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-5 mt-4">
+                    <h3 className="font-bold text-slate-700 mb-1">
+                      {unparseableIssues.length} issue{unparseableIssues.length > 1 ? "s" : ""} need manual review
+                    </h3>
+                    <p className="text-xs text-slate-500 mb-3">
+                      No file location could be parsed from the finding text — these
+                      won&apos;t be in the auto-fix PR.
+                    </p>
+                    <ul className="space-y-1 text-xs font-mono text-slate-700 max-h-48 overflow-auto">
+                      {unparseableIssues.map((u, i) => (
+                        <li key={i} className="truncate">
+                          <span className="text-slate-400">[{u.module}]</span> {u.detail}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
@@ -1463,7 +1486,7 @@ function WatchdogPanel() {
       const fixRes = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: repo.html_url, issues: fixableIssues }),
+        body: JSON.stringify({ repoUrl: repo.html_url, issues: fixableIssues, tier: "full" }),
       });
       const fixData = await fixRes.json();
       setScanStates((s) => ({
