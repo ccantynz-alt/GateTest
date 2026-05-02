@@ -1,5 +1,6 @@
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
+import FreePreviewScanner from "./components/FreePreviewScanner";
 import Problem from "./components/Problem";
 import AiNative from "./components/AiNative";
 import HowItWorks from "./components/HowItWorks";
@@ -19,6 +20,7 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <FreePreviewScanner />
         <Problem />
         <AiNative />
         <HowItWorks />

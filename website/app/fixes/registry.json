@@ -1,0 +1,77 @@
+{
+  "lastUpdated": "2026-05-02",
+  "fixes": [
+    {
+      "id": "gatetest-self-fix-2026-04-26",
+      "repo": "ccantynz-alt/gatetest",
+      "publicUrl": "https://github.com/ccantynz-alt/gatetest",
+      "displayName": "GateTest (self-scan + self-fix)",
+      "tier": "scan_fix",
+      "scannedAt": "2026-04-26",
+      "duration": "10s",
+      "stats": {
+        "modulesRun": 39,
+        "modulesPassed": 30,
+        "errors": 37,
+        "warnings": 328,
+        "fixesShipped": 2
+      },
+      "notableFix": "Replaced 2 console.log calls with process.stderr.write in src/runtime/alerts.js — caught by codeQuality module, fixed by Claude in 8.5s",
+      "proofDoc": "/docs/proofs/phase-1-self-fix-real.md"
+    },
+    {
+      "id": "crontech-nuclear-2026-04-26",
+      "repo": "ccantynz-alt/Crontech",
+      "publicUrl": "https://github.com/ccantynz-alt/Crontech",
+      "displayName": "Crontech.ai",
+      "tier": "nuclear",
+      "scannedAt": "2026-04-26",
+      "duration": "scan complete",
+      "stats": {
+        "modulesRun": 39,
+        "modulesPassed": 23,
+        "errors": 754,
+        "diagnosed": 10,
+        "chains": 2
+      },
+      "notableFix": "Found 2 critical attack chains: client-bundle exposure of API keys + supply-chain CI takeover via unpinned actions. Both diagnosed by Claude with root cause + fix order.",
+      "proofDoc": "/docs/proofs/phase-2-3-crontech-real-customer-grade.md"
+    },
+    {
+      "id": "gluecron-nuclear-2026-04-26",
+      "repo": "ccantynz-alt/Gluecron.com",
+      "publicUrl": "https://github.com/ccantynz-alt/Gluecron.com",
+      "displayName": "Gluecron.com",
+      "tier": "nuclear",
+      "scannedAt": "2026-04-26",
+      "duration": "scan complete",
+      "stats": {
+        "modulesRun": 39,
+        "modulesPassed": 26,
+        "errors": 649,
+        "diagnosed": 9,
+        "chains": 3
+      },
+      "notableFix": "Cleverest cross-finding chain we've seen: hardcoded secret + undeclared WORKFLOW_SECRETS_KEY in .env.example = 'secret rotation is impossible'. Operational lock-in neither finding describes alone.",
+      "proofDoc": "/docs/proofs/phase-2-3-gluecron-marcoreid.md"
+    },
+    {
+      "id": "marcoreid-nuclear-2026-04-26",
+      "repo": "ccantynz-alt/MarcoReid",
+      "publicUrl": "https://marcoreid.co.nz",
+      "displayName": "MarcoReid (legal-tech)",
+      "tier": "nuclear",
+      "scannedAt": "2026-04-26",
+      "duration": "scan complete",
+      "stats": {
+        "modulesRun": 39,
+        "modulesPassed": 31,
+        "errors": 124,
+        "diagnosed": 9,
+        "chains": 0
+      },
+      "notableFix": "Caught a textbook fintech bug: parseFloat() on a money-named variable in TrustActions.tsx for a legal-tech product handling client trust money. Correlator HONESTLY returned 0 chains because findings were genuinely independent — proving the no-padding rule works.",
+      "proofDoc": "/docs/proofs/phase-2-3-gluecron-marcoreid.md"
+    }
+  ]
+}
