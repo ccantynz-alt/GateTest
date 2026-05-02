@@ -983,6 +983,54 @@ export async function POST(req: NextRequest) {
     errors.push(`Test generation failed (no regression tests added): ${message}`);
     return { tests: [] as Array<{ path: string; content: string; sourceFile: string }>, skipped: [] as Array<{ sourceFile: string; reason: string }>, summary: `test generation: failed (${message})` };
   });
+
+  // Phase 6.2.8 — mutation-driven test strengthening. Runs ONLY on the
+  // Nuclear tier ($399). Generates mutation candidates against each
+  // fixed source, asks Claude to strengthen the regression test so it
+  // catches every mutation. Replaces the weak test with the strong one
+  // BEFORE the test gets appended to the fixes array. Non-blocking:
+  // any failure leaves the original test intact.
+  let strengthenSummary: string | undefined;
+  let strengthenedCount = 0;
+  if (input.tier === "nuclear" && testGen.tests.length > 0) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { strengthenRegressionTests } = require("@/app/lib/mutation-driven-test-strengthener.js") as {
+        strengthenRegressionTests: (opts: {
+          fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+          regressionTests: Array<{ path: string; content: string; sourceFile: string }>;
+          askClaudeForStrengthen: (prompt: string) => Promise<string>;
+        }) => Promise<{
+          strengthened: Array<{ path: string; content: string; sourceFile: string; mutationsChecked: number }>;
+          skipped: Array<{ sourceFile: string; testPath: string; reason: string; mutationsChecked?: number }>;
+          summary: string;
+        }>;
+      };
+      const strengthenResult = await strengthenRegressionTests({
+        fixes,
+        regressionTests: testGen.tests,
+        askClaudeForStrengthen: askClaudeForTest, // same Claude wrapper, different prompt
+      });
+      // Replace the strengthened tests in-place so the appendix loop
+      // below picks up the strong version, not the weak one.
+      const strongByPath = new Map(strengthenResult.strengthened.map((s) => [s.path, s]));
+      for (const t of testGen.tests) {
+        const strong = strongByPath.get(t.path);
+        if (strong) {
+          t.content = strong.content;
+          strengthenedCount += 1;
+        }
+      }
+      for (const s of strengthenResult.skipped) {
+        errors.push(`(info) Mutation-strengthen skipped ${s.testPath}: ${s.reason}`);
+      }
+      strengthenSummary = strengthenResult.summary;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "mutation strengthening failed";
+      errors.push(`Mutation-driven test strengthening failed: ${message}`);
+      strengthenSummary = `mutation-strengthen: failed (${message})`;
+    }
+  }
   for (const t of testGen.tests) {
     fixes.push({ file: t.path, original: "", fixed: t.content, issues: [`Regression test for ${t.sourceFile}`] });
   }
@@ -1243,6 +1291,9 @@ export async function POST(req: NextRequest) {
       propertyTestGeneration: propTestSummary
         ? { testsWritten: propTestsWritten, summary: propTestSummary }
         : { skipped: true, reason: "tier is not nuclear — property tests are a $399-tier value-add" },
+      mutationStrengthening: strengthenSummary
+        ? { testsStrengthened: strengthenedCount, summary: strengthenSummary }
+        : { skipped: true, reason: "tier is not nuclear or no regression tests — mutation strengthening is a $399-tier value-add" },
       pairReview: pairReviewSummary
         ? { summary: pairReviewSummary }
         : { skipped: true, reason: "tier is not scan_fix — pair review is a $199-tier value-add" },
