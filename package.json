@@ -1,6 +1,6 @@
 {
   "name": "gatetest",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GateTest — the unified quality gate for AI-generated code. 90 modules: security, accessibility, performance, AI code review, and auto-fix.",
   "main": "src/index.js",
   "bin": {
