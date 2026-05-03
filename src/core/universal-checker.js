@@ -255,7 +255,9 @@ function runLanguageChecks(lang, projectRoot, result, options = {}) {
   let filesScanned = 0;
 
   for (const file of files) {
-    const isTest = spec.testFilePattern && spec.testFilePattern.test(file);
+    // Normalize backslashes to forward-slash so the testFilePattern regexes
+    // (which use `/` literally) match identically on Windows.
+    const isTest = spec.testFilePattern && spec.testFilePattern.test(file.split(path.sep).join('/'));
     let content;
     try {
       content = fs.readFileSync(file, 'utf-8');
