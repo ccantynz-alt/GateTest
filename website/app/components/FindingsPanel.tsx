@@ -215,6 +215,17 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
     }
   }
 
+  // Universal-copy helper — formats the currently-filtered findings as a
+  // markdown checklist the customer can paste into any AI builder /
+  // ticket / Slack thread. Backed by the shared formatter so the same
+  // shape ships across panels and is unit-tested separately. Hook MUST
+  // live before any conditional return — Rules of Hooks require a stable
+  // call order across renders.
+  const bulkCopyText = useMemo(
+    () => formatFindingsAsMarkdown({ findings: filtered, totalCount: counts.total, repoUrl }),
+    [filtered, counts.total, repoUrl]
+  );
+
   if (findings.length === 0) {
     return (
       <div className="rounded-2xl border border-green-200 bg-green-50/60 p-8 text-center celebrate">
@@ -228,15 +239,6 @@ export default function FindingsPanel({ modules, repoUrl }: Props) {
       </div>
     );
   }
-
-  // Universal-copy helper — formats the currently-filtered findings as a
-  // markdown checklist the customer can paste into any AI builder /
-  // ticket / Slack thread. Backed by the shared formatter so the same
-  // shape ships across panels and is unit-tested separately.
-  const bulkCopyText = useMemo(
-    () => formatFindingsAsMarkdown({ findings: filtered, totalCount: counts.total, repoUrl }),
-    [filtered, counts.total, repoUrl]
-  );
 
   return (
     <div className="rounded-2xl border border-border bg-white overflow-hidden">

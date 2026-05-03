@@ -335,11 +335,11 @@ export async function POST(req: NextRequest) {
   let finalModules = result.modules;
   let finalTotalIssues = result.totalIssues;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const confidenceReport = require("@/app/lib/confidence-aware-report.js");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const moduleConfidence = require("@/app/lib/module-confidence.js");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { getDb } = require("@/app/lib/db");
     const sqlForConfidence = getDb();
     const resolveAction = confidenceReport.buildResolveAction({
@@ -352,7 +352,6 @@ export async function POST(req: NextRequest) {
     // pass a sync resolver into applyConfidenceToScan.
     const moduleActionMap = new Map<string, string>();
     for (const m of result.modules) {
-      // eslint-disable-next-line no-await-in-loop
       const action = await resolveAction(m.name, null);
       moduleActionMap.set(m.name, action);
     }

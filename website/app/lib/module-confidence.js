@@ -274,7 +274,7 @@ async function refreshModuleConfidence(opts) {
   if (typeof sql !== 'function') throw new Error('refreshModuleConfidence: sql is required');
 
   // Lazy import — keeps the store free of cross-imports.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { aggregateDissentByModulePattern } = require('./dissent-store.js');
 
   const dissentRows = await aggregateDissentByModulePattern({ sql, daysBack });

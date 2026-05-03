@@ -20,7 +20,7 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
 import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const moduleConfidence = require("@/app/lib/module-confidence.js") as {
   ensureModuleConfidenceTable: (sql: unknown) => Promise<void>;
   refreshModuleConfidence: (opts: { sql: unknown; daysBack?: number }) => Promise<{
@@ -28,7 +28,7 @@ const moduleConfidence = require("@/app/lib/module-confidence.js") as {
     scanned: number;
   }>;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const dissentStore = require("@/app/lib/dissent-store.js") as {
   ensureDissentTable: (sql: unknown) => Promise<void>;
 };

@@ -130,7 +130,7 @@ async function connectIntegration(opts) {
   if (!orgId) throw new Error('connectIntegration: orgId is required');
   if (!accessToken) throw new Error('connectIntegration: accessToken is required');
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   const accessTokenEnc = encryptToken(accessToken);
@@ -166,7 +166,7 @@ async function getIntegrationCredentials(opts) {
   if (!repoUrl) throw new Error('getIntegrationCredentials: repoUrl is required');
   if (!vendor) throw new Error('getIntegrationCredentials: vendor is required');
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   const rows = await sql`
@@ -211,7 +211,7 @@ async function disconnectIntegration(opts) {
   const { sql, repoUrl, vendor } = opts;
   if (typeof sql !== 'function') throw new Error('disconnectIntegration: sql is required');
   if (!repoUrl) throw new Error('disconnectIntegration: repoUrl is required');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   if (vendor) {
@@ -237,7 +237,7 @@ async function listConnectedVendors(opts) {
   const { sql, repoUrl } = opts;
   if (typeof sql !== 'function') throw new Error('listConnectedVendors: sql is required');
   if (!repoUrl) throw new Error('listConnectedVendors: repoUrl is required');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   const rows = await sql`

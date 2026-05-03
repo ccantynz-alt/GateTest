@@ -29,7 +29,7 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
 import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const fingerprintStore = require("@/app/lib/scan-fingerprint-store.js") as {
   hashRepoUrl: (url: string) => string;
   findSimilarFingerprints: (opts: {
@@ -45,7 +45,7 @@ const fingerprintStore = require("@/app/lib/scan-fingerprint-store.js") as {
     daysBack?: number;
   }) => Promise<{ count: number; medianFindings: number; p90Findings: number; fixSuccessRate: number }>;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const lookup = require("@/app/lib/cross-repo-lookup.js") as {
   summariseSimilarScans: (rows: Array<Record<string, unknown>>) => Record<string, unknown> | null;
 };

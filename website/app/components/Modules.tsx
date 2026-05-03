@@ -111,25 +111,6 @@ const activeModules = [
   },
 ];
 
-const comingSoonModules = [
-  {
-    name: "Live Browser Testing",
-    description: "Playwright-powered. Opens a real browser, visits every page, clicks every button.",
-  },
-  {
-    name: "Visual Regression",
-    description: "Screenshot comparison between deploys. Catches pixel-level changes automatically.",
-  },
-  {
-    name: "Auto-Fix PRs",
-    description: "GateTest creates a pull request that fixes the issues it finds. Automatically.",
-  },
-  {
-    name: "Mutation Testing",
-    description: "Modifies your source code to verify your tests actually catch bugs.",
-  },
-];
-
 export default function Modules() {
   return (
     <section id="modules" className="py-24 px-6 border-t border-border">

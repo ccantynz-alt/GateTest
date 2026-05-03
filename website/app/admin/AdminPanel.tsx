@@ -112,7 +112,10 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [error, setError] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
-  const [fileProgress, setFileProgress] = useState<FileProgress[]>([]);
+  // Per-file progress is tracked for the in-flight fix loop and consumed
+  // by callbacks that mutate the queue; the value isn't rendered yet.
+  // Underscore-prefix marks intentional read-not-yet-wired.
+  const [, setFileProgress] = useState<FileProgress[]>([]);
   // Findings whose file location couldn't be parsed — surfaced to the operator
   // instead of being silently dropped by the auto-fixer.
   const [unparseableIssues, setUnparseableIssues] = useState<UnparseableIssue[]>([]);
