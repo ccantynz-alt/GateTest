@@ -233,7 +233,7 @@ class EnvVarsModule extends BaseModule {
           entry.name === 'compose.yaml'
         ) {
           this._harvestConfigFile(full, declared);
-        } else if (full.includes('.github/workflows/') && CI_WORKFLOW_RE.test(entry.name)) {
+        } else if (full.split(path.sep).join('/').includes('.github/workflows/') && CI_WORKFLOW_RE.test(entry.name)) {
           this._harvestWorkflowFile(full, declared);
         }
       }
@@ -327,7 +327,7 @@ class EnvVarsModule extends BaseModule {
         if (!entry.isFile()) continue;
         const ext = path.extname(entry.name).toLowerCase();
         if (!CODE_EXTS.has(ext)) continue;
-        const rel = path.relative(projectRoot, full);
+        const rel = path.relative(projectRoot, full).split(path.sep).join('/');
         if (TEST_PATH_RE.test(rel)) continue;
         if (DEV_CONFIG_BASENAME_RE.test(entry.name)) continue;
         this._scanReferences(full, projectRoot, referenced);
