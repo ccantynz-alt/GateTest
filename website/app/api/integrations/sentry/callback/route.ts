@@ -9,13 +9,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/app/lib/db";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const sentry = require("@/app/lib/sentry-client.js") as {
   exchangeOAuthCode: (opts: {
     code: string; clientId: string; clientSecret: string; redirectUri: string;
   }) => Promise<{ accessToken: string; refreshToken: string | null; expiresAt: string | null; scope: string | null; orgId: string | null }>;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const integrations = require("@/app/lib/external-integrations-store.js") as {
   VENDORS: Record<string, string>;
   ensureExternalIntegrationsTable: (sql: unknown) => Promise<void>;

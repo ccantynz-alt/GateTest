@@ -111,7 +111,7 @@ async function runDiagnosesForFixInputs(opts) {
   }
 
   // Lazy-import nuclear-diagnoser unless an override is injected (tests).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const fn = diagnoseFindingsImpl || require('./nuclear-diagnoser.js').diagnoseFindings;
 
   try {

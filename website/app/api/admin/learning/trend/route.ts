@@ -22,11 +22,11 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
 import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const dissentStore = require("@/app/lib/dissent-store.js") as {
   ensureDissentTable: (sql: unknown) => Promise<void>;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const fpTrend = require("@/app/lib/fp-trend.js") as {
   DEFAULT_DAYS_BACK: number;
   DEFAULT_BUCKET_DAYS: number;

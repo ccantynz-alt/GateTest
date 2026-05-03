@@ -32,9 +32,9 @@ import { postGluecronResult } from "@/app/lib/gluecron-callback";
 import { getDb } from "@/app/lib/db";
 
 // CommonJS interop — helpers are .js using require-style exports.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const githubEvents = require("@/app/lib/github-events");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const queueStore = require("@/app/lib/scan-queue-store");
 
 export async function POST(req: NextRequest) {

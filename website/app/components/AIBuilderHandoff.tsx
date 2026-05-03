@@ -165,7 +165,11 @@ export default function AIBuilderHandoff({
     // claude.ai accepts the new-chat URL; users can paste manually.
     const url = "https://claude.ai/new";
     // Copy first so paste works immediately.
-    if (navigator.clipboard) navigator.clipboard.writeText(rendered.content).catch(() => {});
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(rendered.content).catch((err) => {
+        console.warn("[AIBuilderHandoff] clipboard write failed; user will need to paste manually:", err);
+      });
+    }
     window.open(url, "_blank", "noopener,noreferrer");
   }
 

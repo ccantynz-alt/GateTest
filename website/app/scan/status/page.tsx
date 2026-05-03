@@ -7,7 +7,7 @@ import LiveScanTerminal from "@/app/components/LiveScanTerminal";
 import AIBuilderHandoff from "@/app/components/AIBuilderHandoff";
 import FixSelectionPanel from "@/app/components/FixSelectionPanel";
 import DiffViewer from "@/app/components/DiffViewer";
-import { extractIssuesFromModules, type UnparseableIssue } from "@/app/lib/issue-extractor";
+import { extractIssuesFromModules } from "@/app/lib/issue-extractor";
 
 interface ModuleResult {
   name: string;
@@ -214,10 +214,6 @@ export default function ScanStatus() {
   // silently filtered out.
   function extractFixableIssues(modules: ModuleResult[]) {
     return extractIssuesFromModules(modules).fixable;
-  }
-
-  function extractUnparseableIssues(modules: ModuleResult[]): UnparseableIssue[] {
-    return extractIssuesFromModules(modules).unparseable;
   }
 
   async function runFix() {

@@ -45,7 +45,7 @@ import { runTier } from "@/app/lib/scan-modules";
 // per-file) and produces a "design observations" report — layering
 // violations, duplicated logic, god objects, refactoring opportunities.
 // REPORTED only, never auto-refactored. Posts as a PR comment.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { annotateArchitecture, renderArchitectureComment } = require("@/app/lib/architecture-annotator") as {
   annotateArchitecture: (opts: {
     fileContents: Array<{ path: string; content: string }>;
@@ -72,7 +72,7 @@ const { annotateArchitecture, renderArchitectureComment } = require("@/app/lib/a
 // Phase 2.1 — pair-review agent. Second Claude critiques each fix on a
 // 4-axis rubric (correctness / completeness / readability / testCoverage),
 // posts result as a PR comment.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { runPairReview, renderReviewComment } = require("@/app/lib/pair-review") as {
   runPairReview: (opts: {
     fixes: Array<{ file: string; original: string; fixed: string; issues: string[] }>;
@@ -95,7 +95,7 @@ const { runPairReview, renderReviewComment } = require("@/app/lib/pair-review") 
 // from every artifact this route collects (fixes, errors, attempt
 // history, gate results, before/after findings, regression tests).
 // Pure string composition.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { composePrBody } = require("@/app/lib/pr-composer") as {
   composePrBody: (opts: {
     fixes?: Array<{ file: string; original: string; fixed: string; issues: string[] }>;
@@ -111,7 +111,7 @@ const { composePrBody } = require("@/app/lib/pr-composer") as {
 };
 
 // Phase 1.3 — test generation per fix.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { generateTestsForFixes } = require("@/app/lib/test-generator") as {
   generateTestsForFixes: (opts: {
     fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -123,7 +123,7 @@ const { generateTestsForFixes } = require("@/app/lib/test-generator") as {
     summary: string;
   }>;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gate") as {
   validateFixesAgainstScanner: (opts: {
     fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -145,7 +145,7 @@ const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gat
 // Phase 1.2a — cross-fix syntax-validation gate. Sits between the
 // per-file iterative loop and PR creation. Catches Claude output that
 // passes shape + pattern checks but doesn't actually parse.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { validateFixesSyntax, summariseSyntaxGate } = require("@/app/lib/cross-fix-syntax-gate") as {
   validateFixesSyntax: (opts: {
     fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -155,7 +155,7 @@ const { validateFixesSyntax, summariseSyntaxGate } = require("@/app/lib/cross-fi
   };
   summariseSyntaxGate: (result: { accepted: unknown[]; rejected: unknown[] }) => string;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-attempt-loop") as {
   attemptFixWithRetries: (opts: {
     askClaude: (issues: string[]) => Promise<string>;
@@ -182,7 +182,7 @@ const { attemptFixWithRetries, summariseAttempts } = require("@/app/lib/fix-atte
   }>;
   summariseAttempts: (attempts: Array<{ outcome: string; durationMs: number }>) => string;
 };
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { mapWithAdaptiveConcurrency } = require("@/app/lib/adaptive-concurrency") as {
   mapWithAdaptiveConcurrency: <T, R>(
     items: T[],
@@ -645,7 +645,7 @@ export async function POST(req: NextRequest) {
   let nuclearEnrichmentSummary: string | undefined;
   if (input.tier === "nuclear") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const { shipDiagnosisAwareFix } = require("@/app/lib/diagnosis-enricher.js") as {
         shipDiagnosisAwareFix: (opts: {
           issues: IssueInput[];
@@ -915,7 +915,7 @@ export async function POST(req: NextRequest) {
       try {
         // Lazy import to avoid pulling the store into the hot path of
         // routes that never roll anything back.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+         
         const dissentStore = require("@/app/lib/dissent-store.js") as {
           DISSENT_KINDS: Record<string, string>;
           ensureDissentTable: (sql: unknown) => Promise<void>;
@@ -929,7 +929,7 @@ export async function POST(req: NextRequest) {
             fixPrNumber?: number | null;
           }) => Promise<{ id: number | null }>;
         };
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+         
         const { getDb } = require("@/app/lib/db") as { getDb: () => unknown };
         const sql = getDb();
         await dissentStore.ensureDissentTable(sql);
@@ -939,13 +939,21 @@ export async function POST(req: NextRequest) {
           // didn't preserve it), so we use the scanner-gate's reason
           // string as the module signal, prefixed so the operator
           // dashboard can tell rollback dissent apart from explicit FP.
-          await dissentStore.recordDissent({
-            sql,
-            repoUrl,
-            module: `scanner-gate:${(rb.reason || "regression").slice(0, 32)}`,
-            kind: dissentStore.DISSENT_KINDS.FIX_REJECTED,
-            notes: `${rb.file} — ${(rb.newFindings || []).slice(0, 3).join("; ")}`.slice(0, 500),
-          }).catch(() => null);
+          await dissentStore
+            .recordDissent({
+              sql,
+              repoUrl,
+              module: `scanner-gate:${(rb.reason || "regression").slice(0, 32)}`,
+              kind: dissentStore.DISSENT_KINDS.FIX_REJECTED,
+              notes: `${rb.file} — ${(rb.newFindings || []).slice(0, 3).join("; ")}`.slice(0, 500),
+            })
+            .catch((err: unknown) => {
+              console.error(
+                "[scan/fix] dissent recording failed (rollback still applied):",
+                err instanceof Error ? err.message : String(err),
+              );
+              return null;
+            });
         }
       } catch {
         // Brain unavailable — never block fix flow.
@@ -998,7 +1006,7 @@ export async function POST(req: NextRequest) {
   let strengthenedCount = 0;
   if (input.tier === "nuclear" && testGen.tests.length > 0) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const { strengthenRegressionTests } = require("@/app/lib/mutation-driven-test-strengthener.js") as {
         strengthenRegressionTests: (opts: {
           fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -1055,7 +1063,7 @@ export async function POST(req: NextRequest) {
   let propTestsWritten = 0;
   if (input.tier === "nuclear") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const { generatePropTestsForFixes } = require("@/app/lib/property-test-generator.js") as {
         generatePropTestsForFixes: (opts: {
           fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -1107,7 +1115,7 @@ export async function POST(req: NextRequest) {
   let benchmarksWritten = 0;
   if (input.tier === "nuclear") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const { generateBenchmarksForFixes } = require("@/app/lib/perf-benchmark-generator.js") as {
         generateBenchmarksForFixes: (opts: {
           fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
@@ -1155,7 +1163,7 @@ export async function POST(req: NextRequest) {
   let chaosTestsWritten = 0;
   if (input.tier === "nuclear") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const { generateChaosTestsForFixes } = require("@/app/lib/chaos-test-generator.js") as {
         generateChaosTestsForFixes: (opts: {
           fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;

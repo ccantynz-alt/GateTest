@@ -113,7 +113,7 @@ async function recordDissent(opts) {
     throw new Error(`recordDissent: kind must be one of ${Object.values(DISSENT_KINDS).join(', ')}`);
   }
   // Lazy import — avoids circular ref between dissent-store and scan-fingerprint-store.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   const reviewerHash = reviewer ? hashReviewer(reviewer) : null;
@@ -161,7 +161,7 @@ async function listDissentForRepo(opts) {
   const { sql, repoUrl, limit = 100 } = opts;
   if (typeof sql !== 'function') throw new Error('listDissentForRepo: sql is required');
   if (!repoUrl) throw new Error('listDissentForRepo: repoUrl is required');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { hashRepoUrl } = require('./scan-fingerprint-store.js');
   const repoUrlHash = hashRepoUrl(repoUrl);
   const rows = await sql`
