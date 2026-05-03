@@ -30,7 +30,7 @@
     "lint": "eslint src/ --ext .js",
     "precommit": "node src/hooks/pre-commit.js",
     "prepush": "node src/hooks/pre-push.js",
-    "prepublishOnly": "node bin/gatetest.js --list >/dev/null && node --test tests/*.test.js"
+    "prepublishOnly": "node scripts/prepublish-check.mjs"
   },
   "keywords": [
     "testing",
