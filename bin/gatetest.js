@@ -73,6 +73,11 @@ const HELP = `
     --monitor-heal     Auto-apply safe fixes (cache flush) when issues detected
     --flush <url>      Flush CDN cache: tries Vercel, Cloudflare, custom webhook, then gives manual steps
 
+    --repair <url>     Self-sufficient repair: clone → scan → patch → verify → push (no external API needed)
+    --repair-token <t> Git credential for clone + push (PAT, deploy token, etc.)
+    --repair-dry-run   Show what would be fixed without writing or pushing
+    --repair-suite <s> Which scan suite to run during repair (default: full)
+
   EXAMPLES
     gatetest                          Run standard checks
     gatetest --suite full             Run every single check
@@ -280,6 +285,55 @@ async function main() {
     }
   }
 
+  // Direct repair — self-sufficient clone → scan → patch → push
+  if (args.repair) {
+    const { DirectRepair } = require('../src/core/direct-repair');
+    const repoUrl = args.repair.startsWith('http') || args.repair.startsWith('git@')
+      ? args.repair : `https://github.com/${args.repair}`;
+    const token = args.repairToken || process.env.GATETEST_GITHUB_TOKEN || process.env.GLUECRON_API_TOKEN || '';
+    const engine = new DirectRepair({
+      dryRun: args.repairDryRun || false,
+      claudeFn: process.env.ANTHROPIC_API_KEY ? async (prompt) => {
+        const Anthropic = require('@anthropic-ai/sdk');
+        const client = new Anthropic.default({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const msg = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8192,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        return msg.content[0]?.text || null;
+      } : null,
+    });
+
+    console.log(`\n  GATETEST — Direct Repair`);
+    console.log(`  Repository : ${repoUrl}`);
+    console.log(`  Suite      : ${args.repairSuite || 'full'}`);
+    console.log(`  Dry run    : ${args.repairDryRun ? 'yes' : 'no'}`);
+    console.log(`  Claude     : ${process.env.ANTHROPIC_API_KEY ? 'available (novel patterns)' : 'not configured (builtin + cache only)'}\n`);
+
+    const report = await engine.repair(repoUrl, token, { suite: args.repairSuite || 'full' });
+
+    if (report.error) {
+      console.error(`  ERROR: ${report.error}`);
+      process.exit(1);
+    }
+
+    console.log(`  Findings   : ${report.findings.length}`);
+    console.log(`  Fixed      : ${report.fixes.length} (${report.cacheHits} cache hits, ${report.claudeCalls} Claude calls)`);
+    console.log(`  Skipped    : ${report.skipped.length}`);
+    if (report.committed) console.log(`  Committed  : ${report.commitSha} on branch ${report.branch}`);
+    if (report.pushed)    console.log(`  Pushed     : yes`);
+    console.log(`  Duration   : ${report.duration}s\n`);
+
+    if (report.fixes.length > 0) {
+      console.log('  Fixed issues:');
+      for (const f of report.fixes) {
+        console.log(`    [${f.strategy}] ${f.finding.module}: ${f.finding.detail.slice(0, 70)}`);
+      }
+    }
+    process.exit(report.fixes.length > 0 ? 0 : 1);
+  }
+
   // Continuous monitoring
   if (args.monitor) {
     const Monitor = require('../src/runtime/monitor');
@@ -386,6 +440,10 @@ function parseArgs(argv) {
     else if (arg === '--monitor' && argv[i + 1]) args.monitor = argv[++i];
     else if (arg === '--monitor-interval' && argv[i + 1]) args.monitorInterval = parseInt(argv[++i]);
     else if (arg === '--monitor-heal') args.monitorHeal = true;
+    else if (arg === '--repair' && argv[i + 1]) args.repair = argv[++i];
+    else if (arg === '--repair-token' && argv[i + 1]) args.repairToken = argv[++i];
+    else if (arg === '--repair-dry-run') args.repairDryRun = true;
+    else if (arg === '--repair-suite' && argv[i + 1]) args.repairSuite = argv[++i];
     else if (arg === '--flush' && argv[i + 1]) args.flush = argv[++i];
   }
   return args;
