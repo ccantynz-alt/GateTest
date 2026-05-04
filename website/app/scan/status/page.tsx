@@ -38,6 +38,11 @@ interface ScanResult {
   error?: string;
   canRetry?: boolean;
   fixableIssues?: FixableIssue[];
+  // Tier-aware coverage: customers see how many files were inspected
+  // out of the total source-file count in the repo.
+  totalSourceFiles?: number;
+  scannedFiles?: number;
+  filesSkippedForBudget?: number;
 }
 
 interface FixResult {
@@ -498,6 +503,28 @@ export default function ScanStatus() {
             </div>
           ))}
         </div>
+
+        {/* Honest coverage line — show how much of the customer's repo we
+            actually inspected. Surfaced inline so "did you scan everything?"
+            is answered without scrolling. */}
+        {isComplete && scanResult?.totalSourceFiles !== undefined && (
+          <div className="mb-4 px-4 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+            <span>
+              <span className="font-mono tabular-nums">{scanResult.scannedFiles ?? 0}</span>
+              {" / "}
+              <span className="font-mono tabular-nums">{scanResult.totalSourceFiles}</span>
+              {" source files inspected"}
+              {(scanResult.filesSkippedForBudget ?? 0) > 0 && (
+                <span className="text-amber-600">
+                  {" — "}{scanResult.filesSkippedForBudget} skipped (tier file budget)
+                </span>
+              )}
+            </span>
+            {(scanResult.filesSkippedForBudget ?? 0) > 0 && (
+              <span className="text-slate-500 italic">Upgrade tier for full coverage</span>
+            )}
+          </div>
+        )}
 
         {/* Completion section */}
         {isComplete && (
