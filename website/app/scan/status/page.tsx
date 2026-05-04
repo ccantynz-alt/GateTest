@@ -496,7 +496,7 @@ export default function ScanStatus() {
             {/* What's next — AI fix is the primary CTA */}
             {(scanResult?.totalIssues || 0) > 0 && (
               <div className="p-5 rounded-xl border border-border bg-white">
-                <h3 className="font-bold text-foreground mb-2">Or let GateTest fix it for you</h3>
+                <h2 className="font-bold text-foreground mb-2">Or let GateTest fix it for you</h2>
                 <p className="text-sm text-muted mb-4">
                   Skip the copy-paste — Claude reads each finding, generates the fix, re-validates against the scanner, writes a regression test, and opens a pull request on your repo. Included with every scan.
                 </p>
