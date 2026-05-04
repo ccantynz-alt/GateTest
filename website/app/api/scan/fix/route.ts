@@ -192,6 +192,41 @@ const { mapWithAdaptiveConcurrency } = require("@/app/lib/adaptive-concurrency")
   ) => Promise<R[]>;
 };
 
+// Phase 5.1.3 brain wire-up — every fix prompt enriched with cross-repo
+// prior-art ("X% of similar-stack repos had this finding; pattern Y worked
+// Z%"). Was Nuclear-tier-only at landing; now flows into the regular fix
+// loop so $99/$199 customers also benefit.
+const fingerprintLib = require("@/app/lib/scan-fingerprint") as {
+  extractFingerprint: (opts: {
+    modules?: unknown[];
+    dependencies?: Record<string, unknown>;
+    files?: string[];
+    fixes?: unknown[];
+    fixErrors?: string[];
+    tier?: string;
+    durationMs?: number | null;
+  }) => { fingerprintSignature: string; frameworkVersions: Record<string, string> };
+};
+const fingerprintStore = require("@/app/lib/scan-fingerprint-store") as {
+  hashRepoUrl: (repoUrl: string) => string;
+  findSimilarFingerprints: (opts: {
+    sql: unknown;
+    fingerprintSignature: string;
+    frameworkVersions?: Record<string, string>;
+    excludeRepoUrlHash?: string | null;
+    limit?: number;
+  }) => Promise<unknown[]>;
+};
+const crossRepoLookup = require("@/app/lib/cross-repo-lookup") as {
+  fetchPriorArt: (opts: {
+    fingerprint: { fingerprintSignature: string; frameworkVersions?: Record<string, string> };
+    repoUrlHash: string;
+    findSimilarFingerprints: unknown;
+    sql: unknown;
+    limit?: number;
+  }) => Promise<{ context: string; sampleSize: number } | null>;
+};
+
 // Default attempt ceiling — set higher than the old hardcoded "1+1 retry"
 // so the loop has room to learn from its own mistakes. Configurable via
 // GATETEST_FIX_MAX_ATTEMPTS env var if a deployment wants tighter cost
@@ -312,7 +347,7 @@ async function anthropicCallWithRetry(body: string, maxAttempts = 6): Promise<{ 
     : new Error(`Anthropic API unreachable after ${maxAttempts} attempts`);
 }
 
-async function askClaude(fileContent: string, filePath: string, issues: string[]): Promise<string> {
+async function askClaude(fileContent: string, filePath: string, issues: string[], priorArtContext: string | null = null): Promise<string> {
   // Enrich broken-link issues with context about what actually exists
   const enrichedIssues = await Promise.all(issues.map(async (issue) => {
     const brokenMatch = issue.match(/BROKEN LINK \(404\):\s*(https:\/\/github\.com\/([^/]+)\/([^/]+)\/([^\s]+))/i);
@@ -339,6 +374,21 @@ async function askClaude(fileContent: string, filePath: string, issues: string[]
     return issue;
   }));
 
+  // Brain context — injected before the rules section so Claude can use
+  // it as background but not as a copy-paste source. The cross-repo
+  // intelligence module formats this as "X repos with similar stack
+  // showed pattern Y" so Claude knows what's COMMON for this stack and
+  // avoids the inferior fixes that other repos tried first.
+  const priorArtBlock = priorArtContext
+    ? `\nCROSS-REPO CONTEXT (informational only — do not copy patterns; use to prioritise + sanity-check your fix):\n${priorArtContext}\n`
+    : "";
+
+  const batchHint = enrichedIssues.length > 1
+    ? `
+
+BATCH CONTEXT: ${enrichedIssues.length} issues in this single file. Read them ALL before you start writing. Some fixes interact — e.g. an unused-import fix may collide with a missing-import fix on the same line, or two fixes may both need to touch the same function signature. Plan the combined fix once, then write the file once. Do NOT fix issue 1, then issue 2, then issue 3 in isolation — that produces inconsistent state.`
+    : "";
+
   const prompt = `You are an expert code fixer for GateTest, an AI-powered QA platform with 90 scanning modules.
 
 Fix ALL of the following issues in this file. Every fix must pass GateTest's re-scan.
@@ -346,7 +396,8 @@ Fix ALL of the following issues in this file. Every fix must pass GateTest's re-
 FILE: ${filePath}
 ISSUES TO FIX:
 ${enrichedIssues.map((i, idx) => `${idx + 1}. ${i}`).join("\n")}
-
+${batchHint}
+${priorArtBlock}
 CURRENT CODE:
 \`\`\`
 ${fileContent}
@@ -648,6 +699,51 @@ export async function POST(req: NextRequest) {
   const token = auth.token;
   const authSource = auth.source;
 
+  // ── Brain wire-up ──────────────────────────────────────────────
+  // Best-effort cross-repo intelligence. Fetch package.json so we can
+  // build a fingerprint, look up prior-art from the brain, and pass the
+  // resulting context string through to every askClaude call. Failures
+  // here NEVER block the fix loop — empty priorArt = behaviour identical
+  // to before this commit.
+  let priorArtContext: string | null = null;
+  let brainSampleSize = 0;
+  try {
+    // Read package.json (best-effort, single file) for framework versions.
+    let dependencies: Record<string, unknown> = {};
+    try {
+      const pkgRaw = await fetchBlob(owner, repo, "package.json", "", token);
+      if (pkgRaw) {
+        const pkg = JSON.parse(pkgRaw);
+        dependencies = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      }
+    } catch {
+      // No package.json — non-JS project. Brain will fingerprint on
+      // language-mix only (still useful).
+    }
+    const fingerprint = fingerprintLib.extractFingerprint({
+      dependencies,
+      files: issues.map((i) => i.file).filter((f): f is string => Boolean(f)),
+      tier: input.tier || "full",
+    });
+    const repoUrlHash = fingerprintStore.hashRepoUrl(repoUrl);
+    // SQL connection comes from the same db helper the brain already uses.
+    const { getDb } = require("@/app/lib/db") as { getDb: () => unknown };
+    const sql = getDb();
+    const priorArt = await crossRepoLookup.fetchPriorArt({
+      fingerprint,
+      repoUrlHash,
+      findSimilarFingerprints: fingerprintStore.findSimilarFingerprints,
+      sql,
+      limit: 10,
+    });
+    if (priorArt && priorArt.context) {
+      priorArtContext = priorArt.context;
+      brainSampleSize = priorArt.sampleSize;
+    }
+  } catch {
+    // Brain unavailable — fall through with priorArtContext = null.
+  }
+
   // Phase Nuclear-coupling — when tier=nuclear, diagnose every issue
   // FIRST and enrich the issue text with the diagnoser's rootCause +
   // recommendation BEFORE feeding it into the per-file fix loop. This
@@ -781,7 +877,7 @@ export async function POST(req: NextRequest) {
       // feedback about what was introduced. On total failure, all attempts
       // are surfaced in the response so the UI can show the full trail.
       const loopResult = await attemptFixWithRetries({
-        askClaude: (currentIssues: string[]) => askClaude(originalContent, filePath, currentIssues),
+        askClaude: (currentIssues: string[]) => askClaude(originalContent, filePath, currentIssues, priorArtContext),
         validateFix,
         verifyFixQuality,
         originalContent,
@@ -1434,6 +1530,9 @@ export async function POST(req: NextRequest) {
       nuclearEnrichment: nuclearEnrichmentSummary
         ? { summary: nuclearEnrichmentSummary }
         : { skipped: true, reason: "tier is not nuclear — enrichment is a $399-tier value-add" },
+      brain: priorArtContext
+        ? { used: true, sampleSize: brainSampleSize, summary: `Fix prompts enriched with cross-repo intelligence from ${brainSampleSize} similar-stack scans.` }
+        : { used: false, reason: "no similar-stack scans available yet (brain populates as more customers run scans)" },
       attemptHistory: attemptHistoryByFile,
     });
   } catch (err) {
