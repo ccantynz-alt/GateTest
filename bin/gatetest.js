@@ -78,6 +78,11 @@ const HELP = `
     --repair-dry-run   Show what would be fixed without writing or pushing
     --repair-suite <s> Which scan suite to run during repair (default: full)
 
+    --prune-prs <owner/repo>  Delete stale GateTest/Claude branches + close abandoned PRs
+    --prune-pattern <prefix>  Branch prefix to match (default: "gatetest/,claude/")
+    --prune-dry-run           Show what would be deleted without actually deleting
+    --prune-stale-days <n>    Age threshold in days before a branch is considered stale (default: 7)
+
   EXAMPLES
     gatetest                          Run standard checks
     gatetest --suite full             Run every single check
@@ -286,6 +291,54 @@ async function main() {
   }
 
   // Direct repair — self-sufficient clone → scan → patch → push
+  // PR + branch pruner
+  if (args.prunePrs) {
+    const { PrPruner } = require('../src/core/pr-pruner');
+    const [owner, repo] = args.prunePrs.includes('/') ? args.prunePrs.split('/') : [args.prunePrs, null];
+    if (!owner || !repo) {
+      console.error('  Usage: gatetest --prune-prs <owner/repo>');
+      process.exit(1);
+    }
+    const patterns = args.prunePattern ? args.prunePattern.split(',') : ['gatetest/', 'claude/'];
+    const pruner = new PrPruner({
+      token: process.env.GATETEST_GITHUB_TOKEN || process.env.GITHUB_TOKEN,
+      patterns,
+      dryRun: args.pruneDryRun || false,
+      staleDays: args.pruneStale || 7,
+    });
+
+    console.log(`\n  GATETEST — PR + Branch Pruner`);
+    console.log(`  Repository : ${owner}/${repo}`);
+    console.log(`  Patterns   : ${patterns.join(', ')}`);
+    console.log(`  Stale days : ${args.pruneStale || 7}`);
+    console.log(`  Dry run    : ${args.pruneDryRun ? 'yes (nothing will be deleted)' : 'no'}\n`);
+
+    const report = await pruner.prune(owner, repo);
+
+    console.log(`  Scanned    : ${report.scanned} matching branches`);
+    if (report.closedPRs.length > 0) {
+      console.log(`  Closed PRs : ${report.closedPRs.map(p => `#${p.number}${p.dryRun ? ' (dry)' : ''}`).join(', ')}`);
+    }
+    if (report.deletedBranches.length > 0) {
+      console.log(`  Deleted    : ${report.deletedBranches.length} branches`);
+      for (const b of report.deletedBranches) {
+        console.log(`    ${b.dryRun ? '[dry] ' : ''}${b.branch}  (${b.reason})`);
+      }
+    }
+    if (report.skipped.length > 0) {
+      console.log(`  Skipped    : ${report.skipped.length} (too new or active)`);
+    }
+    if (report.errors.length > 0) {
+      console.log(`  Errors     :`);
+      for (const e of report.errors) console.log(`    ${e.branch}: ${e.error}`);
+    }
+    if (report.deletedBranches.length === 0 && report.closedPRs.length === 0) {
+      console.log(`  Nothing to clean up.`);
+    }
+    console.log();
+    process.exit(report.errors.length > 0 ? 1 : 0);
+  }
+
   if (args.repair) {
     const { DirectRepair } = require('../src/core/direct-repair');
     const repoUrl = args.repair.startsWith('http') || args.repair.startsWith('git@')
@@ -444,6 +497,10 @@ function parseArgs(argv) {
     else if (arg === '--repair-token' && argv[i + 1]) args.repairToken = argv[++i];
     else if (arg === '--repair-dry-run') args.repairDryRun = true;
     else if (arg === '--repair-suite' && argv[i + 1]) args.repairSuite = argv[++i];
+    else if (arg === '--prune-prs' && argv[i + 1]) args.prunePrs = argv[++i];
+    else if (arg === '--prune-pattern' && argv[i + 1]) args.prunePattern = argv[++i];
+    else if (arg === '--prune-dry-run') args.pruneDryRun = true;
+    else if (arg === '--prune-stale-days' && argv[i + 1]) args.pruneStale = parseInt(argv[++i]);
     else if (arg === '--flush' && argv[i + 1]) args.flush = argv[++i];
   }
   return args;
