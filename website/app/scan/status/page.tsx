@@ -88,6 +88,8 @@ export default function ScanStatus() {
   const [animIndex, setAnimIndex] = useState(0);
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState<FixResult | null>(null);
+  // Live progress from /api/scan/fix/stream — null when not streaming.
+  const [fixProgress, setFixProgress] = useState<{ elapsedMs: number; elapsedHuman: string } | null>(null);
   const [fixError, setFixError] = useState("");
   const startTimeRef = useRef(Date.now());
   const scanTriggered = useRef(false);
@@ -238,18 +240,74 @@ export default function ScanStatus() {
     setFixing(true);
     setFixResult(null);
     setFixError("");
+    setFixProgress({ elapsedMs: 0, elapsedHuman: "0s" });
+
     try {
-      const res = await fetch("/api/scan/fix", {
+      // Streaming endpoint — emits started/heartbeat/done/error events
+      // so the UI can show live elapsed time instead of staring at a
+      // blank spinner. Falls back to the plain JSON endpoint if the
+      // stream errors before producing a `done` event.
+      const res = await fetch("/api/scan/fix/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier || "full" }),
       });
-      const data = await res.json() as FixResult;
-      setFixResult(data);
+      if (!res.ok || !res.body) {
+        throw new Error(`Fix stream failed: ${res.status} ${res.statusText}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalEvent: FixResult | null = null;
+      let streamError: string | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sep = buffer.indexOf("\n\n");
+        while (sep >= 0) {
+          const block = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          let eventName = "message";
+          const dataLines: string[] = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+          }
+          if (dataLines.length > 0) {
+            let parsed: unknown;
+            try { parsed = JSON.parse(dataLines.join("\n")); } catch { parsed = dataLines.join("\n"); }
+            if (eventName === "heartbeat" && parsed && typeof parsed === "object") {
+              const h = parsed as { elapsedMs?: number; elapsedHuman?: string };
+              setFixProgress({
+                elapsedMs: h.elapsedMs ?? 0,
+                elapsedHuman: h.elapsedHuman ?? "",
+              });
+            } else if (eventName === "done") {
+              finalEvent = parsed as FixResult;
+            } else if (eventName === "error" && parsed && typeof parsed === "object") {
+              streamError = (parsed as { message?: string }).message ?? "Fix stream errored";
+            }
+          }
+          sep = buffer.indexOf("\n\n");
+        }
+      }
+
+      if (streamError && !finalEvent) {
+        setFixError(streamError);
+      } else if (finalEvent) {
+        setFixResult(finalEvent);
+      } else {
+        setFixError("Fix stream closed without a final result.");
+      }
     } catch (err) {
       setFixError(err instanceof Error ? err.message : "Fix failed");
     } finally {
       setFixing(false);
+      setFixProgress(null);
     }
   }
 
@@ -519,10 +577,22 @@ export default function ScanStatus() {
                 {fixing && (
                   <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
                     <span className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">Claude is reading your code and generating fixes…</p>
-                      <p className="text-xs text-amber-700 mt-0.5">Typically 30&ndash;90 seconds. Each fix is re-scanned before commit.</p>
-
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-800">
+                        Claude is reading your code and generating fixes
+                        {fixProgress && fixProgress.elapsedHuman ? (
+                          <>
+                            <span className="text-amber-700"> · </span>
+                            <span className="font-mono tabular-nums text-amber-900">{fixProgress.elapsedHuman}</span>
+                            <span className="text-amber-700 text-xs"> elapsed</span>
+                          </>
+                        ) : (
+                          <>…</>
+                        )}
+                      </p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Typically 30&ndash;90 seconds. Each fix is re-scanned before commit. Heartbeat every 5 seconds confirms the connection is live.
+                      </p>
                     </div>
                   </div>
                 )}
