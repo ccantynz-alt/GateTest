@@ -371,7 +371,14 @@ CRITICAL RULES — violations will cause re-scan failure:
 
   const body = JSON.stringify({
     model: "claude-sonnet-4-6",
-    max_tokens: 8192,
+    // 32K output budget. Claude Sonnet 4.6 supports up to 64K. The
+    // previous 8192 cap silently truncated fixes on files >150KB
+    // (the model would return well-formed code right up to the limit
+    // then get cut). 32K + the validateClaudeOutput truncation
+    // detector (rejects fixes <40% of original length) handles big
+    // React components, generated SQL migrations, and verbose Vue
+    // single-file components without surprise.
+    max_tokens: 32768,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -472,8 +479,15 @@ function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; ne
 const FIX_CONCURRENCY = 4;
 const FIX_CONCURRENCY_MAX = 8;
 const FIX_RAMP_AFTER_SUCCESSES = 3;
-// Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
-const MAX_FILE_BYTES = 400 * 1024;
+// Max file size we'll send to Claude. Sized against the 32K-token output
+// budget: at ~0.4 tokens/char of source, 32K tokens ≈ 80KB of output.
+// 600KB input gives the model headroom for files where the fixed version
+// shrinks (removed lines, refactored extracts). Larger inputs WILL get
+// truncated; the validateFix() truncation detector + retry loop catch
+// those, so this cap is "we'll TRY up to 600KB" not "we GUARANTEE 600KB".
+// Files reliably bigger than this need the Phase 5.4 multi-file refactor
+// pipeline (chunks the file, fixes per-chunk, stitches back).
+const MAX_FILE_BYTES = 600 * 1024;
 
 /**
  * Ask Claude to generate a NEW file (when it doesn't exist yet).
