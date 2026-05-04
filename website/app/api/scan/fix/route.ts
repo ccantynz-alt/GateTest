@@ -188,6 +188,7 @@ const { mapWithAdaptiveConcurrency } = require("@/app/lib/adaptive-concurrency")
     items: T[],
     initialLimit: number,
     fn: (item: T, state: AdaptiveState) => Promise<R>,
+    opts?: { rampAfterSuccesses?: number; maxConcurrency?: number },
   ) => Promise<R[]>;
 };
 
@@ -464,10 +465,13 @@ function verifyFixQuality(fixed: string, filePath: string): { clean: boolean; ne
 }
 
 // Concurrency cap for parallel file fixing — balances Vercel time budget vs API rate.
-// Dropped from 4 → 2 after prod hit cascading EPROTO / TLS alert 80 failures under
-// heavy undici keep-alive pressure. Two parallel requests + keepalive:false on each
-// keeps fresh sockets without pool-poisoning a whole batch when one goes bad.
-const FIX_CONCURRENCY = 2;
+// History: 4 → 2 (2026-04, EPROTO/TLS-alert cascading failures), then back up to
+// 4 (2026-05, after the adaptive ramp-up safety net landed in fa2f7ed). The
+// adaptive helper ramps 4 → 8 on sustained success and drops to 1 on network
+// errors, so we get the throughput when prod is healthy + safety when it's not.
+const FIX_CONCURRENCY = 4;
+const FIX_CONCURRENCY_MAX = 8;
+const FIX_RAMP_AFTER_SUCCESSES = 3;
 // Max file size we'll send to Claude (bigger risks output truncation at 8192 tokens).
 const MAX_FILE_BYTES = 400 * 1024;
 
@@ -822,7 +826,7 @@ export async function POST(req: NextRequest) {
         errors.push(`Failed to fix ${filePath}: ${raw}`);
       }
     }
-  });
+  }, { rampAfterSuccesses: FIX_RAMP_AFTER_SUCCESSES, maxConcurrency: FIX_CONCURRENCY_MAX });
 
   if (skippedForBudget > 0) {
     errors.push(`Skipped ${skippedForBudget} file${skippedForBudget > 1 ? "s" : ""} — function time budget exhausted. Re-run fix to process the remainder.`);
