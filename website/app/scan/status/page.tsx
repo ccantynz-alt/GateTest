@@ -570,7 +570,7 @@ export default function ScanStatus() {
                       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
                       <button
                         className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-white/[0.03] transition-colors"
-                        onClick={() => setExpandedModules((s) => { const n = new Set(s); n.has(mod.name) ? n.delete(mod.name) : n.add(mod.name); return n; })}>
+                        onClick={() => setExpandedModules((s) => { const n = new Set(s); if (n.has(mod.name)) { n.delete(mod.name); } else { n.add(mod.name); } return n; })}>
                         <div className="flex items-center gap-3">
                           <span className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold shrink-0"
                             style={{ background: "rgba(239,68,68,0.15)", color: "#f87171" }}>!</span>

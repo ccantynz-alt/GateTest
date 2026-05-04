@@ -26,7 +26,7 @@ const fs      = require('fs');
 const path    = require('path');
 const os      = require('os');
 const crypto  = require('crypto');
-const { execSync, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
 // ─── pattern cache (in-process; persisted to disk if cacheDir is set) ──────
 

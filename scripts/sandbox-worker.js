@@ -59,7 +59,9 @@ async function loop() {
     try {
       const r = await fetch(`${BASE_URL}/api/health`);
       if (r.ok) ready = true;
-    } catch {}
+    } catch (err) {
+      process.stderr.write(`[worker] health check attempt ${i + 1}: ${err.message}\n`);
+    }
     if (!ready) await new Promise(r => setTimeout(r, 2000));
   }
   if (!ready) {
@@ -69,7 +71,7 @@ async function loop() {
   process.stdout.write(`[worker] app healthy — beginning tick loop\n`);
 
   // Every 30 seconds check if any scheduled tick is due
-  setInterval(async () => {
+  const interval = setInterval(async () => {
     scanTick++;
     watchTick++;
 
@@ -91,6 +93,10 @@ async function loop() {
       await tick('/api/admin/learning/cron');
     }
   }, 30_000);
+
+  // Keep interval reference alive (prevents resource-leak warning)
+  process.on('SIGTERM', () => { clearInterval(interval); process.exit(0); });
+  process.on('SIGINT',  () => { clearInterval(interval); process.exit(0); });
 }
 
 loop().catch(err => {
