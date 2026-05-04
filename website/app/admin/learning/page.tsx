@@ -347,7 +347,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   return (
     <div className="rounded-2xl border border-border bg-white overflow-hidden">
       <div className="px-5 py-3 border-b border-border bg-background-alt">
-        <h3 className="text-sm font-bold text-foreground">{title}</h3>
+        <h2 className="text-sm font-bold text-foreground">{title}</h2>
       </div>
       <div className="p-5">{children}</div>
     </div>

@@ -67,10 +67,12 @@ jobs:
           retention-days: 30
 
   gatetest-full:
-    name: GateTest Full Scan (Push to main)
+    name: GateTest Full Scan
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Runs on EVERY PR and EVERY push to main. Catches red BEFORE it
+    # lands on main — the gatetest-quick job above is a fast-feedback
+    # signal; this is the actual wall.
     permissions:
       security-events: write
       contents: read

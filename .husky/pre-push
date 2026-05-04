@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ============================================================================
+# GATETEST SELF-PROTECTION — PRE-PUSH HOOK
+# ============================================================================
+# Runs the gate locally before every `git push`. If the gate fails, the
+# push is rejected — red code can't reach origin. Bible Forbidden #24
+# guarantee enforced here, before CI.
+#
+# To bypass for emergencies: `git push --no-verify` (use sparingly; the
+# CI gate will catch it on the other side either way).
+# ============================================================================
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "[GateTest] Running self-gate before push ..."
+node bin/gatetest.js --suite quick

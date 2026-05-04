@@ -136,6 +136,7 @@ export default function IntelligenceDashboard() {
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
+            aria-label="Repository URL"
             className="flex-1 px-4 py-2 rounded-lg border border-border bg-white text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
           />
           <button
@@ -217,7 +218,7 @@ export default function IntelligenceDashboard() {
                   rows={Object.entries(data.myLatestFingerprint.frameworkVersions).map(([k, v]) => [k, String(v)])}
                   emptyText="No frameworks detected — scan ran on a non-JS/Python codebase or package manifest was missing."
                 />
-                <h4 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted mb-2">Language mix</h4>
+                <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted mb-2">Language mix</h3>
                 <div className="space-y-1">
                   {Object.entries(data.myLatestFingerprint.languageMix)
                     .sort((a, b) => Number(b[1]) - Number(a[1]))

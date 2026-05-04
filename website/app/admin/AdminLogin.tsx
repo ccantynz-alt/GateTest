@@ -88,6 +88,7 @@ export default function AdminLogin({
                 if (e.key === "Enter") login();
               }}
               placeholder="Enter admin password"
+              aria-label="Admin password"
               className="w-full px-4 py-3 rounded-xl border border-border bg-surface-solid text-foreground text-sm mb-3"
               autoFocus
             />

@@ -22,6 +22,18 @@ export default function CountUp({ value, duration = 1600, className = "" }: Coun
     if (!ref.current || isNaN(target) || animated) {
       return;
     }
+    // Honour OS-level "reduced motion" preference: skip the count-up
+    // animation entirely and show the final value. WCAG 2.3.3 + the
+    // a11y:reduced-motion rule.
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setDisplay(value);
+      setAnimated(true);
+      return;
+    }
     const node = ref.current;
     const observer = new IntersectionObserver(
       (entries) => {

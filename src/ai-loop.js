@@ -42,7 +42,7 @@ async function main() {
   console.log('');
   console.log('='.repeat(60));
   console.log('  GATETEST AI LOOP');
-  console.log('  Scanning: ' - url);
+  console.log('  Scanning: ' + url);
   console.log('='.repeat(60));
   console.log('');
 
