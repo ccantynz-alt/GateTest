@@ -873,22 +873,34 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Phase 1.2b — cross-file scanner re-validation. Only runs when the
-  // caller supplied the original workspace + findings. Without that
-  // baseline we can't tell which findings are NEW vs pre-existing, so
-  // skip silently — per-file iterative loop + syntax gate still ran.
+  // Phase 1.2b — cross-file scanner re-validation. Now self-populates
+  // originalFileContents from the fix loop's captured pre-fix content when
+  // the caller didn't pass it explicitly. The fix loop already fetched each
+  // file's original content (stored in fix.original), so we reuse that
+  // rather than making a second round-trip. This activates the gate for
+  // ALL tiers that have successful fixes, not just callers that pre-fetch
+  // the whole workspace. Coverage is limited to fixed files only (cross-file
+  // regressions involving unfixed files won't be caught), but that's
+  // far better than the prior state of always skipping the gate.
+  const effectiveOriginalFileContents =
+    Array.isArray(input.originalFileContents) && input.originalFileContents.length > 0
+      ? input.originalFileContents
+      : fixes
+          .filter((f) => typeof f.original === "string" && f.original.length > 0)
+          .map((f) => ({ path: f.file, content: f.original }));
+
   let scannerGateSummary: string | undefined;
   let scannerGateRolledBack: Array<{ file: string; reason: string; newFindings: string[] }> = [];
   let postFixFindingsByModule: Record<string, string[]> | undefined;
   if (
-    Array.isArray(input.originalFileContents) &&
-    input.originalFileContents.length > 0 &&
+    effectiveOriginalFileContents.length > 0 &&
     input.originalFindingsByModule &&
-    typeof input.originalFindingsByModule === "object"
+    typeof input.originalFindingsByModule === "object" &&
+    Object.keys(input.originalFindingsByModule).length > 0
   ) {
     const scannerGate = await validateFixesAgainstScanner({
       fixes,
-      originalFileContents: input.originalFileContents,
+      originalFileContents: effectiveOriginalFileContents,
       originalFindingsByModule: input.originalFindingsByModule,
       runTier,
       owner,
@@ -1393,7 +1405,7 @@ export async function POST(req: NextRequest) {
       syntaxGate: { accepted: syntaxGate.accepted.length, rejected: syntaxGate.rejected.length, summary: syntaxGateSummary },
       scannerGate: scannerGateSummary
         ? { rolledBack: scannerGateRolledBack, summary: scannerGateSummary }
-        : { skipped: true, reason: "caller did not pass originalFileContents + originalFindingsByModule" },
+        : { skipped: true, reason: "no successful fixes with original content, or originalFindingsByModule not provided" },
       testGeneration: { testsWritten: testGen.tests.length, skipped: testGen.skipped, summary: testGenSummary },
       propertyTestGeneration: propTestSummary
         ? { testsWritten: propTestsWritten, summary: propTestSummary }

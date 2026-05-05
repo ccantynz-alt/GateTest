@@ -32,6 +32,9 @@ interface ScanResult {
   error?: string;
   canRetry?: boolean;
   fixableIssues?: FixableIssue[];
+  // Phase 1.2b: per-module findings map returned by /api/scan/run so
+  // the fix API can run the cross-scanner re-validation gate.
+  findingsByModule?: Record<string, string[]>;
 }
 
 interface FixResult {
@@ -323,7 +326,15 @@ export default function ScanStatus() {
       const res = await fetch("/api/scan/fix", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: params.repo, issues, tier: params.tier || "full" }),
+        body: JSON.stringify({
+          repoUrl: params.repo,
+          issues,
+          tier: params.tier || "full",
+          // Phase 1.2b: pass the pre-fix findings baseline so the fix API
+          // can run the cross-scanner re-validation gate. The gate diffs
+          // post-fix findings against this to detect new regressions.
+          originalFindingsByModule: scanResult?.findingsByModule || {},
+        }),
       });
       const data = await res.json() as FixResult;
       setFixResult(data);
