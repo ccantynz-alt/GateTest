@@ -23,9 +23,13 @@ const ALLOWED_FIX_MODELS = Object.freeze({
     label: 'Sonnet 5 (default — fast, cheapest)',
     aliases: Object.freeze(['sonnet', 'sonnet-5']),
   },
+  'claude-opus-5': {
+    label: 'Opus 5 (deeper reasoning, half Fable cost)',
+    aliases: Object.freeze(['opus', 'opus-5']),
+  },
   'claude-opus-4-8': {
-    label: 'Opus 4.8 (deeper reasoning)',
-    aliases: Object.freeze(['opus', 'opus-4-8', 'opus-4.8']),
+    label: 'Opus 4.8 (previous-generation Opus)',
+    aliases: Object.freeze(['opus-4-8', 'opus-4.8']),
   },
   'claude-fable-5': {
     label: 'Fable 5 (most capable, ~3.3x Sonnet cost)',

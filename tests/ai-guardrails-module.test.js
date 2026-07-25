@@ -58,6 +58,15 @@ function stopTestServer(server) {
   return new Promise((resolve) => server.close(() => setImmediate(resolve)));
 }
 
+// Yield long enough for libuv to finish closing socket handles left behind by
+// failed/keep-alive connections. See the call site in the unreachable-endpoint
+// test for why this is needed (Known Issue #42).
+function settleOpenHandles(ms = 150) {
+  // Deliberately NOT unref'd — the whole point is to hold the event loop open
+  // until the closing handles are gone.
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ============================================================
 // Shape + no-op behaviour
 // ============================================================
@@ -175,6 +184,16 @@ test('module: unreachable endpoint surfaces probe-error checks but does not cras
   assert.ok(errors.length >= 1, 'should report probe errors');
   // Summary still fires.
   assert.ok(result.checks.some((c) => c.id === 'ai-guardrails:summary'));
+
+  // Known Issue #42: this test fires every jailbreak scenario at a
+  // connection-refused port. The probe promises reject as soon as the connect
+  // fails, but each failed TCP connect leaves a socket handle that libuv is
+  // still closing. --test-force-exit then calls process.exit() mid-teardown,
+  // which on Windows trips
+  //   "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" in src/win/async.c
+  // and fails the whole FILE even though every subtest passed. Yielding here
+  // lets those handles finish closing before the runner exits.
+  await settleOpenHandles();
 });
 
 // ============================================================

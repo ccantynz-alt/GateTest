@@ -868,9 +868,9 @@ async function runFixApply(argv, rootDir) {
     --project <path>      Project root (default: cwd)
     --dry-run             Show what would be fixed without writing any files
     --model <name>        Claude model for the fix engine. One of:
-                            sonnet (claude-sonnet-5, default)
-                            opus   (claude-opus-4-8)
-                            fable  (claude-fable-5, most capable, ~3.3x Sonnet cost)
+${Object.entries(ALLOWED_FIX_MODELS)
+    .map(([id, m]) => `                            ${m.aliases[0].padEnd(6)} (${id})${id === CHEAP_MODEL ? ' [default]' : ''}`)
+    .join('\n')}
                           Env fallback: GATETEST_FIX_MODEL.
 
   REQUIRES

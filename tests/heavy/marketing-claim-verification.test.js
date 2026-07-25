@@ -61,7 +61,7 @@ describe('marketing claim — module count', () => {
 // ---------------------------------------------------------------------------
 
 describe('marketing claim — hybrid engine models', () => {
-  it('no source file references a LEGACY claude model (current: fable-5, sonnet-4-6, opus-4-8, haiku-4-5)', () => {
+  it('no source file references a LEGACY claude model (current: fable-5, sonnet-5, opus-5, opus-4-8, haiku-4-5)', () => {
     // Walk JS/TS/TSX/yml under tracked dirs and assert clean.
     const found = [];
     function walk(dir) {
@@ -75,6 +75,12 @@ describe('marketing claim — hybrid engine models', () => {
           const body = fs.readFileSync(full, 'utf8');
           // Allow the verification test itself to mention legacy IDs (it asserts they're gone)
           if (full.endsWith('marketing-claim-verification.test.js')) continue;
+          // prompt-safety.js is the module whose JOB is detecting deprecated /
+          // retired models in a CUSTOMER's repo, so its MODEL_LIFECYCLE table
+          // must name every legacy id. Those references are the product working,
+          // not the engine running a stale model. Its own test file mirrors them.
+          if (full.endsWith(path.join('src', 'modules', 'prompt-safety.js'))) continue;
+          if (full.endsWith(path.join('tests', 'prompt-safety.test.js'))) continue;
           // Banned: older Opus (4-5/4-6/4-7 + dated), older Sonnets (4-5/4-7 + dated),
           // dated Haikus. Opus 4.8 is ALLOWED (the Fable refusal fallback); Fable 5,
           // Sonnet 4.6, and non-dated Haiku 4.5 are the current engine models.

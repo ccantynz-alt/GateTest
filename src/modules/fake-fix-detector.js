@@ -25,7 +25,13 @@ const https = require('https');
 
 const ANTHROPIC_API_HOST = 'api.anthropic.com';
 const MODEL_SONNET = 'claude-sonnet-5';
-const MODEL_HAIKU = 'claude-sonnet-5';
+// The cheap model the cost ledger downgrades to at 80% of the ceiling. This
+// MUST stay a genuinely different (and cheaper) model from MODEL_SONNET: a
+// prior model upgrade set both to the same id, which silently (a) collapsed
+// MODEL_PRICING to one entry so Sonnet was billed at Haiku's rate — a 3.75x
+// under-count of real spend against the ceiling — and (b) turned the 80%
+// downgrade into a no-op. Never point these two at the same model.
+const MODEL_HAIKU = 'claude-haiku-4-5';
 const MAX_DIFF_SIZE = 120000; // 120KB — cap the payload sent to AI
 const AI_TIMEOUT_MS = 60000;
 
@@ -54,8 +60,15 @@ const DEFAULT_CEILING_USD = 3.0;
 // Anthropic pricing changes. Both figures cover input AND output.
 const MODEL_PRICING = {
   [MODEL_SONNET]: { inputPerMTok: 3.0, outputPerMTok: 15.0 },
-  [MODEL_HAIKU]: { inputPerMTok: 0.8, outputPerMTok: 4.0 },
+  [MODEL_HAIKU]: { inputPerMTok: 1.0, outputPerMTok: 5.0 },
 };
+
+// Fail-safe: an unrecognised model id is almost always a NEWER, pricier one,
+// so price it at the most expensive rate we know rather than the cheapest.
+const MAX_KNOWN_PRICING = Object.values(MODEL_PRICING).reduce(
+  (worst, rate) => (rate.outputPerMTok > worst.outputPerMTok ? rate : worst),
+  MODEL_PRICING[MODEL_SONNET]
+);
 
 const DOWNGRADE_RATIO = 0.8;  // 80% → switch to Haiku
 const HARD_STOP_RATIO = 0.95; // 95% → stop calling Claude
@@ -72,7 +85,7 @@ function estimateTokens(text) {
 }
 
 function estimateCostUsd(model, inputTokens, outputTokens) {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING[MODEL_SONNET];
+  const pricing = MODEL_PRICING[model] || MAX_KNOWN_PRICING;
   return (
     (inputTokens / 1_000_000) * pricing.inputPerMTok +
     (outputTokens / 1_000_000) * pricing.outputPerMTok
@@ -816,5 +829,11 @@ module.exports = FakeFixDetectorModule;
 // Exported for testing and external consumers
 module.exports.PATTERN_RULES = PATTERN_RULES;
 module.exports.COST_CEILING_USD = COST_CEILING_USD;
+// Exported for the regression test that guards against a model rename
+// collapsing the two tiers into one (see MODEL_HAIKU's comment).
+module.exports.MODEL_SONNET = MODEL_SONNET;
+module.exports.MODEL_HAIKU = MODEL_HAIKU;
+module.exports.MODEL_PRICING = MODEL_PRICING;
+module.exports.estimateCostUsd = estimateCostUsd;
 module.exports.getCostReport = getCostReport;
 module.exports.resetCostReport = resetCostReport;

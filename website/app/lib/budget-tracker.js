@@ -39,8 +39,14 @@ const ALS = (() => {
 const INPUT_USD_PER_MTOK = Number(process.env.GATETEST_INPUT_USD_PER_MTOK) || 3;
 const OUTPUT_USD_PER_MTOK = Number(process.env.GATETEST_OUTPUT_USD_PER_MTOK) || 15;
 
-// Per-model rates. Keyed by the model id string passed to record(). Unknown /
-// untagged calls fall back to the Sonnet default pair above.
+// Per-model rates. Keyed by the model id string passed to record().
+//
+// An UNTAGGED call (null/undefined/empty) is priced at the Sonnet default pair
+// above — that is genuinely the model those callers run. An UNKNOWN model id
+// (a string we have no rate for) is priced at the most expensive known rate
+// instead: a model we don't recognise is almost always a NEWER, pricier one,
+// and silently pricing it as Sonnet lets real spend run past the per-scan cap.
+// Over-counting stops a scan early; under-counting bills Craig for the gap.
 const MODEL_PRICING = {
   // Sonnet 5 priced at sticker ($3/$15), not the intro rate, so caps stay
   // conservative. Sonnet 4.6 entry kept for calls that still tag it.
@@ -48,11 +54,26 @@ const MODEL_PRICING = {
   'claude-sonnet-4-6': { input: INPUT_USD_PER_MTOK, output: OUTPUT_USD_PER_MTOK },
   'claude-fable-5':    { input: Number(process.env.GATETEST_FABLE_INPUT_USD_PER_MTOK) || 10,
                          output: Number(process.env.GATETEST_FABLE_OUTPUT_USD_PER_MTOK) || 50 },
+  'claude-mythos-5':   { input: Number(process.env.GATETEST_FABLE_INPUT_USD_PER_MTOK) || 10,
+                         output: Number(process.env.GATETEST_FABLE_OUTPUT_USD_PER_MTOK) || 50 },
+  'claude-opus-5':     { input: 5, output: 25 },
   'claude-opus-4-8':   { input: 5, output: 25 },
+  'claude-haiku-4-5':  { input: 1, output: 5 },
 };
 
+// Most expensive known rate — the fail-safe for unrecognised model ids.
+const MAX_KNOWN_PRICING = Object.values(MODEL_PRICING).reduce(
+  (worst, rate) => (rate.output > worst.output ? rate : worst),
+  { input: INPUT_USD_PER_MTOK, output: OUTPUT_USD_PER_MTOK },
+);
+
 function priceFor(model) {
-  return MODEL_PRICING[model] || { input: INPUT_USD_PER_MTOK, output: OUTPUT_USD_PER_MTOK };
+  if (MODEL_PRICING[model]) return MODEL_PRICING[model];
+  // Untagged → the default model actually ran. Unknown id → assume the worst.
+  if (typeof model !== 'string' || !model.trim()) {
+    return { input: INPUT_USD_PER_MTOK, output: OUTPUT_USD_PER_MTOK };
+  }
+  return MAX_KNOWN_PRICING;
 }
 
 // Default per-scan ceilings. Sized for Opus pricing — the same token

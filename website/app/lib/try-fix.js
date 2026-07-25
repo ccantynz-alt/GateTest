@@ -36,11 +36,19 @@ const LAYER_TIMEOUT_MS = 30_000;
 
 // Anthropic pricing (approximate, USD per 1K tokens) — used for telemetry cost
 // roll-up. Treat as best-effort: the bill of record is the Anthropic console.
+// USD per 1K tokens. Previously this table had 'claude-sonnet-5' as a
+// DUPLICATE key — a botched model rename clobbered the second model's row, so
+// every Fable/Opus fix through this path was costed at Sonnet's rate (a 3.3x
+// under-count for Fable). Keep one row per model id and never let two keys
+// collide.
 const CLAUDE_PRICING = {
-  // claude-sonnet-5 — sonnet pricing as of 2026-04
-  'claude-sonnet-5':       { inputPer1K: 0.003, outputPer1K: 0.015 },
-  'claude-sonnet-5':{ inputPer1K: 0.003, outputPer1K: 0.015 },
-  default:                   { inputPer1K: 0.003, outputPer1K: 0.015 },
+  'claude-fable-5':   { inputPer1K: 0.010, outputPer1K: 0.050 },
+  'claude-mythos-5':  { inputPer1K: 0.010, outputPer1K: 0.050 },
+  'claude-opus-5':    { inputPer1K: 0.005, outputPer1K: 0.025 },
+  'claude-opus-4-8':  { inputPer1K: 0.005, outputPer1K: 0.025 },
+  'claude-sonnet-5':  { inputPer1K: 0.003, outputPer1K: 0.015 },
+  'claude-haiku-4-5': { inputPer1K: 0.001, outputPer1K: 0.005 },
+  default:            { inputPer1K: 0.003, outputPer1K: 0.015 },
 };
 
 // Lazy-require so the orchestrator loads even if optional deps (babel) aren't

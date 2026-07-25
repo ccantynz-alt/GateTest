@@ -35,6 +35,15 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
+// Recommendation text comes from the engine's own model policy, so a future
+// model upgrade doesn't leave us advising customers to migrate ONTO a model we
+// ourselves have already moved off. Falls back to a literal if the core module
+// isn't resolvable (e.g. a trimmed install).
+let RECOMMENDED_MODEL = 'claude-sonnet-5';
+try {
+  ({ CHEAP_MODEL: RECOMMENDED_MODEL } = require('../core/engine-models'));
+} catch { /* keep the literal default */ }
+
 const DEFAULT_EXCLUDES = [
   'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
   '.next', '__pycache__', 'target', 'vendor',
@@ -65,25 +74,70 @@ const USER_INPUT_HINTS = [
 // looks like instructions / a prompt scaffold.
 const PROMPT_SHAPE = /(?:^|[:,\s])(?:you are|summari[sz]e|translate|rewrite|answer|analy[sz]e|classify|extract|generate|write a|act as|please|respond with|respond as)/i;
 
-const DEPRECATED_MODELS = [
-  'text-davinci-001', 'text-davinci-002', 'text-davinci-003',
-  'code-davinci-002',
-  'gpt-3.5-turbo-0301', 'gpt-3.5-turbo-0613',
-  'claude-v1', 'claude-v1.2', 'claude-v1.3',
-  'claude-instant-v1', 'claude-instant-1', 'claude-instant-1.1',
-  'claude-2', 'claude-2.0', 'claude-2.1',
-  // Claude 3.x family — superseded by Claude 4.x
-  'claude-3-opus-20240229',
-  'claude-3-sonnet-20240229',
-  'claude-3-haiku-20240307',
-  // Claude 3.5 family — superseded by Claude 4.x
-  'claude-3-5-sonnet-20240620',
-  'claude-3-5-sonnet-20241022',
-  'claude-3-5-haiku-20241022',
-  // Claude 3.7 family — superseded by Claude 4.x
-  'claude-3-7-sonnet-20250219',
-  'palm-2', 'text-bison-001',
+// ---------------------------------------------------------------------------
+// Model lifecycle table — the ONE place to update when a provider retires a
+// model. Each entry is [id, retiresOn] where retiresOn is the announced
+// retirement date (ISO) or null for models already long gone / never dated.
+//
+// This table is the module's "melting iceberg" surface: it is the only part of
+// GateTest whose staleness ships INTO a customer's repo as wrong advice. A
+// model missing here means we hand a customer a clean bill of health right up
+// until their production calls start 404ing. Re-check it against
+// platform.claude.com/docs/en/about-claude/models/overview whenever a new
+// model generation ships, and add the NEXT generation's retirement dates as
+// soon as they are announced — not after they pass.
+//
+// Last reconciled: 2026-07-26.
+// ---------------------------------------------------------------------------
+const MODEL_LIFECYCLE = [
+  // --- OpenAI / Google legacy ---
+  ['text-davinci-001', null], ['text-davinci-002', null], ['text-davinci-003', null],
+  ['code-davinci-002', null],
+  ['gpt-3.5-turbo-0301', null], ['gpt-3.5-turbo-0613', null],
+  ['palm-2', null], ['text-bison-001', null],
+
+  // --- Claude 1.x / 2.x — retired 2025-07-21 ---
+  ['claude-v1', null], ['claude-v1.2', null], ['claude-v1.3', null],
+  ['claude-instant-v1', null], ['claude-instant-1', null],
+  ['claude-instant-1.1', null], ['claude-instant-1.2', null],
+  ['claude-2', '2025-07-21'], ['claude-2.0', '2025-07-21'], ['claude-2.1', '2025-07-21'],
+
+  // --- Claude 3.x / 3.5 / 3.7 — all retired ---
+  ['claude-3-sonnet-20240229', '2025-07-21'],
+  ['claude-3-5-sonnet-20240620', '2025-10-28'],
+  ['claude-3-5-sonnet-20241022', '2025-10-28'],
+  ['claude-3-opus-20240229', '2026-01-05'],
+  ['claude-3-5-haiku-20241022', '2026-02-19'],
+  ['claude-3-7-sonnet-20250219', '2026-02-19'],
+  ['claude-3-haiku-20240307', '2026-04-19'],
+
+  // --- Claude 4.0 / 4.1 — the generation most customer repos are pinned to.
+  // These were missing entirely until 2026-07-26, which meant a repo pinned to
+  // claude-opus-4-1 scanned clean with days left before its retirement.
+  ['claude-opus-4-20250514', '2026-06-15'],
+  ['claude-sonnet-4-20250514', '2026-06-15'],
+  ['claude-opus-4-0', '2026-06-15'],
+  ['claude-sonnet-4-0', '2026-06-15'],
+  ['claude-opus-4-1', '2026-08-05'],
+  ['claude-opus-4-1-20250805', '2026-08-05'],
 ];
+
+const DEPRECATED_MODELS = MODEL_LIFECYCLE.map(([id]) => id);
+const RETIREMENT_DATES = new Map(MODEL_LIFECYCLE);
+
+/**
+ * Describe a model's retirement status relative to now.
+ * @param {string} id model id from MODEL_LIFECYCLE
+ * @returns {{retired: boolean, days: number|null, on: string|null}}
+ */
+function retirementStatus(id, now = Date.now()) {
+  const on = RETIREMENT_DATES.get(id) || null;
+  if (!on) return { retired: true, days: null, on: null };
+  const ms = Date.parse(`${on}T00:00:00Z`);
+  if (Number.isNaN(ms)) return { retired: true, days: null, on };
+  const days = Math.ceil((ms - now) / 86400000);
+  return { retired: days <= 0, days, on };
+}
 
 class PromptSafetyModule extends BaseModule {
   constructor() {
@@ -221,13 +275,19 @@ class PromptSafetyModule extends BaseModule {
         const re = new RegExp(`["'\`]${m.replace(/\./g, '\\.')}["'\`]`);
         const modelMatch = re.exec(line);
         if (modelMatch && !this._isInsideStringLiteral(line, modelMatch.index)) {
+          const status = retirementStatus(m);
+          const message = status.retired
+            ? `Model \`${m}\` is retired${status.on ? ` (as of ${status.on})` : ''} — these calls return 404`
+            : `Model \`${m}\` retires on ${status.on} (${status.days} day${status.days === 1 ? '' : 's'} away) — migrate before then or calls start failing`;
           issues += this._flag(result, `prompt-safety:deprecated-model:${m}:${rel}:${i + 1}`, {
             severity: 'warning',
             file: rel,
             line: i + 1,
             model: m,
-            message: `Model \`${m}\` is deprecated / EOL — calls may fail or return degraded output`,
-            suggestion: 'Upgrade to a current model (e.g. `claude-sonnet-5`, or the latest GPT-4o-class model).',
+            retiresOn: status.on,
+            daysUntilRetirement: status.days,
+            message,
+            suggestion: `Upgrade to a current model (e.g. \`${RECOMMENDED_MODEL}\`, or the latest GPT-4o-class model).`,
           });
           break;
         }

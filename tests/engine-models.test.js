@@ -50,6 +50,7 @@ for (const [label, mod] of [['website', webTwin], ['src/core', cliTwin]]) {
     it('allow-list contains exactly the user-selectable models', () => {
       assert.deepEqual(mod.allowedModelIds(), [
         'claude-sonnet-5',
+        'claude-opus-5',
         'claude-opus-4-8',
         'claude-fable-5',
       ]);
@@ -63,7 +64,9 @@ for (const [label, mod] of [['website', webTwin], ['src/core', cliTwin]]) {
 
     it('resolveModelChoice accepts aliases, case-insensitively, with whitespace', () => {
       assert.deepEqual(mod.resolveModelChoice('sonnet'), { ok: true, model: 'claude-sonnet-5' });
-      assert.deepEqual(mod.resolveModelChoice('OPUS'), { ok: true, model: 'claude-opus-4-8' });
+      // Bare "opus" now resolves to the CURRENT Opus, not the previous one.
+      assert.deepEqual(mod.resolveModelChoice('OPUS'), { ok: true, model: 'claude-opus-5' });
+      assert.deepEqual(mod.resolveModelChoice('opus-5'), { ok: true, model: 'claude-opus-5' });
       assert.deepEqual(mod.resolveModelChoice('opus-4.8'), { ok: true, model: 'claude-opus-4-8' });
       assert.deepEqual(mod.resolveModelChoice('  Fable '), { ok: true, model: 'claude-fable-5' });
       assert.deepEqual(mod.resolveModelChoice('fable-5'), { ok: true, model: 'claude-fable-5' });
@@ -110,9 +113,28 @@ describe('budget-tracker — model-aware pricing', () => {
     assert.deepEqual(tracker.priceFor('claude-sonnet-4-6'), { input: 3, output: 15 });
   });
 
-  it('unknown / untagged model falls back to the Sonnet default rate', () => {
-    assert.deepEqual(tracker.priceFor('some-unknown-model'), { input: 3, output: 15 });
+  it('prices the current Opus and Haiku tiers', () => {
+    assert.deepEqual(tracker.priceFor('claude-opus-5'), { input: 5, output: 25 });
+    assert.deepEqual(tracker.priceFor('claude-opus-4-8'), { input: 5, output: 25 });
+    assert.deepEqual(tracker.priceFor('claude-haiku-4-5'), { input: 1, output: 5 });
+  });
+
+  it('UNTAGGED calls price at the Sonnet default (that is the model that ran)', () => {
     assert.deepEqual(tracker.priceFor(undefined), { input: 3, output: 15 });
+    assert.deepEqual(tracker.priceFor(null), { input: 3, output: 15 });
+    assert.deepEqual(tracker.priceFor('   '), { input: 3, output: 15 });
+  });
+
+  it('UNKNOWN model ids price at the most expensive known rate, never the cheapest', () => {
+    // A model id we do not recognise is almost always a newer, pricier one.
+    // Pricing it as Sonnet would let real spend run past the per-scan cap;
+    // over-counting merely stops the scan early. Fail safe, not cheap.
+    const unknown = tracker.priceFor('claude-something-6');
+    assert.deepEqual(unknown, { input: 10, output: 50 });
+    assert.ok(
+      unknown.output >= tracker.priceFor('claude-fable-5').output,
+      'unknown model must not be cheaper than the priciest known model',
+    );
   });
 
   it('record() prices a Fable response higher than the same Sonnet response', () => {
