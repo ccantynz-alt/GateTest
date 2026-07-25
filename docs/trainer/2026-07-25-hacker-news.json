@@ -1,0 +1,257 @@
+{
+  "generatedAt": "2026-07-25T05:52:08.922Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 12,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 6,
+      "SonarQube": 1,
+      "Semgrep": 1,
+      "CodeQL": 3,
+      "DeepSource": 0,
+      "Codacy": 2,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 2
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49042525",
+        "author": "ButlerianJihad",
+        "type": "comment",
+        "title": null,
+        "text": "My father originally had a 100% manual lawnmower, and for the size of our property, it wasn't really bad; my father is a physically fit dude, and he could knock out the whole thing in a short period.Then in the late 80s, he purchased an electric lawnmower! Yep it wasn't battery-powered, but it had a little AC cord that you plugged in... somewhere! So Dad would just run a ginormous snake of an extension cord out across the lawn.Now, our property wasn't large, but to reach an AC outlet, we really needed a lot of cord, and of course it was a key skill to not run over your own cord, like when you're vacuuming.Dad never got anything gas-powered. He also had an edger that was electric, IIRC, and he made a lot of use of this edger. It was one of those kinds that used a fishing-line type cutting edge.But he kept that machine around, and I guess it was fine for a very long time. Dad and Mom are old enough to employ a landscaping team, nowadays.",
+        "url": "https://news.ycombinator.com/item?id=49042525",
+        "points": null,
+        "numComments": null,
+        "storyId": 49031561,
+        "createdAt": "2026-07-24T22:44:18Z",
+        "createdAtUnix": 1784933058,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49038863",
+        "author": "lardosaurusrex",
+        "type": "comment",
+        "title": null,
+        "text": "i dunno why we dont do what the art world does and just blacklist you from everything if you're caught stealing&#x2F;tracing and even revoke your degree(s) for it.ai detectors always have so many false positives that im convinced they're only put in place by people too dumb to know any better and snakeoil salesmen.",
+        "url": "https://news.ycombinator.com/item?id=49038863",
+        "points": null,
+        "numComments": null,
+        "storyId": 49038059,
+        "createdAt": "2026-07-24T17:20:54Z",
+        "createdAtUnix": 1784913654,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49036653",
+        "author": "Brajeshwar",
+        "type": "story",
+        "title": "Robot snakes searched for Venezuela earthquake survivors in collapsed buildings",
+        "text": "Robot snakes searched for Venezuela earthquake survivors in collapsed buildings",
+        "url": "https://arstechnica.com/gadgets/2026/07/robot-snakes-searched-for-venezuela-earthquake-survivors-in-collapsed-buildings/",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49036653,
+        "createdAt": "2026-07-24T14:58:31Z",
+        "createdAtUnix": 1784905111,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49034785",
+        "author": "nkrisc",
+        "type": "comment",
+        "title": null,
+        "text": "What does a male chicken, a word representing the sound a large bell makes, and the Yiddish word for \"snake\" have to do with the word \"penis\"? Why would you censor such innocuous words?",
+        "url": "https://news.ycombinator.com/item?id=49034785",
+        "points": null,
+        "numComments": null,
+        "storyId": 48959008,
+        "createdAt": "2026-07-24T12:45:22Z",
+        "createdAtUnix": 1784897122,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49032256",
+        "author": "janandonly",
+        "type": "story",
+        "title": "Snake fossil sheds light on why lizards lost their limbs and started slithering",
+        "text": "Snake fossil sheds light on why lizards lost their limbs and started slithering",
+        "url": "https://theconversation.com/80-million-year-old-snake-fossil-sheds-light-on-why-lizards-lost-their-limbs-and-started-slithering-287291",
+        "points": 5,
+        "numComments": 0,
+        "storyId": 49032256,
+        "createdAt": "2026-07-24T07:27:34Z",
+        "createdAtUnix": 1784878054,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49031657",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Meilisearch vs. Manticore: Setting the Record Straight",
+        "text": "Meilisearch vs. Manticore: Setting the Record Straight",
+        "url": "https://manticoresearch.com/blog/meilisearch-vs-manticore-response/",
+        "points": 3,
+        "numComments": 0,
+        "storyId": 49031657,
+        "createdAt": "2026-07-24T05:54:43Z",
+        "createdAtUnix": 1784872483,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [
+      {
+        "objectId": "49034990",
+        "author": "onion2k",
+        "type": "comment",
+        "title": null,
+        "text": "manual PR reviews can catch things that llms currently missI didn't say LLMs though. I'm talking about the sort of code quality tooling that's been in use for decades - Sonarqube, Codacy, CodeClimate, etc for code quality, eslint for AST-based code rule checking (easily picks up duplication for example), Istanbul for code coverage, Wiz or Github Advanced Security for security.These are well known industry standards for knowing a code change is correct without giving it to an LLM to guess at. If you have them, and they're well configured, and you maintain the tooling properly, then PRs become unhelpful gates that don't find problems.",
+        "url": "https://news.ycombinator.com/item?id=49034990",
+        "points": null,
+        "numComments": null,
+        "storyId": 49023019,
+        "createdAt": "2026-07-24T13:06:40Z",
+        "createdAtUnix": 1784898400,
+        "intent": "neutral"
+      }
+    ],
+    "Semgrep": [
+      {
+        "objectId": "49037269",
+        "author": "roenxi",
+        "type": "comment",
+        "title": null,
+        "text": "> So you’re in agreement with me that “no politics” isn’t really a thing in a space?Yeah, its a meaningless term. The people calling for it are clearly being inarticulately and are trying to say something else.But the trans bathroom thing has an obvious resolution. The people fighting over it are more about wanting to pick a fight than that there is an actual issue; if the people around me wanted me to use the female bathroom or the male bathroom either is cool. It's a bathroom. They meet a unisex need. If segregation is an issue in the abstract then stop doing that until there is an objective standard to use instead of a subjective one.",
+        "url": "https://news.ycombinator.com/item?id=49037269",
+        "points": null,
+        "numComments": null,
+        "storyId": 49000600,
+        "createdAt": "2026-07-24T15:39:30Z",
+        "createdAtUnix": 1784907570,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [
+      {
+        "objectId": "49039491",
+        "author": "tocariimaa",
+        "type": "comment",
+        "title": null,
+        "text": "I can recommend Codefloe, runs forgejo and the hosting is EU-based",
+        "url": "https://news.ycombinator.com/item?id=49039491",
+        "points": null,
+        "numComments": null,
+        "storyId": 49021856,
+        "createdAt": "2026-07-24T18:07:19Z",
+        "createdAtUnix": 1784916439,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49038042",
+        "author": "stock_toaster",
+        "type": "comment",
+        "title": null,
+        "text": "codefloe[1] also runs forgejo.[1]: https:&#x2F;&#x2F;codefloe.com&#x2F;",
+        "url": "https://news.ycombinator.com/item?id=49038042",
+        "points": null,
+        "numComments": null,
+        "storyId": 49036765,
+        "createdAt": "2026-07-24T16:32:45Z",
+        "createdAtUnix": 1784910765,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49034990",
+        "author": "onion2k",
+        "type": "comment",
+        "title": null,
+        "text": "manual PR reviews can catch things that llms currently missI didn't say LLMs though. I'm talking about the sort of code quality tooling that's been in use for decades - Sonarqube, Codacy, CodeClimate, etc for code quality, eslint for AST-based code rule checking (easily picks up duplication for example), Istanbul for code coverage, Wiz or Github Advanced Security for security.These are well known industry standards for knowing a code change is correct without giving it to an LLM to guess at. If you have them, and they're well configured, and you maintain the tooling properly, then PRs become unhelpful gates that don't find problems.",
+        "url": "https://news.ycombinator.com/item?id=49034990",
+        "points": null,
+        "numComments": null,
+        "storyId": 49023019,
+        "createdAt": "2026-07-24T13:06:40Z",
+        "createdAtUnix": 1784898400,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [
+      {
+        "objectId": "49034990",
+        "author": "onion2k",
+        "type": "comment",
+        "title": null,
+        "text": "manual PR reviews can catch things that llms currently missI didn't say LLMs though. I'm talking about the sort of code quality tooling that's been in use for decades - Sonarqube, Codacy, CodeClimate, etc for code quality, eslint for AST-based code rule checking (easily picks up duplication for example), Istanbul for code coverage, Wiz or Github Advanced Security for security.These are well known industry standards for knowing a code change is correct without giving it to an LLM to guess at. If you have them, and they're well configured, and you maintain the tooling properly, then PRs become unhelpful gates that don't find problems.",
+        "url": "https://news.ycombinator.com/item?id=49034990",
+        "points": null,
+        "numComments": null,
+        "storyId": 49023019,
+        "createdAt": "2026-07-24T13:06:40Z",
+        "createdAtUnix": 1784898400,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49033883",
+        "author": "ARayOutOfBounds",
+        "type": "story",
+        "title": "AI generated PRs can hide malicious intent across several PRs",
+        "text": "AI generated PRs can hide malicious intent across several PRs",
+        "url": "https://blog.codacy.com/detecting-malicious-intent-across-ai-generated-pull-requests-a-governance-framework-for-engineering-leaders",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49033883,
+        "createdAt": "2026-07-24T11:10:42Z",
+        "createdAtUnix": 1784891442,
+        "intent": "neutral"
+      }
+    ],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49043507",
+        "author": "teeray",
+        "type": "comment",
+        "title": null,
+        "text": "Green Checkmark with a little “i” notice",
+        "url": "https://news.ycombinator.com/item?id=49043507",
+        "points": null,
+        "numComments": null,
+        "storyId": 49033240,
+        "createdAt": "2026-07-25T01:06:01Z",
+        "createdAtUnix": 1784941561,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [
+    {
+      "phrase": "false positive",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49038863",
+          "url": "https://news.ycombinator.com/item?id=49038863",
+          "snippet": "i dunno why we dont do what the art world does and just blacklist you from everything if you're caught stealing&#x2F;tracing and even revoke your degree(s) for it.ai detectors always have so many fals"
+        }
+      ]
+    },
+    {
+      "phrase": "false positives",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49038863",
+          "url": "https://news.ycombinator.com/item?id=49038863",
+          "snippet": "i dunno why we dont do what the art world does and just blacklist you from everything if you're caught stealing&#x2F;tracing and even revoke your degree(s) for it.ai detectors always have so many fals"
+        }
+      ]
+    }
+  ],
+  "actionItems": []
+}
