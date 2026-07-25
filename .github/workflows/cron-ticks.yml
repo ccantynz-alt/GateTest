@@ -8,7 +8,14 @@ name: Cron Ticks (off-Vercel stopgap)
 # Continuous ($49/mo) tier works the moment the CRON_SECRET repo secret is
 # set, even before the box-level cron lands.
 #
-# - No-ops silently (exit 0) while the CRON_SECRET secret is unset.
+# - FAILS LOUDLY while the CRON_SECRET secret is unset. It used to `exit 0`
+#   with the message "stopgap disarmed, nothing to do", which meant this job
+#   reported GREEN every 5 minutes while the production scan queue was not
+#   being drained at all. That is exactly the silent failure the Bible's
+#   Forbidden #16 prohibits, and it is why the stall went unnoticed: pushes
+#   were enqueued and never scanned, so no commit status was ever posted.
+#   A red X here is correct — it is a real production outage, and it clears
+#   the moment the secret is set on BOTH sides (see the error message below).
 # - GitHub schedule granularity is ~5 min and often delayed — good enough as
 #   a stopgap, NOT a replacement for the box cron. Delete this file once
 #   Vapron's scheduler is confirmed firing.
@@ -30,8 +37,8 @@ jobs:
           BASE_URL: https://gatetest.ai
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "CRON_SECRET secret not set — stopgap disarmed, nothing to do."
-            exit 0
+            echo "::error::CRON_SECRET repo secret is NOT SET — the production scan queue is not being drained. Pushes are enqueued by /api/webhook and never executed, so NO commit status or PR comment is ever posted. Fix: set the SAME value in both places — (1) gh secret set CRON_SECRET --repo crclabs-hq/gatetest, and (2) CRON_SECRET in the Vapron production environment. They must match or the tick 401s."
+            exit 1
           fi
           for path in /api/scan/worker/tick /api/watches/tick; do
             code=$(curl -s -o /tmp/tick-body -w "%{http_code}" -X POST \

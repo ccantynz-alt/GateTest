@@ -26,6 +26,33 @@ All four green → proceed top to bottom.
 
 ---
 
+## Gate 0b — GitHub Marketplace preflight (MANDATORY before Submit-for-review)
+
+The 2026-05-14 submission was rejected. A second rejection costs another review
+cycle, so **do not click Submit until this exits 0**:
+
+```bash
+node scripts/marketplace-preflight.js
+```
+
+It mechanically verifies what a GitHub reviewer actually sees, and each check
+maps to something found genuinely broken in a live audit:
+
+| Check | Why it exists |
+|---|---|
+| `/legal/*` return 200 and contain no `DRAFT` / `requires attorney review` / `TBD` | Reviewers open the legal URLs first. Ours served *"should not be treated as final legal terms"* — the most likely rejection trigger. |
+| `CRON_SECRET` + `RESEND_API_KEY` set in prod (parsed from `/api/status`) | With `CRON_SECRET` unset, `/api/webhook` enqueues the scan and **nothing drains the queue** — the reviewer installs, pushes, and sees no commit status at all, while the listing promises scans on every push. |
+| App has `statuses`/`issues`/`pull_requests`/`contents` write | PR comments post via the **Issues** comments API; without `issues:write` the PR comment the listing promises silently fails. |
+| Only one `gatetest*` App installed | An orphaned duplicate confuses the reviewer and can receive stray events. |
+| `cron-ticks` last run is armed (not disarmed / 401) | The stopgap used to `exit 0` while disarmed, reporting **green every 5 minutes** during a real outage. |
+| Listing module count matches `bin/gatetest.js --list` | The count is manually-pasted copy with a documented history of going stale. Only the fenced copy blocks are checked — the prose header intentionally quotes the rejected submission's "90 modules". |
+| Listing pricing section is Free-only | Describing paid functionality on an app under the ≥100-install / verified-publisher threshold is **exactly why the first submission was rejected**. |
+
+`gh`-dependent checks report `SKIP` (not pass) when `gh` is unavailable, so an
+unauthenticated run can never produce a false all-clear.
+
+---
+
 ## Wave 1 — Claude-executable via `gh` (agent runs these; Craig approves publish actions)
 
 ### 1a. GitHub release with the Desktop extension (already built: `dist/gatetest.mcpb`)
