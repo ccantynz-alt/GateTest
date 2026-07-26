@@ -1,0 +1,10 @@
+# Corpus fixtures encode line endings ON PURPOSE.
+#
+# reliability-corpus/known-good/modern-node-idioms/.env.example is CRLF because
+# that is the shape that triggered KI #49 (env-integrity split on a bare \n,
+# leaving a trailing \r on every line, which the trailing-whitespace rule then
+# matched — 123 of 123 checks were false positives). If git normalises it to LF
+# on checkout, the guard still passes but tests nothing at all.
+#
+# -text disables all EOL conversion so the bytes on disk are the bytes in git.
+reliability-corpus/**/.env.example -text
