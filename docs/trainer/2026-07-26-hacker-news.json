@@ -1,0 +1,190 @@
+{
+  "generatedAt": "2026-07-26T06:15:21.999Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 11,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 8,
+      "SonarQube": 0,
+      "Semgrep": 1,
+      "CodeQL": 1,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49050192",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "I thought we were having a technical discussion not a linguistic one. Baseline level of technical understanding is expected. s&#x2F;allowing&#x2F;enabling&#x2F;.allow [intransitive verb]: to make a possibilityhttps:&#x2F;&#x2F;www.merriam-webster.com&#x2F;dictionary&#x2F;allow",
+        "url": "https://news.ycombinator.com/item?id=49050192",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T18:24:28Z",
+        "createdAtUnix": 1785003868,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49046878",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Yeah, they didn't claim that it's a CVE, just behavior that they wanted to change. Miscommunication then.",
+        "url": "https://news.ycombinator.com/item?id=49046878",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T12:03:48Z",
+        "createdAtUnix": 1784981028,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49046831",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "I found Thingino to be very buggy and frustrating to use despite using 2 different supported cameras. The stream would constantly drop out, services would sometimes crash and wouldn't get automatically restarted. I tried tweaking all available parameters, resetting, updating but eventually I just gave up (a few months ago).e.g. https:&#x2F;&#x2F;github.com&#x2F;themactep&#x2F;thingino-firmware&#x2F;issues&#x2F;640",
+        "url": "https://news.ycombinator.com/item?id=49046831",
+        "points": null,
+        "numComments": null,
+        "storyId": 49034292,
+        "createdAt": "2026-07-25T11:56:22Z",
+        "createdAtUnix": 1784980582,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49046270",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "This is not one of them. This is \"the lock accepts any key\" type of CVE.> In adbd_tls_verify_cert of auth.cpp, there is a possible bypass of wireless ADB mutual authentication due to a logic error in the code. This could lead to remote (proximal&#x2F;adjacent) code execution as the shell user with no additional execution privileges needed.Patch: https:&#x2F;&#x2F;android.googlesource.com&#x2F;platform&#x2F;packages&#x2F;modules&#x2F;a...Docs:> EVP_PKEY_cmp() return 1 if the keys match, 0 if they don't match, -1 if the key types are different and -2 if the operation is not supported.The original code cast the integer return value to boolean, and -1 and -2 cast to \"true\", therefore authentication would succeed if the key types were different or the operation wasn't supported.",
+        "url": "https://news.ycombinator.com/item?id=49046270",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T10:14:30Z",
+        "createdAtUnix": 1784974470,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49046205",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "> Separately, a number of people here are attempting to argue that the availability of On-Device ADB should be regarded as a \"CVE\" in and of itself. Google does not appear to share that view.This was proposed by a Google employee: https:&#x2F;&#x2F;issuetracker.google.com&#x2F;issues&#x2F;526109803#comment3",
+        "url": "https://news.ycombinator.com/item?id=49046205",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T09:59:17Z",
+        "createdAtUnix": 1784973557,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49046166",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "They're 3 separate issues. There's a genuine vulnerability (CVE) which has been fixed, there's a follow-up proposal to allow the user to choose which interfaces to bind to, and there's another proposal to disallow ADB over loopback which would cut you off from using ADB on-device.Your problem is with the last one which has nothing to do with the CVE itself.",
+        "url": "https://news.ycombinator.com/item?id=49046166",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T09:50:45Z",
+        "createdAtUnix": 1784973045,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49045999",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Allowing strangers to run adb commands on your phone without your consent is about as bad as a compromise can get. Your keyboard can be replaced with a keylogger and all of your data can be stolen without your knowledge by simply connecting to the wrong wifi network.",
+        "url": "https://news.ycombinator.com/item?id=49045999",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T09:24:31Z",
+        "createdAtUnix": 1784971471,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49045930",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Can you provide a reasonable definition where an authentication bypass in ADB doesn't qualify as a vulnerability? Is there a use case for allowing anyone on your network to run adb commands without your approval?There are 3 things which I feel like are being confused here:1. There was a genuine authentication bypass vulnerability in ADB (bad)2. Initial proposed change wants to add an option to limit the ADB server to certain IPs or network interfaces (good - it doesn't affect you)3. Response to the original request, proposing that ADB shouldn't be allowed to listen on loopback interfaces (bad&#x2F;nefarious - it breaks functionality)[1] https:&#x2F;&#x2F;nvd.nist.gov&#x2F;vuln&#x2F;detail&#x2F;CVE-2026-0073[2] https:&#x2F;&#x2F;issuetracker.google.com&#x2F;issues&#x2F;526109803#comment1[3] https:&#x2F;&#x2F;issuetracker.google.com&#x2F;issues&#x2F;526109803#comment3",
+        "url": "https://news.ycombinator.com/item?id=49045930",
+        "points": null,
+        "numComments": null,
+        "storyId": 49045159,
+        "createdAt": "2026-07-25T09:14:21Z",
+        "createdAtUnix": 1784970861,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49047101",
+        "author": "noisy_boy",
+        "type": "comment",
+        "title": null,
+        "text": "Please Firefox, just implement workspaces. I'm tired of 10 windows, that I have created to segregate for each type of browsing, launching at startup and then me accidentally closing one and again having to manually add the tabs back. Don't even need to make it mandatory, just make it optional. Vivaldi has spoiled me with this and it is very hard to switch to another browser that doesn't have it.Excellent job making containers native. Just go one more step.",
+        "url": "https://news.ycombinator.com/item?id=49047101",
+        "points": null,
+        "numComments": null,
+        "storyId": 48995409,
+        "createdAt": "2026-07-25T12:37:13Z",
+        "createdAtUnix": 1784983033,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [
+      {
+        "objectId": "49046488",
+        "author": "mjyut",
+        "type": "story",
+        "title": "CodeFloe – A code hosting platform for the modern age",
+        "text": "CodeFloe – A code hosting platform for the modern age",
+        "url": "https://codefloe.com/",
+        "points": 2,
+        "numComments": 1,
+        "storyId": 49046488,
+        "createdAt": "2026-07-25T10:55:59Z",
+        "createdAtUnix": 1784976959,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49050731",
+        "author": "vitalyan8184",
+        "type": "comment",
+        "title": null,
+        "text": "in case of old twitter, the blue checkmarks and their likeminded folx were allowed to hatespeak, \"brigade\", doxx, libel, call to violence, anything at all, as long as their infinite vitriol was directed at certain groups implicitly but blatantly designated as unprotected. the other side, on the other hand, was subject to \"private platforms can do whatever the fuck they want\" kind of moderation, where even \"off-platform conduct\" could get you summarily banned.",
+        "url": "https://news.ycombinator.com/item?id=49050731",
+        "points": null,
+        "numComments": null,
+        "storyId": 49047365,
+        "createdAt": "2026-07-25T19:30:04Z",
+        "createdAtUnix": 1785007804,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}
