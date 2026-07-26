@@ -137,6 +137,38 @@ async function runCase({ manifest, scanner, codeRoot, repeatForDeterminism = fal
   }
   const durationMs = now() - startedAt;
 
+  // A scanner that FAILED is not a scanner that found nothing.
+  //
+  // scanCode() reports problems by RETURNING { findings: [], error: "..." }
+  // rather than throwing — report-not-found, scanner-timed-out,
+  // codeRoot-not-found, report-parse-failed, no-code-scanner-adapter. The
+  // try/catch above only covers thrown errors, so every one of those used to
+  // fall through as "zero findings", which on a known-good case (whose whole
+  // assertion is "produces nothing") is indistinguishable from success.
+  //
+  // Measured consequence: a fixture with 8 real errors and 16 real warnings
+  // reported passed:true with zero totals, purely because no report existed
+  // yet. That made the corpus structurally incapable of failing on its first
+  // run of any new case — the actual root cause behind KI #75, deeper than
+  // the hardcoded exitCode: 0.
+  if (scanResult && scanResult.error) {
+    return {
+      name: m.name,
+      category: m.category,
+      tier: m.tier,
+      target: m.target,
+      url: m.url || null,
+      findingsByModule: {},
+      totals: { errors: 0, warnings: 0, info: 0 },
+      durationMs,
+      peakMemoryMb: null,
+      deterministic: null,
+      passed: false,
+      issues: [`scanner reported an error, results are not trustworthy: ${scanResult.error}`],
+      error: scanResult.error,
+    };
+  }
+
   const findings = scanResult.findings || [];
   const { findingsByModule, totals } = tallyFindings(findings);
 

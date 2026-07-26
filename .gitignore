@@ -22,3 +22,6 @@ vscode-extension/*.vsix
 apply-*.js
 .vercel
 .env*
+
+# Scan artifacts written by corpus runs — never commit these.
+reliability-corpus/**/.gatetest/

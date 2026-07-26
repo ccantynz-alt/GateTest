@@ -19,6 +19,9 @@
  *       "warnings": { "<module>": { "atLeast": n, "atMost": m } },
  *       "totalErrorsAtLeast": n,    // overall floor
  *       "totalErrorsAtMost":  m,    // overall ceiling
+ *       "totalWarningsAtMost": m,   // overall warning ceiling. On a known-good
+ *                                   // case the default is 0 — any warning on
+ *                                   // known-clean code is a false positive.
  *     },
  *     "budgets": {
  *       "maxDurationMs": 30000,
@@ -115,6 +118,9 @@ function validateManifest(manifest) {
     if (e.totalErrorsAtMost !== undefined && (!Number.isInteger(e.totalErrorsAtMost) || e.totalErrorsAtMost < 0)) {
       errors.push("expected.totalErrorsAtMost: must be a non-negative integer");
     }
+    if (e.totalWarningsAtMost !== undefined && (!Number.isInteger(e.totalWarningsAtMost) || e.totalWarningsAtMost < 0)) {
+      errors.push("expected.totalWarningsAtMost: must be a non-negative integer");
+    }
   } else if (manifest.expected !== undefined) {
     errors.push("expected: must be an object when present");
   }
@@ -167,6 +173,7 @@ function normaliseManifest(manifest) {
       warnings: manifest.expected?.warnings || {},
       totalErrorsAtLeast: manifest.expected?.totalErrorsAtLeast ?? null,
       totalErrorsAtMost: manifest.expected?.totalErrorsAtMost ?? null,
+      totalWarningsAtMost: manifest.expected?.totalWarningsAtMost ?? null,
     },
     budgets: {
       maxDurationMs: manifest.budgets?.maxDurationMs ?? 60_000,
@@ -213,12 +220,31 @@ function compareToExpected(manifest, caseResult) {
   checkModule("errors", manifest.expected.errors);
   checkModule("warnings", manifest.expected.warnings);
 
+  if (manifest.expected.totalWarningsAtMost !== null && totals.warnings > manifest.expected.totalWarningsAtMost) {
+    issues.push(`total warnings ${totals.warnings} > expected atMost ${manifest.expected.totalWarningsAtMost}`);
+  }
+
   // known-good cases must produce zero errors UNLESS the manifest has
   // explicitly opted into a non-zero ceiling via totalErrorsAtMost.
   // Authors documenting "this is acceptable scanner noise" should encode
   // it in the manifest rather than silently weakening the rule.
   if (manifest.category === "known-good" && totals.errors > 0 && manifest.expected.totalErrorsAtMost === null) {
     issues.push(`known-good corpus must produce 0 errors, got ${totals.errors}`);
+  }
+
+  // ...and zero WARNINGS, by the same rule. This is the guard that was
+  // missing: every false-positive flood this engine has shipped (KI #48
+  // ai-hallucination 1047/1099, KI #49 envIntegrity 123/123, KI #50
+  // compatibility 237/240) was warning-severity, so a known-good case with
+  // only an error ceiling would have passed all three while the scanner was
+  // ~99% wrong. On code asserted to be clean, ANY finding is by definition a
+  // false positive — including a warning.
+  if (manifest.category === "known-good" && totals.warnings > 0 && manifest.expected.totalWarningsAtMost === null) {
+    issues.push(
+      `known-good corpus must produce 0 warnings, got ${totals.warnings} ` +
+      `(every finding on known-clean code is a false positive; if some are genuinely ` +
+      `acceptable, encode the ceiling in expected.totalWarningsAtMost and say why in knownNoise)`,
+    );
   }
 
   // Budget overruns

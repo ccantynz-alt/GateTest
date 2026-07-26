@@ -13,7 +13,12 @@
     "maxDurationMs": 60000,
     "deterministic": true
   },
-  "labels": ["craig-owned", "url-baseline-pending", "protected-platform"],
+  "labels": [
+    "craig-owned",
+    "url-baseline-pending",
+    "protected-platform"
+  ],
   "source": "craig-2026-05-29",
-  "createdAt": "2026-05-29T00:00:00Z"
+  "createdAt": "2026-05-29T00:00:00Z",
+  "knownNoise": "STALE FIXTURE — https://crontech.ai no longer resolves (HTTP 000, verified 2026-07-26). Crontech was renamed to Vapron (Craig 2026-06-12) and the old domain is gone. This case was SILENTLY PASSING until the runner learned to treat a scanner error as a failure instead of as \"found nothing\" — a url-known-good case whose URL does not resolve proves nothing. Craig: supply the current Vapron URL and this fixture can be repointed, or delete the case. Not run in CI (the reliability-corpus workflow is scoped to known-good/known-bad code categories)."
 }

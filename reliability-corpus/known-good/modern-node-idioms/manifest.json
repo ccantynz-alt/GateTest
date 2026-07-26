@@ -1,0 +1,25 @@
+{
+  "name": "modern-node-idioms",
+  "category": "known-good",
+  "target": "code",
+  "tier": "full",
+  "description": "Correct, idiomatic modern ESM Node library (node:-prefixed builtins, CRLF .env.example, ./validators + ./version imports, README/LICENSE/lockfile/tests/eslint config). Every construct is right, so any DETECTION finding here is a false positive. This is the regression tripwire for the FP floods that shipped as KI #48/#49/#50.",
+  "expected": {
+    "totalErrorsAtMost": 6,
+    "totalWarningsAtMost": 10
+  },
+  "budgets": {
+    "maxDurationMs": 60000,
+    "deterministic": true
+  },
+  "labels": ["known-good", "false-positive-guard", "regression"],
+  "source": "hand-crafted",
+  "createdAt": "2026-07-26T00:00:00Z",
+  "guards": {
+    "KI-48": "src/index.js imports node:fs/promises, node:path, node:timers/promises. ai-hallucination's BUILT_IN_MODULES only listed bare builtin names, so every node:-prefixed import — the modern, documented form — was flagged 'possible hallucinated import'. 1047 of 1099 checks (95%) were false positives. This fixture fires ZERO ai-hallucination findings; if that changes, the ceiling below is exceeded and the build fails.",
+    "KI-49": ".env.example is deliberately CRLF-encoded (the Windows default, and common anywhere via core.autocrlf). env-integrity split content on bare \\n, leaving a trailing \\r on every line, which the trailing-whitespace rule then matched — 123/123 checks (100%) false positives. VERIFIED 2026-07-26: reintroducing the bare-\\n split takes this case from 10 warnings to 13 and fails the suite, so the tripwire demonstrably works.",
+    "KI-50": "src/index.js imports ./validators.js and ./version.js. compatibility's 'RegExp v flag' detector (/\\/[^/]+\\/[gimsuy]*v/) had no word boundary after the v, so it matched any two-slash path segment followed by a word starting with v — 202 of 237 findings (85%) false positives. This fixture fires zero.",
+    "why-exact-ceilings": "The ceilings are the EXACT current counts, not round numbers with headroom. That is deliberate: the tripwire only works if one extra finding breaks it. Do not raise these to make a build pass — investigate what started firing. If a new finding is genuinely correct, fix the fixture; if it is a false positive, fix the module."
+  },
+  "knownNoise": "The 6 errors / 10 warnings allowed here are NOT detection false positives — they are environment and project-shape artifacts, itemised so a future session can tell them apart from a real regression. (1) ENVIRONMENT, 3 errors: unit-tests:run, security:npm-audit and mutation:baseline all need installed node_modules and a test runner the corpus deliberately does not provision. (2) INAPPLICABLE-BY-SHAPE, 2 errors: seo:sitemap and seo:robots-txt fire on a Node library with no web surface at all — a genuine over-fire worth scoping to web projects, tracked as a follow-up rather than silenced here. (3) DOCUMENTATION STRICTNESS, 1 error + 4 warnings: docs:readme-setup/install, readme-contributing, readme-license, changelog, jsdoc-coverage — opinionated but defensible completeness checks. (4) LIBRARY ENTRY POINT, 1 warning: dead-code:unused-export flags loadConfig, which is exported public API and therefore correctly not imported anywhere inside the package — the KI #51 false-positive class. (5) CONFIG DOCUMENTATION, 3 warnings: env-vars:unused-in-code on API_URL / API_TIMEOUT_MS / LOG_LEVEL, which .env.example documents for consumers. (6) AGGREGATE, 2 warnings: deploy-readiness score + top-issues, which merely restate the above."
+}

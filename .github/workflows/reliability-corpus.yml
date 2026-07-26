@@ -1,0 +1,66 @@
+name: Reliability Corpus (false-positive gate)
+
+# KI #75. The corpus existed since 2026-05-29 but was referenced by ZERO
+# workflows, and its CLI hardcoded exitCode 0 — so nothing could ever fail on a
+# false-positive regression. That is why KI #43/#48/#49/#50 were each found by
+# hand, one module at a time, after shipping.
+#
+# The known-good cases assert code that is CORRECT. Any finding against them is
+# by definition a false positive, so this job is the standing tripwire: if a
+# detection change starts firing on clean code, the build goes red here before
+# it reaches a customer.
+#
+# Verified to actually catch a regression on 2026-07-26: reintroducing the KI
+# #49 bare-\n split in env-integrity.js took modern-node-idioms from 10 to 13
+# warnings and failed this suite with
+#   "total warnings 13 > expected atMost 10".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  known-good:
+    name: known-good corpus must stay clean
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run known-good corpus (strict)
+        run: |
+          node bin/gatetest-reliability.js \
+            --corpus reliability-corpus \
+            --category known-good \
+            --strict
+
+      - name: Run known-bad corpus (planted bugs must still be caught)
+        # The mirror of the above: known-bad cases assert that real bugs ARE
+        # found. Together they pin both sides — a module that stops firing is
+        # as much a regression as one that starts over-firing.
+        run: |
+          node bin/gatetest-reliability.js \
+            --corpus reliability-corpus \
+            --category known-bad \
+            --strict
+
+      - name: Upload corpus report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-corpus-report
+          path: reliability-corpus/**/.gatetest/reports/gatetest-report-latest.json
+          if-no-files-found: ignore
+          retention-days: 14

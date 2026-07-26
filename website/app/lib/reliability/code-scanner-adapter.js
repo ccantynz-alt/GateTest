@@ -30,7 +30,7 @@ const fs = require("fs");
  * Find the most recently-modified JSON report file under
  * <projectRoot>/.gatetest/reports/. Returns the absolute path or null.
  */
-function findLatestReport(projectRoot, _fs = fs) {
+function findLatestReport(projectRoot, _fs = fs, notBeforeMs = 0) {
   const dir = path.join(projectRoot, ".gatetest", "reports");
   if (!_fs.existsSync(dir)) return null;
   const entries = _fs.readdirSync(dir);
@@ -41,6 +41,12 @@ function findLatestReport(projectRoot, _fs = fs) {
   const jsons = entries
     .filter((n) => n.endsWith(".json") && /gatetest-report/.test(n))
     .map((n) => ({ name: n, path: path.join(dir, n), mtimeMs: _fs.statSync(path.join(dir, n)).mtimeMs }))
+    // Only reports written by THIS scan. Fixture directories accumulate
+    // reports from every previous run, so without this the adapter would
+    // happily validate the current engine against a stale report — passing a
+    // case whose scan actually failed, or grading a regression against
+    // yesterday's clean output.
+    .filter((f) => f.mtimeMs >= notBeforeMs)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
   return jsons.length > 0 ? jsons[0].path : null;
 }
@@ -150,16 +156,36 @@ async function scanCode({
     return { findings: [], peakMemoryMb: null, error: "gatetestBin-missing" };
   }
 
+  // Resolve to an absolute path BEFORE spawning. The corpus loader hands us
+  // codeRoot relative to the orchestrator's cwd, and we set the CHILD's cwd to
+  // that same directory — so a relative --project value is resolved a second
+  // time, against itself, producing a doubly-nested path that does not exist.
+  // The scan then examined nothing and wrote no report, which (before the
+  // runner's error guard) surfaced as a PASS on every corpus case.
+  // Resolve only if RELATIVE. A blanket path.resolve() would rewrite an
+  // already-absolute POSIX path like "/repo" into "C:\repo" on Windows, which
+  // breaks callers (and the injected-fs tests) that legitimately use
+  // POSIX-style absolute roots. path.isAbsolute("/repo") is true on win32, so
+  // such paths pass through untouched while real relative corpus paths still
+  // get resolved.
+  const codeRootAbs = path.isAbsolute(target.codeRoot)
+    ? target.codeRoot
+    : path.resolve(target.codeRoot);
+
   const tier = manifest && manifest.tier ? manifest.tier : "quick";
   const args = [
     gatetestBin,
     "--suite", tier,
-    "--project", target.codeRoot,
+    "--project", codeRootAbs,
     "--report-only", // never block from the CLI exit code; we read the report
   ];
 
+  // Captured BEFORE the scan so we can reject reports left by earlier runs.
+  // 1s of slack absorbs coarse filesystem mtime granularity.
+  const scanStartedMs = Date.now() - 1000;
+
   const r = await _exec.run("node", args, {
-    cwd: target.codeRoot,
+    cwd: codeRootAbs,
     timeoutMs: timeoutMs || (manifest && manifest.budgets && manifest.budgets.maxDurationMs ? manifest.budgets.maxDurationMs + 30_000 : 90_000),
   });
 
@@ -168,11 +194,13 @@ async function scanCode({
   }
 
   // The CLI may write the report regardless of exit code; try to read it.
-  const reportPath = findLatestReport(target.codeRoot, _fs);
+  const reportPath = findLatestReport(codeRootAbs, _fs, scanStartedMs);
   if (!reportPath) {
     return {
       findings: [],
       peakMemoryMb: null,
+      // The runner treats a returned error as a FAILED case, never as "found
+      // nothing" — see the error guard in runner.js runCase().
       error: "report-not-found",
       stderr: r.stderr.slice(0, 1000),
     };
@@ -189,7 +217,7 @@ async function scanCode({
     };
   }
 
-  const findings = reportToFindings(report, target.codeRoot);
+  const findings = reportToFindings(report, codeRootAbs);
   return {
     findings,
     peakMemoryMb: null,

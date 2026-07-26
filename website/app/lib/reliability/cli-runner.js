@@ -48,6 +48,11 @@ async function runReliabilityCli({
   json = false,
   captureBaselines: shouldCaptureBaselines = false,
   compareBaselines: shouldCompareBaselines = false,
+  // Opt-in gate mode. Default stays exit 0 ("painkiller philosophy" — a
+  // customer running the corpus should never be blocked by it). CI passes
+  // strict:true so a false-positive regression can actually fail the build,
+  // which is the whole point of the corpus existing (KI #75).
+  strict = false,
   capturedBy,
   capturedFrom,
   _fetch,
@@ -125,8 +130,16 @@ async function runReliabilityCli({
   const output = json
     ? JSON.stringify({ suite, captureResult, driftPerCase }, null, 2)
     : renderSuiteMarkdown(suite, loaded, { captureResult, driftPerCase });
+  // Default 0 (informational, painkiller philosophy). Under --strict, a failed
+  // case, an invalid manifest, or baseline drift is a build failure.
+  const strictFailures = strict
+    ? suite.failed
+      + loaded.invalid.length
+      + (driftPerCase ? driftPerCase.filter((d) => d.status === "drift").length : 0)
+    : 0;
+
   return {
-    exitCode: 0, // never exit non-zero on case failures — painkiller philosophy
+    exitCode: strictFailures > 0 ? 1 : 0,
     output,
     summary: {
       total: suite.total,

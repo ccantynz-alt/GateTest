@@ -1,0 +1,17 @@
+{
+  "name": "modern-node-idioms",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "description": "Reliability-corpus fixture: correct, idiomatic modern ESM Node.",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "browserslist": [
+    "node >= 20"
+  ]
+}

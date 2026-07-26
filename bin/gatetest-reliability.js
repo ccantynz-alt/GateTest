@@ -41,11 +41,19 @@ Flags:
                           and report drift. Cases with no baseline are
                           flagged so you can run --capture-baselines.
   --json                  Emit JSON instead of markdown
+  --strict                Exit 1 if any case fails, any manifest is invalid,
+                          or any case drifts from its baseline. Use in CI.
   --help, -h              Show this usage
 
-Painkiller: this CLI never exits non-zero on case failures. The
-reliability run is informational. Hard non-zero exit only on argument
-errors or outright crashes.
+Painkiller by default: without --strict this CLI never exits non-zero on
+case failures — the run is informational, and a customer is never blocked
+by it. Hard non-zero exit only on argument errors or outright crashes.
+
+With --strict it becomes a gate. That is how CI uses it: a known-good case
+that starts producing findings is a false-positive regression, and it fails
+the build. On a known-good case the ceiling for BOTH errors and warnings
+defaults to zero, because any finding on code asserted to be clean is by
+definition a false positive.
 `.trim();
 
 function parseArgs(argv) {
@@ -58,6 +66,7 @@ function parseArgs(argv) {
     repeatForDeterminism: false,
     captureBaselines: false,
     compareBaselines: false,
+    strict: false,
     json: false,
     help: false,
     errors: [],
@@ -78,6 +87,7 @@ function parseArgs(argv) {
       case "--determinism": out.repeatForDeterminism = true; break;
       case "--capture-baselines": out.captureBaselines = true; break;
       case "--compare-baselines": out.compareBaselines = true; break;
+      case "--strict": out.strict = true; break;
       case "--json": out.json = true; break;
       case "--help":
       case "-h": out.help = true; break;
@@ -112,6 +122,7 @@ async function main() {
       json: args.json,
       captureBaselines: args.captureBaselines,
       compareBaselines: args.compareBaselines,
+      strict: args.strict,
     });
   } catch (err) {
     process.stderr.write(`[gatetest-reliability] fatal: ${err && err.stack ? err.stack : String(err)}\n`);

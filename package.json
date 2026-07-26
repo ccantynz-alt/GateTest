@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "bin": {
     "gatetest": "bin/gatetest.js",
-    "gatetest-mcp": "bin/gatetest-mcp.mjs"
+    "gatetest-mcp": "bin/gatetest-mcp.mjs",
+    "gatetest-reliability": "bin/gatetest-reliability.js"
   },
   "files": [
     "bin/",
