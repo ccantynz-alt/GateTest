@@ -448,3 +448,10 @@ export async function GET(req: NextRequest) {
     timestamp: new Date().toISOString(),
   });
 }
+
+// Cron schedulers are heterogeneous: Vercel's built-in cron issues GET, while
+// curl/systemd/GitHub-Actions stopgaps and our own deploy docs use POST. This
+// route was GET-only, so every POST scheduler got a silent 405 and watches
+// never ran off-Vercel — the same class of invisible outage as the disarmed
+// cron stopgap. /api/scan/worker/tick already exports both; match it.
+export const POST = GET;

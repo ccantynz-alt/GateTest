@@ -89,8 +89,15 @@ schedule authenticated HTTP hits:
 
 | Endpoint | Frequency | Header |
 |---|---|---|
-| `POST /api/scan/worker/tick` | every ~2 min | `Authorization: Bearer $CRON_SECRET` |
-| `POST /api/watches/tick` | every ~5 min | `Authorization: Bearer $CRON_SECRET` |
+| `POST` or `GET` `/api/scan/worker/tick` | every ~2 min | `Authorization: Bearer $CRON_SECRET` |
+| `POST` or `GET` `/api/watches/tick` | every ~5 min | `Authorization: Bearer $CRON_SECRET` |
+
+Both endpoints accept **either method**. That matters because schedulers
+differ — Vercel's built-in cron issues GET, while curl, systemd timers and the
+GitHub Actions stopgap POST. `/api/watches/tick` was GET-only until
+2026-07-26, so every POST scheduler got a silent `405` and watches never ran
+off-Vercel while the scheduler still reported success. `tests/cron-endpoint-methods.test.js`
+now pins both methods on every path declared as a cron in `website/vercel.json`.
 
 Any scheduler works (Vapron's own cron, a systemd timer, or a GitHub Actions
 `schedule:` as a stopgap). Without this, the Continuous ($49/mo) tier does nothing.
