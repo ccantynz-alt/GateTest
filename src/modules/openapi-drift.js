@@ -78,7 +78,6 @@ const SOURCE_EXTS = new Set([
 
 const SPEC_BASENAME_RE = /^(?:openapi|swagger|api-spec|api)(?:\.[A-Za-z0-9_-]+)?\.(?:ya?ml|json)$/i;
 
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|stories|storybook|e2e)(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
 
 // Route-definition shapes across common Node frameworks.
 // Captures: method (lowercase), path literal (quoted).
@@ -293,7 +292,7 @@ class OpenApiDriftModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return; }
 
     const rel = path.relative(projectRoot, file);
-    if (TEST_PATH_RE.test(rel)) return;
+    if (this._isTestPath(rel)) return;
 
     const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i += 1) {

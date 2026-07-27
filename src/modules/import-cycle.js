@@ -90,8 +90,6 @@ const EXCLUDE_DIRS = new Set([
 const JS_EXTS = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts'];
 const JS_EXT_SET = new Set(JS_EXTS);
 
-const TEST_PATH_RE = /(?:^|\/)(?:test|tests|__tests__|spec|specs|e2e|fixtures?|stories|reliability-corpus)\//i;
-const TEST_FILE_RE = /\.(?:test|spec|e2e|stories)\.[a-z0-9]+$/i;
 
 const SUPPRESS_RE = /\bimport-cycle-ok\b/;
 
@@ -157,7 +155,7 @@ class ImportCycleModule extends BaseModule {
     // Report self-loops
     for (const abs of selfLoops) {
       const rel = path.relative(projectRoot, abs).replace(/\\/g, '/');
-      const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
+      const isTest = this._isTestPath(rel);
       result.addCheck(`import-cycle:self-loop:${rel}`, false, {
         severity: isTest ? 'warning' : 'error',
         message: `${rel} imports itself — runtime undefined import`,
@@ -171,7 +169,7 @@ class ImportCycleModule extends BaseModule {
     for (const scc of cycles) {
       const ordered = this._orderCycle(scc, graph, projectRoot);
       const rels = ordered.map((a) => path.relative(projectRoot, a).replace(/\\/g, '/'));
-      const isTest = rels.some((r) => TEST_PATH_RE.test(r) || TEST_FILE_RE.test(r));
+      const isTest = rels.some((r) => this._isTestPath(r));
       const display = [...rels, rels[0]].join(' -> ');
       const ruleKey = rels.join('|');
       result.addCheck(`import-cycle:cycle:${ruleKey}`, false, {

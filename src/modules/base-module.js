@@ -2,6 +2,18 @@
  * Base Module - Abstract base class for all GateTest test modules.
  */
 
+/**
+ * Canonical "is this test/fixture code?" pattern — the union of the 6
+ * drifted copies it replaces. Forward slashes only; `_isTestPath()` owns
+ * normalising the input, so callers must go through it rather than testing
+ * this directly (that omission is the Windows bug it was built to fix).
+ *
+ * Two branches: a directory segment anywhere in the path, or a conventional
+ * test-file suffix. Language list covers the runtimes GateTest scans.
+ */
+const TEST_PATH_RE =
+  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus)(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$/i;
+
 class BaseModule {
   constructor(name, description) {
     this.name = name;
@@ -134,6 +146,37 @@ class BaseModule {
    * (Found via self-scan 2026-07-15: tls-security/cookie-security flagging
    * their own test fixtures as real findings.)
    */
+  /**
+   * Is this repo-relative path test/fixture code?
+   *
+   * Modules use this to downgrade findings (usually error → info) in code
+   * that is not shipped. It replaces 6 DIFFERENT hand-rolled `TEST_PATH_RE`
+   * bodies that had been copy-pasted across 20 modules and then drifted, so
+   * whether `src/foo.test.js` counted as a test depended on which module
+   * found it (KI #77).
+   *
+   * SEPARATOR NORMALISATION IS THE POINT, not a detail. `path.relative()`
+   * returns `tests\helper.js` on Windows, and every one of those regexes
+   * required `/`. Eight modules — async-iteration, env-vars, hardcoded-url,
+   * import-cycle, openapi-drift, race-condition, resource-leak, ssrf —
+   * tested the raw value, so on any Windows checkout a file under `tests/`
+   * was NOT recognised unless its name also carried `.test.`/`.spec.`.
+   * Findings in `tests/helper.js`, `tests/setup.js`, `spec/support/*.js`
+   * were reported at full severity; for `ssrf` that is a gate-BLOCKING
+   * error rather than an info. Proven by direct predicate comparison
+   * 2026-07-28. Normalising here fixes it everywhere at once.
+   *
+   * The pattern is the union of what those 6 variants were each reaching
+   * for — none of them was deliberately narrow, they were just incomplete.
+   *
+   * @param {string} relPath — repo-relative path, either separator
+   * @returns {boolean}
+   */
+  _isTestPath(relPath) {
+    if (typeof relPath !== 'string' || !relPath) return false;
+    return TEST_PATH_RE.test(relPath.replace(/\\/g, '/'));
+  }
+
   _isInsideStringLiteral(line, index) {
     let state = null;
     for (let j = 0; j < index && j < line.length; j += 1) {

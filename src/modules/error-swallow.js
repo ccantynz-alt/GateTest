@@ -78,7 +78,6 @@ const DEFAULT_EXCLUDES = [
 ];
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec)(?:\/|$)|\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
 
 // Function names whose invocation returns a Promise commonly enough
 // that calling without await/then/catch is a smell. Deliberately
@@ -250,7 +249,7 @@ class ErrorSwallowModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const isTest = TEST_PATH_RE.test(rel.replace(/\\/g, '/'));
+    const isTest = this._isTestPath(rel.replace(/\\/g, '/'));
     const lines = content.split('\n');
     let issues = 0;
 

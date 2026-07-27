@@ -82,8 +82,6 @@ const SOURCE_EXTS = new Set([
   '.py',
 ]);
 
-const TEST_PATH_RE = /(?:^|\/)(?:test|tests|__tests__|spec|specs|e2e|fixtures?|stories|reliability-corpus)\//i;
-const TEST_FILE_RE = /\.(?:test|spec|e2e|stories)\.[a-z0-9]+$/i;
 
 const SUPPRESS_RE = /\bredos-ok\b/;
 
@@ -188,7 +186,7 @@ class RedosModule extends BaseModule {
   }
 
   _scanFile(rel, text, result) {
-    const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
+    const isTest = this._isTestPath(rel);
     const lines = text.split(/\r?\n/);
     let issues = 0;
 

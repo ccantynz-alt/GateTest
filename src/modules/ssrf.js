@@ -75,7 +75,6 @@ const DEFAULT_EXCLUDES = [
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec)(?:\/|$)|\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
 
 function isInString(line, idx) {
   let inS = false; let inD = false; let inT = false;
@@ -198,7 +197,7 @@ class SSRFModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const isTestFile = TEST_PATH_RE.test(rel);
+    const isTestFile = this._isTestPath(rel);
     const lines = content.split('\n');
     let issues = 0;
 

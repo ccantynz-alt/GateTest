@@ -89,8 +89,6 @@ const JSON_EXTS = new Set(['.json']);
 
 const SUPPRESS_RE = /\bcron-ok\b/;
 
-const TEST_PATH_RE = /(?:^|\/)(?:test|tests|__tests__|spec|specs|e2e|fixtures?|stories|reliability-corpus)\//i;
-const TEST_FILE_RE = /\.(?:test|spec|e2e|stories)\.[a-z0-9]+$/i;
 
 // Predefined aliases accepted by most cron implementations.
 const ALIASES = new Set([
@@ -176,7 +174,7 @@ class CronExpressionModule extends BaseModule {
           (line > 1 && lines[line - 2] && SUPPRESS_RE.test(lines[line - 2]));
         if (suppressed) continue;
 
-        const inTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
+        const inTest = this._isTestPath(rel);
         issues += this._validateCron(expr, rel, line, result, inTest);
       }
     }

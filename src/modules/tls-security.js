@@ -90,8 +90,6 @@ const JS_EXTS = new Set([
 ]);
 const PY_EXTS = new Set(['.py']);
 
-const TEST_PATH_RE = /(?:^|\/)(?:test|tests|__tests__|spec|specs|e2e|fixtures?|stories|reliability-corpus)\//i;
-const TEST_FILE_RE = /\.(?:test|spec|e2e|stories)\.[a-z0-9]+$/i;
 
 const SUPPRESS_RE = /\btls-ok\b/;
 
@@ -196,7 +194,7 @@ class TlsSecurityModule extends BaseModule {
   }
 
   _scanJs(rel, text, result) {
-    const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
+    const isTest = this._isTestPath(rel);
     const errSev = isTest ? 'warning' : 'error';
     const lines = text.split(/\r?\n/);
     let issues = 0;
@@ -292,7 +290,7 @@ class TlsSecurityModule extends BaseModule {
   }
 
   _scanPy(rel, text, result) {
-    const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
+    const isTest = this._isTestPath(rel);
     const errSev = isTest ? 'warning' : 'error';
     const warnSev = isTest ? 'info' : 'warning';
     const lines = text.split(/\r?\n/);

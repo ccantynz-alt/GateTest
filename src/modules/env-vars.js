@@ -83,7 +83,6 @@ const CI_WORKFLOW_RE = /\.ya?ml$/i;
 // Test paths contain scanner fixtures like `"process.env.SOME_KEY"` embedded
 // as string literals; they'd pollute the reference set with keys that
 // are not real app env reads. Skip.
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|stories|storybook|e2e)(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py)$/i;
 
 // Local-dev config files legitimately read env vars (BASE_URL, CI)
 // that CI sets at runtime; they don't need `.env.example` entries.
@@ -372,7 +371,7 @@ class EnvVarsModule extends BaseModule {
         const ext = path.extname(entry.name).toLowerCase();
         if (!CODE_EXTS.has(ext)) continue;
         const rel = path.relative(projectRoot, full);
-        if (TEST_PATH_RE.test(rel)) continue;
+        if (this._isTestPath(rel)) continue;
         if (DEV_CONFIG_BASENAME_RE.test(entry.name)) continue;
         this._scanReferences(full, projectRoot, referenced);
       }

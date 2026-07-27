@@ -86,7 +86,6 @@ const SOURCE_EXTS = new Set([
 const LOCALE_PATH_RE = /(?:^|\/)(?:locales?|i18n|lang(?:uages?)?|translations?|intl|l10n)(?:\/|$)/i;
 const LOCALE_EXT_RE = /\.(?:po|pot|xliff|xlf|arb|lang|locale|mo)$/i;
 const DOC_EXT_RE = /\.(?:md|mdx|markdown|rst|txt)$/i;
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?)(?:\/|$)/i;
 
 // Bidi-override / isolate — the Trojan Source range.
 // U+202A LRE, U+202B RLE, U+202C PDF, U+202D LRO, U+202E RLO,
@@ -236,7 +235,7 @@ class HomoglyphModule extends BaseModule {
     const relFwd = rel.replace(/\\/g, '/');
     const isLocale = LOCALE_PATH_RE.test(relFwd) || LOCALE_EXT_RE.test(relFwd);
     const isDoc = DOC_EXT_RE.test(relFwd);
-    const isTestFile = TEST_PATH_RE.test(relFwd);
+    const isTestFile = this._isTestPath(relFwd);
 
     // Locale and doc files are allowed any Unicode.
     if (isLocale || isDoc) return 0;
