@@ -42,6 +42,9 @@ class SecurityModule extends BaseModule {
     // SQL injection via string concatenation / template interpolation
     this._checkSqlInjectionPatterns(projectRoot, result);
 
+    // MD5/SHA-1 used to hash a credential
+    this._checkWeakPasswordHashing(projectRoot, result);
+
     // Check for dangerous file permissions
     this._checkFilePermissions(projectRoot, result);
 
@@ -268,6 +271,81 @@ class SecurityModule extends BaseModule {
       message: `CRITICAL: SQL injection risk — SQL query built via string concatenation/interpolation of an identifier at ${relPath}:${lineNo}`,
       suggestion: 'Use parameterised queries (e.g. conn.query("...WHERE id = ?", [id])) or a tagged-template SQL builder (sql`...`) instead of concatenating/interpolating identifiers into SQL text',
     });
+  }
+
+  /**
+   * MD5 / SHA-1 used to hash a CREDENTIAL.
+   *
+   * The hard part of this rule is not detecting md5 — it is not drowning the
+   * customer in false positives. MD5 and SHA-1 are perfectly legitimate, and
+   * extremely common, for non-security work: cache keys, ETags, content
+   * addressing, checksums, cache-busting hashes, test fixtures. A rule that
+   * flagged every `createHash('md5')` would fire constantly on correct code
+   * and teach people to ignore this module.
+   *
+   * So it fires only when a CREDENTIAL is being hashed — the identifier
+   * feeding the hash, or the thing being assigned, names a password or
+   * secret. Fast hashes are wrong there specifically because they are fast:
+   * they make offline brute-force cheap. The fix is bcrypt/scrypt/argon2,
+   * not "use sha256", so the suggestion says so.
+   *
+   * Gap found 2026-07-28 by scanning a fixture of genuinely-vulnerable code
+   * to measure false NEGATIVES: `grep -rln md5 src/modules/` returned
+   * nothing at all, while every competitor ships this check (KI #89).
+   */
+  _checkWeakPasswordHashing(projectRoot, result) {
+    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
+
+    // A weak, fast digest being constructed.
+    const WEAK_HASH_RE = /createHash\s*\(\s*['"`](md5|sha1|sha-1)['"`]/i;
+    // Credential-ish naming, in the hashed value or the assignment target.
+    //
+    // Two classes, and the distinction matters. The unambiguous words are
+    // matched as SUBSTRINGS because these functions are named in camelCase —
+    // `\bpassword\b` does not match `hashPassword`, which is precisely how
+    // this code is written in the wild (that boundary cost me the first
+    // version of this rule). The ambiguous short words stay word-bounded,
+    // because `pin` inside "spinner" and `token` inside "tokenizer" would
+    // otherwise drag innocent hashes in.
+    const CREDENTIAL_STRONG_RE = /(?:password|passwd|passphrase|secret|credential|api[_-]?key)/i;
+    const CREDENTIAL_WEAK_RE = /\b(?:pwd|pin|token|salt)\b/i;
+
+    for (const file of files) {
+      const relPath = path.relative(projectRoot, file);
+      if (SCANNER_PATH_RE.test(relPath.replace(/\\/g, '/'))) continue;
+
+      let content;
+      try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+      const lines = content.split(/\r?\n/);
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (this._isCommentLine(line)) continue;
+        const m = line.match(WEAK_HASH_RE);
+        if (!m) continue;
+        if (this._isInsideStringLiteral(line, m.index)) continue;
+
+        // The credential can be named on this line (`.update(password)`) or
+        // on the enclosing function/assignment a couple of lines up
+        // (`function hashPassword(pw) {`). Keep the window tight so an
+        // unrelated password mention elsewhere in the file cannot drag an
+        // innocent cache-key hash into a finding.
+        const windowText = lines.slice(Math.max(0, i - 2), i + 2).join('\n');
+        if (!CREDENTIAL_STRONG_RE.test(windowText) && !CREDENTIAL_WEAK_RE.test(windowText)) continue;
+
+        const algo = m[1].toLowerCase();
+        result.addCheck(`security:weak-password-hash:${relPath}:${i + 1}`, false, {
+          file: relPath,
+          line: i + 1,
+          column: m.index,
+          severity: 'error',
+          message: `${relPath}:${i + 1} CRITICAL: ${algo.toUpperCase()} used to hash a credential — fast hashes make offline brute-force cheap`,
+          suggestion: 'Use a deliberately slow, salted KDF: bcrypt, scrypt, or argon2id. Switching to SHA-256 does NOT fix this — the problem is speed, not collision resistance.',
+        });
+        break; // one finding per file; the remedy is the same throughout
+      }
+    }
   }
 
   _checkFilePermissions(projectRoot, result) {

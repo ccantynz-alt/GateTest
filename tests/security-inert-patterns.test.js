@@ -215,3 +215,129 @@ describe('security — command injection via an aliased child_process', () => {
     assert.deepStrictEqual(found, []);
   });
 });
+
+// =============================================================================
+// FALSE NEGATIVE: MD5/SHA-1 used to hash a credential
+// =============================================================================
+// `grep -rln md5 src/modules/` returned NOTHING before 2026-07-28 — the
+// engine had no weak-hash check at all, while every competitor ships one
+// (KI #89).
+//
+// The hard part is not detecting md5. It is not drowning the customer in
+// false positives: md5/sha1 are legitimate and everywhere for cache keys,
+// ETags, content addressing and checksums. A rule that flagged every
+// createHash('md5') would fire constantly on correct code and train people
+// to ignore the module. So it fires only on CREDENTIAL context.
+// =============================================================================
+
+describe('security — weak hashing of credentials', () => {
+  let tmp3;
+  beforeEach(() => { tmp3 = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-hash-')); });
+  afterEach(() => { fs.rmSync(tmp3, { recursive: true, force: true }); });
+
+  async function scanHash(source) {
+    fs.mkdirSync(path.join(tmp3, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp3, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    fs.writeFileSync(path.join(tmp3, 'src', 'x.js'), source);
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp3 });
+    return result.checks.filter((c) => !c.passed && /weak-password-hash/.test(c.name));
+  }
+
+  it('flags md5 hashing a password (camelCase function name)', async () => {
+    // `\bpassword\b` does NOT match `hashPassword` — that boundary broke the
+    // first version of this rule, and camelCase is how this is really written.
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function hashPassword(pw) {',
+      "  return crypto.createHash('md5').update(pw).digest('hex');",
+      '}',
+      'module.exports = { hashPassword };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].severity, 'error');
+    assert.match(found[0].suggestion, /bcrypt|scrypt|argon2/i);
+    assert.match(found[0].suggestion, /does NOT fix/i,
+      'the suggestion must say switching to SHA-256 is not the fix');
+  });
+
+  it('flags sha1 hashing a secret', async () => {
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function digestSecret(secret) {',
+      "  return crypto.createHash('sha1').update(secret).digest('hex');",
+      '}',
+      'module.exports = { digestSecret };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1);
+  });
+
+  // The negatives are the whole point of the rule's design.
+  it('does NOT flag md5 for a cache key', async () => {
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function cacheKey(fileContent) {',
+      "  return crypto.createHash('md5').update(fileContent).digest('hex');",
+      '}',
+      'module.exports = { cacheKey };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag sha1 for an ETag', async () => {
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function etagFor(buffer) {',
+      "  return crypto.createHash('sha1').update(buffer).digest('base64');",
+      '}',
+      'module.exports = { etagFor };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag md5 for an asset fingerprint', async () => {
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function assetFingerprint(bytes) {',
+      "  return crypto.createHash('md5').update(bytes).digest('hex').slice(0, 8);",
+      '}',
+      'module.exports = { assetFingerprint };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT let an ambiguous short word drag in an innocent hash', async () => {
+    // `pin` inside "spinner" and `token` inside "tokenizer" must not count —
+    // those stay word-bounded while password/secret match as substrings.
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function spinnerTokenizerKey(bytes) {',
+      "  return crypto.createHash('md5').update(bytes).digest('hex');",
+      '}',
+      'module.exports = { spinnerTokenizerKey };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag a weak hash mentioned only in a doc string', async () => {
+    const found = await scanHash([
+      'const DOCS = { bad: "crypto.createHash(\'md5\').update(password)" };',
+      'module.exports = { DOCS };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag sha256 for a password (correct-ish algorithm choice)', async () => {
+    // Still not ideal, but this rule is specifically about md5/sha1. A rule
+    // that also fired here would be making a different argument.
+    const found = await scanHash([
+      "const crypto = require('crypto');",
+      'function hashPassword(pw) {',
+      "  return crypto.createHash('sha256').update(pw).digest('hex');",
+      '}',
+      'module.exports = { hashPassword };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+});
