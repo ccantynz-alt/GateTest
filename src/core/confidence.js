@@ -218,6 +218,68 @@ function isInsideBlockComment(sourceText, line) {
  * "is the line dominated by a string?" — used by modules that don't
  * track column.
  */
+/**
+ * Is `column` inside string TEXT — as opposed to code?
+ *
+ * The distinction that matters is `${...}` interpolation. The previous
+ * implementation flipped a boolean on every backtick and answered "inside a
+ * string" for everything between them, so the most common injection shape in
+ * modern JavaScript —
+ *
+ *     const q = `SELECT * FROM users WHERE id = ${req.query.id}`;
+ *
+ * — scored 0.4 at the column of `req.query.id`. Below the 0.7 block
+ * threshold, an error-severity finding there is downgraded to a
+ * non-blocking soft error, so the gate waved SQL injection through. Same
+ * false-negative class as the block-comment walker (KI #85), found the same
+ * way: by looking at what the "string literal" signal was actually firing on.
+ *
+ * Maintains a stack so nesting works — `${obj['key']}` is a string inside
+ * interpolation inside a template.
+ *
+ * @param {string} lineText
+ * @param {number} column
+ * @returns {boolean} true only when the position is literal text
+ */
+function _isInsideStringText(lineText, column) {
+  const stack = []; // { q: "'" | '"' | '`', interp: number }
+  let i = 0;
+  while (i < column && i < lineText.length) {
+    const ch = lineText[i];
+    const nx = lineText[i + 1];
+    const top = stack[stack.length - 1];
+
+    // Inside `${ ... }` — ordinary code rules apply.
+    if (top && top.q === '`' && top.interp > 0) {
+      if (ch === '\\') { i += 2; continue; }
+      if (ch === '{') { top.interp += 1; i += 1; continue; }
+      if (ch === '}') { top.interp -= 1; i += 1; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { stack.push({ q: ch, interp: 0 }); i += 1; continue; }
+      i += 1;
+      continue;
+    }
+
+    // Inside string text.
+    if (top) {
+      if (ch === '\\') { i += 2; continue; }
+      if (top.q === '`' && ch === '$' && nx === '{') { top.interp = 1; i += 2; continue; }
+      if (ch === top.q) { stack.pop(); i += 1; continue; }
+      i += 1;
+      continue;
+    }
+
+    // Outside any string.
+    if (ch === "'" || ch === '"' || ch === '`') { stack.push({ q: ch, interp: 0 }); i += 1; continue; }
+    i += 1;
+  }
+
+  const top = stack[stack.length - 1];
+  if (!top) return false;
+  // Sitting in a template's interpolation is code, not text.
+  if (top.q === '`' && top.interp > 0) return false;
+  return true;
+}
+
 function isInsideStringLiteral(sourceText, line, column) {
   if (!sourceText || !line || line < 1) return null;
   const lines = sourceText.split('\n');
@@ -227,27 +289,17 @@ function isInsideStringLiteral(sourceText, line, column) {
 
   // If column is given, walk to that column tracking string state.
   if (typeof column === 'number' && column >= 0) {
-    let inS = false;
-    let inD = false;
-    let inT = false;
-    for (let i = 0; i < column && i < lineText.length; i += 1) {
-      const ch = lineText[i];
-      if (ch === '\\') {
-        i += 1;
-        continue;
-      }
-      if (!inD && !inT && ch === '\'') inS = !inS;
-      else if (!inS && !inT && ch === '"') inD = !inD;
-      else if (!inS && !inD && ch === '`') inT = !inT;
-    }
-    if (inS || inD || inT) {
+    if (_isInsideStringText(lineText, column)) {
       return { multiplier: 0.4, reason: 'string literal' };
     }
     return null;
   }
 
   // No column: conservative heuristic. Doc-string-shape line.
+  // A template literal with `${...}` in it is NOT "just a string" — part of
+  // the line is executable — so the whole-line shortcut must not claim it.
   const trimmed = lineText.trim();
+  if (trimmed.includes('${')) return null;
   if (/^['"`]/.test(trimmed) && /['"`][,)\s]*$/.test(trimmed)) {
     return { multiplier: 0.4, reason: 'string literal' };
   }

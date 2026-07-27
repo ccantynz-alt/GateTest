@@ -429,3 +429,91 @@ test('block-comment walker: the real-world shape that exposed this scores full c
   ].join('\n');
   assert.equal(_score(src, 5).confidence, 1);
 });
+
+// ---------------------------------------------------------------------------
+// String-literal detection must treat `${...}` interpolation as CODE.
+//
+// The old walker flipped a boolean on every backtick, so everything between
+// them counted as "string literal" — including interpolations. That made the
+// most common injection shape in modern JavaScript score 0.4:
+//
+//     const q = `SELECT * FROM users WHERE id = ${req.query.id}`;
+//
+// Below the 0.7 block threshold an error-severity finding is downgraded to a
+// non-blocking soft error, so the gate waved SQL injection through. Same
+// false-negative class as the block-comment walker (KI #85), found the same
+// way — by looking at what the signal was actually firing on.
+// ---------------------------------------------------------------------------
+
+function _scoreAt(sourceText, line, column, ruleKey = 'sql-injection:template-literal') {
+  return scoreFinding({
+    filePath: 'src/db.js', ruleKey, module: 'security', line, column, sourceText,
+  });
+}
+
+test('string literal: a finding inside ${...} is CODE and keeps full confidence', () => {
+  const src = [
+    'function getUser(req, db) {',
+    '  const q = `SELECT * FROM users WHERE id = ${req.query.id}`;',
+    '  return db.query(q);',
+    '}',
+  ].join('\n');
+  const lineText = src.split('\n')[1];
+  const col = lineText.indexOf('req.query.id');
+  const s = _scoreAt(src, 2, col);
+  assert.equal(s.confidence, 1);
+  assert.ok(!(s.signals || []).includes('string literal'));
+  assert.ok(s.confidence >= BLOCK_THRESHOLD, 'must still block the gate');
+});
+
+test('string literal: literal TEXT inside the same template is still down-weighted', () => {
+  const src = ['const q = `SELECT * FROM users WHERE id = ${id}`;'].join('\n');
+  const col = src.indexOf('SELECT');
+  const s = _scoreAt(src, 1, col);
+  assert.equal(s.confidence, 0.4);
+  assert.ok((s.signals || []).includes('string literal'));
+});
+
+test('string literal: a nested string inside ${...} IS string text', () => {
+  // `${obj['key']}` — the inner quoted part is genuinely literal text.
+  const src = ["const q = `x ${obj['key']} y`;"].join('\n');
+  const col = src.indexOf('key');
+  assert.equal(_scoreAt(src, 1, col).confidence, 0.4);
+});
+
+test('string literal: code AFTER a closed interpolation is still template text', () => {
+  const src = ['const q = `a ${x} bbbb`;'].join('\n');
+  const col = src.indexOf('bbbb');
+  assert.equal(_scoreAt(src, 1, col).confidence, 0.4, 'past the } we are back in text');
+});
+
+test('string literal: nested braces inside interpolation do not end it early', () => {
+  const src = ['const q = `a ${fn({ k: v })} TAIL`;'].join('\n');
+  const inner = src.indexOf('k: v');
+  assert.equal(_scoreAt(src, 1, inner).confidence, 1, 'still inside ${...}');
+  const tail = src.indexOf('TAIL');
+  assert.equal(_scoreAt(src, 1, tail).confidence, 0.4, 'back to template text after the close');
+});
+
+test('string literal: ordinary quoted strings are unaffected', () => {
+  const src = ["const s = 'hello world';"].join('\n');
+  assert.equal(_scoreAt(src, 1, src.indexOf('hello')).confidence, 0.4);
+  assert.equal(_scoreAt(src, 1, src.indexOf('const')).confidence, 1);
+});
+
+test('string literal: an escape inside a string does not desynchronise the walker', () => {
+  const src = [String.raw`const s = 'a\'b'; danger(x);`].join('\n');
+  const col = src.indexOf('danger');
+  assert.equal(_scoreAt(src, 1, col).confidence, 1, 'code after the string is code');
+});
+
+test('string literal: the no-column heuristic does not claim an interpolated line', () => {
+  // Without a column we fall back to "does the line look like just a string?".
+  // A template with ${...} in it is part code, so the shortcut must decline.
+  const src = ['`gatetest-${process.pid}-${Date.now()}.json`,'].join('\n');
+  const s = scoreFinding({
+    filePath: 'tests/x.test.js', ruleKey: 'flaky-tests:math-random',
+    module: 'flakyTests', line: 1, sourceText: src,
+  });
+  assert.ok(!(s.signals || []).includes('string literal'));
+});
