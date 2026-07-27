@@ -28,6 +28,44 @@ class SecretsModule extends BaseModule {
     ];
   }
 
+  /**
+   * True when the quoted value in a `key: 'value'` match reads as English
+   * prose rather than a credential.
+   *
+   * Why this exists: the pattern rules key off the IDENTIFIER (`secret`,
+   * `token`, `api_key`), so any object that maps env-var names to
+   * human-readable descriptions trips them — a documentation map, not a
+   * leak. Found by GateTest's own self-scan on
+   * scripts/marketplace-preflight.js (`CRON_SECRET: 'the scan queue is
+   * never drained ...'`).
+   *
+   * The test is deliberately conservative — a value only counts as prose
+   * when it has 4+ whitespace-separated words AND contains no contiguous
+   * 12-char run mixing letters with digits/`+/=` (the signature of a real
+   * key). A multi-word passphrase like `'correct horse battery staple'`
+   * is the one shape this could mask, so the token test stays strict and
+   * anything with key-like entropy is still reported.
+   *
+   * @param {string} match - full regex match, e.g. `SECRET: 'some words'`
+   * @returns {boolean}
+   */
+  _looksLikeProse(match) {
+    const q = match.match(/['"]([^'"]*)$/);
+    if (!q) return false;
+    const value = q[1];
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 4) return false;
+    // Any contiguous 12+ char run that mixes letters with digits or base64
+    // padding is key-shaped — never treat that as prose. Checked per-run so
+    // a sentence that merely happens to contain a digit elsewhere is safe.
+    const runs = value.match(/[A-Za-z0-9+/=_-]{12,}/g) || [];
+    if (runs.some((r) => /[A-Za-z]/.test(r) && /[0-9+/=]/.test(r))) return false;
+    // Every word must be plain language: letters, digits, and ordinary
+    // sentence punctuation. Underscores, braces, brackets and backslashes
+    // signal code, so a value containing them is not treated as prose.
+    return words.every((w) => /^[A-Za-z0-9''""«»,.;:!?()\-—–/&%]+$/.test(w));
+  }
+
   async run(result, config) {
     const projectRoot = config.projectRoot;
     const sourceExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.rb', '.go', '.rs',
@@ -75,12 +113,33 @@ class SecretsModule extends BaseModule {
           // Reset regex lastIndex for global regexes
           pattern.regex.lastIndex = 0;
           if (pattern.regex.test(line)) {
+            // Re-anchor before exec. `test()` above ADVANCED lastIndex on
+            // these /g regexes, so the exec used to resume past the match it
+            // had just found and return null — which silently disabled every
+            // value-based suppression below (placeholders included) for as
+            // long as this module has shipped. Reset, exec, reset again.
+            pattern.regex.lastIndex = 0;
             // Skip known placeholder / sentinel values that are intentionally visible
             const m = pattern.regex.exec(line);
             pattern.regex.lastIndex = 0;
             if (m) {
               const val = m[0].toLowerCase();
-              if (/(?:changeme|placeholder|your[_-]?(?:secret|key|password|token)|replace[_-]?me|example|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo)/.test(val)) continue;
+              // `your[_-]?(?:\w+[_-])?` so the extremely common
+              // `your_api_key_here` / `your-github-token` shapes are covered,
+              // not just the bare `your_key`.
+              // `example` is bounded so it only suppresses a standalone
+              // placeholder word (`example_secret`, `"example"`). Left
+              // unbounded it swallows any high-entropy value that merely
+              // contains the substring — including AWS's canonical
+              // AKIAIOSFODNN7EXAMPLE — and a secrets module must fail
+              // toward detection, never toward silence.
+              if (/(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo)/.test(val)) continue;
+              // Skip prose values. `CRON_SECRET: 'the scan queue is never
+              // drained'` is a docs/description map keyed by env-var NAME —
+              // the name matches the rule, the value is an English sentence.
+              // Credentials are contiguous high-entropy strings; sentences
+              // are not. See _looksLikeProse for the exact test.
+              if (this._looksLikeProse(m[0])) continue;
             }
             found.push({
               type: pattern.type,

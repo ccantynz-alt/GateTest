@@ -116,6 +116,46 @@ export function ProgressTicker({ suite, elapsedSec }: { suite: "web" | "wp"; ela
   );
 }
 
+/**
+ * Shown when the runtime (headless-browser) pass could NOT be queued.
+ *
+ * Why this exists: /web sells "we open your site in a real browser." When
+ * the worker tier is unreachable the API honestly returns
+ * `runtime.status: "unavailable"` — but nothing rendered it, so the report
+ * looked complete while a whole advertised layer had silently not run.
+ * Static-probe findings are still real; the customer just needs to know
+ * what is missing from them.
+ */
+export function RuntimeUnavailable({ reason }: { reason?: string | null }) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 ring-1 ring-amber-100">
+      <div className="flex items-start gap-3">
+        <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-amber-500/15 flex items-center justify-center">
+          <span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden />
+        </span>
+        <div className="flex-1">
+          <p className="font-semibold text-amber-900 leading-tight">
+            Live browser check didn&apos;t run
+          </p>
+          <p className="text-sm text-amber-900/80 mt-1">
+            Everything below is from our static and network probes, and it&apos;s all real. But
+            the headless-browser pass — live JavaScript errors, hydration mismatches, CSP
+            violations — couldn&apos;t start this time, so those checks are <em>not</em>{" "}
+            reflected in the score. Re-run the scan in a few minutes, or email{" "}
+            <a href="mailto:hello@gatetest.ai" className="underline font-medium">
+              hello@gatetest.ai
+            </a>{" "}
+            if it keeps happening.
+          </p>
+          {reason ? (
+            <p className="text-xs text-amber-900/60 mt-2 font-mono break-words">{reason}</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RuntimePending({ pollUrl, onComplete }: { pollUrl: string; onComplete: (rt: RuntimeBlock["payload"]) => void }) {
   const [elapsed, setElapsed] = useState(0);
   const onCompleteRef = useRef(onComplete);

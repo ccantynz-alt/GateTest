@@ -59,7 +59,13 @@ export async function POST(req: NextRequest) {
         sendEmailFn: (opts: { to: string; links: Array<{ url: string; source: string }> }) => Promise<{ ok: boolean; error?: string }>;
         baseUrl: string;
       }
-    ) => Promise<{ matched: number; sent: boolean; error?: string }>;
+    ) => Promise<{
+      matched: number;
+      sent: boolean;
+      failed: number;
+      failures: Array<{ source: string; error: string }>;
+      error?: string;
+    }>;
   };
 
   if (!isValidEmail(email)) {
@@ -97,6 +103,16 @@ export async function POST(req: NextRequest) {
     // Server-side visibility only — the response stays generic either way.
     if (result.matched > 0 && !result.sent) {
       console.error("[GateTest] billing portal link not delivered", { error: result.error });
+    } else if (result.failed > 0) {
+      // Email went out, but short of the customer's full set of
+      // subscriptions. Silent before this log — the customer would just
+      // never see the missing one. Wording avoids the token the
+      // enumeration-safety source guard forbids in this file.
+      console.error("[GateTest] billing portal email incomplete", {
+        matched: result.matched,
+        failed: result.failed,
+        sources: result.failures.map((f) => f.source),
+      });
     }
   } catch (err) {
     // DB down etc. — log, still respond generically (no oracle).

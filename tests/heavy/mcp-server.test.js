@@ -274,7 +274,11 @@ describeOrSkip('MCP server — scan_local', () => {
     const res = await callMcp(
       'tools/call',
       { name: 'scan_local', arguments: { path: TINY_SCAN_PATH } },
-      10000,
+      // 60s (the helper default), not 10s. These assert a GATING POLICY, not
+      // latency — and spawning the server plus a real scan can exceed 10s
+      // when the heavy suite runs its files in parallel. Observed flaking
+      // exactly here on 2026-07-27 while green in isolation.
+      60000,
       noKeyEnv
     );
     assert.ok(!res.result.content[0].text.includes('🔒'), 'local scan_local must be free for any suite (KI #39)');
@@ -286,7 +290,7 @@ describeOrSkip('MCP server — scan_local', () => {
     const res = await callMcp(
       'tools/call',
       { name: 'scan_local', arguments: { path: TINY_SCAN_PATH, modules: ['memory', 'syntax'] } },
-      10000,
+      60000, // same rationale as above — policy assertion, not a latency budget
       noKeyEnv
     );
     assert.ok(!res.result.content[0].text.includes('🔒'), 'modules array must be free on the local server (KI #39)');

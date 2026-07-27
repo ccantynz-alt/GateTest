@@ -33,7 +33,7 @@ import type {
   UrlScanFlowProps,
 } from "./url-scan-flow-types";
 import { HealthScoreCard, StatCard, FindingRow, RecommendationCard, PaywallCard } from "./url-scan-flow-cards";
-import { LiveModuleTicker, ProgressTicker, RuntimePending } from "./url-scan-flow-progress";
+import { LiveModuleTicker, ProgressTicker, RuntimePending, RuntimeUnavailable } from "./url-scan-flow-progress";
 import { CopyForClaudeButton } from "./url-scan-flow-export";
 import { consumeSseStream } from "./url-scan-flow-sse";
 
@@ -355,6 +355,12 @@ export function UrlScanFlow({ suite, endpoint, streamEndpoint, recommendEndpoint
 
           {showRuntime && result.runtime?.status === "queued" && result.runtime.pollUrl && (
             <RuntimePending pollUrl={result.runtime.pollUrl} onComplete={applyRuntimePayload} />
+          )}
+
+          {/* The advertised browser pass didn't start. Say so — a report that
+              silently omits a whole layer reads as a clean bill of health. */}
+          {result.runtime?.status === "unavailable" && (
+            <RuntimeUnavailable reason={result.runtime.reason} />
           )}
 
           {result.findings.length > 0 ? (

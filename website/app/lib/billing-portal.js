@@ -125,29 +125,55 @@ async function createPortalSession(customerId, returnUrl, stripeRequestFn = defa
  * The whole flow for one request. Returns what happened for logging, but
  * callers MUST NOT let the distinction reach the HTTP response body.
  *
+ * Partial failure is reported, not swallowed. A customer with two
+ * subscriptions whose second portal session fails still gets an email —
+ * with one link — and previously nothing recorded that the other link was
+ * missing, so the operator had no way to know the email was incomplete.
+ * `failed` / `failures` carry that upstream for logging and alerting while
+ * the loop keeps its per-record tolerance.
+ *
  * @param {object} deps  — { sql, stripeRequestFn, sendEmailFn, baseUrl }
- * @returns {Promise<{ matched: number, sent: boolean, error?: string }>}
+ * @returns {Promise<{ matched: number, sent: boolean, failed: number,
+ *   failures: Array<{ source: string, error: string }>, error?: string }>}
  */
 async function requestPortalLink(email, deps) {
   const { sql, stripeRequestFn, sendEmailFn, baseUrl } = deps;
   const customers = await findStripeCustomersByEmail(sql, email);
-  if (customers.length === 0) return { matched: 0, sent: false };
+  if (customers.length === 0) return { matched: 0, sent: false, failed: 0, failures: [] };
 
   const returnUrl = `${(baseUrl || 'https://gatetest.ai').replace(/\/$/, '')}/billing`;
   const links = [];
+  const failures = [];
   for (const c of customers.slice(0, MAX_PORTAL_SESSIONS_PER_REQUEST)) {
     try {
       const { url } = await createPortalSession(c.customerId, returnUrl, stripeRequestFn);
       links.push({ url, source: c.source });
     } catch (err) {
-      // One bad customer record must not block the rest.
-      console.error('[GateTest] portal session failed', { source: c.source, error: err.message });
+      // One bad customer record must not block the rest — but the failure
+      // is recorded and returned, never only logged.
+      const reason = (err && err.message) || 'unknown error';
+      console.error('[GateTest] portal session failed', { source: c.source, error: reason });
+      failures.push({ source: c.source, error: reason });
     }
   }
-  if (links.length === 0) return { matched: customers.length, sent: false, error: 'no portal session created' };
+  if (links.length === 0) {
+    return {
+      matched: customers.length,
+      sent: false,
+      failed: failures.length,
+      failures,
+      error: 'no portal session created',
+    };
+  }
 
   const sendResult = await sendEmailFn({ to: email.trim(), links });
-  return { matched: customers.length, sent: Boolean(sendResult && sendResult.ok), error: sendResult && sendResult.error };
+  return {
+    matched: customers.length,
+    sent: Boolean(sendResult && sendResult.ok),
+    failed: failures.length,
+    failures,
+    error: (sendResult && sendResult.error) || (failures.length ? `${failures.length} portal session(s) failed` : undefined),
+  };
 }
 
 module.exports = {

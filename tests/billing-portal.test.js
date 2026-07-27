@@ -102,7 +102,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sendEmailFn: async () => { emails += 1; return { ok: true }; },
       baseUrl: 'https://gatetest.ai',
     });
-    assert.deepStrictEqual(result, { matched: 0, sent: false });
+    assert.deepStrictEqual(result, { matched: 0, sent: false, failed: 0, failures: [] });
     assert.strictEqual(stripeCalls, 0);
     assert.strictEqual(emails, 0);
   });
@@ -154,6 +154,60 @@ describe('billing-portal — requestPortalLink flow', () => {
     });
     assert.strictEqual(result.sent, true);
     assert.strictEqual(sentEmails[0].links.length, 1);
+  });
+
+  // Regression: the per-customer catch used to log-and-eat. A customer with
+  // two subscriptions whose second portal session failed got a one-link
+  // email and NOTHING recorded the omission, so the operator never knew the
+  // email was incomplete. Flagged by GateTest's own errorSwallow module.
+  it('partial failure is REPORTED, not swallowed — failed/failures reach the caller', async () => {
+    const sql = fakeSql([
+      [{ stripe_customer_id: 'cus_bad', status: 'active' }, { stripe_customer_id: 'cus_good', status: 'active' }],
+      [],
+    ]);
+    const result = await Portal.requestPortalLink('craig@example.com', {
+      sql,
+      stripeRequestFn: async (m, p, body) => {
+        if (String(body).includes('cus_bad')) throw new Error('No such customer');
+        return { url: 'https://billing.stripe.com/p/good' };
+      },
+      sendEmailFn: async () => ({ ok: true }),
+      baseUrl: 'https://gatetest.ai',
+    });
+    assert.strictEqual(result.sent, true, 'the good link still ships');
+    assert.strictEqual(result.failed, 1, 'the failure count is surfaced');
+    assert.strictEqual(result.failures.length, 1);
+    assert.match(result.failures[0].error, /No such customer/);
+    assert.match(result.error, /1 portal session\(s\) failed/);
+  });
+
+  it('total failure still reports every failure reason', async () => {
+    const sql = fakeSql([[{ stripe_customer_id: 'cus_bad', status: 'active' }], []]);
+    let emails = 0;
+    const result = await Portal.requestPortalLink('craig@example.com', {
+      sql,
+      stripeRequestFn: async () => { throw new Error('Stripe down'); },
+      sendEmailFn: async () => { emails += 1; return { ok: true }; },
+      baseUrl: 'https://gatetest.ai',
+    });
+    assert.strictEqual(result.sent, false);
+    assert.strictEqual(result.failed, 1);
+    assert.match(result.failures[0].error, /Stripe down/);
+    assert.strictEqual(result.error, 'no portal session created');
+    assert.strictEqual(emails, 0, 'no email when there is nothing to send');
+  });
+
+  it('clean run reports zero failures', async () => {
+    const sql = fakeSql([[{ stripe_customer_id: 'cus_A', status: 'active' }], []]);
+    const result = await Portal.requestPortalLink('craig@example.com', {
+      sql,
+      stripeRequestFn: async () => ({ url: 'https://billing.stripe.com/p/s1' }),
+      sendEmailFn: async () => ({ ok: true }),
+      baseUrl: 'https://gatetest.ai',
+    });
+    assert.strictEqual(result.failed, 0);
+    assert.deepStrictEqual(result.failures, []);
+    assert.strictEqual(result.error, undefined, 'no spurious error on a clean run');
   });
 });
 
