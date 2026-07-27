@@ -295,7 +295,11 @@ function quickFilter(message) {
   return null;
 }
 
-const CHAT_MODEL = 'claude-sonnet-5';
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches the chat
+// path — it was a hardcoded literal, invisible to the override (KI #78).
+const { CHEAP_MODEL } = require('./engine-models');
+
+const CHAT_MODEL = CHEAP_MODEL;
 const CHAT_MAX_TOKENS = 1024;
 
 module.exports = {

@@ -24,9 +24,12 @@
 const { execSync } = require('child_process');
 const https = require('https');
 const BaseModule = require('./base-module');
+// MODEL resolves through engine-models so GATETEST_CHEAP_MODEL reaches
+// this call site — it was a hardcoded literal, invisible to the override (KI #78).
+const { CHEAP_MODEL } = require('../core/engine-models');
 
 const ANTHROPIC_HOST = 'api.anthropic.com';
-const MODEL          = 'claude-sonnet-5';
+const MODEL          = CHEAP_MODEL;
 const MAX_DIFF_SIZE  = 80_000; // 80 KB cap
 const TIMEOUT_MS     = 45_000;
 

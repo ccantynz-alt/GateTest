@@ -12,6 +12,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import { deriveAdminToken } from "../../../lib/admin-auth";
 
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
+// route — it was an inline literal, invisible to the override (KI #78).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+
 // Watchdog intelligence — anomaly detection + Claude diagnosis (pure JS, DI).
 const { detectAnomalies, diagnoseWatchEvent } = require("@/app/lib/watchdog-intelligence") as {
   detectAnomalies: (opts: {
@@ -50,7 +55,7 @@ async function askClaudeBounded(prompt: string): Promise<string> {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-5",
+        model: CHEAP_MODEL,
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
       }),

@@ -4,8 +4,13 @@
  * CommonJS and cannot import from website/. Keep the two in sync.
  *
  * See the website twin for the full rationale (hybrid: Fable 5 on paid fix
- * tiers, Sonnet 5 on cheap/high-volume paths, Opus 4.8 refusal fallback).
+ * tiers, Sonnet 5 on cheap/high-volume paths, Opus 4.8 declared as fallback).
  * Craig 2026-07-07; Sonnet 5 upgrade + user-selectable model Craig 2026-07-10.
+ *
+ * FALLBACK_MODEL is DECLARED, NOT WIRED — no production code retries on it.
+ * This header used to say "Opus 4.8 refusal fallback", which reads as an
+ * automatic retry that does not exist. See the website twin for the full
+ * note (KI #78).
  */
 
 'use strict';

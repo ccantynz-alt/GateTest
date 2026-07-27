@@ -11,6 +11,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import https from "https";
 
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
+// route — it was an inline literal, invisible to the override (KI #78).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+
 // Phase 3.5 — executive summary composer. Synthesises diagnoses +
 // chains + scan stats into a single CTO-readable report.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -349,7 +354,7 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]`,
 async function askClaudeForDiagnosis(prompt: string): Promise<string> {
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
   const body = JSON.stringify({
-    model: "claude-sonnet-5",
+    model: CHEAP_MODEL,
     max_tokens: 2048,
     messages: [{ role: "user", content: prompt }],
   });

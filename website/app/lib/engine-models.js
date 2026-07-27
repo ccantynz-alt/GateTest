@@ -11,7 +11,21 @@
  *
  *   FIX_MODEL   (Fable 5)   → paid fix tiers: scan_fix ($199), nuclear/forensic ($399)
  *   CHEAP_MODEL (Sonnet 5)  → everything else: guidance, on-site chat, $29/$99 scan review, trainers
- *   FALLBACK_MODEL (Opus 4.8)→ refusal fallback for Fable (security-tooling false positives)
+ *   FALLBACK_MODEL (Opus 4.8)→ DECLARED, NOT WIRED. See the warning below.
+ *
+ * FALLBACK_MODEL is currently unused by production code. It is exported and
+ * asserted in tests, and this docstring used to call it "refusal fallback for
+ * Fable", which reads as an automatic retry — there is none. What actually
+ * happens on a Fable classifier refusal (HTTP 200, empty content):
+ * `validateFixOutput` rejects the output and that single finding falls
+ * through to the advisory section. The fix is skipped, not retried on
+ * another model. That degradation is deliberate and documented at the call
+ * site (`fixModelExtras` in api/scan/fix/route.ts) — the only thing wrong
+ * was this docstring promising a safety net the code never had (KI #78).
+ *
+ * Wiring a real retry would spend an extra Opus 4.8 call per refusal on a
+ * paid tier, so it is Craig's call, not a silent change. Left declared
+ * because that retry is the intended destination.
  *
  * Fable is ~3.3x Sonnet per token ($10/$50 vs $3/$15 per MTok); the paid-tier
  * budget caps in budget-tracker.js were raised to fund deeper analysis, and that

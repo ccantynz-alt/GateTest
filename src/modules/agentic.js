@@ -28,9 +28,12 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+// MODEL resolves through engine-models so GATETEST_CHEAP_MODEL reaches
+// this call site — it was a hardcoded literal, invisible to the override (KI #78).
+const { CHEAP_MODEL } = require('../core/engine-models');
 
 const ANTHROPIC_API_HOST = 'api.anthropic.com';
-const MODEL = 'claude-sonnet-5';
+const MODEL = CHEAP_MODEL;
 const MAX_INVESTIGATIONS = 3;
 const MAX_FILE_SIZE = 40000;
 const TIMEOUT_MS = 45000;

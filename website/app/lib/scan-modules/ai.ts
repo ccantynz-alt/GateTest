@@ -9,8 +9,12 @@ import type { ModuleRunner, ModuleContext, ModuleOutput, RepoFile } from "./type
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { priceFor } = require("../budget-tracker");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { CHEAP_MODEL } = require("../engine-models") as { CHEAP_MODEL: string };
 
-const MODEL = "claude-sonnet-5";
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this call
+// site — it was a hardcoded literal, invisible to the override (KI #78).
+const MODEL = CHEAP_MODEL;
 const MAX_FILES = 8;
 const MAX_FILE_CHARS = 30000;
 const MAX_TOKENS = 4096;

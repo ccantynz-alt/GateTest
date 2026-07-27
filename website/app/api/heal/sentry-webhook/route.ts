@@ -20,6 +20,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { neon } from "@neondatabase/serverless";
 
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
+// route — it was an inline literal, invisible to the override (KI #78).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+
 const SENTRY_WEBHOOK_SECRET = process.env.SENTRY_WEBHOOK_SECRET_HEAL || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const GITHUB_TOKEN = process.env.GATETEST_GITHUB_TOKEN || process.env.GITHUB_TOKEN || "";
@@ -133,7 +138,7 @@ PATCH:
 CONFIDENCE: <LOW|MEDIUM|HIGH>`;
 
   const body = JSON.stringify({
-    model: "claude-sonnet-5",
+    model: CHEAP_MODEL,
     max_tokens: 1024,
     messages: [{ role: "user", content: userContent }],
   });

@@ -12,6 +12,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { httpsJsonRequest } from "../../../lib/github-app";
 
+// Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
+// route — it was an inline literal, invisible to the override (KI #78).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 interface IssueInput {
@@ -190,7 +195,7 @@ Rules:
 - 3-5 steps max.`;
 
   const body = JSON.stringify({
-    model: "claude-sonnet-5",
+    model: CHEAP_MODEL,
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
