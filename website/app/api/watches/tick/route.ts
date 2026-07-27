@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { getDb } from "../../../lib/db";
 import { deriveAdminToken } from "../../../lib/admin-auth";
 
@@ -87,16 +88,46 @@ interface WatchRow {
   auto_fix_enabled: boolean;
 }
 
-// Simple auth — Vercel Cron sets a specific header, or allow manual trigger with admin cookie
+/**
+ * Authorise a scheduler tick. Bearer secret only.
+ *
+ * SECURITY FIX 2026-07-28 — this was an auth bypass, live and exploitable
+ * on production. It previously returned true for any request carrying the
+ * header `x-vercel-cron: 1`. That was safe on Vercel, where the platform
+ * owns and strips that header. We left Vercel on 2026-07-14 and run on
+ * Vapron, where nothing strips it — so it became a boolean password that
+ * every client can set. Verified against live production:
+ *
+ *   curl https://gatetest.ai/api/watches/tick                 -> 401
+ *   curl -H 'x-vercel-cron: 1' https://gatetest.ai/...        -> 200 + data
+ *
+ * The 200 ran the tick unauthenticated AND returned customer watch targets
+ * and their health to the caller. Removed outright: we are Vapron-only, so
+ * there is no legitimate sender. The inline kicks use a different header
+ * (`x-vercel-cron-secret`) which carries the actual secret, not a boolean.
+ *
+ * The dev fallback also inverted dangerously: `NODE_ENV !== "production"`
+ * authorises everything whenever NODE_ENV is simply UNSET, which is the
+ * default on a bare Node process. It now requires an explicit
+ * "development", so an unset value fails CLOSED.
+ *
+ * Comparison is timing-safe and the secret being unset is a hard deny —
+ * never an open door.
+ */
 function authorizedTick(req: NextRequest): boolean {
-  const vercelCronSecret = process.env.CRON_SECRET || "";
+  const cronSecret = process.env.CRON_SECRET || "";
   const authHeader = req.headers.get("authorization") || "";
-  // Vercel Cron sends "Bearer <CRON_SECRET>"
-  if (vercelCronSecret && authHeader === `Bearer ${vercelCronSecret}`) return true;
-  // Also allow the request if it comes from vercel cron signature
-  if (req.headers.get("x-vercel-cron") === "1") return true;
-  // Dev mode fallback
-  if (process.env.NODE_ENV !== "production") return true;
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+
+  if (cronSecret && bearer) {
+    const a = Buffer.from(bearer);
+    const b = Buffer.from(cronSecret);
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+
+  // Explicitly development only. An unset NODE_ENV must NOT authorise.
+  if (process.env.NODE_ENV === "development") return true;
+
   return false;
 }
 

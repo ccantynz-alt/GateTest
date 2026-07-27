@@ -2,7 +2,7 @@
  * Signal Bus E1 — cron-driven worker tick.
  *
  * Triggered by:
- *   1. Vercel cron: `* * * * *` from vercel.json
+ *   1. Vapron scheduler (crontab / systemd timer, see docs/deploy/VAPRON-DEPLOY.md)
  *   2. Inline kick from /api/events/push and /api/webhook after enqueue
  *   3. Admin-auth'd manual trigger (for debugging)
  *
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
  * This used to return a self-documenting JSON blob and do no work. That is
  * the same invisible failure as the 405 on /api/watches/tick, only quieter:
  * Vercel's built-in cron issues GET — and this endpoint's own response
- * listed "vercel-cron" as its first trigger — so the scheduler received a
+ * listed a cron platform as its first trigger — so the scheduler received a
  * cheerful `{"ok":true}` on every tick while the queue drained nothing. A
  * 200 is the one status nobody investigates.
  *

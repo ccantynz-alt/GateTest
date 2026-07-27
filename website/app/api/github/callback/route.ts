@@ -67,12 +67,74 @@ async function storeInstallation(
   }
 }
 
+/**
+ * Queue a first scan for a fresh installation. NEVER throws and never
+ * blocks the redirect — a slow GitHub or a down queue must not turn a
+ * successful install into an error page. Failures are logged; the customer
+ * still lands on the confirmation page, and their next push scans as usual.
+ */
+async function startFirstScans(installationId: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { enqueueFirstScans } = require("../../../lib/onboarding") as {
+      enqueueFirstScans: (o: unknown) => Promise<{ ok: boolean; queued: unknown[]; skipped: unknown[]; reason?: string }>;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { enqueueScan, ensureScanQueueTable } = require("../../../lib/scan-queue-store");
+    const { getInstallationToken, githubApi } = await import("../../../lib/github-app");
+
+    const sql = getDb();
+    await ensureScanQueueTable(sql);
+
+    const result = await enqueueFirstScans({
+      installationId,
+      deps: {
+        getInstallationToken: (id: string) => getInstallationToken(Number(id)),
+        listRepos: async (token: string) => {
+          const body = await githubApi("GET", "/installation/repositories?per_page=100", token);
+          return (body && (body as { repositories?: unknown[] }).repositories) || [];
+        },
+        getDefaultBranchSha: async (token: string, fullName: string) => {
+          const repo = await githubApi("GET", `/repos/${fullName}`, token) as { default_branch?: string };
+          const branch = repo?.default_branch;
+          if (!branch) return null;
+          const ref = await githubApi("GET", `/repos/${fullName}/commits/${branch}`, token) as { sha?: string };
+          return ref?.sha ? { sha: ref.sha, ref: `refs/heads/${branch}` } : null;
+        },
+        enqueueScan,
+        sql,
+      },
+    });
+
+    if (!result.ok) {
+      console.warn("[onboarding] first scan not queued:", result.reason);
+    } else {
+      console.log(
+        `[onboarding] installation ${installationId}: queued ${result.queued.length}, skipped ${result.skipped.length}`,
+      );
+    }
+    // Deliberate swallow, and the one place in this file it is correct: the
+    // customer is mid-redirect on a SUCCESSFUL install. Their App is
+    // installed and their next push will scan — turning that into an error
+    // page because GitHub was slow would be strictly worse. Logged, never
+    // rethrown; the caller has no action to take, so the log IS the surface.
+  } catch (err) { // error-ok
+    console.warn("[onboarding] first scan failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
 export async function GET(req: NextRequest) {
   const installationId = req.nextUrl.searchParams.get("installation_id");
   const setupAction = req.nextUrl.searchParams.get("setup_action");
 
   if (setupAction === "install" && installationId) {
     await storeInstallation(installationId, setupAction);
+    // Onboarding: queue a scan of their most active repos NOW, so results
+    // are waiting when they land. Before this, installing produced nothing
+    // until the customer went away, wrote code and pushed it — the one
+    // moment they were paying attention delivered no evidence the product
+    // works. Best-effort by design; see startFirstScans().
+    await startFirstScans(installationId);
     return NextResponse.redirect(new URL("/github/installed", req.url));
   }
 

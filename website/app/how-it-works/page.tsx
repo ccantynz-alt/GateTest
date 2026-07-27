@@ -14,13 +14,13 @@ const LIMITS = [
   "Doesn't fix bugs that span 5+ files without human review. Multi-file refactors are flagged but require an engineer to drive.",
   "Coverage on Rust, Go, and Java is shallower than JS/TS/Python today. We have language-specific modules for nine non-JS backends but the depth is honestly thinner than our JS coverage.",
   "Hosted website scans read up to 50 source files per scan (prioritised by relevance) — enough for most small-to-mid repos, but a large monorepo gets a representative slice, not exhaustive coverage. The CLI and GitHub Action scan everything, with no file cap.",
-  "No on-prem deployment yet. Everything runs against our managed Vercel + Neon stack today. Air-gapped customers are on the roadmap.",
+  "No on-prem deployment yet. Everything runs against our managed Vapron + Neon stack today. Air-gapped customers are on the roadmap.",
   "No VSCode extension that runs in real time yet. Today's loop is push → CI → PR comment. Editor integration is on the list.",
 ];
 
 const DATA_FLOW = [
   { label: "Frontend", value: "Next.js 16 (App Router) + Tailwind 4. Server Components everywhere except where interactivity demands client." },
-  { label: "Runtime",  value: "Vercel serverless functions. Every function is stateless — no in-memory persistence between requests." },
+  { label: "Runtime",  value: "Node on Vapron. Every request handler is stateless — no in-memory persistence between requests." },
   { label: "Database", value: "Postgres on Neon. Holds scan_queue, audit log, fix-recipe store, customer sessions." },
   { label: "Payments", value: "Stripe upfront-charge. Scan tiers are one-time payments at checkout — no auto-renew. Continuous ($49/mo) and MCP ($29/mo) are monthly subscriptions, cancel anytime." },
   { label: "AI layer", value: "Anthropic Claude Sonnet 5. Our key for managed scans; your key for the self-healing CI bot in your repo." },

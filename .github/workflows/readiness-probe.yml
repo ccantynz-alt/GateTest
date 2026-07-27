@@ -53,17 +53,22 @@ jobs:
       #
       # Use the workflow_dispatch run with --expect-commit right AFTER a
       # deploy to prove that specific deploy landed.
+      # The base URL goes through `env:`, never interpolated straight into
+      # `run:`. A workflow_dispatch input is attacker-influenced text, and
+      # `${{ ... }}` inside a run block is substituted BEFORE the shell sees
+      # it — so a crafted input executes as shell. GateTest's own ciSecurity
+      # module flagged this on the first version of this file, which is a
+      # fair result for a security product to get from itself.
       - name: Probe production
-        run: |
-          node scripts/ops/readiness-probe.js \
-            --base "${{ github.event.inputs.base_url || 'https://gatetest.ai' }}"
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.ai' }}
+        run: node scripts/ops/readiness-probe.js --base "$BASE_URL"
 
       - name: Probe production (JSON artifact)
         if: always()
-        run: |
-          node scripts/ops/readiness-probe.js \
-            --base "${{ github.event.inputs.base_url || 'https://gatetest.ai' }}" \
-            --json > readiness.json || true
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.ai' }}
+        run: node scripts/ops/readiness-probe.js --base "$BASE_URL" --json > readiness.json || true
 
       - uses: actions/upload-artifact@v4
         if: always()
