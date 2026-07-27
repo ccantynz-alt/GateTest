@@ -138,12 +138,20 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    endpoint: "/api/scan/worker/tick",
-    method: "POST",
-    triggers: ["vercel-cron", "inline-kick-from-events-push", "admin"],
-    callback: { github: "commit-status + pr-comment", gluecron: "signal-bus-hook" },
-  });
+/**
+ * GET must DRAIN THE QUEUE, not describe it.
+ *
+ * This used to return a self-documenting JSON blob and do no work. That is
+ * the same invisible failure as the 405 on /api/watches/tick, only quieter:
+ * Vercel's built-in cron issues GET — and this endpoint's own response
+ * listed "vercel-cron" as its first trigger — so the scheduler received a
+ * cheerful `{"ok":true}` on every tick while the queue drained nothing. A
+ * 200 is the one status nobody investigates.
+ *
+ * `tests/cron-endpoint-methods.test.js` did not catch it because it asserted
+ * both methods were EXPORTED, not that either did the work. Strengthened
+ * alongside this fix. Found 2026-07-28 by the readiness probe.
+ */
+export async function GET(req: NextRequest) {
+  return POST(req);
 }

@@ -93,7 +93,10 @@ export default function BillingPage() {
           Trouble managing your plan?{" "}
           <a href="mailto:hello@gatetest.ai" className="underline">hello@gatetest.ai</a>
           {" · "}
-          <Link href="/pricing" className="underline">Pricing</Link>
+          {/* `/pricing` is not a route — pricing is a section on the home
+              page (components/Pricing.tsx renders id="pricing"). This link
+              404'd. Found 2026-07-28 by the readiness probe. */}
+          <Link href="/#pricing" className="underline">Pricing</Link>
         </p>
       </div>
     </div>

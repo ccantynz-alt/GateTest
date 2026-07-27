@@ -1,0 +1,73 @@
+name: Readiness Probe (production)
+
+# Answers "are we production ready?" continuously, against the LIVE site,
+# instead of inferring it from a green test suite.
+#
+# It exists because on 2026-07-27/28 the suite was green — 6,700+ tests
+# passing, clean build, self-scan gate PASSED — while production was 102
+# commits stale, `/billing` returned 404, `POST /api/watches/tick` returned
+# 405, and paid MCP customers received no API key. None of that is visible
+# to a test. All of it is obvious to something that asks the live site a
+# question. That stale deploy went unnoticed for ELEVEN DAYS; this job
+# would have gone red on the first run after it.
+#
+# Safe to run unattended: every step is a GET, or a POST we expect to be
+# REJECTED. It never completes a payment and never writes customer data, so
+# it needs no secrets — which is the point. A monitor that requires
+# credentials tends not to get set up.
+#
+# A red X here is a real customer-facing problem, not flakiness.
+
+on:
+  schedule:
+    # Every 30 minutes. Frequent enough that a bad deploy is caught before
+    # the working day notices; infrequent enough to stay quiet.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Base URL to probe'
+        required: false
+        default: 'https://gatetest.ai'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # NOTE: deliberately NOT --expect-head. On a schedule this runs from
+      # the default branch, and main legitimately moves ahead of production
+      # between deploys — asserting an exact match would make this job red
+      # by design and train everyone to ignore it. It still fails when the
+      # build carries no commit stamp at all, which is the case that means
+      # "we cannot tell fresh from stale".
+      #
+      # Use the workflow_dispatch run with --expect-commit right AFTER a
+      # deploy to prove that specific deploy landed.
+      - name: Probe production
+        run: |
+          node scripts/ops/readiness-probe.js \
+            --base "${{ github.event.inputs.base_url || 'https://gatetest.ai' }}"
+
+      - name: Probe production (JSON artifact)
+        if: always()
+        run: |
+          node scripts/ops/readiness-probe.js \
+            --base "${{ github.event.inputs.base_url || 'https://gatetest.ai' }}" \
+            --json > readiness.json || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: readiness-report
+          path: readiness.json
+          retention-days: 14

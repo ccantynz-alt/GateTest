@@ -62,5 +62,33 @@ describe('cron endpoints accept any scheduler method', () => {
           'docs/deploy/VAPRON-DEPLOY.md all POST; a GET-only route 405s them silently',
       );
     });
+
+    // Exporting a method is not the same as DOING the work. /api/scan/worker/
+    // tick exported GET and returned a self-documenting JSON blob — so a
+    // Vercel cron (which issues GET, and which that very blob listed as its
+    // first trigger) got a cheerful {"ok":true} on every tick while the queue
+    // drained nothing. This test passed throughout, because it only checked
+    // the export. A 200 is the one status nobody investigates.
+    // Found 2026-07-28 by the readiness probe.
+    it(`${apiPath} GET actually does the work, and is auth-gated`, () => {
+      const file = routeFileFor(apiPath);
+      const src = fs.readFileSync(file, 'utf8');
+      const getBody = (src.match(/export\s+async\s+function\s+GET\s*\([^)]*\)\s*\{([\s\S]*?)\n\}/) || [])[1] || '';
+
+      assert.ok(getBody.trim(), `${apiPath}: could not read the GET body`);
+
+      const delegatesToPost = /\breturn\s+POST\s*\(/.test(getBody);
+      const doesWorkInline = /authoriz|authoris|getDb\s*\(|sql`/i.test(getBody);
+      assert.ok(
+        delegatesToPost || doesWorkInline,
+        `${apiPath}: GET neither delegates to POST nor does the work itself — it looks like a `
+          + 'documentation stub. A GET-based scheduler will report success and drain nothing.',
+      );
+
+      // A doc stub is recognisable: it answers 200 with a description and
+      // never mentions authorisation.
+      const looksLikeDocStub = /endpoint:\s*['"]/.test(getBody) && !delegatesToPost && !doesWorkInline;
+      assert.ok(!looksLikeDocStub, `${apiPath}: GET returns a description instead of running the tick`);
+    });
   }
 });
