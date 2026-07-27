@@ -92,6 +92,7 @@ const { diagnoseFinding } = require('../lib/nuclear-diagnoser.js');
 const { resolveStackTrace } = require('../src/core/source-map-resolver.js');
 const { blameLine, blameRange, showCommit, findLikelyRegressionCommit } = require('../src/core/regression-bisector.js');
 const { resolveModelChoice, allowedModelIds, ALLOWED_FIX_MODELS, CHEAP_MODEL } = require('../src/core/engine-models.js');
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require('../src/core/anthropic-config');
 
 // Every value a user may pass as `model` — exact ids plus their aliases. Built
 // from the engine-models allow-list so the schema enum can never drift.
@@ -1041,11 +1042,11 @@ async function callClaude(prompt, { maxTokens = 4096, model = CHEAP_MODEL } = {}
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45_000);
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(anthropicApiUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': anthropicVersion(),
         'x-api-key': apiKey,
       },
       body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),

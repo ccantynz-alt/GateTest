@@ -18,6 +18,11 @@
 
 "use strict";
 
+// Endpoint + API version come from anthropic-config so ANTHROPIC_BASE_URL /
+// ANTHROPIC_VERSION reach this path too (KI #78).
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("../anthropic-config");
+const { CHEAP_MODEL } = require("../engine-models");
+
 const DRAFT_BANNER = "[DRAFT — REVIEW BEFORE POSTING]";
 const MAX_VOICE_EXAMPLES = 8;
 const MAX_VOICE_CHARS_PER_EXAMPLE = 600;
@@ -156,13 +161,13 @@ async function defaultAnthropicCall({ systemPrompt, userPrompt }) {
   }
   const fetchFn = typeof globalThis.fetch === "function" ? globalThis.fetch : null;
   if (!fetchFn) throw new Error("no fetch available in runtime");
-  const model = "claude-sonnet-5";
+  const model = CHEAP_MODEL;
 
-  const res = await fetchFn("https://api.anthropic.com/v1/messages", {
+  const res = await fetchFn(anthropicApiUrl(), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01",
+      "anthropic-version": anthropicVersion(),
       "x-api-key": key,
     },
     body: JSON.stringify({

@@ -30,6 +30,8 @@ const {
 } = require("@/app/lib/budget-tracker");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { modelForTier, CHEAP_MODEL, needsRefusalFallback, resolveModelChoice, allowedModelIds } = require("@/app/lib/engine-models");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { apiUrl: (r?: string) => string; apiVersion: () => string };
 import {
   CUSTOMER_COOKIE_NAME,
   getOAuthConfig,
@@ -703,11 +705,11 @@ async function anthropicCall(body: string): Promise<{ status: number; data: Reco
   // function budget and won't let a single stuck request monopolise.
   const timer = setTimeout(() => controller.abort(), 45_000);
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(anthropicApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         // BYOK: a customer key on the request tracker takes priority over the
         // server key. Read per-call (not per-module) so each request stays
         // isolated on Fluid Compute's shared-instance model.

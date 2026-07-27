@@ -11,6 +11,8 @@ import type { ModuleRunner, ModuleContext, ModuleOutput, RepoFile } from "./type
 const { priceFor } = require("../budget-tracker");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("../engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require("../anthropic-config") as { endpoint: () => { hostname: string; port: number }; apiPath: (r?: string) => string; apiVersion: () => string };
 
 // Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this call
 // site — it was a hardcoded literal, invisible to the override (KI #78).
@@ -70,13 +72,15 @@ function callClaude(apiKey: string, prompt: string): Promise<ApiResult> {
     });
     const req = https.request(
       {
-        host: "api.anthropic.com",
-        port: 443,
-        path: "/v1/messages",
+        host: anthropicEndpoint().hostname,
+
+        port: anthropicEndpoint().port,
+
+        path: anthropicApiPath("/v1/messages"),
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "anthropic-version": "2023-06-01",
+          "anthropic-version": anthropicVersion(),
           "x-api-key": apiKey,
           "Content-Length": Buffer.byteLength(payload),
         },

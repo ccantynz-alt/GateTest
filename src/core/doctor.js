@@ -19,6 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require('./anthropic-config');
 
 // ANSI colour codes — terminal-only; html-aware viewers will see plain text.
 const C = {
@@ -71,11 +72,11 @@ async function probeAnthropic(apiKey, timeoutMs = 8000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const started = Date.now();
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(anthropicApiUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': anthropicVersion(),
         'x-api-key': apiKey,
       },
       body: JSON.stringify({

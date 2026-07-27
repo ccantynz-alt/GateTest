@@ -39,6 +39,8 @@ import type { RepoFile } from "@/app/lib/scan-modules";
 // route — it was an inline literal, invisible to the override (KI #78).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { endpoint: () => { hostname: string; port: number }; apiPath: (r?: string) => string; apiVersion: () => string };
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -302,13 +304,13 @@ async function checkAnthropic(): Promise<Check> {
       messages: [{ role: "user", content: "hi" }],
     });
     const res = await httpsPost({
-      hostname: "api.anthropic.com",
-      port: 443,
-      path: "/v1/messages",
+      hostname: anthropicEndpoint().hostname,
+      port: anthropicEndpoint().port,
+      path: anthropicApiPath("/v1/messages"),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "x-api-key": key,
         "Content-Length": Buffer.byteLength(payload),
       },

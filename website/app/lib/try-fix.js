@@ -31,6 +31,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require('./anthropic-config');
 
 const LAYER_TIMEOUT_MS = 30_000;
 
@@ -312,11 +313,11 @@ async function runClaudeLayer(issue, opts) {
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const res = await fetchFn('https://api.anthropic.com/v1/messages', {
+  const res = await fetchFn(anthropicApiUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
+      'anthropic-version': anthropicVersion(),
       'x-api-key': opts.anthropicApiKey,
     },
     body,

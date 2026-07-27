@@ -15,6 +15,8 @@ import https from "https";
 // route — it was an inline literal, invisible to the override (KI #78).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { endpoint: () => { hostname: string; port: number }; apiPath: (r?: string) => string; apiVersion: () => string };
 
 // Phase 3.5 — executive summary composer. Synthesises diagnoses +
 // chains + scan stats into a single CTO-readable report.
@@ -361,13 +363,13 @@ async function askClaudeForDiagnosis(prompt: string): Promise<string> {
 
   const doCall = () => new Promise<{ status: number; data: Record<string, unknown> }>((resolve, reject) => {
     const req = https.request({
-      hostname: "api.anthropic.com",
-      port: 443,
-      path: "/v1/messages",
+      hostname: anthropicEndpoint().hostname,
+      port: anthropicEndpoint().port,
+      path: anthropicApiPath("/v1/messages"),
       method: "POST",
       headers: {
         "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "content-type": "application/json",
         "content-length": String(Buffer.byteLength(body)),
       },

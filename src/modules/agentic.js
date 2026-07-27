@@ -31,8 +31,8 @@ const https = require('https');
 // MODEL resolves through engine-models so GATETEST_CHEAP_MODEL reaches
 // this call site — it was a hardcoded literal, invisible to the override (KI #78).
 const { CHEAP_MODEL } = require('../core/engine-models');
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('../core/anthropic-config');
 
-const ANTHROPIC_API_HOST = 'api.anthropic.com';
 const MODEL = CHEAP_MODEL;
 const MAX_INVESTIGATIONS = 3;
 const MAX_FILE_SIZE = 40000;
@@ -256,13 +256,13 @@ If the hypothesis is refuted (no bug found), return findings: [] and verdict: "r
 
       const req = https.request(
         {
-          hostname: ANTHROPIC_API_HOST,
-          port: 443,
-          path: '/v1/messages',
+          hostname: anthropicEndpoint().hostname,
+          port: anthropicEndpoint().port,
+          path: anthropicApiPath('/v1/messages'),
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'anthropic-version': '2023-06-01',
+            'anthropic-version': anthropicVersion(),
             'x-api-key': apiKey,
             'Content-Length': Buffer.byteLength(body),
           },

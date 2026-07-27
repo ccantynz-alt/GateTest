@@ -22,8 +22,8 @@
 
 const BaseModule = require('./base-module');
 const https = require('https');
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('../core/anthropic-config');
 
-const ANTHROPIC_API_HOST = 'api.anthropic.com';
 const MODEL_SONNET = 'claude-sonnet-5';
 // The cheap model the cost ledger downgrades to at 80% of the ceiling. This
 // MUST stay a genuinely different (and cheaper) model from MODEL_SONNET: a
@@ -750,13 +750,14 @@ Be ruthless. We are building a product that kills fake fixes.`;
       });
 
       const options = {
-        hostname: ANTHROPIC_API_HOST,
-        port: 443,
-        path: '/v1/messages',
+        hostname: anthropicEndpoint().hostname,
+
+        port: anthropicEndpoint().port,
+        path: anthropicApiPath('/v1/messages'),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
+          'anthropic-version': anthropicVersion(),
           'x-api-key': apiKey,
           'Content-Length': Buffer.byteLength(body),
         },

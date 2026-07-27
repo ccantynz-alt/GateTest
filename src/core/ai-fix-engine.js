@@ -74,8 +74,8 @@ function _buildGroundingHeader(projectRoot) {
 }
 
 const { CHEAP_MODEL } = require('./engine-models');
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('./anthropic-config');
 
-const ANTHROPIC_HOST   = 'api.anthropic.com';
 const MODEL_FAST       = CHEAP_MODEL;   // small/simple fixes
 const MODEL_SMART      = CHEAP_MODEL;   // complex/multi-line
 const MAX_FILE_BYTES   = 120_000;   // skip files larger than 120 KB
@@ -95,13 +95,15 @@ function callAnthropic(apiKey, model, systemPrompt, userMessage) {
 
     const req = https.request(
       {
-        hostname: ANTHROPIC_HOST,
-        path: '/v1/messages',
+        hostname: anthropicEndpoint().hostname,
+
+        port: anthropicEndpoint().port,
+        path: anthropicApiPath('/v1/messages'),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
+          'anthropic-version': anthropicVersion(),
           'Content-Length': Buffer.byteLength(body),
         },
       },

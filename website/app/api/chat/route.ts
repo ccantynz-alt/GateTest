@@ -28,12 +28,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { apiUrl: (r?: string) => string; apiVersion: () => string };
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_API_URL = anthropicApiUrl();
 
 interface InboundMessage {
   role?: string;
@@ -123,7 +125,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "Content-Type": "application/json",
       },
       body: upstreamBody,

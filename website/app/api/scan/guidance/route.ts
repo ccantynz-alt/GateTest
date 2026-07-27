@@ -16,6 +16,8 @@ import { httpsJsonRequest } from "../../../lib/github-app";
 // route — it was an inline literal, invisible to the override (KI #78).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { endpoint: () => { hostname: string; port: number }; apiPath: (r?: string) => string; apiVersion: () => string };
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
@@ -202,13 +204,13 @@ Rules:
 
   try {
     const res = await httpsJsonRequest({
-      hostname: "api.anthropic.com",
-      port: 443,
-      path: "/v1/messages",
+      hostname: anthropicEndpoint().hostname,
+      port: anthropicEndpoint().port,
+      path: anthropicApiPath("/v1/messages"),
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "x-api-key": ANTHROPIC_API_KEY,
         "Content-Length": String(Buffer.byteLength(body)),
       },

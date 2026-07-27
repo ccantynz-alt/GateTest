@@ -24,6 +24,8 @@ import { neon } from "@neondatabase/serverless";
 // route — it was an inline literal, invisible to the override (KI #78).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { apiUrl: (r?: string) => string; apiVersion: () => string };
 
 const SENTRY_WEBHOOK_SECRET = process.env.SENTRY_WEBHOOK_SECRET_HEAL || "";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
@@ -147,11 +149,11 @@ CONFIDENCE: <LOW|MEDIUM|HIGH>`;
   const timer = setTimeout(() => controller.abort(), 45_000);
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(anthropicApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "x-api-key": ANTHROPIC_API_KEY,
       },
       body,

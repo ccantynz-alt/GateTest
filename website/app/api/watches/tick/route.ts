@@ -16,6 +16,8 @@ import { deriveAdminToken } from "../../../lib/admin-auth";
 // route — it was an inline literal, invisible to the override (KI #78).
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { CHEAP_MODEL } = require("@/app/lib/engine-models") as { CHEAP_MODEL: string };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { apiUrl: (r?: string) => string; apiVersion: () => string };
 
 // Watchdog intelligence — anomaly detection + Claude diagnosis (pure JS, DI).
 const { detectAnomalies, diagnoseWatchEvent } = require("@/app/lib/watchdog-intelligence") as {
@@ -47,11 +49,11 @@ async function askClaudeBounded(prompt: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(anthropicApiUrl(), {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": anthropicVersion(),
         "content-type": "application/json",
       },
       body: JSON.stringify({

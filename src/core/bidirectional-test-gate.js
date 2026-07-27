@@ -26,8 +26,8 @@ const { execSync } = require('child_process');
 // MODEL resolves through engine-models so GATETEST_CHEAP_MODEL reaches
 // this call site — it was a hardcoded literal, invisible to the override (KI #78).
 const { CHEAP_MODEL } = require('./engine-models');
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('./anthropic-config');
 
-const ANTHROPIC_HOST = 'api.anthropic.com';
 const MODEL          = CHEAP_MODEL;
 const CLAUDE_TIMEOUT = 60_000;
 const TEST_TIMEOUT   = 15_000;
@@ -43,13 +43,14 @@ function _callClaude(apiKey, system, user) {
       messages: [{ role: 'user', content: user }],
     });
     const req = https.request({
-      hostname: ANTHROPIC_HOST,
-      path: '/v1/messages',
+      hostname: anthropicEndpoint().hostname,
+      port: anthropicEndpoint().port,
+      path: anthropicApiPath('/v1/messages'),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': anthropicVersion(),
         'Content-Length': Buffer.byteLength(body),
       },
     }, (res) => {

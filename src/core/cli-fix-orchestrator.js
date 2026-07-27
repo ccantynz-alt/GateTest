@@ -28,8 +28,8 @@ const {
 } = require('./flywheel-playback-engine');
 
 const { CHEAP_MODEL } = require('./engine-models');
+const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('./anthropic-config');
 
-const ANTHROPIC_HOST  = 'api.anthropic.com';
 const TIMEOUT_MS      = 90_000;
 const TEST_TIMEOUT_MS = 15_000;
 const MAX_ATTEMPTS    = 3;
@@ -52,13 +52,15 @@ function _callClaude(apiKey, system, user, model = CHEAP_MODEL) {
       messages: [{ role: 'user', content: user }],
     });
     const req = https.request({
-      hostname: ANTHROPIC_HOST,
-      path: '/v1/messages',
+      hostname: anthropicEndpoint().hostname,
+
+      port: anthropicEndpoint().port,
+      path: anthropicApiPath('/v1/messages'),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': anthropicVersion(),
         'Content-Length': Buffer.byteLength(body),
       },
     }, (res) => {
