@@ -1,5 +1,10 @@
 {
   "generatedAt": "2026-07-27T06:31:34.443Z",
+  "repoRoot": "/home/runner/work/GateTest/GateTest",
+  "suite": "quick",
+  "files": 10,
+  "mutationsTried": 50,
+  "mutationsCaught": 0,
   "coverageHoles": [
     {
       "file": "src/ai-loop.js",
@@ -330,5 +335,10 @@
       "after": null,
       "note": "Mutation slipped through — gate emitted no new error rules vs baseline"
     }
+  ],
+  "errors": [
+    "src/reporters/ci-summary-reporter.js:undefined: gate run returned no parseable output",
+    "src/reporters/ci-summary-reporter.js:undefined: gate run returned no parseable output",
+    "src/reporters/ci-summary-reporter.js:undefined: gate run returned no parseable output"
   ]
 }
