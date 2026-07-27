@@ -151,22 +151,48 @@ function isInsideBlockComment(sourceText, line) {
   let inBlock = false;
   // Scan up to (but not including) the target line — we want the state
   // ENTERING the target line.
+  //
+  // The walker MUST skip line comments and string literals. It used to
+  // count any `/*` anywhere, so a line comment like
+  //     // The /api/v1/* endpoints expose ...
+  // or a string like '**/*.test.js' latched `inBlock` on permanently, and
+  // every finding below it in that file scored 0.20 "inside block comment".
+  //
+  // That is the FALSE-NEGATIVE direction and it defeats the gate: error
+  // findings below the block threshold are downgraded to non-blocking soft
+  // errors. Measured on this repo before the fix — 13 findings carried the
+  // signal, 13 of them were not inside a comment at all, and 1 was
+  // error-severity, i.e. the gate passed something it should have caught.
   for (let i = 0; i < line - 1; i += 1) {
     const s = lines[i];
     let j = 0;
+    let quote = null;
     while (j < s.length) {
-      if (!inBlock && s[j] === '/' && s[j + 1] === '*') {
-        inBlock = true;
-        j += 2;
+      const ch = s[j];
+      const nx = s[j + 1];
+
+      if (inBlock) {
+        if (ch === '*' && nx === '/') { inBlock = false; j += 2; continue; }
+        j += 1;
         continue;
       }
-      if (inBlock && s[j] === '*' && s[j + 1] === '/') {
-        inBlock = false;
-        j += 2;
+      if (quote) {
+        if (ch === '\\') { j += 2; continue; }   // escape — skip the pair
+        if (ch === quote) quote = null;
+        j += 1;
         continue;
       }
+      if (ch === '"' || ch === "'" || ch === '`') { quote = ch; j += 1; continue; }
+      // `//` starts a line comment: nothing after it on this line is code,
+      // so no `/*` in it can open a block.
+      if (ch === '/' && nx === '/') break;
+      if (ch === '/' && nx === '*') { inBlock = true; j += 2; continue; }
       j += 1;
     }
+    // An unterminated quote cannot span a newline in valid JS (template
+    // literals aside, which we deliberately do not track across lines —
+    // over-tracking would resurrect the very bug this guards against).
+    quote = null;
   }
 
   if (inBlock) {

@@ -338,3 +338,94 @@ test('PR #85 regression: ephemeral .claude/worktrees path downgrades', () => {
   });
   assert.ok(confidence < 0.2, `expected < 0.2, got ${confidence}`);
 });
+
+// ---------------------------------------------------------------------------
+// Block-comment walker must skip line comments and string literals.
+//
+// It used to count any `/*` on any preceding line, so a line comment like
+// `// The /api/v1/* endpoints ...` or a glob string latched the walker on
+// permanently — every finding below it in that file then scored 0.20
+// "inside block comment".
+//
+// That is the FALSE-NEGATIVE direction and it defeats the gate: an
+// error-severity finding below the block threshold is downgraded to a
+// non-blocking soft error. Measured on GateTest's own repo before the fix —
+// 13 findings carried the signal, all 13 were not inside a comment, and one
+// was error-severity, i.e. the gate passed something it should have caught.
+// Found 2026-07-28 by grouping low-confidence findings by signal.
+// ---------------------------------------------------------------------------
+
+function _score(sourceText, line) {
+  return scoreFinding({
+    filePath: 'src/x.js',
+    ruleKey: 'error-swallow:empty-catch',
+    module: 'errorSwallow',
+    line,
+    sourceText,
+  });
+}
+function _insideFlagged(sourceText, line) {
+  return (_score(sourceText, line).signals || []).includes('inside block comment');
+}
+
+test('block-comment walker: a line comment containing /* does not latch it', () => {
+  const src = ['// The /api/v1/* endpoints are public', 'try { g(); } catch {}'].join('\n');
+  assert.equal(_insideFlagged(src, 2), false);
+  assert.equal(_score(src, 2).confidence, 1);
+});
+
+test('block-comment walker: a string containing /* does not latch it', () => {
+  const src = ["const glob = 'src/**" + "/*.test.js';", 'try { g(); } catch {}'].join('\n');
+  assert.equal(_insideFlagged(src, 2), false);
+});
+
+test('block-comment walker: a double-quoted string containing /* does not latch it', () => {
+  const src = ['const s = "a /* b";', 'try { g(); } catch {}'].join('\n');
+  assert.equal(_insideFlagged(src, 2), false);
+});
+
+test('block-comment walker: an escaped quote does not desynchronise tracking', () => {
+  // String.raw so the scanned source really contains a backslash-escape;
+  // written with a normal escape it collapses and the fixture stops
+  // testing what it claims to.
+  const src = [String.raw`const s = 'it\'s /* fine';`, 'try { g(); } catch {}'].join('\n');
+  assert.ok(src.includes("\\'"), 'fixture must contain a real escaped quote');
+  assert.equal(_insideFlagged(src, 2), false);
+});
+
+test('block-comment walker: an inline /* */ ON the finding line is not "inside"', () => {
+  // `} catch { /* not fatal */ }` is real, executing code.
+  const src = ['function f() {', '  try { g(); } catch { /* not fatal */ }', '}'].join('\n');
+  assert.equal(_insideFlagged(src, 2), false);
+});
+
+test('block-comment walker: code after a CLOSED block comment is not inside it', () => {
+  const src = ['/**', ' * docs', ' */', 'try { g(); } catch {}'].join('\n');
+  assert.equal(_insideFlagged(src, 4), false);
+});
+
+// The detection must still WORK — the fix must not have turned it off.
+test('block-comment walker: a finding genuinely inside a block comment is still flagged', () => {
+  const src = ['/*', '  try { g(); } catch {}', '*/', 'const a = 1;'].join('\n');
+  assert.equal(_insideFlagged(src, 2), true);
+  assert.equal(_score(src, 2).confidence, 0.2);
+});
+
+test('block-comment walker: a finding inside a JSDoc block is still flagged', () => {
+  const src = ['/**', ' * try { g(); } catch {}', ' */', 'const a = 1;'].join('\n');
+  assert.equal(_insideFlagged(src, 2), true);
+});
+
+test('block-comment walker: the real-world shape that exposed this scores full confidence', () => {
+  // Reduced from src/core/doctor.js, where line 247's `/api/v1/*` line
+  // comment silently down-weighted every finding below it.
+  const src = [
+    '// The /api/v1/* endpoints expose GateTest as a platform',
+    'function f() {',
+    '  try {',
+    '    g();',
+    '  } catch { /* not fatal */ }',
+    '}',
+  ].join('\n');
+  assert.equal(_score(src, 5).confidence, 1);
+});
