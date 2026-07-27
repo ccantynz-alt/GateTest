@@ -303,12 +303,42 @@ function isInsideStringLiteral(sourceText, line, column) {
   if (/^['"`]/.test(trimmed) && /['"`][,)\s]*$/.test(trimmed)) {
     return { multiplier: 0.4, reason: 'string literal' };
   }
+  // Deliberately NOT matching `key: "…"` here. That shape is ambiguous:
+  // `message: "NEXT_PUBLIC_… in browser bundle"` (a scanner's own detection
+  // table, PR #85) and `apiBase: "http://localhost:3000"` (a real hardcoded
+  // URL that must block) are the same line shape. Line shape cannot separate
+  // them; only the message content can, which is what
+  // looksLikeUserFacingDocString is for.
   return null;
 }
 
 /**
  * Message itself looks like documentation / a rule description rather
  * than a concrete bug location.
+ *
+ * The list must contain DOCUMENTATION MARKERS, never ordinary security
+ * vocabulary. This signal alone drops a finding to 0.5 — under the 0.7
+ * block threshold — so every phrase added here silently disables blocking
+ * for any rule whose wording contains it.
+ *
+ * Removed 2026-07-28 after auditing what our own modules actually say:
+ *   'placeholder'          — `cookie-security` reports "Session secret is a
+ *                            known-weak placeholder (\"changeme\")" at ERROR
+ *                            severity in non-test code. A hardcoded weak
+ *                            session secret is exactly what the gate exists
+ *                            to stop, and this word was waving it through.
+ *                            Also hit `links` ("dead/placeholder link(s)").
+ *   'should not be'        — ordinary finding prose: "secrets should not be
+ *   'should not contain'     committed", "eval() should not be used".
+ *
+ * The PR #85 case that justifies the signal is unaffected: its message is
+ * "NEXT_PUBLIC_ANTHROPIC_API_KEY in browser bundle", which still matches
+ * the retained 'in browser bundle' marker.
+ *
+ * Note this cannot be replaced by a line-shape rule. `message: "…"` (a
+ * scanner's own detection table) and `apiBase: "http://localhost:3000"` (a
+ * real hardcoded URL that must block) are the same shape — only the message
+ * content separates them.
  */
 function looksLikeUserFacingDocString(message) {
   if (!message || typeof message !== 'string') return null;
@@ -316,14 +346,11 @@ function looksLikeUserFacingDocString(message) {
   // The classic PR #85 false-positive shapes
   const docPhrases = [
     'in browser bundle',
-    'should not be',
-    'should not contain',
     'example of',
     'for example',
     'e.g.,',
     ' eg. ',
     'illustrative',
-    'placeholder',
   ];
   for (const p of docPhrases) {
     if (m.includes(p)) {

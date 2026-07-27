@@ -103,12 +103,45 @@ test('looksLikeUserFacingDocString fires on doc-shaped messages', () => {
   assert.ok(_signals.looksLikeUserFacingDocString(
     'NEXT_PUBLIC_API_KEY in browser bundle',
   ));
-  assert.ok(_signals.looksLikeUserFacingDocString('Should not be committed'));
   assert.ok(_signals.looksLikeUserFacingDocString('Example of bad code'));
   assert.equal(
     _signals.looksLikeUserFacingDocString('Found hardcoded URL'),
     null,
   );
+});
+
+test('looksLikeUserFacingDocString does NOT fire on ordinary security prose', () => {
+  // This signal alone drops a finding to 0.5, under the 0.7 block threshold,
+  // so any phrase in its list silently stops that rule blocking the gate.
+  // The list must hold documentation MARKERS, not security VOCABULARY.
+  //
+  // Removed 2026-07-28 after auditing what our own modules actually emit:
+  // `cookie-security` reports a known-weak session secret at ERROR severity
+  // with the word "placeholder" in the message, and was being downgraded to
+  // a non-blocking soft error because of it.
+  assert.equal(_signals.looksLikeUserFacingDocString(
+    'Session secret is a known-weak placeholder ("changeme") — replace before deploy.',
+  ), null);
+  assert.equal(_signals.looksLikeUserFacingDocString('Should not be committed'), null);
+  assert.equal(_signals.looksLikeUserFacingDocString('eval() should not be used'), null);
+  assert.equal(_signals.looksLikeUserFacingDocString(
+    '3 dead/placeholder link(s) found',
+  ), null);
+});
+
+test('a weak session secret in production code still BLOCKS the gate', () => {
+  // End-to-end of the above: the real cookie-security message shape, scored
+  // in a normal source file, must stay above the block threshold.
+  const { confidence } = scoreFinding({
+    filePath: 'src/server/session.js',
+    ruleKey: 'cookie-sec:js-weak-secret:src/server/session.js:12',
+    module: 'cookieSecurity',
+    message: 'Session secret is a known-weak placeholder ("changeme") — replace before deploy.',
+  });
+  assert.equal(confidence, 1);
+  assert.ok(isBlockingFinding(
+    { passed: false, severity: 'error', confidence }, BLOCK_THRESHOLD,
+  ), 'a hardcoded weak session secret must block');
 });
 
 // ─── scoreFinding ───────────────────────────────────────────────────────────
