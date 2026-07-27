@@ -121,3 +121,97 @@ describe('security — the scan carries a column for the confidence scorer', () 
       'without a column the scorer falls back to a whole-line guess');
   });
 });
+
+// =============================================================================
+// FALSE NEGATIVE: command injection in its most common form
+// =============================================================================
+// Found 2026-07-28 by inverting the inert-fixture technique — scanning a
+// fixture of genuinely-vulnerable code to measure what is MISSED rather than
+// what is over-reported.
+//
+// The only shell-exec rule was /child_process.*exec\s*\(/, which requires
+// `child_process` on the SAME LINE. So it caught the inline
+// `require('child_process').exec(...)` and missed the ordinary shape:
+//
+//     const cp = require('child_process');
+//     cp.execSync('ls ' + req.query.dir);
+//
+// Command injection is an OWASP staple and this is how it actually appears.
+// =============================================================================
+
+describe('security — command injection via an aliased child_process', () => {
+  let tmp2;
+  beforeEach(() => { tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-cmd-')); });
+  afterEach(() => { fs.rmSync(tmp2, { recursive: true, force: true }); });
+
+  async function scanCmd(source) {
+    fs.mkdirSync(path.join(tmp2, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp2, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    fs.writeFileSync(path.join(tmp2, 'src', 'x.js'), source);
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp2 });
+    return result.checks
+      .filter((c) => !c.passed && /shell exec/.test(c.name))
+      .map((c) => c.name);
+  }
+
+  it('flags execSync with concatenated user input', async () => {
+    const found = await scanCmd([
+      "const cp = require('child_process');",
+      'function run(req) {',
+      "  return cp.execSync('ls ' + req.query.dir);",
+      '}',
+      'module.exports = { run };',
+    ].join('\n'));
+    assert.ok(found.length > 0, `command injection must be caught, got ${JSON.stringify(found)}`);
+  });
+
+  it('flags exec with an interpolated template literal', async () => {
+    const found = await scanCmd([
+      "const { exec } = require('child_process');",
+      'function run(req) {',
+      '  return exec(`rm -rf ${req.query.path}`);',
+      '}',
+      'module.exports = { run };',
+    ].join('\n'));
+    assert.ok(found.length > 0);
+  });
+
+  // The safe alternatives must NOT be punished — flagging them would push
+  // people away from the correct fix.
+  it('does NOT flag execFileSync with an argv array', async () => {
+    const found = await scanCmd([
+      "const cp = require('child_process');",
+      'function run(dir) { return cp.execFileSync("ls", [dir]); }',
+      'module.exports = { run };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('does NOT flag spawnSync with an argv array', async () => {
+    const found = await scanCmd([
+      "const cp = require('child_process');",
+      'function run(dir) { return cp.spawnSync("ls", ["-la", dir]); }',
+      'module.exports = { run };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('does NOT flag a static command string', async () => {
+    const found = await scanCmd([
+      "const cp = require('child_process');",
+      'function run() { return cp.execSync("git rev-parse HEAD"); }',
+      'module.exports = { run };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('does NOT flag an exec mentioned only inside a doc string', async () => {
+    const found = await scanCmd([
+      'const DOCS = { bad: "cp.execSync(\'ls \' + req.query.dir)" };',
+      'module.exports = { DOCS };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+});

@@ -117,6 +117,20 @@ class SecurityModule extends BaseModule {
       { regex: /\.innerHTML\s*=(?!=)/g, name: 'innerHTML assignment', severity: 'high' },
       { regex: /document\.write\s*\(/g, name: 'document.write()', severity: 'high' },
       { regex: /child_process.*exec\s*\(/g, name: 'shell exec without sanitization', severity: 'high' },
+      // The rule above requires `child_process` on the SAME LINE, so it only
+      // ever caught `require('child_process').exec(...)` written inline. The
+      // ordinary shape —
+      //     const cp = require('child_process');
+      //     cp.execSync('ls ' + req.query.dir);
+      // — was invisible, i.e. command injection, the OWASP staple, went
+      // undetected in its most common form. Found 2026-07-28 by scanning a
+      // fixture of genuinely-vulnerable code to measure false NEGATIVES.
+      //
+      // Deliberately scoped to exec/execSync, which run their argument
+      // through a shell. execFile/spawn take an argv array and are the SAFE
+      // alternative — flagging those would punish the correct fix. Requires
+      // a `+` or `${` in the argument, so a static command is not flagged.
+      { regex: /\b(?:exec|execSync)\s*\(\s*[^)]*(?:\+|\$\{)/g, name: 'shell exec with interpolated input', severity: 'critical' },
       { regex: /\$\{.*req\.(params|query|body)/g, name: 'unsanitized user input in template', severity: 'critical' },
       { regex: /res\.redirect\s*\(\s*req\./g, name: 'open redirect risk', severity: 'high' },
       { regex: /\.createReadStream\s*\(\s*req\./g, name: 'path traversal risk', severity: 'critical' },
