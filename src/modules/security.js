@@ -48,6 +48,9 @@ class SecurityModule extends BaseModule {
     // Prototype pollution — user-controlled key in a bracket assignment
     this._checkPrototypePollution(projectRoot, result);
 
+    // Path traversal — user-controlled path into a filesystem call
+    this._checkPathTraversal(projectRoot, result);
+
     // Check for dangerous file permissions
     this._checkFilePermissions(projectRoot, result);
 
@@ -413,6 +416,72 @@ class SecurityModule extends BaseModule {
           severity: 'error',
           message: `${relPath}:${i + 1} CRITICAL: user-controlled key written straight into an object — a request supplying "__proto__" poisons Object for the whole process`,
           suggestion: 'Reject __proto__/constructor/prototype keys, or store user-keyed data in a `new Map()` / `Object.create(null)` instead of a plain object.',
+        });
+        break; // one finding per file; the remedy is the same throughout
+      }
+    }
+  }
+
+  /**
+   * Path traversal — request input reaching a filesystem call.
+   *
+   * The trap this rule exists to catch is that `path.join` looks like a fix
+   * and is not one:
+   *
+   *     fs.readFileSync(path.join('/data', req.query.file))
+   *
+   * `join` normalises `..` segments rather than rejecting them, so
+   * `?file=../../etc/passwd` escapes `/data` cleanly. Plenty of code is
+   * written this way believing it is safe, which is exactly why the rule is
+   * worth having.
+   *
+   * Only `.createReadStream(req.` was matched before 2026-07-28, so the
+   * common `readFile`/`writeFile` forms were invisible (KI #89).
+   *
+   * Stands down on the real defences: `basename()` (discards directory
+   * parts entirely), or a `resolve()`/`normalize()` paired with a
+   * `startsWith` containment check, or an explicit `includes('..')`
+   * rejection. `path.join` on its own is deliberately NOT accepted as a
+   * guard — treating it as one would be endorsing the bug.
+   */
+  _checkPathTraversal(projectRoot, result) {
+    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
+
+    const FS_SINK_RE =
+      /\b(?:fs|fsp|fsPromises)\s*\.\s*(?:promises\s*\.\s*)?(?:readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|createReadStream|createWriteStream|unlink|unlinkSync|rm|rmSync|rmdir|rmdirSync|open|openSync)\s*\([^)]*(?:req|request|ctx|event)\s*\.\s*(?:body|query|params|payload)\b/;
+    // sendFile/download take a path just as directly.
+    const RES_SINK_RE =
+      /\bres\s*\.\s*(?:sendFile|download)\s*\([^)]*(?:req|request|ctx|event)\s*\.\s*(?:body|query|params|payload)\b/;
+    // The actual defences. path.join is NOT one of them.
+    const GUARD_RE =
+      /\bbasename\s*\(|startsWith\s*\(|\.includes\s*\(\s*['"`]\.\.['"`]\s*\)|\bindexOf\s*\(\s*['"`]\.\.['"`]\s*\)|allow(?:ed)?[_-]?(?:list|files|paths)/i;
+
+    for (const file of files) {
+      const relPath = path.relative(projectRoot, file);
+      if (SCANNER_PATH_RE.test(relPath.replace(/\\/g, '/'))) continue;
+
+      let content;
+      try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+      const lines = content.split(/\r?\n/);
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (this._isCommentLine(line)) continue;
+        const m = line.match(FS_SINK_RE) || line.match(RES_SINK_RE);
+        if (!m) continue;
+        if (this._isInsideStringLiteral(line, m.index)) continue;
+
+        const windowText = lines.slice(Math.max(0, i - 6), i + 3).join('\n');
+        if (GUARD_RE.test(windowText)) continue;
+
+        result.addCheck(`security:path-traversal:${relPath}:${i + 1}`, false, {
+          file: relPath,
+          line: i + 1,
+          column: m.index,
+          severity: 'error',
+          message: `${relPath}:${i + 1} CRITICAL: request input reaches a filesystem path — "../../etc/passwd" escapes the intended directory (path.join normalises "..", it does not reject it)`,
+          suggestion: 'Take path.basename() of the user value, or resolve() it and verify the result startsWith the intended root before touching the filesystem. path.join alone is not a defence.',
         });
         break; // one finding per file; the remedy is the same throughout
       }

@@ -449,3 +449,117 @@ describe('security — prototype pollution', () => {
     assert.deepStrictEqual(found.map((f) => f.name), []);
   });
 });
+
+// =============================================================================
+// FALSE NEGATIVE: path traversal
+// =============================================================================
+// Only `.createReadStream(req.` was matched before 2026-07-28, so the common
+// readFile/writeFile forms were invisible (KI #89).
+//
+// The trap worth catching is that path.join LOOKS like a fix and is not one:
+//
+//     fs.readFileSync(path.join('/data', req.query.file))
+//
+// join normalises `..` rather than rejecting it, so ?file=../../etc/passwd
+// escapes /data cleanly. Plenty of code is written this way believing it is
+// safe — which is the whole reason the rule earns its place.
+// =============================================================================
+
+describe('security — path traversal', () => {
+  let tmp5;
+  beforeEach(() => { tmp5 = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-path-')); });
+  afterEach(() => { fs.rmSync(tmp5, { recursive: true, force: true }); });
+
+  async function scanPath(source) {
+    fs.mkdirSync(path.join(tmp5, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp5, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    fs.writeFileSync(path.join(tmp5, 'src', 'x.js'), source);
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp5 });
+    return result.checks.filter((c) => !c.passed && /path-traversal/.test(c.name));
+  }
+
+  it('flags path.join with request input — join is NOT a defence', async () => {
+    const found = await scanPath([
+      "const fs = require('fs');",
+      "const path = require('path');",
+      'function read(req) {',
+      "  return fs.readFileSync(path.join('/data', req.query.file));",
+      '}',
+      'module.exports = { read };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].severity, 'error');
+    assert.match(found[0].suggestion, /basename|startsWith/);
+    assert.match(found[0].message, /path\.join normalises/);
+  });
+
+  it('flags writeFile and res.sendFile with request input', async () => {
+    for (const src of [
+      "const fs = require('fs');\nfunction w(req) { fs.writeFileSync('/d/' + req.body.name, 'x'); }\nmodule.exports = { w };",
+      'function s(req, res) { res.sendFile(req.query.p); }\nmodule.exports = { s };',
+    ]) {
+      assert.strictEqual((await scanPath(src)).length, 1, src);
+    }
+  });
+
+  // The negatives are the three real defences plus the no-user-input case.
+  it('does NOT flag a basename() guard', async () => {
+    const found = await scanPath([
+      "const fs = require('fs');",
+      "const path = require('path');",
+      'function read(req) {',
+      "  return fs.readFileSync(path.join('/data', path.basename(req.query.file)));",
+      '}',
+      'module.exports = { read };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag a resolve + startsWith containment check', async () => {
+    const found = await scanPath([
+      "const fs = require('fs');",
+      "const path = require('path');",
+      "const ROOT = '/data';",
+      'function read(req) {',
+      '  const full = path.resolve(ROOT, req.query.file);',
+      "  if (!full.startsWith(ROOT)) throw new Error('escape');",
+      '  return fs.readFileSync(full);',
+      '}',
+      'module.exports = { read };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag an explicit ".." rejection', async () => {
+    const found = await scanPath([
+      "const fs = require('fs');",
+      "const path = require('path');",
+      'function read(req) {',
+      "  if (req.query.file.includes('..')) throw new Error('nope');",
+      "  return fs.readFileSync(path.join('/data', req.query.file));",
+      '}',
+      'module.exports = { read };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag a filesystem call with no request input', async () => {
+    const found = await scanPath([
+      "const fs = require('fs');",
+      "const path = require('path');",
+      "function read(name) { return fs.readFileSync(path.join('/data', name)); }",
+      'module.exports = { read };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag the same sink quoted in a doc string', async () => {
+    const found = await scanPath([
+      'const DOCS = { bad: "fs.readFileSync(path.join(root, req.query.file))" };',
+      'module.exports = { DOCS };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+});
