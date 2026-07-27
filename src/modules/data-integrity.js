@@ -268,14 +268,54 @@ class DataIntegrityModule extends BaseModule {
       // and module-summary strings as SQL injections. This narrower form
       // only matches the actual unsafe shape: a query function call with
       // SELECT/INSERT/UPDATE/DELETE followed by an interpolation.
-      const sqlConcatPattern = /(?:query|execute|raw)\s*\(\s*[`'"](?:SELECT|INSERT|UPDATE|DELETE)\b[^`'"]*\$\{/gi;
-      if (sqlConcatPattern.test(content)) {
-        result.addCheck(`data:sql-injection:${relPath}`, false, {
+      // `\s*` after the opening quote closes a false NEGATIVE: the very
+      // common formatting
+      //     db.query(`
+      //       SELECT * FROM users WHERE id = ${id}
+      //     `)
+      // was never detected, because the pattern demanded SELECT immediately
+      // after the quote. Verified against the pre-change code: only the
+      // single-line form was ever caught (found 2026-07-28 while fixing the
+      // FP below — the multi-line case was checked rather than assumed).
+      const sqlConcatPattern = /(?:query|execute|raw)\s*\(\s*[`'"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\b[^`'"]*\$\{/gi;
+
+      // Matched against the WHOLE file so the multi-line form above is
+      // reachable at all; a line-by-line scan could not see it.
+      //
+      // The false positive it caused: a handbook/docs file where the whole
+      // snippet sits inside an OUTER string —
+      //     sqlTmpl: "db.query(`SELECT * FROM u WHERE id = ${req.query.id}`)",
+      // — was reported as a blocking SQL-injection error (found 2026-07-28
+      // by scanning an all-inert fixture, KI #77).
+      //
+      // The discriminator is the position of `query(` itself: in real code
+      // it IS code, and in the doc string it is inside a string literal. So
+      // check the match START rather than dropping to line-by-line. The
+      // opening quote always shares that line, so the line-based guard is
+      // exact here.
+      sqlConcatPattern.lastIndex = 0;
+      let sqlMatch;
+      while ((sqlMatch = sqlConcatPattern.exec(content)) !== null) {
+        const before = content.slice(0, sqlMatch.index);
+        const lineNo = before.split(/\r?\n/).length;
+        const lineStart = before.lastIndexOf('\n') + 1;
+        const lineText = content.slice(lineStart, content.indexOf('\n', sqlMatch.index) === -1
+          ? content.length
+          : content.indexOf('\n', sqlMatch.index));
+        const col = sqlMatch.index - lineStart;
+
+        if (this._isCommentLine(lineText)) continue;
+        if (this._isInsideStringLiteral(lineText, col)) continue;
+
+        result.addCheck(`data:sql-injection:${relPath}:${lineNo}`, false, {
           file: relPath,
+          line: lineNo,
+          column: col,
           severity: 'error',
-          message: 'Possible SQL injection — string interpolation inside a SQL query call',
+          message: `${relPath}:${lineNo} Possible SQL injection — string interpolation inside a SQL query call`,
           suggestion: 'Use parameterized queries or prepared statements',
         });
+        break; // one finding per file is enough; the fix is the same everywhere
       }
     }
   }

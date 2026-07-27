@@ -33,3 +33,91 @@ describe('DataIntegrityModule — baseline shape', () => {
     await assert.doesNotReject(mod.run(result, { projectRoot: tmp }));
   });
 });
+
+/**
+ * SQL-injection detection: position matters, and multi-line counts.
+ *
+ * Found 2026-07-28 by scanning an all-inert fixture — a handbook file whose
+ * every dangerous construct sits inside a doc string. `data:sql-injection`
+ * fired on it as a BLOCKING error:
+ *
+ *   sqlTmpl: "db.query(`SELECT * FROM u WHERE id = ${req.query.id}`)",
+ *
+ * The discriminator is where `query(` sits. In real code it IS code; in the
+ * handbook it is inside an outer string. Checking the match position beats
+ * dropping to a line-by-line scan, which would have lost the multi-line
+ * form entirely.
+ *
+ * And while verifying that, the multi-line form turned out never to have
+ * been detected at all — the pattern demanded SELECT immediately after the
+ * opening quote. Confirmed against the pre-change code rather than assumed.
+ */
+describe('data-integrity — SQL injection: strings vs code, single vs multi-line', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-di-sqli-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function scan(rel, source) {
+    const abs = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, source);
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    const mod = new DataIntegrityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && c.name.startsWith('data:sql-injection'));
+  }
+
+  it('does NOT flag a query snippet quoted inside a doc string', async () => {
+    const found = await scan('src/handbook.js', [
+      'const RULES = {',
+      '  sqlTmpl: "db.query(`SELECT * FROM u WHERE id = ${req.query.id}`)",',
+      '};',
+      'module.exports = { RULES };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag a query snippet inside a comment', async () => {
+    const found = await scan('src/notes.js', [
+      '// never write db.query(`SELECT * FROM u WHERE id = ${id}`)',
+      'const a = 1;',
+      'module.exports = { a };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('DOES flag a real single-line interpolated query', async () => {
+    const found = await scan('src/db.js', [
+      'async function one(db, req) {',
+      '  return db.query(`SELECT * FROM users WHERE id = ${req.query.id}`);',
+      '}',
+      'module.exports = { one };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].line, 2, 'the finding must carry a line number');
+  });
+
+  it('DOES flag a real MULTI-LINE interpolated query', async () => {
+    // This shape was never detected before 2026-07-28.
+    const found = await scan('src/db2.js', [
+      'async function many(db, req) {',
+      '  return db.query(`',
+      '    SELECT * FROM users WHERE id = ${req.query.id}',
+      '  `);',
+      '}',
+      'module.exports = { many };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1, 'multi-line queries are the common formatting');
+  });
+
+  it('does NOT flag a parameterised query', async () => {
+    const found = await scan('src/safe.js', [
+      'async function safe(db, req) {',
+      '  return db.query("SELECT * FROM users WHERE id = $1", [req.query.id]);',
+      '}',
+      'module.exports = { safe };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+});
