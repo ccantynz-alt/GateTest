@@ -492,3 +492,92 @@ describe('try-fix orchestrator', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// KI #78 — an Anthropic HTTP error must never read as "no fix available".
+//
+// Before this, runClaudeLayer never checked res.ok. An error body carries no
+// `content` array, so 404 (model retired), 401 (bad key), 429 (rate limited)
+// and 529 (overloaded) all fell through to `return null` and surfaced as
+// reason:'no-layer-matched' — identical to a genuine miss. Retiring a model
+// would have looked like a company-wide quality regression, and `doctor`
+// would have blamed the customer's API key.
+// ---------------------------------------------------------------------------
+describe('try-fix — Anthropic API errors are distinguishable from a miss', () => {
+  const CASES = [
+    { status: 404, msg: 'model: claude-retired-9', label: 'retired model' },
+    { status: 401, msg: 'invalid x-api-key', label: 'bad key' },
+    { status: 429, msg: 'rate limit exceeded', label: 'rate limited' },
+    { status: 529, msg: 'overloaded', label: 'overloaded' },
+  ];
+
+  for (const c of CASES) {
+    it(`HTTP ${c.status} (${c.label}) reports claude-api-error, not no-layer-matched`, async () => {
+      const fakeFetch = async () => ({
+        ok: false,
+        status: c.status,
+        json: async () => ({ type: 'error', error: { type: 'x', message: c.msg } }),
+      });
+      const tel = captureTelemetry();
+      const out = await tryFix(NOVEL_ISSUE, {
+        enableClaude: true,
+        anthropicApiKey: 'sk-test',
+        fetch: fakeFetch,
+        recordFixAttempt: tel.fn,
+      });
+
+      assert.strictEqual(out.patched, null);
+      assert.strictEqual(out.reason, 'claude-api-error', 'an outage must not read as a clean miss');
+      assert.strictEqual(out.apiError.status, c.status);
+      assert.match(out.apiError.detail, new RegExp(String(c.status)));
+      assert.match(out.apiError.detail, new RegExp(c.msg.split(' ')[0]));
+
+      // And it must be visible in telemetry, not just the return value.
+      const rec = tel.records.find((r) => r.layer === 'claude');
+      assert.ok(rec, 'the claude layer must still record an attempt');
+      assert.strictEqual(rec.success, false);
+      assert.match(rec.reason, /^api-error:/);
+    });
+  }
+
+  it('a non-JSON error body still reports the status', async () => {
+    const fakeFetch = async () => ({
+      ok: false,
+      status: 502,
+      json: async () => { throw new Error('not json'); },
+    });
+    const out = await tryFix(NOVEL_ISSUE, {
+      enableClaude: true,
+      anthropicApiKey: 'sk-test',
+      fetch: fakeFetch,
+    });
+    assert.strictEqual(out.reason, 'claude-api-error');
+    assert.strictEqual(out.apiError.status, 502);
+  });
+
+  it('a genuine miss (200 with no usable content) still reports no-layer-matched', async () => {
+    const fakeFetch = async () => ({ ok: true, status: 200, json: async () => ({ content: [] }) });
+    const out = await tryFix(NOVEL_ISSUE, {
+      enableClaude: true,
+      anthropicApiKey: 'sk-test',
+      fetch: fakeFetch,
+    });
+    assert.strictEqual(out.reason, 'no-layer-matched', 'a real miss must keep its own reason');
+    assert.strictEqual(out.apiError, undefined);
+  });
+
+  it('a 200 response is unaffected by the error check', async () => {
+    const fakeFetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: [{ type: 'text', text: 'FIXED' }], usage: { input_tokens: 1, output_tokens: 1 } }),
+    });
+    const out = await tryFix(NOVEL_ISSUE, {
+      enableClaude: true,
+      anthropicApiKey: 'sk-test',
+      fetch: fakeFetch,
+    });
+    assert.strictEqual(out.layer, 'claude');
+    assert.strictEqual(out.patched, 'FIXED');
+  });
+});

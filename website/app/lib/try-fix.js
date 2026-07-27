@@ -322,6 +322,27 @@ async function runClaudeLayer(issue, opts) {
     body,
   });
 
+  // An HTTP error body has no `content` array, so before this check a 404
+  // (model retired), 401 (bad key), 429 (rate limited) and 529 (overloaded)
+  // all fell through to `return null` and were reported as "Claude had no
+  // fix" — an outage indistinguishable from a quality miss (Forbidden #16).
+  // Detect failure only when the response positively says so, so test doubles
+  // that return a bare `{ json }` keep working.
+  const failed = res && (res.ok === false || (typeof res.status === 'number' && res.status >= 400));
+  if (failed) {
+    let detail = '';
+    try {
+      const errBody = await res.json();
+      detail = (errBody && errBody.error && errBody.error.message) || '';
+    } catch { /* non-JSON error body — status alone still tells the story */ }
+    return {
+      apiError: true,
+      status: res.status,
+      model,
+      reason: `api-error:${res.status}${detail ? ` ${String(detail).slice(0, 200)}` : ''}`,
+    };
+  }
+
   let data;
   try {
     data = await res.json();
@@ -379,6 +400,23 @@ async function runLayer({ name, fn, issue, opts, telemetryFn, telemetryPath, ext
         ...extraTelemetry,
       }, telemetryPath);
       return { ok: false, skipped: true, reason: raw.reason };
+    }
+    if (raw.apiError) {
+      // The provider answered with an error. Distinct from a miss: the layer
+      // never got the chance to produce a fix, so callers must not report
+      // this as "no fix available".
+      recordSafely(telemetryFn, {
+        layer: name,
+        success: false,
+        issueRuleKey: issue.ruleKey,
+        module: issue.module,
+        durationMs,
+        costUsd: 0,
+        reason: raw.reason,
+        model: raw.model,
+        ...extraTelemetry,
+      }, telemetryPath);
+      return { ok: false, apiError: true, status: raw.status, reason: raw.reason };
     }
     if (typeof raw.patched === 'string') patched = raw.patched;
     if (Number.isFinite(raw.costUsd)) costUsd = raw.costUsd;
@@ -569,6 +607,19 @@ async function tryFix(issue, opts = {}) {
       durationMs: claudeResult.durationMs,
       costUsd: claudeResult.costUsd,
       model,
+    };
+  }
+
+  // An Anthropic outage/misconfiguration must never masquerade as a clean
+  // "nothing to fix here". Without this, retiring a model would look like a
+  // sudden quality regression across every customer, and `doctor` would
+  // blame the customer's API key.
+  if (claudeResult.apiError) {
+    return {
+      layer: null,
+      patched: null,
+      reason: 'claude-api-error',
+      apiError: { status: claudeResult.status, detail: claudeResult.reason },
     };
   }
 
