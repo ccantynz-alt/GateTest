@@ -45,6 +45,9 @@ class SecurityModule extends BaseModule {
     // MD5/SHA-1 used to hash a credential
     this._checkWeakPasswordHashing(projectRoot, result);
 
+    // Prototype pollution — user-controlled key in a bracket assignment
+    this._checkPrototypePollution(projectRoot, result);
+
     // Check for dangerous file permissions
     this._checkFilePermissions(projectRoot, result);
 
@@ -342,6 +345,74 @@ class SecurityModule extends BaseModule {
           severity: 'error',
           message: `${relPath}:${i + 1} CRITICAL: ${algo.toUpperCase()} used to hash a credential — fast hashes make offline brute-force cheap`,
           suggestion: 'Use a deliberately slow, salted KDF: bcrypt, scrypt, or argon2id. Switching to SHA-256 does NOT fix this — the problem is speed, not collision resistance.',
+        });
+        break; // one finding per file; the remedy is the same throughout
+      }
+    }
+  }
+
+  /**
+   * Prototype pollution — a USER-CONTROLLED key in a bracket assignment.
+   *
+   * The whole difficulty is precision. `obj[key] = value` is one of the most
+   * common lines in JavaScript and is almost always fine; a rule that flagged
+   * dynamic assignment generally would bury the customer. So this requires
+   * the key expression to trace *directly* to request input —
+   *
+   *     target[req.body.key] = req.body.value;   // __proto__ gets through
+   *
+   * — which is the shape that actually lets an attacker set `__proto__`,
+   * `constructor` or `prototype` on Object and poison every object in the
+   * process.
+   *
+   * It also stands down when the author has clearly thought about it: a
+   * nearby `__proto__`/`constructor`/`prototype` denylist,
+   * `Object.create(null)`, `hasOwnProperty`, or a `Map` means the guard is
+   * already there and a finding would be noise on correct code.
+   *
+   * Gap found 2026-07-28 by scanning genuinely-vulnerable code to measure
+   * false negatives — there was no `__proto__` detection anywhere in the
+   * engine (KI #89).
+   */
+  _checkPrototypePollution(projectRoot, result) {
+    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
+
+    // `something[req.body…] = ` / `[req.query…]` / `[req.params…]`, also
+    // ctx/request/event for Koa/Lambda-style handlers.
+    const SINK_RE =
+      /[\w$\].]\s*\[\s*(?:req|request|ctx|event)\.(?:body|query|params|payload)\b[^\]]*\]\s*=(?!=)/;
+    // Evidence the author already defends against this.
+    const GUARD_RE =
+      /__proto__|\bconstructor\b|\bprototype\b|Object\.create\s*\(\s*null\s*\)|hasOwnProperty|new\s+Map\b|\bfreeze\s*\(/;
+
+    for (const file of files) {
+      const relPath = path.relative(projectRoot, file);
+      if (SCANNER_PATH_RE.test(relPath.replace(/\\/g, '/'))) continue;
+
+      let content;
+      try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+      const lines = content.split(/\r?\n/);
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (this._isCommentLine(line)) continue;
+        const m = line.match(SINK_RE);
+        if (!m) continue;
+        if (this._isInsideStringLiteral(line, m.index)) continue;
+
+        // Wider window than the weak-hash check: a key denylist is usually a
+        // few lines above the assignment, not adjacent to it.
+        const windowText = lines.slice(Math.max(0, i - 6), i + 3).join('\n');
+        if (GUARD_RE.test(windowText)) continue;
+
+        result.addCheck(`security:prototype-pollution:${relPath}:${i + 1}`, false, {
+          file: relPath,
+          line: i + 1,
+          column: m.index,
+          severity: 'error',
+          message: `${relPath}:${i + 1} CRITICAL: user-controlled key written straight into an object — a request supplying "__proto__" poisons Object for the whole process`,
+          suggestion: 'Reject __proto__/constructor/prototype keys, or store user-keyed data in a `new Map()` / `Object.create(null)` instead of a plain object.',
         });
         break; // one finding per file; the remedy is the same throughout
       }

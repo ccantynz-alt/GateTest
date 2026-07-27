@@ -341,3 +341,111 @@ describe('security — weak hashing of credentials', () => {
     assert.deepStrictEqual(found.map((f) => f.name), []);
   });
 });
+
+// =============================================================================
+// FALSE NEGATIVE: prototype pollution
+// =============================================================================
+// There was no __proto__ detection anywhere in the engine before 2026-07-28
+// (KI #89). The difficulty is precision, not detection: `obj[key] = value` is
+// one of the most common lines in JavaScript and is almost always fine, so a
+// rule flagging dynamic assignment generally would bury the customer.
+//
+// It therefore requires the key to trace DIRECTLY to request input, and it
+// stands down when the author has visibly defended the sink.
+// =============================================================================
+
+describe('security — prototype pollution', () => {
+  let tmp4;
+  beforeEach(() => { tmp4 = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-proto-')); });
+  afterEach(() => { fs.rmSync(tmp4, { recursive: true, force: true }); });
+
+  async function scanProto(source) {
+    fs.mkdirSync(path.join(tmp4, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp4, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    fs.writeFileSync(path.join(tmp4, 'src', 'x.js'), source);
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp4 });
+    return result.checks.filter((c) => !c.passed && /prototype-pollution/.test(c.name));
+  }
+
+  it('flags a user-controlled key written straight into an object', async () => {
+    const found = await scanProto([
+      'function merge(target, req) {',
+      '  target[req.body.key] = req.body.value;',
+      '  return target;',
+      '}',
+      'module.exports = { merge };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].severity, 'error');
+    assert.match(found[0].suggestion, /Map|Object\.create/);
+  });
+
+  it('flags req.query and req.params keys too', async () => {
+    for (const src of [
+      'function m(t, req) { t[req.query.k] = 1; return t; }\nmodule.exports = { m };',
+      'function m(t, req) { t[req.params.k] = 1; return t; }\nmodule.exports = { m };',
+    ]) {
+      assert.strictEqual((await scanProto(src)).length, 1, src);
+    }
+  });
+
+  // The negatives carry this rule. Each is correct code that must stay quiet.
+  it('does NOT flag when a key denylist is present', async () => {
+    const found = await scanProto([
+      "const BLOCKED = ['__proto__', 'constructor', 'prototype'];",
+      'function merge(target, req) {',
+      '  if (BLOCKED.includes(req.body.key)) throw new Error("bad key");',
+      '  target[req.body.key] = req.body.value;',
+      '  return target;',
+      '}',
+      'module.exports = { merge };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag an Object.create(null) sink', async () => {
+    const found = await scanProto([
+      'function safe(req) {',
+      '  const store = Object.create(null);',
+      '  store[req.body.key] = req.body.value;',
+      '  return store;',
+      '}',
+      'module.exports = { safe };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag ordinary dynamic assignment with a local key', async () => {
+    // The single most common shape in JS. Flagging it would be unusable.
+    const found = await scanProto([
+      'function set(obj, key, value) {',
+      '  obj[key] = value;',
+      '  return obj;',
+      '}',
+      'module.exports = { set };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag a Map-based store', async () => {
+    const found = await scanProto([
+      'function store(req) {',
+      '  const m = new Map();',
+      '  m.set(req.body.key, req.body.value);',
+      '  return m;',
+      '}',
+      'module.exports = { store };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('does NOT flag the same sink quoted in a doc string', async () => {
+    const found = await scanProto([
+      'const DOCS = { bad: "target[req.body.key] = req.body.value" };',
+      'module.exports = { DOCS };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+});
