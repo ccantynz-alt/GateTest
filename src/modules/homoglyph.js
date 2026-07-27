@@ -241,7 +241,7 @@ class HomoglyphModule extends BaseModule {
     // Locale and doc files are allowed any Unicode.
     if (isLocale || isDoc) return 0;
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {

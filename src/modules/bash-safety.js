@@ -81,7 +81,7 @@ class BashSafetyModule extends BaseModule {
     let content;
     try { content = fs.readFileSync(file, 'utf8'); } catch { return; }
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     lines.forEach((rawLine, idx) => {
       const lineNum = idx + 1;
 

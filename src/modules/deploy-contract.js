@@ -90,7 +90,7 @@ class DeployContractModule extends BaseModule {
     for (const file of files) {
       let content;
       try { content = fs.readFileSync(file, 'utf8'); } catch { continue; }
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       lines.forEach((rawLine, idx) => {
         // Strip YAML 'run: |' prefix noise

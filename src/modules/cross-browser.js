@@ -131,7 +131,7 @@ class CrossBrowserModule extends BaseModule {
     try {
       browser = await playwright[engine].launch({ headless: true, timeout: 15000 });
     } catch (err) {
-      return { launched: false, skipReason: err && err.message ? err.message.split('\n')[0] : String(err) };
+      return { launched: false, skipReason: err && err.message ? err.message.split(/\r?\n/)[0] : String(err) };
     }
 
     try {

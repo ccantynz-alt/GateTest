@@ -243,8 +243,8 @@ class UndefinedRefModule extends BaseModule {
     // Stripping protects pass 2 from flagging identifier-shaped substrings
     // inside strings as undefined references.
     const stripped = this._stripCommentsAndStrings(content);
-    const strippedLines = stripped.split('\n');
-    const rawLines = content.split('\n');
+    const strippedLines = stripped.split(/\r?\n/);
+    const rawLines = content.split(/\r?\n/);
 
     // Pass 1: harvest declarations + imports from RAW content. The string
     // stripper has limitations (regex literals with embedded quote chars

@@ -232,7 +232,7 @@ class PrQualityModule extends BaseModule {
         maxBuffer: 4 * 1024 * 1024,
       });
       return out
-        .split('\n')
+        .split(/\r?\n/)
         .filter(Boolean)
         .map((line) => {
           const [sha, ...rest] = line.split('\t');
@@ -251,7 +251,7 @@ class PrQualityModule extends BaseModule {
         stdio: ['pipe', 'pipe', 'pipe'],
         maxBuffer: 4 * 1024 * 1024,
       });
-      return out.split('\n').map((s) => s.trim()).filter(Boolean);
+      return out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     } catch {
       return [];
     }

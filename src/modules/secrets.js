@@ -90,7 +90,7 @@ class SecretsModule extends BaseModule {
       if (/(?:^|\/)src[\\/]modules[\\/]/.test(relUnix)) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
       const found = [];
 
       for (let i = 0; i < lines.length; i++) {

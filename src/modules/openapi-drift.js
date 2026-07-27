@@ -222,7 +222,7 @@ class OpenApiDriftModule extends BaseModule {
 
     // YAML — minimal extractor. We look for the `paths:` top-level
     // section and walk indented entries.
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let inPaths = false;
     let pathsIndent = 0;
     let currentPath = null;
@@ -295,7 +295,7 @@ class OpenApiDriftModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     if (TEST_PATH_RE.test(rel)) return;
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
       const trimmed = line.trim();
@@ -328,7 +328,7 @@ class OpenApiDriftModule extends BaseModule {
       const p = m[2];
       if (!p.startsWith('/')) continue;
       const before = content.slice(0, m.index);
-      const lineNum = before.split('\n').length;
+      const lineNum = before.split(/\r?\n/).length;
       const key = `${method} ${this._normalizeCodePath(p)}`;
       if (!codeRoutes.has(key)) codeRoutes.set(key, { file: rel, line: lineNum });
     }
@@ -338,7 +338,7 @@ class OpenApiDriftModule extends BaseModule {
       const method = m[2].toUpperCase();
       if (!p.startsWith('/')) continue;
       const before = content.slice(0, m.index);
-      const lineNum = before.split('\n').length;
+      const lineNum = before.split(/\r?\n/).length;
       const key = `${method} ${this._normalizeCodePath(p)}`;
       if (!codeRoutes.has(key)) codeRoutes.set(key, { file: rel, line: lineNum });
     }
@@ -376,7 +376,7 @@ class OpenApiDriftModule extends BaseModule {
             if (methodRe.test(content)) {
               const key = `${method} ${normalized}`;
               const m = content.match(methodRe);
-              const lineNum = content.slice(0, m.index).split('\n').length;
+              const lineNum = content.slice(0, m.index).split(/\r?\n/).length;
               if (!codeRoutes.has(key)) codeRoutes.set(key, { file: rel, line: lineNum });
             }
           }

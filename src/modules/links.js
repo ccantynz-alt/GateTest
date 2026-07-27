@@ -79,7 +79,7 @@ class LinksModule extends BaseModule {
           for (const m of matches) {
             // Find approximate line number
             const idx = content.indexOf(m);
-            const line = content.substring(0, idx).split('\n').length;
+            const line = content.substring(0, idx).split(/\r?\n/).length;
             deadLinks.push({ href: type, source: relPath, line });
           }
         }

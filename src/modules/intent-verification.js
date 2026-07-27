@@ -123,7 +123,7 @@ class IntentVerification extends BaseModule {
 
     result.addCheck('intent-verification:running', true, {
       severity: 'info',
-      message: `Verifying intent: "${commitMsg.split('\n')[0].slice(0, 80)}"`,
+      message: `Verifying intent: "${commitMsg.split(/\r?\n/)[0].slice(0, 80)}"`,
     });
 
     try {

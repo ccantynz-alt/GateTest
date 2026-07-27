@@ -230,7 +230,7 @@ class DeadCodeModule extends BaseModule {
       const lang = ext === '.py' ? 'py' : 'js';
       const rel = path.relative(projectRoot, file);
       if (this._matchesIgnorePattern(rel, ignorePatterns)) continue;
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       let run = 0;
       let runStart = 0;

@@ -191,7 +191,7 @@ class SbomModule extends BaseModule {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
       if (name === 'requirements.txt') {
-        for (const line of content.split('\n')) {
+        for (const line of content.split(/\r?\n/)) {
           const clean = line.split('#')[0].trim();
           if (!clean) continue;
           const m = clean.match(/^([A-Za-z0-9_.-]+)\s*[=><~!]+\s*([^\s,]+)/);
@@ -216,7 +216,7 @@ class SbomModule extends BaseModule {
     const seen = new Set();
     try {
       const content = fs.readFileSync(goSumPath, 'utf8');
-      for (const line of content.split('\n')) {
+      for (const line of content.split(/\r?\n/)) {
         const parts = line.trim().split(/\s+/);
         if (parts.length < 2) continue;
         const [modver] = parts;
@@ -254,7 +254,7 @@ class SbomModule extends BaseModule {
     let inSpecs = false;
     try {
       const content = fs.readFileSync(gemfileLockPath, 'utf8');
-      for (const line of content.split('\n')) {
+      for (const line of content.split(/\r?\n/)) {
         if (line.match(/^\s{4}SPECS:/)) { inSpecs = true; continue; }
         if (inSpecs && line.match(/^[A-Z]/)) { inSpecs = false; }
         if (inSpecs) {

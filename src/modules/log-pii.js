@@ -199,7 +199,7 @@ class LogPiiModule extends BaseModule {
     const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
     const errSev = isTest ? 'warning' : 'error';
     const warnSev = isTest ? 'info' : 'warning';
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     let issues = 0;
     let inBlock = false;
 
@@ -331,7 +331,7 @@ class LogPiiModule extends BaseModule {
     const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
     const errSev = isTest ? 'warning' : 'error';
     const warnSev = isTest ? 'info' : 'warning';
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     let issues = 0;
     let inDocstring = false;
     let docQuote = null;

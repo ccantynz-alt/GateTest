@@ -239,7 +239,7 @@ class PromptSafetyModule extends BaseModule {
     const relUnix = rel.replace(/\\/g, '/');
     const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -344,7 +344,7 @@ class PromptSafetyModule extends BaseModule {
         if (/max_tokens\s*[:=]/.test(body)) continue;
         const idx = m.index;
         const beforeMatch = content.slice(0, idx);
-        const lineNo = beforeMatch.split('\n').length;
+        const lineNo = beforeMatch.split(/\r?\n/).length;
         const lineStart = beforeMatch.lastIndexOf('\n') + 1;
         const lineText = lines[lineNo - 1] || '';
         // Same fixture-data guard as the other rules in this file — a real

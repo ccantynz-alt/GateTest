@@ -170,7 +170,7 @@ class CronExpressionModule extends BaseModule {
       harvested += found.length;
       for (const { expr, line } of found) {
         // Suppression: cron-ok on same or preceding line
-        const lines = text.split('\n');
+        const lines = text.split(/\r?\n/);
         const suppressed =
           (lines[line - 1] && SUPPRESS_RE.test(lines[line - 1])) ||
           (line > 1 && lines[line - 2] && SUPPRESS_RE.test(lines[line - 2]));
@@ -219,7 +219,7 @@ class CronExpressionModule extends BaseModule {
 
   _harvestCronStrings(rel, text, ext) {
     const found = [];
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
 
     if (YAML_EXTS.has(ext)) {
       // Context-aware: we want `cron:` inside `schedule:` (GitHub

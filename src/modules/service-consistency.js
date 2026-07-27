@@ -40,7 +40,7 @@ function normaliseSlashes(s) {
 
 function parseSystemd(content) {
   const commands = [];
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const clean = stripComments(line);
     const m = clean.match(/^ExecStart\s*=\s*(.+)/);
     if (m) commands.push(m[1].trim());
@@ -50,7 +50,7 @@ function parseSystemd(content) {
 
 function parseProcfile(content) {
   const commands = [];
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const clean = stripComments(line);
     const m = clean.match(/^\w+\s*:\s*(.+)/);
     if (m) commands.push(m[1].trim());

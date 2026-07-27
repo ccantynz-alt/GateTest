@@ -102,7 +102,7 @@ class TRPCContractDrift extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       // Harvest router definitions
       if (isRouterFile(rel)) {
@@ -117,7 +117,7 @@ class TRPCContractDrift extends BaseModule {
           while ((km = PROC_KEY_RE.exec(body)) !== null) {
             const name   = km[1];
             if (['default', 'type', 'interface', 'return', 'const', 'let', 'var', 'import', 'export'].includes(name)) continue;
-            const lineNo = content.slice(0, matchIdx + km.index).split('\n').length;
+            const lineNo = content.slice(0, matchIdx + km.index).split(/\r?\n/).length;
             definedProcedures.set(name, { file: rel, absFile: file, line: lineNo });
           }
 
@@ -126,7 +126,7 @@ class TRPCContractDrift extends BaseModule {
           let mr;
           while ((mr = MERGE_RE.exec(body)) !== null) {
             const ns = mr[1];
-            const lineNo = content.slice(0, matchIdx + mr.index).split('\n').length;
+            const lineNo = content.slice(0, matchIdx + mr.index).split(/\r?\n/).length;
             definedProcedures.set(ns, { file: rel, absFile: file, line: lineNo, isNamespace: true });
           }
         }
@@ -137,7 +137,7 @@ class TRPCContractDrift extends BaseModule {
       let cm;
       while ((cm = CALL_SITE_RE.exec(content)) !== null) {
         const path_parts = cm[1];
-        const lineNo     = content.slice(0, cm.index).split('\n').length;
+        const lineNo     = content.slice(0, cm.index).split(/\r?\n/).length;
         const lineText   = lines[lineNo - 1] || '';
         if (lineText.includes('// trpc-ok')) continue;
 

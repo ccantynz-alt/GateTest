@@ -289,7 +289,7 @@ class EnvVarsModule extends BaseModule {
   _harvestEnvFile(file, out) {
     let content;
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return; }
-    for (const rawLine of content.split('\n')) {
+    for (const rawLine of content.split(/\r?\n/)) {
       const line = rawLine.trim();
       if (!line || line.startsWith('#')) continue;
       // Remove optional `export `
@@ -322,7 +322,7 @@ class EnvVarsModule extends BaseModule {
     // Only consume lines that look like `  KEY: value` inside an
     // `environment:` block. We approximate state with a flag.
     let inEnv = false;
-    for (const ln of content.split('\n')) {
+    for (const ln of content.split(/\r?\n/)) {
       if (/^\s*environment\s*:\s*$/.test(ln)) { inEnv = true; continue; }
       if (inEnv) {
         if (/^\S/.test(ln)) { inEnv = false; }
@@ -339,7 +339,7 @@ class EnvVarsModule extends BaseModule {
     // `  FOO: ${{ secrets.FOO }}` or `  FOO: bar`.
     let inEnv = false;
     let envIndent = -1;
-    for (const ln of content.split('\n')) {
+    for (const ln of content.split(/\r?\n/)) {
       const headerMatch = ln.match(/^(\s*)env\s*:\s*$/);
       if (headerMatch) { inEnv = true; envIndent = headerMatch[1].length; continue; }
       if (inEnv) {
@@ -385,7 +385,7 @@ class EnvVarsModule extends BaseModule {
     let content;
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return; }
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     const ext = path.extname(file).toLowerCase();
 
     const patterns = [];

@@ -207,7 +207,7 @@ class AsyncIterationModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const isTestFile = TEST_PATH_RE.test(rel);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     let inBlockComment = false;

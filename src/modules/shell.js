@@ -119,7 +119,7 @@ class ShellModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     const firstNonBlank = lines.find((l) => l.trim().length > 0) || '';

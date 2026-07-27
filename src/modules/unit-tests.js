@@ -38,7 +38,7 @@ class UnitTestsModule extends BaseModule {
     } else {
       result.addCheck('unit-tests:run', false, {
         message: 'Unit tests failed',
-        details: (stdout + stderr).split('\n').slice(-20),
+        details: (stdout + stderr).split(/\r?\n/).slice(-20),
         suggestion: 'Fix failing tests before committing',
       });
     }

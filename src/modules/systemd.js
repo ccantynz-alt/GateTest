@@ -53,7 +53,7 @@ class SystemdModule extends BaseModule {
     let content;
     try { content = fs.readFileSync(file, 'utf8'); } catch { return; }
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     const get = (key) => {
       for (const line of lines) {
         const m = line.match(new RegExp(`^${key}\\s*=\\s*(.+)$`));

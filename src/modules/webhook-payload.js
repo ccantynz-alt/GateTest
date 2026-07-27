@@ -142,7 +142,7 @@ class WebhookPayloadValidator extends BaseModule {
     let m;
     while ((m = WEBHOOK_ROUTE_RE.exec(content)) !== null) {
       const route   = m[1];
-      const lineNo  = content.slice(0, m.index).split('\n').length;
+      const lineNo  = content.slice(0, m.index).split(/\r?\n/).length;
       const body    = this._extractFunctionBody(content, m.index);
       handlers.push({ body, route, line: lineNo });
     }

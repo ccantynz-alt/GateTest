@@ -111,13 +111,13 @@ class MonorepoConstraints extends BaseModule {
         try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
         const rel = path.relative(projectRoot, file);
-        const lines = content.split('\n');
+        const lines = content.split(/\r?\n/);
 
         IMPORT_RE.lastIndex = 0;
         let m;
         while ((m = IMPORT_RE.exec(content)) !== null) {
           const specifier = m[1];
-          const lineNo    = content.slice(0, m.index).split('\n').length;
+          const lineNo    = content.slice(0, m.index).split(/\r?\n/).length;
           const lineText  = lines[lineNo - 1] || '';
           if (lineText.includes('// monorepo-ok')) continue;
 

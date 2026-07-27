@@ -230,7 +230,7 @@ class ImportCycleModule extends BaseModule {
     }
     if (text.length > 2 * 1024 * 1024) return edges;
 
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const dir = path.dirname(absPath);
 
     for (let i = 0; i < lines.length; i += 1) {

@@ -213,7 +213,7 @@ class FlakyTestsModule extends BaseModule {
     } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     const hasFakeTimers = FAKE_TIMER_HINTS.some((re) => re.test(content));

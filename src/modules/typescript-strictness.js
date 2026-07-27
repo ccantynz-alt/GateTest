@@ -297,7 +297,7 @@ class TypeScriptStrictnessModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const isTest = TEST_FILE_RE.test(rel);
     const isDts = DTS_RE.test(rel);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {

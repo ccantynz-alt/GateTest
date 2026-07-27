@@ -181,7 +181,7 @@ class AiHallucinationDetector extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       // 1. Unknown package imports
       const imports = harvestImports(content);
@@ -193,7 +193,7 @@ class AiHallucinationDetector extends BaseModule {
         if (knownDeps.has(pkg)) continue;
         if (workspaceNames.has(pkg)) continue;
 
-        const lineNo  = content.slice(0, index).split('\n').length;
+        const lineNo  = content.slice(0, index).split(/\r?\n/).length;
         const lineText = lines[lineNo - 1] || '';
         if (lineText.includes('// hallucination-ok')) continue;
         // Type-only imports are erased at compile time — treat as warning, not error
@@ -222,7 +222,7 @@ class AiHallucinationDetector extends BaseModule {
         let m;
         const reGlobal = new RegExp(re.source, (re.flags.includes('g') ? re.flags : re.flags + 'g'));
         while ((m = reGlobal.exec(content)) !== null) {
-          const lineNo   = content.slice(0, m.index).split('\n').length;
+          const lineNo   = content.slice(0, m.index).split(/\r?\n/).length;
           const lineText = lines[lineNo - 1] || '';
           if (lineText.includes('// hallucination-ok')) continue;
 

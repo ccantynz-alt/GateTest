@@ -37,7 +37,7 @@ class E2eModule extends BaseModule {
     } else {
       result.addCheck('e2e:run', false, {
         message: `${framework.name} E2E tests failed`,
-        details: (stdout + stderr).split('\n').slice(-30),
+        details: (stdout + stderr).split(/\r?\n/).slice(-30),
         suggestion: 'Fix failing E2E tests — check screenshots/traces for details',
       });
     }

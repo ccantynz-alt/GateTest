@@ -187,7 +187,7 @@ class WebHeadersModule extends BaseModule {
     const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
     if (isTest) return 0;
 
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
     const lowerContent = content.toLowerCase();
 
@@ -260,7 +260,7 @@ class WebHeadersModule extends BaseModule {
     const hasCredentialsTrue = /access-control-allow-credentials["'\s:,]+true/i.test(content);
     if (hasWildcardOrigin && hasCredentialsTrue) {
       const idx = content.search(/access-control-allow-origin/i);
-      const lineNo = content.slice(0, Math.max(0, idx)).split('\n').length;
+      const lineNo = content.slice(0, Math.max(0, idx)).split(/\r?\n/).length;
       issues += this._flag(result, `web-headers:cors-wildcard-with-credentials:${rel}:${lineNo}`, {
         // isTest files return 0 above, before this line is reachable.
         severity: 'error',

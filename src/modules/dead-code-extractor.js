@@ -62,7 +62,7 @@ function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages 
 
 function extractJsExports(content) {
   const out = [];
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const trimmed = line.trim();
@@ -383,7 +383,7 @@ function extractJsImports(content) {
 
 function extractPyExports(content) {
   const out = [];
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     let m = line.match(/^(?:async\s+)?def\s+([A-Za-z_][\w]*)\s*\(/);
@@ -417,7 +417,7 @@ function extractPyExports(content) {
 function extractPyImports(content) {
   const names = new Set();
   const paths = new Set();
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   for (const line of lines) {
     let m = line.match(/^\s*from\s+([.\w]+)\s+import\s+(.+?)(?:\s*#.*)?$/);
     if (m) {

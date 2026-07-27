@@ -189,7 +189,7 @@ class RedosModule extends BaseModule {
 
   _scanFile(rel, text, result) {
     const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     let issues = 0;
 
     // Block-comment state

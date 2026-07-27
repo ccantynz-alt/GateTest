@@ -223,7 +223,7 @@ class SyntaxModule extends BaseModule {
     const content = fs.readFileSync(file, 'utf-8');
 
     // Basic YAML validation — check for common errors
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       // Tab indentation (YAML requires spaces)
@@ -246,7 +246,7 @@ class SyntaxModule extends BaseModule {
     const content = fs.readFileSync(file, 'utf-8');
 
     // Basic TOML validation
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const raw = lines[i];
       const line = raw.trim();
@@ -360,7 +360,7 @@ class SyntaxModule extends BaseModule {
       if (exitCode !== 0) {
         allPass = false;
         const output = stdout + stderr;
-        const errors = output.split('\n').filter(l => l.includes('error TS'));
+        const errors = output.split(/\r?\n/).filter(l => l.includes('error TS'));
         allErrors.push(...errors);
       }
     }

@@ -192,7 +192,7 @@ class DependenciesModule extends BaseModule {
   // -------------------------------------------------------------------------
 
   _checkPip(manifest, result) {
-    const lines = manifest.content.split('\n');
+    const lines = manifest.content.split(/\r?\n/);
     let lineNo = 0;
     let hasAnyPin = false;
 
@@ -296,7 +296,7 @@ class DependenciesModule extends BaseModule {
 
   _checkGoMod(manifest, projectRoot, result) {
     this._checkLockfile(manifest, projectRoot, result);
-    const lines = manifest.content.split('\n');
+    const lines = manifest.content.split(/\r?\n/);
     let lineNo = 0;
     let inRequireBlock = false;
 
@@ -339,7 +339,7 @@ class DependenciesModule extends BaseModule {
     const content = manifest.content;
     const depsSection = content.match(/\[dependencies\][\s\S]*?(?=\n\[|$)/);
     if (!depsSection) return;
-    const lines = depsSection[0].split('\n');
+    const lines = depsSection[0].split(/\r?\n/);
     let lineNo = 0;
     for (const raw of lines) {
       lineNo += 1;
@@ -380,7 +380,7 @@ class DependenciesModule extends BaseModule {
 
   _checkGemfile(manifest, projectRoot, result) {
     this._checkLockfile(manifest, projectRoot, result);
-    const lines = manifest.content.split('\n');
+    const lines = manifest.content.split(/\r?\n/);
     let lineNo = 0;
     for (const raw of lines) {
       lineNo += 1;
@@ -451,7 +451,7 @@ class DependenciesModule extends BaseModule {
   // -------------------------------------------------------------------------
 
   _checkGradle(manifest, result) {
-    const lines = manifest.content.split('\n');
+    const lines = manifest.content.split(/\r?\n/);
     let lineNo = 0;
     for (const raw of lines) {
       lineNo += 1;

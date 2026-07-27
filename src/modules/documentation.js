@@ -254,7 +254,7 @@ class DocumentationModule extends BaseModule {
       if (relPath.includes('test') || relPath.includes('.min.')) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];

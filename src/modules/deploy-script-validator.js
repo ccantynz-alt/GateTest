@@ -97,7 +97,7 @@ class DeployScriptValidator extends BaseModule {
         HEALTH_URL_RE_QUOTED.lastIndex = 0;
         while ((m = HEALTH_URL_RE_QUOTED.exec(content)) !== null) {
           const url    = m[2].split('?')[0];
-          const lineNo = content.slice(0, m.index).split('\n').length;
+          const lineNo = content.slice(0, m.index).split(/\r?\n/).length;
           if (!deployHealthUrls.has(url)) {
             deployHealthUrls.set(url, { file: rel, line: lineNo });
           }
@@ -105,7 +105,7 @@ class DeployScriptValidator extends BaseModule {
         HEALTH_URL_RE_BARE.lastIndex = 0;
         while ((m = HEALTH_URL_RE_BARE.exec(content)) !== null) {
           const url    = m[1].split('?')[0];
-          const lineNo = content.slice(0, m.index).split('\n').length;
+          const lineNo = content.slice(0, m.index).split(/\r?\n/).length;
           if (!deployHealthUrls.has(url)) {
             deployHealthUrls.set(url, { file: rel, line: lineNo });
           }
@@ -114,7 +114,7 @@ class DeployScriptValidator extends BaseModule {
         K8S_PROBE_RE.lastIndex = 0;
         while ((m = K8S_PROBE_RE.exec(content)) !== null) {
           const url    = m[1].split('?')[0];
-          const lineNo = content.slice(0, m.index).split('\n').length;
+          const lineNo = content.slice(0, m.index).split(/\r?\n/).length;
           if (!deployHealthUrls.has(url)) {
             deployHealthUrls.set(url, { file: rel, line: lineNo });
           }

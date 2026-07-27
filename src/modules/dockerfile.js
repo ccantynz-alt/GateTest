@@ -105,7 +105,7 @@ class DockerfileModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
-    const rawLines = content.split('\n');
+    const rawLines = content.split(/\r?\n/);
     let issues = 0;
 
     // Normalise: merge line continuations so RUN chains scan as one logical line.

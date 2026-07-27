@@ -102,7 +102,7 @@ function buildWorkspaceMap(projectRoot) {
 
   try {
     const yaml = fs.readFileSync(path.join(projectRoot, 'pnpm-workspace.yaml'), 'utf-8');
-    for (const line of yaml.split('\n')) {
+    for (const line of yaml.split(/\r?\n/)) {
       const m = line.match(/^\s*-\s*['"]?([^'"#\s]+)['"]?/);
       if (m) patterns.add(m[1]);
     }

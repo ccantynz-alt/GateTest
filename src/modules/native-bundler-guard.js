@@ -164,7 +164,7 @@ class NativeBundlerGuard extends BaseModule {
       let m;
       const re = /require\s*\(\s*['"`][^'"]+\.node['"`]\s*\)/g;
       while ((m = re.exec(content)) !== null) {
-        const lineNo = content.slice(0, m.index).split('\n').length;
+        const lineNo = content.slice(0, m.index).split(/\r?\n/).length;
         issueCount++;
         result.addCheck(`native-bundler-guard:dot-node:${rel}:${lineNo}`, false, {
           severity: 'error',

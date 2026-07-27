@@ -159,7 +159,7 @@ class ClaudeComplianceModule extends BaseModule {
       const isTest = TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel);
       const isMockFile = MOCK_FILE_RE.test(rel);
       const ext = path.extname(abs).toLowerCase();
-      const lines = text.split('\n');
+      const lines = text.split(/\r?\n/);
 
       issues += this._scanFile(rel, lines, result, { isTest, isMockFile, ext });
     }

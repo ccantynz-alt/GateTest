@@ -180,7 +180,7 @@ class DataIntegrityModule extends BaseModule {
       if (/^src[\\/]modules[\\/]/.test(relPath)) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       for (const { regex, type } of piiPatterns) {
         regex.lastIndex = 0;

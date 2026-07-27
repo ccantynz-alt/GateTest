@@ -144,7 +144,7 @@ class SecurityModule extends BaseModule {
       const normalisedPath = relPath.replace(/\\/g, '/');
       if (SCANNER_PATH_RE.test(normalisedPath)) continue;
       const content = fs.readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       for (const pattern of dangerousPatterns) {
         for (let i = 0; i < lines.length; i++) {
@@ -190,7 +190,7 @@ class SecurityModule extends BaseModule {
       } catch {
         continue;
       }
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -356,7 +356,7 @@ class SecurityModule extends BaseModule {
       } catch {
         continue;
       }
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
@@ -487,7 +487,7 @@ class SecurityModule extends BaseModule {
       if (!fs.existsSync(filePath)) continue;
 
       const content = fs.readFileSync(filePath, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
 
       // Running as root
       if (df === 'Dockerfile') {
@@ -680,7 +680,7 @@ class SecurityModule extends BaseModule {
 
       // Check env file contents for real-looking secrets (not placeholders)
       const content = fs.readFileSync(envPath, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line || line.startsWith('#')) continue;

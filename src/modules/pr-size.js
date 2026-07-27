@@ -425,7 +425,7 @@ class PrSizeModule extends BaseModule {
   _parseDiff(diff) {
     // numstat format: "<added>\t<removed>\t<path>"
     const numstatLine = /^(\d+|-)\t(\d+|-)\t(.+)$/;
-    const lines = diff.split('\n');
+    const lines = diff.split(/\r?\n/);
     const looksLikeNumstat = lines.some((l) => numstatLine.test(l));
 
     if (looksLikeNumstat) {
@@ -457,7 +457,7 @@ class PrSizeModule extends BaseModule {
   _parseUnifiedDiff(diff) {
     const files = [];
     let current = null;
-    for (const line of diff.split('\n')) {
+    for (const line of diff.split(/\r?\n/)) {
       if (line.startsWith('diff --git ')) {
         if (current) files.push(current);
         const m = line.match(/^diff --git a\/(.+?) b\/(.+)$/);

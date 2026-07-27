@@ -226,7 +226,7 @@ class SecretRotationModule extends BaseModule {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(content)) !== null) {
-        const lineNo = content.slice(0, m.index).split('\n').length;
+        const lineNo = content.slice(0, m.index).split(/\r?\n/).length;
         // De-duplicate: don't flag the same kind at the same line twice
         if (hits.find((h) => h.kind === kind && h.line === lineNo)) continue;
         hits.push({ kind, rel, line: lineNo });
@@ -343,7 +343,7 @@ class SecretRotationModule extends BaseModule {
         continue;
       }
       const vars = {};
-      for (const line of content.split('\n')) {
+      for (const line of content.split(/\r?\n/)) {
         const t = line.trim();
         if (!t || t.startsWith('#')) continue;
         const m = t.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);

@@ -34,7 +34,7 @@ function parseYamlInputs(content) {
   let currentInput     = null;
   let inputIndent      = null;
 
-  for (const rawLine of content.split('\n')) {
+  for (const rawLine of content.split(/\r?\n/)) {
     const line   = rawLine.replace(/#.*$/, '');
     const trimmed = line.trimStart();
     const indent  = line.length - trimmed.length;
@@ -85,7 +85,7 @@ function parseWorkflowSteps(content) {
   let inWith       = false;
   let withIndent   = null;
 
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const line    = rawLine.replace(/#.*$/, '');
