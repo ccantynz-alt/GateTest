@@ -251,7 +251,7 @@ async function runDoctor(opts = {}) {
   } else {
     record('warn',
       'NEXT_PUBLIC_BASE_URL not set — partners will see localhost URLs in webhook payloads',
-      'Set NEXT_PUBLIC_BASE_URL=https://gatetest.ai in Vercel env vars');
+      'Set NEXT_PUBLIC_BASE_URL=https://your-domain.example in your deploy host\'s env vars');
   }
 
   if (process.env.DATABASE_URL) {
@@ -259,7 +259,7 @@ async function runDoctor(opts = {}) {
   } else {
     record('bad',
       'DATABASE_URL not set — public API cannot authenticate keys or queue scans',
-      'Set DATABASE_URL=postgres://... in Vercel env vars');
+      'Set DATABASE_URL=postgres://... in your deploy host\'s env vars');
   }
 
   // ── 7. Disk space (lightweight check — Vercel /tmp + local) ───────

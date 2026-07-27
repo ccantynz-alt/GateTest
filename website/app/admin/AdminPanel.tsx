@@ -31,6 +31,23 @@ const ADMIN_TABS: TabDef[] = [
   { id: "platforms", label: "Platforms" },
   { id: "accounts", label: "GitHub Accounts" },
 ];
+
+/**
+ * Live problem signals painted onto the tab bar, so a broken section is
+ * visible without clicking into it.
+ *
+ * Motivated by the 2026-07-27 audit: production was 102 commits stale with
+ * RESEND_API_KEY unset (paid MCP keys silently never sending) and nothing in
+ * this console said so. Every signal below is read from an endpoint that
+ * already existed — the data was there, it just had nowhere to surface.
+ */
+interface TabSignals {
+  /** siblings reporting down/unreachable → Platforms */
+  siblingsDown: number;
+  siblingNames: string[];
+  /** scans in a failed state → Recent Scans */
+  failedScans: number;
+}
 type AdminTabId = "scan" | "server" | "nuclear" | "watchdog" | "scans" | "customers" | "keys" | "platforms" | "accounts";
 
 interface AdminPanelProps {
@@ -42,6 +59,8 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
   const [dbLoading, setDbLoading] = useState(true);
   const [dbError, setDbError] = useState("");
   const [activeTab, setActiveTab] = useState<AdminTabId>("scan");
+  const [statsError, setStatsError] = useState("");
+  const [signals, setSignals] = useState<TabSignals>({ siblingsDown: 0, siblingNames: [], failedScans: 0 });
 
   const loadDbData = useCallback(async () => {
     try {
@@ -49,17 +68,70 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
       if (res.ok) {
         const data = await res.json();
         setDbData(data);
+        setStatsError("");
+      } else {
+        // Was swallowed as "DB not available yet — that's fine", which made a
+        // broken stats endpoint indistinguishable from an empty database.
+        setStatsError(`Stats unavailable — HTTP ${res.status}`);
       }
-    } catch {
-      // DB not available yet — that's fine
+    } catch (err) {
+      setStatsError(err instanceof Error ? err.message : "Stats request failed");
     } finally {
       setDbLoading(false);
     }
   }, []);
 
+  // Sibling health drives the Platforms badge. Best-effort: this panel must
+  // still render if the aggregator is down, so a failure here is recorded as
+  // "no signal" rather than surfaced as a false all-clear.
+  const loadSignals = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/platform-siblings", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        siblings?: Array<{ name: string; healthy: boolean }>;
+      };
+      const unhealthy = (data.siblings || []).filter((s) => !s.healthy);
+      setSignals((prev) => ({
+        ...prev,
+        siblingsDown: unhealthy.length,
+        siblingNames: unhealthy.map((s) => s.name),
+      }));
+    } catch {
+      /* leave the previous signal rather than inventing a clean one */
+    }
+  }, []);
+
   useEffect(() => {
     loadDbData();
-  }, [loadDbData]);
+    loadSignals();
+  }, [loadDbData, loadSignals]);
+
+  useEffect(() => {
+    const failed = Number(dbData?.stats?.failed_scans || 0);
+    setSignals((prev) => (prev.failedScans === failed ? prev : { ...prev, failedScans: failed }));
+  }, [dbData]);
+
+  // Decorate the static tab list with whatever is currently wrong.
+  const tabs: TabDef[] = ADMIN_TABS.map((t) => {
+    if (t.id === "platforms" && signals.siblingsDown > 0) {
+      return {
+        ...t,
+        status: "error",
+        count: signals.siblingsDown,
+        statusLabel: `${signals.siblingNames.join(", ")} not reporting healthy`,
+      };
+    }
+    if (t.id === "scans" && signals.failedScans > 0) {
+      return {
+        ...t,
+        status: "warn",
+        count: signals.failedScans,
+        statusLabel: `${signals.failedScans} scan(s) in a failed state`,
+      };
+    }
+    return t;
+  });
 
   async function initDb() {
     setDbError("");
@@ -133,7 +205,15 @@ export default function AdminPanel({ adminLogin }: AdminPanelProps) {
         )}
 
         {/* Tab navigation — accessible (role=tab, aria-selected, arrow-key nav) */}
-        <AdminTabs tabs={ADMIN_TABS} active={activeTab} onChange={(id) => setActiveTab(id as AdminTabId)} />
+        <AdminTabs tabs={tabs} active={activeTab} onChange={(id) => setActiveTab(id as AdminTabId)} />
+
+        {/* A failing stats endpoint used to be indistinguishable from an
+            empty database. Say which it is. */}
+        {statsError && (
+          <div className="rounded-xl bg-white border border-red-200 shadow-sm p-4 mb-6 border-l-4 border-l-red-400">
+            <p className="text-sm text-red-700">{statsError}</p>
+          </div>
+        )}
 
         {/* DB init notice */}
         {dbData?.note && (

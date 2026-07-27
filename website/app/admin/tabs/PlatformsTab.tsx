@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import PlatformSiblings from "../PlatformSiblings";
 
 // The "Platforms" tab — orgs registered here get full admin access: the
 // GateTest gate runs in strict mode with no advisory-mode messaging.
@@ -50,6 +51,10 @@ export function PlatformsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Cross-product health. Both this widget and /api/admin/platform-siblings
+          were built but never rendered anywhere — found dead 2026-07-27. */}
+      <PlatformSiblings />
+
       <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-1">Platform Registry</h3>
         <p className="text-sm text-gray-500 mb-4">
@@ -128,8 +133,8 @@ export function PlatformsTab() {
           <strong>How it works:</strong> When GateTest&apos;s GitHub App processes a push or PR from a
           registered org, it automatically uses strict mode — findings show as ✅ or ❌ in the
           PR checks tab, with no &ldquo;advisory mode&rdquo; label. Works for all repos under that org.
-          You can also set <code className="bg-blue-100 px-1 rounded">GATETEST_ADMIN_ORGS</code> as
-          a Vercel env var for a code-level fallback.
+          You can also set <code className="bg-blue-100 px-1 rounded">GATETEST_ADMIN_ORGS</code> in
+          Vapron → Platform secrets (then <em>Apply to live app</em>) for a code-level fallback.
         </p>
       </div>
     </div>

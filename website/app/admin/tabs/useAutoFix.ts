@@ -2,7 +2,7 @@
 
 // The batch auto-fix engine behind the Repo Scan tab. Groups fixable issues
 // by file, sends them to /api/scan/fix in batches of 5 so each request fits
-// within Vercel's function timeout, and tracks per-file progress the UI
+// within the host's function timeout, and tracks per-file progress the UI
 // renders live. Extracted verbatim from AdminPanel.tsx in the god-component
 // split — the fetch bodies here are covered by tests/tier-passthrough.test.js
 // (every /api/scan/fix call MUST forward `tier`).
@@ -126,7 +126,7 @@ export function useAutoFix({
     onError("");
 
     // Group issues by unique file, then process in batches of 5 so each
-    // request fits within Vercel's function timeout and the user sees real
+    // request fits within the host's function timeout and the user sees real
     // progress as each batch completes instead of a frozen spinner.
     const BATCH_SIZE = 5;
     const fileMap = new Map<string, FixableIssue[]>();

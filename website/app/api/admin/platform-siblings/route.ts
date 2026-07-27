@@ -62,7 +62,12 @@ const SIBLINGS: Array<{ id: SiblingId; name: string; envVar: string; defaultUrl:
     id: "vapron",
     name: "Vapron",
     envVar: "VAPRON_STATUS_URL",
-    defaultUrl: "https://vapron.ai/api/platform-status",
+    // vapron.ai is the MARKETING site and 404s every /api/* path except
+    // /api/health — pointing here made Vapron render permanently "down".
+    // The platform API lives on api.vapron.ai/api/platform (the same base
+    // VAPRON_BASE_URL uses for job dispatch). Verified 2026-07-27:
+    // vapron.ai/api/platform-status → 404, api.vapron.ai/api/platform/* → 401.
+    defaultUrl: "https://api.vapron.ai/api/platform/api/platform-status",
   },
   {
     id: "gluecron",

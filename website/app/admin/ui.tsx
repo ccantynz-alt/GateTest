@@ -176,6 +176,46 @@ export interface TabDef {
   id: string;
   label: string;
   danger?: boolean;
+  /**
+   * Problem state for this section, surfaced as a badge on the tab itself so
+   * the operator sees it without opening the tab. `danger` above is a static
+   * styling flag (Forensic is permanently red); this is live state.
+   */
+  status?: "error" | "warn";
+  /** Number shown inside the badge. Omit for a bare dot. */
+  count?: number;
+  /** Plain-English reason — becomes the tooltip and the screen-reader text. */
+  statusLabel?: string;
+}
+
+/**
+ * The badge rendered on a tab that is reporting a problem. Colour alone must
+ * never be the signal (WCAG 1.4.1), so the count/dot carries a text
+ * alternative and the severity word is spelled out for assistive tech.
+ */
+function TabStatusBadge({ status, count, label }: { status: "error" | "warn"; count?: number; label?: string }) {
+  const isError = status === "error";
+  const tone = isError
+    ? "bg-[var(--danger)]/12 text-[var(--danger)] ring-[var(--danger)]/30"
+    : "bg-amber-500/12 text-amber-700 ring-amber-500/30";
+  const word = isError ? "error" : "warning";
+  return (
+    <span
+      className={`ml-1.5 inline-flex items-center justify-center rounded-full ring-1 tabular-nums ${tone} ${
+        typeof count === "number" ? "min-w-[1.25rem] px-1.5 h-5 text-[11px] font-bold" : "w-2 h-2"
+      }`}
+      title={label || word}
+    >
+      {typeof count === "number" ? (
+        <>
+          <span aria-hidden>{count > 99 ? "99+" : count}</span>
+          <span className="sr-only">{` — ${count} ${word}${count === 1 ? "" : "s"}${label ? `: ${label}` : ""}`}</span>
+        </>
+      ) : (
+        <span className="sr-only">{` — ${word}${label ? `: ${label}` : ""}`}</span>
+      )}
+    </span>
+  );
 }
 
 export function AdminTabs({
@@ -218,6 +258,7 @@ export function AdminTabs({
             }`}
           >
             {t.label}
+            {t.status && <TabStatusBadge status={t.status} count={t.count} label={t.statusLabel} />}
           </button>
         );
       })}
