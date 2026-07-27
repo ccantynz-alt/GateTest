@@ -111,25 +111,43 @@ function parse(text) {
     return candidates.has(rule);
   }
 
-  function matches(finding) {
-    if (!finding) return false;
+  /**
+   * Which KIND of rule silenced this finding: 'moduleRule', 'path', or null.
+   *
+   * The distinction matters to the noise model. `hardcodedUrl:localhost` is
+   * the user saying "this module's rule is wrong about my repo" — a genuine
+   * accuracy signal. `benchmarks/bench-target/**` is the user saying "this
+   * DIRECTORY is not real code" — it says nothing at all about any module.
+   *
+   * Counting path globs as module dismissals made GateTest down-weight
+   * accurate modules for firing inside a deliberately-bad fixture corpus:
+   * on this repo, 5 ignore lines softened 555 findings across `secrets`,
+   * `codeQuality`, `deadCode` and more, purely because two of those lines
+   * were directory excludes (found 2026-07-28).
+   */
+  function matchKind(finding) {
+    if (!finding) return null;
     const mod = _normToken(finding.module);
     const file = _normPath(finding.file || finding.filePath);
     for (const r of rules) {
       if (r.kind === 'path') {
-        if (file && r.fileRe.test(file)) return true;
+        if (file && r.fileRe.test(file)) return 'path';
         continue;
       }
       // moduleRule
       if (r.module && r.module !== mod) continue;
       if (!ruleKeyMatches(r.rule, finding)) continue;
       if (r.fileRe && !(file && r.fileRe.test(file))) continue;
-      return true;
+      return 'moduleRule';
     }
-    return false;
+    return null;
   }
 
-  return { matches, rules, isEmpty: rules.length === 0 };
+  function matches(finding) {
+    return matchKind(finding) !== null;
+  }
+
+  return { matches, matchKind, rules, isEmpty: rules.length === 0 };
 }
 
 /**

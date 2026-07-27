@@ -230,9 +230,16 @@ class TestResult {
     // .gatetestignore suppression — mark, don't drop, so it stays auditable.
     if (!passed && this._ignoreMatcher) {
       const filePath = details.file || details.filePath;
-      if (this._ignoreMatcher.matches({ module: this.module, ruleKey: name, name, file: filePath })) {
+      const finding = { module: this.module, ruleKey: name, name, file: filePath };
+      const kind = typeof this._ignoreMatcher.matchKind === 'function'
+        ? this._ignoreMatcher.matchKind(finding)
+        : (this._ignoreMatcher.matches(finding) ? 'moduleRule' : null);
+      if (kind) {
         check.suppressed = true;
         check.suppressReason = 'gatetestignore';
+        // Which kind of rule silenced it — the noise model may only learn
+        // from module-scoped entries. See ignore-file.matchKind().
+        check.suppressKind = kind;
       }
     }
 
@@ -319,6 +326,46 @@ class TestResult {
     return this.checks.filter(c => !c.passed && !c.suppressed && c.severity === Severity.WARNING);
   }
 
+  /**
+   * Warnings whose confidence fell below the block threshold.
+   *
+   * Errors have had a confident/soft split since confidence shipped;
+   * warnings never did. They ARE scored — `addCheck` runs `scoreFinding`
+   * for warnings as well as errors, and applies the flywheel penalty — but
+   * nothing downstream ever read the number, so for the 76 modules that
+   * emit warnings the score, and the noise model's softening with it, was
+   * computed and thrown away (KI #77).
+   *
+   * This is a REPORTED sub-count, not a filter. Every warning still appears
+   * in `warningChecks`; low-confidence ones are merely also countable here
+   * so the summary can say how much of the pile is shaky. Silently dropping
+   * warnings would be the false-NEGATIVE direction, which is the one a
+   * security tool must never take on its own initiative.
+   */
+  get softWarningChecks() {
+    const t = this._blockThreshold;
+    return this.warningChecks.filter((c) => {
+      const conf = typeof c.confidence === 'number' ? c.confidence : DEFAULT_CONFIDENCE;
+      return conf < t;
+    });
+  }
+
+  /**
+   * Findings softened by the flywheel — i.e. modules the user has put in
+   * `.gatetestignore` enough times that `noise-model` penalised them.
+   *
+   * Surfacing this closes the disclosure gap noted on KI #76: softening was
+   * only observable by inspecting `confidenceSignals` on an individual
+   * check, so the scan output gave no hint that findings had been quieted.
+   */
+  get flywheelSoftenedChecks() {
+    return this.checks.filter(
+      c => !c.passed && !c.suppressed
+        && Array.isArray(c.confidenceSignals)
+        && c.confidenceSignals.includes('flywheel-softened'),
+    );
+  }
+
   /** Informational checks. */
   get infoChecks() {
     return this.checks.filter(c => c.severity === Severity.INFO);
@@ -362,6 +409,8 @@ class TestResult {
       blockingErrors: this.blockingErrorChecks.length,
       softErrors: this.softErrorChecks.length,
       warnings: this.warningChecks.length,
+      softWarnings: this.softWarningChecks.length,
+      flywheelSoftened: this.flywheelSoftenedChecks.length,
       infoFindings: this.infoFindingChecks.length,
       // Suppressed findings are excluded from every count above, which is
       // right for the gate but wrong for the noise model: a module whose
@@ -855,6 +904,11 @@ class GateTestRunner extends EventEmitter {
       (sum, r) => sum + r.softErrorChecks.length, 0,
     );
     const totalWarnings = this.results.reduce((sum, r) => sum + r.warningChecks.length, 0);
+    // Sub-counts of the warning pile — reported, never subtracted from it.
+    const totalSoftWarnings = this.results.reduce((sum, r) => sum + r.softWarningChecks.length, 0);
+    const totalFlywheelSoftened = this.results.reduce(
+      (sum, r) => sum + r.flywheelSoftenedChecks.length, 0,
+    );
     const totalInfoFindings = this.results.reduce((sum, r) => sum + r.infoFindingChecks.length, 0);
     const totalFixes = this.results.reduce((sum, r) => sum + r.fixes.length, 0);
     const totalBaselined = this.results.reduce(
@@ -880,6 +934,12 @@ class GateTestRunner extends EventEmitter {
       for (const r of this.results) {
         for (const c of r.checks) {
           if (c.suppressReason !== 'gatetestignore') continue;
+          // Only a rule that NAMES the module is evidence about that module.
+          // A bare `path/**` exclude says "this directory is not real code"
+          // and implies nothing about accuracy — counting it softened
+          // 555 findings across 8 accurate modules on this very repo,
+          // purely because two ignore lines were directory excludes.
+          if (c.suppressKind && c.suppressKind !== 'moduleRule') continue;
           const module = r.module;
           const ruleKey = _ruleIdentity(c);
           if (!module || !ruleKey) continue;
@@ -942,6 +1002,8 @@ class GateTestRunner extends EventEmitter {
         blockingErrors: totalBlockingErrors,
         softErrors: totalSoftErrors,
         warnings: totalWarnings,
+        softWarnings: totalSoftWarnings,
+        flywheelSoftened: totalFlywheelSoftened,
         infoFindings: totalInfoFindings,
         baselined: totalBaselined,
       },

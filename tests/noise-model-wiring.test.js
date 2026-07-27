@@ -226,3 +226,97 @@ describe('KI #76 — the suppression key identifies a RULE, not a file:line', ()
     );
   });
 });
+
+/**
+ * A path-scoped ignore is NOT evidence about a module.
+ *
+ * `hardcodedUrl:localhost` says "this rule is wrong about my repo" — a real
+ * accuracy signal. `benchmarks/bench-target/**` says "this directory is not
+ * real code" and implies nothing about any module. Counting the second as a
+ * dismissal made GateTest down-weight accurate modules for firing inside a
+ * deliberately-bad fixture corpus: on GateTest's own repo, 5 ignore lines
+ * softened 555 findings across secrets, codeQuality, deadCode and 5 more,
+ * because two of those lines were directory excludes.
+ *
+ * Found 2026-07-28 only because the scan summary started DISCLOSING how many
+ * findings had been softened — the count was the bug report.
+ */
+describe('KI #76/#77 — only module-scoped ignores teach the noise model', () => {
+  const ignoreFile = require('../src/core/ignore-file');
+
+  it('matchKind distinguishes a module rule from a path glob', () => {
+    const m = ignoreFile.parse('hardcodedUrl:localhost\ncorpus/**\n');
+    assert.strictEqual(
+      m.matchKind({ module: 'hardcodedUrl', ruleKey: 'hardcoded-url:localhost', file: 'src/a.js' }),
+      'moduleRule',
+    );
+    assert.strictEqual(
+      m.matchKind({ module: 'secrets', ruleKey: 'secrets:key', file: 'corpus/b.js' }),
+      'path',
+    );
+    assert.strictEqual(
+      m.matchKind({ module: 'secrets', ruleKey: 'secrets:key', file: 'src/b.js' }),
+      null,
+    );
+  });
+
+  it('matches() still answers the original question', () => {
+    const m = ignoreFile.parse('hardcodedUrl:localhost\ncorpus/**\n');
+    assert.strictEqual(m.matches({ module: 'secrets', ruleKey: 'secrets:key', file: 'corpus/b.js' }), true);
+    assert.strictEqual(m.matches({ module: 'secrets', ruleKey: 'secrets:key', file: 'src/b.js' }), false);
+  });
+
+  it('the runner records which kind suppressed a finding', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'runner.js'), 'utf8');
+    assert.match(src, /check\.suppressKind = kind;/);
+    assert.match(
+      src,
+      /if \(c\.suppressKind && c\.suppressKind !== 'moduleRule'\) continue;/,
+      'path-scoped suppressions must not reach the noise model',
+    );
+  });
+
+  it('a path-suppressed finding contributes no dismissal', () => {
+    // Mirrors the runner's filter: only moduleRule kinds are collected.
+    const checks = [
+      { suppressReason: 'gatetestignore', suppressKind: 'path', name: 'secrets:key' },
+      { suppressReason: 'gatetestignore', suppressKind: 'moduleRule', name: 'hardcoded-url:localhost' },
+      { suppressReason: 'baseline', suppressKind: 'moduleRule', name: 'other:rule' },
+    ];
+    const collected = checks.filter(
+      (c) => c.suppressReason === 'gatetestignore' && (!c.suppressKind || c.suppressKind === 'moduleRule'),
+    );
+    assert.strictEqual(collected.length, 1);
+    assert.strictEqual(collected[0].name, 'hardcoded-url:localhost');
+  });
+});
+
+describe('KI #77 — warning confidence is reported, never silently dropped', () => {
+  const { GateTestRunner, TestResult } = require('../src/core/runner');
+
+  it('softWarningChecks counts low-confidence warnings without removing them', () => {
+    const r = new TestResult('probe', { blockThreshold: 0.7 });
+    r.addCheck('a', false, { severity: 'warning', confidence: 0.9 });
+    r.addCheck('b', false, { severity: 'warning', confidence: 0.4 });
+    r.addCheck('c', false, { severity: 'warning', confidence: 0.2 });
+    assert.strictEqual(r.warningChecks.length, 3, 'nothing is filtered out');
+    assert.strictEqual(r.softWarningChecks.length, 2, 'low-confidence ones are countable');
+  });
+
+  it('flywheelSoftenedChecks surfaces findings quieted by past dismissals', () => {
+    const r = new TestResult('probe', { blockThreshold: 0.7 });
+    r.addCheck('a', false, { severity: 'warning', confidence: 0.3, confidenceSignals: ['flywheel-softened'] });
+    r.addCheck('b', false, { severity: 'warning', confidence: 0.9, confidenceSignals: [] });
+    assert.strictEqual(r.flywheelSoftenedChecks.length, 1);
+  });
+
+  it('the console reporter discloses both counts', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'reporters', 'console-reporter.js'), 'utf8');
+    assert.match(src, /low confidence/, 'the soft-warning share must be visible');
+    assert.match(src, /Softened:/, 'flywheel softening must not be silent');
+  });
+
+  it('GateTestRunner is exported alongside TestResult', () => {
+    assert.strictEqual(typeof GateTestRunner, 'function');
+  });
+});

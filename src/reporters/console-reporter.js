@@ -141,7 +141,22 @@ class ConsoleReporter {
     } else {
       console.log(`  Errors:   ${COLORS.red}${summary.checks.errors}${COLORS.reset}`);
     }
-    console.log(`  Warnings: ${COLORS.yellow}${summary.checks.warnings}${COLORS.reset}`);
+    // Warnings get the same confident/soft disclosure errors already had.
+    // The score was being computed for warnings and then discarded, so a
+    // pile of 800 gave no hint how much of it was shaky (KI #77).
+    const softWarn = summary.checks.softWarnings;
+    const softWarnNote = typeof softWarn === 'number' && softWarn > 0
+      ? `${COLORS.dim} (${softWarn} low confidence)${COLORS.reset}`
+      : '';
+    console.log(`  Warnings: ${COLORS.yellow}${summary.checks.warnings}${COLORS.reset}${softWarnNote}`);
+    // Flywheel softening was previously observable only by inspecting
+    // confidenceSignals on an individual check — the scan said nothing about
+    // findings having been quieted on the user's own past dismissals
+    // (disclosure gap on KI #76). Never quiet about being quiet.
+    const softened = summary.checks.flywheelSoftened;
+    if (typeof softened === 'number' && softened > 0) {
+      console.log(`  ${COLORS.dim}Softened: ${softened} finding(s) down-weighted from your .gatetestignore history — see ${COLORS.reset}gatetest --noise`);
+    }
     if (infoFindings > 0) {
       console.log(`  Info:     ${COLORS.dim}${infoFindings}${COLORS.reset}`);
     }
