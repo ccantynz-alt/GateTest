@@ -154,10 +154,27 @@ class SecurityModule extends BaseModule {
           // by a flag, sitting inside an array of pattern objects).
           const line = lines[i];
           if (/gatetest-self-pattern|gatetest-pattern-ok/.test(line)) continue;
-          if (pattern.regex.test(line)) {
+          // Prose about eval() is not a call to eval(). Without these two
+          // guards this loop reported 13 BLOCKING errors on a file whose
+          // every dangerous token sat inside a doc string or a comment —
+          // false positives that stop the gate, which is the worst kind
+          // (Bible Forbidden #25: we are the painkiller, not the bottleneck).
+          if (this._isCommentLine(line)) continue;
+          // exec(), not test() — `test()` advances lastIndex on these /g
+          // regexes, so a following exec() would resume past the match and
+          // return null. Same trap that silently disabled the secrets
+          // module's placeholder allow-list (KI #78 audit).
+          pattern.regex.lastIndex = 0;
+          const match = pattern.regex.exec(line);
+          pattern.regex.lastIndex = 0;
+          if (match) {
+            if (this._isInsideStringLiteral(line, match.index)) continue;
             result.addCheck(`security:${pattern.name}:${relPath}:${i + 1}`, false, {
               file: relPath,
               line: i + 1,
+              // Carried so the confidence scorer can judge the exact
+              // position rather than falling back to a whole-line guess.
+              column: match.index,
               message: `${pattern.severity.toUpperCase()}: ${pattern.name} detected`,
               suggestion: `Review and replace ${pattern.name} with a safe alternative`,
             });
