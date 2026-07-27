@@ -41,6 +41,30 @@ function _loadBaselineMatcher(projectRoot) {
   } catch { return null; }
 }
 
+/**
+ * Reduce a check name to the RULE it came from, dropping the file and line.
+ *
+ * Module check names are commonly built as `<rule>:<detail>:<file>:<line>`,
+ * so using the raw name as the suppression key produced one entry per file
+ * per line — `hardcodedUrl:hardcoded-url:localhost:src\cfg.js:1` — and the
+ * store grew without bound instead of counting "this rule was silenced".
+ * Observed in an end-to-end CLI run (KI #76).
+ *
+ * @param {{name?: string, file?: string, filePath?: string}} check
+ * @returns {string} the rule identity, e.g. `hardcoded-url:localhost`
+ */
+function _ruleIdentity(check) {
+  let key = String((check && check.name) || '');
+  const file = (check && (check.file || check.filePath)) || '';
+  if (file) {
+    const at = key.indexOf(`:${file}`);
+    if (at > 0) key = key.slice(0, at);
+  }
+  // Trailing `:<line>` survives when the name embedded a path we couldn't
+  // match verbatim (separator differences, relative vs absolute).
+  return key.replace(/:\d+$/, '');
+}
+
 function _loadIgnoreMatcher(projectRoot) {
   try { return _ignoreFile ? _ignoreFile.load(projectRoot) : null; }
   catch { return null; }
@@ -339,6 +363,11 @@ class TestResult {
       softErrors: this.softErrorChecks.length,
       warnings: this.warningChecks.length,
       infoFindings: this.infoFindingChecks.length,
+      // Suppressed findings are excluded from every count above, which is
+      // right for the gate but wrong for the noise model: a module whose
+      // findings are all silenced looks like it never fires. Expose the
+      // count so fireRate can stay honest (KI #76).
+      suppressedChecks: this.suppressedChecks.length,
       fixes: this.fixes.length,
       checks: this.checks,
       appliedFixes: this.fixes,
@@ -832,6 +861,36 @@ class GateTestRunner extends EventEmitter {
       (sum, r) => sum + r.checks.filter(c => c.suppressReason === 'baseline').length, 0,
     );
 
+    // Distinct module:ruleKey pairs the user silenced via .gatetestignore.
+    // This is the noise model's missing input (KI #76): putting a rule in
+    // .gatetestignore IS the user declaring it a false positive, so it is the
+    // dismissal signal `persistent-memory.recordSuppression` always wanted and
+    // never received — it had zero callers, so computePenalties() could only
+    // ever return {}.
+    //
+    // Deliberately EXCLUDES suppressReason === 'baseline': a baselined finding
+    // means "real, fix it later", not "wrong". Counting it would soften modules
+    // for being accurate.
+    //
+    // Deduped per scan so one noisy file can't inflate the count — the signal
+    // is "the user silenced this rule", once per run, regardless of hit count.
+    const suppressedRules = [];
+    {
+      const seen = new Set();
+      for (const r of this.results) {
+        for (const c of r.checks) {
+          if (c.suppressReason !== 'gatetestignore') continue;
+          const module = r.module;
+          const ruleKey = _ruleIdentity(c);
+          if (!module || !ruleKey) continue;
+          const key = `${module}:${ruleKey}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          suppressedRules.push({ module, ruleKey });
+        }
+      }
+    }
+
     // Baseline capture (`gatetest --baseline`) — snapshot the full current
     // failure surface so future runs only fail on NEW findings.
     let baselineInfo = null;
@@ -868,6 +927,7 @@ class GateTestRunner extends EventEmitter {
         ? { fileCount: this._incrementalFileSet ? this._incrementalFileSet.size : 0 }
         : null,
       baseline: baselineInfo,
+      suppressedRules,
       modules: {
         total: this.results.length,
         passed: passed.length,
@@ -903,6 +963,7 @@ module.exports = {
   GateTestRunner,
   TestResult,
   Severity,
+  _ruleIdentity,
   DEFAULT_MODULE_TIMEOUT_MS,
   HEAVY_MODULE_TIMEOUT_MS,
   HEAVY_MODULES,

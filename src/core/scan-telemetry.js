@@ -84,6 +84,8 @@ function _buildRecord(summary, { source, suite }) {
       errors:   _int(r.errors),
       warnings: _int(r.warnings),
       soft:     _int(r.softErrors),
+      // Carried so recordScan can count a silenced module as still firing.
+      suppressed: _int(r.suppressedChecks),
       status:   r.status === 'failed' || r.status === 'skipped' ? r.status : 'ok',
     });
   }
@@ -137,6 +139,22 @@ function recordScanFindings(summary, opts = {}) {
           duration:    record.durationMs,
           suite:       record.suite,
         });
+      } catch { /* best-effort */ } // error-ok
+
+      // Feed the noise model its missing input (KI #76). Every rule the user
+      // silenced in .gatetestignore this run is a declared false positive.
+      // Without this, recordSuppression had ZERO callers, dismissCount was
+      // permanently 0, and computePenalties() could only ever return {} —
+      // `gatetest --noise` said "No modules softened yet" forever.
+      //
+      // MUST run after recordScan: recordSuppressions only increments
+      // modules[m].suppressions for modules that already exist in memory, and
+      // recordScan is what creates them on a first-ever scan.
+      try {
+        const suppressed = Array.isArray(summary.suppressedRules) ? summary.suppressedRules : [];
+        if (suppressed.length > 0 && typeof persistentMemory.recordSuppressions === 'function') {
+          persistentMemory.recordSuppressions(projectRoot, suppressed);
+        }
       } catch { /* best-effort */ } // error-ok
     }
 

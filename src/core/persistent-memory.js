@@ -116,7 +116,14 @@ function recordScan(projectRoot, scanResult, changedFiles = []) {
   // Update per-module stats
   for (const mod of (scanResult.modules || [])) {
     const name  = mod.name || mod;
-    const fired = (mod.status === 'failed') || (mod.errors > 0) || (mod.warnings > 0);
+    // A suppressed finding still counts as the module FIRING. Without this,
+    // silencing a rule in .gatetestignore drops the module's fireRate — so
+    // the very act of declaring it noisy pushed it below the noise model's
+    // `fireRate >= HIGH_FIRE_RATE` gate and it could never be softened.
+    // Caught by an end-to-end CLI run: fireRate fell 1.0 → 0.2 after the
+    // user silenced the rule (KI #76).
+    const fired = (mod.status === 'failed') || (mod.errors > 0) || (mod.warnings > 0)
+      || ((mod.suppressed || 0) > 0);
 
     if (!data.modules[name]) {
       data.modules[name] = { runs: 0, fires: 0, suppressions: 0, fireRate: 0 };
@@ -189,6 +196,35 @@ function recordFixFeedback(projectRoot, ruleKey, accepted) {
  * @param {string} ruleKey
  * @param {string} [pattern]  — the actual finding text / pattern
  */
+/**
+ * Batched form of recordSuppression — one load/save for a whole scan.
+ *
+ * The single-item version does its own load()+save() per call, so recording a
+ * scan's worth of suppressions one at a time would rewrite the memory file
+ * once per rule. The runner hands us the deduped set for the run, so do it in
+ * a single pass.
+ *
+ * @param {string} projectRoot
+ * @param {Array<{module: string, ruleKey: string, pattern?: string}>} pairs
+ * @returns {number} how many suppressions were recorded
+ */
+function recordSuppressions(projectRoot, pairs) {
+  if (!Array.isArray(pairs) || pairs.length === 0) return 0;
+  const data = load(projectRoot);
+  let n = 0;
+  for (const p of pairs) {
+    if (!p || !p.module || !p.ruleKey) continue;
+    const key = `${p.module}:${p.ruleKey}`;
+    if (!data.suppressions[key]) data.suppressions[key] = { count: 0, pattern: p.pattern || '' };
+    data.suppressions[key].count++;
+    if (p.pattern) data.suppressions[key].pattern = p.pattern;
+    if (data.modules[p.module]) data.modules[p.module].suppressions++;
+    n++;
+  }
+  if (n > 0) save(projectRoot, data);
+  return n;
+}
+
 function recordSuppression(projectRoot, module, ruleKey, pattern = '') {
   const data = load(projectRoot);
   const key = `${module}:${ruleKey}`;
@@ -315,6 +351,7 @@ module.exports = {
   recordScan,
   recordFixFeedback,
   recordSuppression,
+  recordSuppressions,
   getSmartSuiteBoosts,
   getFixConfidenceMultiplier,
   getQualityTrend,

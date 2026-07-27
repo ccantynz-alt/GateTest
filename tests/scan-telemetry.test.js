@@ -50,7 +50,11 @@ describe('scan-telemetry — _buildRecord shape + anonymization', () => {
     assert.equal(rec.totalWarnings, 5);
     assert.equal(rec.modules.length, 3);
     const secrets = rec.modules.find((m) => m.name === 'secrets');
-    assert.deepEqual(secrets, { name: 'secrets', errors: 2, warnings: 0, soft: 0, status: 'failed' });
+    // `suppressed` added 2026-07-27 for the noise model (KI #76). Same
+    // privacy class as errors/warnings/soft: an integer count, never a path,
+    // message, or fragment of code. This deepEqual is the gate on that — any
+    // future field must be justified here before it can ship.
+    assert.deepEqual(secrets, { name: 'secrets', errors: 2, warnings: 0, soft: 0, suppressed: 0, status: 'failed' });
   });
 
   it('never emits a file path, code, or finding message anywhere in the record', () => {
