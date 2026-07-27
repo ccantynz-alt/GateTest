@@ -550,3 +550,41 @@ test('string literal: the no-column heuristic does not claim an interpolated lin
   });
   assert.ok(!(s.signals || []).includes('string literal'));
 });
+
+// ---------------------------------------------------------------------------
+// A `docs/` PATH must not down-weight real shipping code.
+//
+// Plenty of products serve a documentation SITE from production code —
+// website/app/docs/api/page.tsx, pages/docs/[slug].tsx, app/docs/route.ts.
+// Scoring those 0.4 as "example data" puts them under the 0.7 block
+// threshold, so an error-severity finding in genuinely deployed code stops
+// blocking the gate. Actual documentation is already handled by isDocFile()
+// (.md/.mdx/.rst -> 0.3), so the path clause only needs the non-source
+// leftovers. Found 2026-07-28 auditing the path signals after KI #85-#87.
+// ---------------------------------------------------------------------------
+
+test('docs/ path does NOT down-weight production source files', () => {
+  for (const p of [
+    'website/app/docs/api/page.tsx',
+    'app/docs/route.ts',
+    'pages/docs/[slug].tsx',
+    'src/doc/handler.js',
+  ]) {
+    const { confidence, signals } = scoreFinding({
+      filePath: p, ruleKey: 'security:sqli', module: 'security',
+    });
+    assert.equal(confidence, 1, `${p} is shipping code, got ${confidence} ${JSON.stringify(signals)}`);
+  }
+});
+
+test('docs/ path still down-weights non-source documentation assets', () => {
+  for (const p of ['docs/sample-config.json', 'docs/ops/runbook.txt', 'docs/api/schema.yml']) {
+    const { confidence } = scoreFinding({ filePath: p, ruleKey: 'x', module: 'm' });
+    assert.ok(confidence <= 0.4, `${p} should stay low, got ${confidence}`);
+  }
+});
+
+test('docs/ change does not disturb real doc files or examples/', () => {
+  assert.ok(scoreFinding({ filePath: 'docs/GUIDE.md', ruleKey: 'x' }).confidence <= 0.3);
+  assert.ok(scoreFinding({ filePath: 'examples/basic.js', ruleKey: 'x' }).confidence <= 0.4);
+});

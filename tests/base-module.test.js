@@ -79,3 +79,38 @@ describe('BaseModule#_stripJsStrings — regex literals', () => {
     assert.ok(!stripped.includes('false'), `expected regex with char-class blanked, got: ${stripped}`);
   });
 });
+
+describe('BaseModule#_isCommentLine', () => {
+  const mod = new BaseModule('test', 'test');
+
+  it('recognises the comment forms modules actually meet', () => {
+    for (const l of [
+      '// line comment',
+      '  // indented',
+      '/* block open',
+      ' * jsdoc continuation',
+      '# shell or python comment',
+    ]) {
+      assert.strictEqual(mod._isCommentLine(l), true, JSON.stringify(l));
+    }
+  });
+
+  it('does not claim real code', () => {
+    for (const l of [
+      'const a = 1;',
+      'await sleep(5);',
+      'const url = "http://x/*y";',
+      'a = b / c; // trailing note',   // code with a trailing comment is CODE
+      '',
+      '   ',
+    ]) {
+      assert.strictEqual(mod._isCommentLine(l), false, JSON.stringify(l));
+    }
+  });
+
+  it('tolerates junk input', () => {
+    for (const v of [null, undefined, 42, {}, []]) {
+      assert.strictEqual(mod._isCommentLine(v), false);
+    }
+  });
+});

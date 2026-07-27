@@ -177,6 +177,33 @@ class BaseModule {
     return TEST_PATH_RE.test(relPath.replace(/\\/g, '/'));
   }
 
+  /**
+   * Is this whole line a comment? (`//`, `#`, or a `*` continuation line.)
+   *
+   * Modules that scan line-by-line for a code pattern need this: prose
+   * describing the thing you detect looks exactly like the thing you detect.
+   * `retry-hygiene` flagged `no-backoff` and `no-jitter` at
+   * `website/app/lib/pentest/probes.js:145` because the line above reads
+   * `// Time-based: send sleep(5), expect response delay` — the module
+   * matched `sleep(5)` in a sentence about sleep(5) (found 2026-07-28).
+   *
+   * Companion to `_isInsideStringLiteral`, which covers the other half of
+   * "this text is not executable code".
+   *
+   * Deliberately only whole-line: a trailing `// note` after real code
+   * leaves that code executable, and callers wanting position-accurate
+   * handling should use `_isInsideStringLiteral` with an index instead.
+   *
+   * @param {string} line
+   * @returns {boolean}
+   */
+  _isCommentLine(line) {
+    if (typeof line !== 'string') return false;
+    const t = line.trim();
+    if (!t) return false;
+    return t.startsWith('//') || t.startsWith('#') || t.startsWith('*') || t.startsWith('/*');
+  }
+
   _isInsideStringLiteral(line, index) {
     let state = null;
     for (let j = 0; j < index && j < line.length; j += 1) {

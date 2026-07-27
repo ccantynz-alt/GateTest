@@ -326,3 +326,48 @@ describe('RetryHygieneModule — clean baseline', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+describe('retry-hygiene — prose about sleep() is not a call to sleep()', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-retry-cmt-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function scan(source) {
+    fs.writeFileSync(path.join(tmp, 'probe.js'), source);
+    const mod = new RetryHygieneModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && /no-backoff|no-jitter/.test(c.name));
+  }
+
+  // Real case: website/app/lib/pentest/probes.js:145 was reported as an
+  // un-backed-off retry because the line above reads
+  //   // Time-based: send sleep(5), expect response delay
+  // The module matched sleep(5) in a sentence ABOUT sleep(5).
+  it('does not flag a literal sleep that only appears in a comment', async () => {
+    const found = await scan([
+      'async function probe(client) {',
+      '  for (let attempt = 0; attempt < 3; attempt++) {',
+      '    // Time-based: send sleep(5), expect response delay',
+      '    // Only run if we have a baseline duration to compare against',
+      '    await client.send();',
+      '  }',
+      '}',
+      'module.exports = { probe };',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('still flags a REAL constant-delay retry', async () => {
+    const found = await scan([
+      'async function probe(client) {',
+      '  for (let attempt = 0; attempt < 3; attempt++) {',
+      '    try { await client.send(); return; } catch (e) { /* retry */ }',
+      '    await new Promise((r) => setTimeout(r, 250));',
+      '  }',
+      '}',
+      'module.exports = { probe };',
+    ].join('\n'));
+    assert.ok(found.length > 0, 'a genuine constant-delay retry must still be reported');
+  });
+});

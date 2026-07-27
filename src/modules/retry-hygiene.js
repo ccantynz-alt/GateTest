@@ -329,6 +329,10 @@ class RetryHygieneModule extends BaseModule {
   _findLiteralSleep(lines, block) {
     for (let i = block.start; i <= block.end; i += 1) {
       const line = lines[i];
+      // Prose about sleep(5) is not a call to sleep(5). Without this,
+      // `// Time-based: send sleep(5), expect response delay` was reported
+      // as a real un-backed-off retry (KI #77).
+      if (this._isCommentLine(line)) continue;
       for (const re of LITERAL_SLEEP_RES) {
         const m = line.match(re);
         if (m && !isInString(line, m.index)) {

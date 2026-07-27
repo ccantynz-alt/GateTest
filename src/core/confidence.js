@@ -49,6 +49,13 @@ const DEFAULT_RULE_OVERRIDES = Object.freeze({
 // ─── individual signal functions ─────────────────────────────────────────────
 
 /**
+ * Extensions that mean "this is executable source", used to stop
+ * documentation-shaped PATH heuristics from claiming real shipping code.
+ */
+const SOURCE_EXT_RE =
+  /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts|py|rb|go|rs|java|php|cs|kt|kts|swift|scala|vue|svelte|sh|bash)$/i;
+
+/**
  * Doc file: .md / .mdx / .rst → 0.3
  */
 function isDocFile(filePath) {
@@ -102,7 +109,16 @@ function isFixtureFile(filePath) {
 function isExampleDataFile(filePath) {
   if (!filePath) return null;
   const p = String(filePath).replace(/\\/g, '/').toLowerCase();
-  if (/(?:^|\/)docs?\//i.test(p)) {
+  // A `docs/` PATH means "documentation" only for non-source files. Plenty
+  // of products serve a documentation site from real, shipping code —
+  // `website/app/docs/api/page.tsx`, `pages/docs/[slug].tsx`, `app/docs/
+  // route.ts`. Down-weighting those to 0.4 puts them under the 0.7 block
+  // threshold, so an error-severity finding in genuinely deployed code stops
+  // blocking the gate. Actual documentation is already covered by
+  // isDocFile() (.md/.mdx/.rst → 0.3), so this clause only needs to catch
+  // the non-source leftovers (.json/.txt/.yml samples). Found 2026-07-28
+  // auditing the path signals for false-negative risk after KI #85-#87.
+  if (/(?:^|\/)docs?\//i.test(p) && !SOURCE_EXT_RE.test(p)) {
     return { multiplier: 0.4, reason: 'example data' };
   }
   // Directory-style match: examples/, samples/, demos/
