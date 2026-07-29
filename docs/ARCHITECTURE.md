@@ -131,6 +131,8 @@ GateTest/
 | `src/core/runner.js` | Severity, auto-fix, diff-mode, gate | Changing how checks work |
 | `src/core/config.js` | Thresholds, suite definitions | Changing what modules run |
 | `src/core/registry.js` | Module registration | Adding new modules |
+| `src/core/site-url.js` | **The canonical public origin for the engine/CLI/MCP/reporters.** Exports `siteUrl` / `siteHost` / `badgeUrl` / `apiBaseUrl` / `botUserAgent` / `FIXTURE_EMAIL` / `SUPPORT_EMAIL`. Never write a domain literal — import from here | Emitting ANY absolute URL, bot User-Agent, or probe address |
+| `website/app/lib/site-url.js` | Same contract for the Next app. Separate file because it must read `NEXT_PUBLIC_BASE_URL` as a static member expression so Next inlines it into CLIENT bundles, and because the npm package ships `src/`+`bin/` without `website/`. `tests/site-url.test.js` fails if the two drift | Touching canonicals, OG URLs, Stripe returns, OAuth redirects, sitemap, robots |
 | `src/core/memory.js` | Persistent codebase memory — the compounding moat | Changing memory schema or persistence |
 | `src/modules/memory.js` | Surfaces memory, runs FIRST, enriches `config._memory` | Before any module that consumes memory |
 | `src/modules/agentic.js` | AI agent that investigates memory-informed hypotheses | Changing agentic prompts / flow |
@@ -191,7 +193,10 @@ GateTest/
 |----------|---------|
 | `STRIPE_SECRET_KEY` | Stripe API (sk_live_... or sk_test_...) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe client key |
-| `NEXT_PUBLIC_BASE_URL` | https://gatetest.io |
+| `NEXT_PUBLIC_BASE_URL` | **The one variable that decides the domain** (default `https://gatetest.io`). Every canonical, OG URL, sitemap entry, IndexNow submission, Stripe return, OAuth redirect, badge snippet and bot User-Agent derives from it. Inlined at BUILD time — changing it needs a rebuild, not a restart |
+| `GATETEST_PUBLIC_BASE_URL` | Server-side alias for the above; lower precedence. Set both to the same value |
+| `GATETEST_BADGE_ORIGIN` | Origin for NEWLY generated badge/embed snippets only. Leave unset — tracks the base URL. Cannot migrate badges already pasted into customers' READMEs |
+| `GATETEST_SUPPORT_EMAIL` | Public support mailbox (default `hello@gatetest.ai` — deliberately lags the domain move; verify the domain in Resend and set up forwarding first, or mail fails silently) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing |
 | `GLUECRON_BASE_URL` | Gluecron deployment URL (default https://gluecron.com) |
 | `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |
