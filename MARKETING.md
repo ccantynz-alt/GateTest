@@ -2,7 +2,7 @@
 
 This document captures the core messaging, competitive positioning, and sales
 strategy for GateTest. This is the source of truth for all marketing materials,
-the gatetest.ai website, and investor communications.
+the gatetest.io website, and investor communications.
 
 ---
 
@@ -200,7 +200,7 @@ People don't pay for code. They pay for:
 
 ---
 
-## Website copy (gatetest.ai)
+## Website copy (gatetest.io)
 
 ### Hero section
 **Headline**: "AI writes fast. GateTest keeps it honest."
@@ -249,7 +249,7 @@ accessibility. GateTest catches every one of these AND fixes them automatically.
 
 ## Domain
 
-**gatetest.ai** — secured.
+**gatetest.io** — secured.
 
 ---
 

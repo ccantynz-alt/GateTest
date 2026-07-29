@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 
-// gatetest.ai/stack — "One team, three products" page.
+// gatetest.io/stack — "One team, three products" page.
 //
 // Boss Rule #8 — all customer-facing copy below is a draft for Craig's
 // final review. Drafted by GateTest session 016MgmXrLw4Y35fnyTBLS96m

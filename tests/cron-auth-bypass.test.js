@@ -8,8 +8,8 @@
  * and run on Vapron, where nothing strips it — so it became a boolean
  * password anyone could send. Verified against live production:
  *
- *   curl https://gatetest.ai/api/watches/tick              -> 401
- *   curl -H 'x-vercel-cron: 1' https://gatetest.ai/...     -> 200 + data
+ *   curl https://gatetest.io/api/watches/tick              -> 401
+ *   curl -H 'x-vercel-cron: 1' https://gatetest.io/...     -> 200 + data
  *
  * The 200 ran the tick unauthenticated and returned customer watch targets
  * and their health to an anonymous caller.

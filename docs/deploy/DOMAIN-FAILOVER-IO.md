@@ -80,9 +80,15 @@ docker exec coolify-proxy sh -c "grep rule: /traefik/dynamic/gatetest-*.yaml"
 
 ## Step 3 — Application base URL
 
-As of commit `cddd02d` the domain is **one environment variable**. Every
-canonical, Open Graph URL, sitemap entry, IndexNow submission, Stripe return URL
-and OAuth redirect derives from it.
+**As of 2026-07-30 the code already defaults to `https://gatetest.io`.** The
+default in `website/app/lib/site-url.js` and `src/core/site-url.js` is the new
+domain, and 650+ host occurrences were rewritten across the app, engine, CLI,
+MCP server, GitHub Action, WordPress plugin, editor extensions and workflows.
+
+So this step is now **belt-and-braces, not load-bearing** — a fresh build serves
+`.io` canonicals with no env var set at all. Set the vars anyway: they are what
+makes the move reversible without a code change, and `NEXT_PUBLIC_BASE_URL` is
+what a rollback would flip.
 
 ```bash
 ssh root@jarvis
@@ -106,13 +112,39 @@ rebuild is required — restarting the service is not enough:
 cd /opt/gatetest/website && npm run build && systemctl restart gatetest-web
 ```
 
-### Keep badges on the old origin (deliberate)
+### Badges follow the new origin (reversal of this doc's first version)
 
-Do **not** set `GATETEST_BADGE_ORIGIN`. Badge markdown already pasted into
-customers' READMEs points at `gatetest.ai` and we cannot edit those repos. Newly
-generated snippets should keep matching the old ones until `.ai` is redeemed and
-301'ing; flipping badges now splits customers across two origins, one of which
-is dead.
+Leave `GATETEST_BADGE_ORIGIN` unset. `BADGE_ORIGIN` tracks `SITE_URL`, so newly
+generated badge snippets will point at `gatetest.io`.
+
+The first version of this runbook said the opposite — pin badges to `.ai` so
+every customer stays on one origin. That reasoning assumed `.ai` was still
+serving. It is not: it is NXDOMAIN. Pinning would mint new badges that are
+**born broken**, which is strictly worse than splitting old from new.
+
+Already-pasted badges in READMEs we cannot edit are fixed the only way they can
+be — by redeeming `.ai` and 301'ing it, below. Not by generating dead URLs.
+
+### E-mail deliberately did NOT move
+
+Every address is still `@gatetest.ai`: `hello@`, `watchdog@` (the Resend `From`),
+and the bot commit identities. This is not an oversight.
+
+A URL on a dead domain is a **visible** error a customer will report. A sending
+domain the ESP has not verified is a **silent** one — Resend rejects the send or
+it lands in spam, and nobody finds out for weeks. Mail moves only after the new
+domain is verified.
+
+To move it, in this order:
+
+1. Add `gatetest.io` in the Resend dashboard and publish the SPF/DKIM records it
+   gives you in the Cloudflare zone. Wait for it to read *verified*.
+2. Set `RESEND_FROM='GateTest <watchdog@gatetest.io>'`.
+3. Set `GATETEST_SUPPORT_EMAIL=hello@gatetest.io`, and set up forwarding for it
+   first — otherwise support mail is accepted and then dropped.
+4. `tests/site-url.test.js` asserts the support address is still on `.ai`.
+   Update that assertion in the same commit, so the guard keeps meaning
+   something instead of being deleted later by someone who thinks it is stale.
 
 ## Step 4 — Verify (do not skip)
 
@@ -127,6 +159,41 @@ node scripts/ops/readiness-probe.js                         # full journey
 
 The canonical check is the one that matters. If it still says `gatetest.ai`, the
 rebuild did not pick up the env var — `NEXT_PUBLIC_BASE_URL` is build-time.
+
+---
+
+## Step 5 — third-party consoles (the domain also lives OUTSIDE this repo)
+
+Steps 1–4 make **our** code and server serve the new domain. They do nothing
+about the places the old domain is written down in someone else's system. Each
+of these is a separate login, all are Boss Rule #4/#6/#7, and the ones marked
+**breaks silently** give no error anyone will notice.
+
+| Where | What to change | If skipped |
+|---|---|---|
+| **Cloudflare** (`gatetest.io` zone) | Step 1 — A records off Vercel onto `66.42.121.161`, grey cloud | Site unreachable |
+| **Vercel** | Disconnect `gatetest.io` from the retired project | Two answers race; stale deploy may still serve |
+| **GitHub App** settings | Homepage, Setup URL `/github/setup`, Callback URL `/api/github/callback`, Webhook URL `/api/webhook` | **Breaks silently** — push/PR events post to a dead host, no commit statuses |
+| **Stripe** → Developers → Webhooks | Endpoint URL → `https://gatetest.io/api/stripe-webhook` | **Breaks silently** — customer pays, scan never starts |
+| **Resend** | Verify `gatetest.io`, publish SPF/DKIM, then set `RESEND_FROM` | **Breaks silently** — all mail rejected or spam-foldered |
+| **Sentry** OAuth app | Redirect URI → `https://gatetest.io/api/integrations/sentry/callback` | Sentry connect flow 400s on callback |
+| **GitHub Marketplace** listing | Every URL in `integrations/marketplace/listing.md` (already updated in-repo) | Listing points at a dead domain mid-review |
+| **Google Search Console** | Add `gatetest.io` property, submit sitemap, file Change of Address from `.ai` | Rankings restart from zero instead of transferring |
+| **Bing Webmaster** + **IndexNow** | Add the site; host the IndexNow key at `https://gatetest.io/<key>.txt` | IndexNow rejects every batch (host mismatch) |
+| **npm** | Republish `@gatetest/cli` + `@gatetest/mcp-server` so registry metadata and the MCP base URL default update | Installed CLIs keep calling the old host until upgraded |
+| **MCP registry** | Resubmit `server.json` | Registry lists a dead endpoint |
+| **WordPress.org** | New plugin release (readme + `GATETEST_API_BASE` already updated in-repo) | Installed plugins keep calling the old API host |
+| **VS Code Marketplace / Open VSX** | Republish so `homepage` updates | Cosmetic only |
+| **Homebrew tap** | `integrations/homebrew/gatetest.rb` homepage (updated in-repo) | Cosmetic only |
+| **Vapron dashboard** | `NEXT_PUBLIC_BASE_URL` + `GATETEST_PUBLIC_BASE_URL` = `https://gatetest.io` | Falls back to the code default, which is already `.io` — so harmless, but set it |
+
+### The ones that bite hardest
+
+**The GitHub App webhook and the Stripe webhook.** Both fail without raising
+anything a human sees: a customer's push produces no commit status, or a
+customer pays and no scan starts. Neither surfaces as an error page. Change
+those two first, and then actually test them — push a commit to a repo with the
+App installed, and run one test-mode checkout.
 
 ---
 

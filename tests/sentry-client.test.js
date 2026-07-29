@@ -48,7 +48,7 @@ describe('exchangeOAuthCode', () => {
       code: 'auth-code-123',
       clientId: 'client-id',
       clientSecret: 'client-secret',
-      redirectUri: 'https://gatetest.ai/api/integrations/sentry/callback',
+      redirectUri: 'https://gatetest.io/api/integrations/sentry/callback',
       fetchImpl: fakeFetch,
     });
     assert.strictEqual(result.accessToken, 'sntrys_xxx');

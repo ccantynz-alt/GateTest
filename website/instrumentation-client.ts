@@ -1,4 +1,4 @@
-// Sentry browser-runtime init for gatetest.ai.
+// Sentry browser-runtime init for gatetest.io.
 //
 // Replaces the older sentry.client.config.ts pattern (per
 // docs.sentry.io/platforms/javascript/guides/nextjs/). Loaded

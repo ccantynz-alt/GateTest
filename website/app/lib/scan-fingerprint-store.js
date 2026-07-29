@@ -23,6 +23,7 @@
  */
 
 const crypto = require('crypto');
+const { siteHost } = require('./site-url');
 
 /**
  * Stable salt for repo-URL hashing. NOT a secret — it's just a domain
@@ -71,7 +72,13 @@ async function ensureScanFingerprintTable(sql) {
   await sql`CREATE TABLE IF NOT EXISTS scan_fingerprint (
     id BIGSERIAL PRIMARY KEY,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    host TEXT NOT NULL DEFAULT 'gatetest.ai',
+    -- Spelled out rather than interpolated from siteHost(): this is a tagged
+    -- SQL template, so an interpolation becomes a BOUND PARAMETER and a
+    -- parameter is not valid in DDL. It is close to inert either way —
+    -- insertFingerprint() always passes an explicit host (defaulting to
+    -- siteHost()), and editing a DEFAULT does not migrate an existing table,
+    -- so rows created before the .ai -> .io move keep their old host value.
+    host TEXT NOT NULL DEFAULT 'gatetest.io',
     repo_url_hash TEXT NOT NULL,
     tier TEXT NOT NULL,
     framework_versions JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -120,7 +127,7 @@ async function ensureScanFingerprintTable(sql) {
  * @param {number} [opts.totalFixed]
  * @param {number} [opts.durationMs]
  * @param {string} opts.fingerprintSignature - the stable hash for similarity lookup
- * @param {string} [opts.host] - default 'gatetest.ai'
+ * @param {string} [opts.host] - default: the canonical site host
  * @returns {Promise<{id: number}>}
  */
 async function insertFingerprint(opts) {
@@ -136,7 +143,7 @@ async function insertFingerprint(opts) {
     totalFixed = 0,
     durationMs = null,
     fingerprintSignature,
-    host = 'gatetest.ai',
+    host = siteHost(),
   } = opts;
 
   if (typeof sql !== 'function') throw new Error('insertFingerprint: sql is required');

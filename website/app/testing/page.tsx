@@ -46,7 +46,7 @@ async function fetchArenaPRs(): Promise<PullRequest[] | { error: string }> {
     const res = await fetch(url, {
       headers: {
         Accept: "application/vnd.github+json",
-        "User-Agent": "gatetest.ai-testing-page",
+        "User-Agent": "gatetest.io-testing-page",
         ...(process.env.GITHUB_TOKEN
           ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
           : {}),

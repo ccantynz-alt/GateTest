@@ -28,7 +28,7 @@ on:
       base_url:
         description: 'Base URL to probe'
         required: false
-        default: 'https://gatetest.ai'
+        default: 'https://gatetest.io'
 
 permissions:
   contents: read
@@ -61,13 +61,13 @@ jobs:
       # fair result for a security product to get from itself.
       - name: Probe production
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.ai' }}
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.io' }}
         run: node scripts/ops/readiness-probe.js --base "$BASE_URL"
 
       - name: Probe production (JSON artifact)
         if: always()
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.ai' }}
+          BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.io' }}
         run: node scripts/ops/readiness-probe.js --base "$BASE_URL" --json > readiness.json || true
 
       - uses: actions/upload-artifact@v4

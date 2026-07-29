@@ -15,13 +15,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const clientId = process.env.SENTRY_CLIENT_ID || "";
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+  // SITE_URL, not a raw env read — this builds the OAuth redirect_uri, and
+  // Sentry compares it by exact string match. A trailing slash in the env var
+  // silently breaks the callback.
+  const baseUrl = SITE_URL;
   const url = new URL(req.url);
   const repoUrl = url.searchParams.get("repoUrl");
 

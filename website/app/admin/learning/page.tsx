@@ -323,7 +323,7 @@ export default function LearningDashboard() {
         )}
 
         <p className="text-center text-xs text-muted pt-6">
-          Phase 5.2 closed feedback loop · cron `0 6 * * 1` · gatetest.ai
+          Phase 5.2 closed feedback loop · cron `0 6 * * 1` · gatetest.io
         </p>
       </div>
     </div>

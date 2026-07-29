@@ -1,8 +1,8 @@
 <?php
 /**
- * Thin HTTP client for the gatetest.ai scan API.
+ * Thin HTTP client for the gatetest.io scan API.
  *
- * All scan work runs server-side at gatetest.ai. This file just packs the
+ * All scan work runs server-side at gatetest.io. This file just packs the
  * site's URL + api_key into a POST request, parses the JSON response, and
  * returns it. No business logic.
  */
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Request a scan from gatetest.ai.
+ * Request a scan from gatetest.io.
  *
  * @param string $api_key The customer's GateTest API key.
  * @param string $site_url The site URL to scan (typically home_url()).
@@ -65,7 +65,7 @@ function gatetest_hc_request_scan($api_key, $site_url, $opts = []) {
     if ($status === 401 || $status === 403) {
         return new WP_Error(
             'gatetest_hc_auth_failed',
-            __('GateTest API rejected the API key. Regenerate it at gatetest.ai/account.', GATETEST_HC_TEXT_DOMAIN),
+            __('GateTest API rejected the API key. Regenerate it at gatetest.io/account.', GATETEST_HC_TEXT_DOMAIN),
             ['status' => $status]
         );
     }
@@ -73,7 +73,7 @@ function gatetest_hc_request_scan($api_key, $site_url, $opts = []) {
     if ($status === 402) {
         return new WP_Error(
             'gatetest_hc_payment_required',
-            __('You have insufficient credit for this scan. Top up at gatetest.ai/account.', GATETEST_HC_TEXT_DOMAIN),
+            __('You have insufficient credit for this scan. Top up at gatetest.io/account.', GATETEST_HC_TEXT_DOMAIN),
             ['status' => $status, 'response' => $json]
         );
     }

@@ -16,7 +16,7 @@
  *
  * GRACEFUL DEGRADATION: when DATABASE_URL is unset or a query throws, every
  * function returns a soft failure and logs — never blocks the caller. This is
- * how it behaves today while gatetest.ai is stale (endpoint reachable, DB may
+ * how it behaves today while gatetest.io is stale (endpoint reachable, DB may
  * not be) — records simply aren't persisted yet, and the client keeps buffering.
  */
 

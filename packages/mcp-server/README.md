@@ -51,7 +51,7 @@ Works with Claude Code, Cursor, Windsurf, Continue, Cline, and any MCP-compatibl
 | `compose_pr` | Render a PR body for a batch of fixes |
 | `explain_finding` | Forensic-tier Claude diagnosis: explanation, root cause, recommendation |
 
-### Hosted API (scans via gatetest.ai, no local filesystem access needed)
+### Hosted API (scans via gatetest.io, no local filesystem access needed)
 
 | Tool | When to use |
 |------|-------------|
@@ -143,6 +143,6 @@ Once installed, ask Claude:
 
 ## Links
 
-- [gatetest.ai](https://gatetest.ai) — web scan, pricing, playground
+- [gatetest.io](https://gatetest.io) — web scan, pricing, playground
 - [GitHub](https://github.com/crclabs-hq/gatetest) — source
 - [Issues](https://github.com/crclabs-hq/gatetest/issues)

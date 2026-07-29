@@ -5,7 +5,7 @@
  * in core.js (transport-agnostic, tested by the repo's node --test suite);
  * this file only does HTTP: CORS, session header, JSON-RPC envelope I/O.
  *
- * Runs on the Jarvis server (66.42.121.161) behind mcp.gatetest.ai — see
+ * Runs on the Jarvis server (66.42.121.161) behind mcp.gatetest.io — see
  * ../README.md for deployment. Start: `bun run src/index.ts`.
  */
 
@@ -19,7 +19,7 @@ import { cors } from 'hono/cors';
 const { createMcpCore } = require('../../../website/app/lib/mcp-remote-core.cjs');
 
 const PORT = Number(process.env.PORT || 8787);
-const API_BASE = process.env.GATETEST_API_BASE_URL || 'https://gatetest.ai';
+const API_BASE = process.env.GATETEST_API_BASE_URL || 'https://gatetest.io';
 const TELEMETRY_FILE = process.env.GATETEST_MCP_TELEMETRY || '/var/log/gatetest/mcp-telemetry.jsonl';
 
 // Flywheel: append one JSONL event per tool call — the same contract the local

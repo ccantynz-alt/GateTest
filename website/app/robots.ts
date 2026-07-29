@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL, siteUrl } from "./lib/site-url";
 
 /**
  * robots.txt
@@ -51,7 +52,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow,
       })),
     ],
-    sitemap: "https://gatetest.ai/sitemap.xml",
-    host: "https://gatetest.ai",
+    sitemap: siteUrl("/sitemap.xml"),
+    host: SITE_URL,
   };
 }

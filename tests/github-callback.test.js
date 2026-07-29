@@ -224,8 +224,8 @@ describe('buildMarkdownComment', () => {
   });
 
   it('includes a full-report link when targetUrl is provided', () => {
-    const md = buildMarkdownComment('o/r', 'a'.repeat(40), makeScanResult(), 'https://gatetest.ai/scan/status');
-    assert.ok(md.includes('https://gatetest.ai/scan/status'), `expected targetUrl`);
+    const md = buildMarkdownComment('o/r', 'a'.repeat(40), makeScanResult(), 'https://gatetest.io/scan/status');
+    assert.ok(md.includes('https://gatetest.io/scan/status'), `expected targetUrl`);
   });
 
   it('shows error message for crashed scan', () => {
@@ -793,12 +793,12 @@ describe('sendGithubCallback — commit status payload', () => {
       repository: 'owner/repo',
       sha: 'k'.repeat(40),
       scanResult: makeScanResult(),
-      env: { GATETEST_GITHUB_TOKEN: 'ghp_test', NEXT_PUBLIC_BASE_URL: 'https://gatetest.ai' },
+      env: { GATETEST_GITHUB_TOKEN: 'ghp_test', NEXT_PUBLIC_BASE_URL: 'https://gatetest.io' },
       fetchImpl: doFetch,
     });
     const body = statusBody(doFetch);
     assert.ok(body.target_url, 'expected target_url in payload');
-    assert.ok(body.target_url.startsWith('https://gatetest.ai'), `unexpected target_url: ${body.target_url}`);
+    assert.ok(body.target_url.startsWith('https://gatetest.io'), `unexpected target_url: ${body.target_url}`);
   });
 });
 

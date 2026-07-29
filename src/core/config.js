@@ -322,7 +322,7 @@ const DEFAULT_CONFIG = {
       'intentVerification',
       'regressionPredictor',
     ],
-    // WordPress side product (wp.gatetest.ai) — Boss Rule D, Craig 2026-05-13.
+    // WordPress side product (wp subdomain) — Boss Rule D, Craig 2026-05-13.
     // Reuses some general-purpose modules from the developer suites where
     // they apply to a live WP URL (webHeaders, tlsSecurity, cookieSecurity,
     // accessibility, seo, links, performance) plus the new WP-specific

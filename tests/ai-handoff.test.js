@@ -231,7 +231,7 @@ test('formatForClaudeCode — includes header, counts, every finding, and footer
   assert.match(out, /uses var declaration/);
   assert.match(out, /hardcoded API key/);
   assert.match(out, /repo missing README\.md/);
-  assert.match(out, /gatetest\.ai/);
+  assert.match(out, /gatetest\.io/);
 });
 
 test('formatForClaudeCode — empty findings still renders header and footer', () => {

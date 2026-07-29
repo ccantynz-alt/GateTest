@@ -63,7 +63,7 @@ Teams duct-tape 10+ tools together — ESLint for style, SonarQube for quality, 
 
 = How it works =
 
-1. **Install** this plugin and enter your GateTest API key (get one free at gatetest.ai/admin)
+1. **Install** this plugin and enter your GateTest API key (get one free at gatetest.io/admin)
 2. **Enter** your GitHub repository URL (your theme or plugin's source code)
 3. **Run** a scan — results appear in your dashboard within 60 seconds
 4. **Review** the detailed findings per module
@@ -81,11 +81,11 @@ GateTest charges per scan — you only pay when the scan completes and delivers 
 * **Full** — $99/scan — the full engine suite (88 modules; mutation + chaos run via the GitHub Action, which has a CI runner)
 * **Scan + Fix** — $199/scan — everything in Full, plus an AI auto-fix PR opened in your repo
 
-Per-scan pricing has no per-seat fees and no lock-in. Continuous scanning ($49/mo, org-wide) is also available at gatetest.ai.
+Per-scan pricing has no per-seat fees and no lock-in. Continuous scanning ($49/mo, org-wide) is also available at gatetest.io.
 
 = Privacy =
 
-GateTest accesses only the GitHub repository you specify. No WordPress data, user data, or site content is ever transmitted. Only the repository URL and your API key are sent to the GateTest API. See [gatetest.ai/legal/privacy](https://gatetest.ai/legal/privacy) for the full privacy policy.
+GateTest accesses only the GitHub repository you specify. No WordPress data, user data, or site content is ever transmitted. Only the repository URL and your API key are sent to the GateTest API. See [gatetest.io/legal/privacy](https://gatetest.io/legal/privacy) for the full privacy policy.
 
 == Installation ==
 
@@ -96,7 +96,7 @@ GateTest accesses only the GitHub repository you specify. No WordPress data, use
 5. Go to **GateTest → Run Scan** and click **Run Scan**
 
 To get a free API key:
-1. Visit [gatetest.ai/admin](https://gatetest.ai/admin)
+1. Visit [gatetest.io/admin](https://gatetest.io/admin)
 2. Go to the **API Keys** tab
 3. Create a new key with your name
 
@@ -104,7 +104,7 @@ To get a free API key:
 
 = What repositories can I scan? =
 
-Any public or private GitHub repository. For private repositories, the GateTest GitHub App needs to be installed (free from [gatetest.ai/github/setup](https://gatetest.ai/github/setup)).
+Any public or private GitHub repository. For private repositories, the GateTest GitHub App needs to be installed (free from [gatetest.io/github/setup](https://gatetest.io/github/setup)).
 
 = Does GateTest only work with WordPress code? =
 

@@ -142,7 +142,7 @@ describe('buildStripeCheckoutParams', () => {
       tier: TIERS.quick,
       tierKey: 'quick',
       repoUrl: VALID_REPO,
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
 
     assert.strictEqual(params.get('payment_method_types[0]'), 'card');
@@ -188,11 +188,11 @@ describe('buildStripeCheckoutParams', () => {
     // success page can read the session back.
     assert.strictEqual(
       params.get('success_url'),
-      'https://gatetest.ai/checkout/success?session_id={CHECKOUT_SESSION_ID}'
+      'https://gatetest.io/checkout/success?session_id={CHECKOUT_SESSION_ID}'
     );
     assert.strictEqual(
       params.get('cancel_url'),
-      'https://gatetest.ai/checkout/cancel'
+      'https://gatetest.io/checkout/cancel'
     );
   });
 
@@ -201,10 +201,10 @@ describe('buildStripeCheckoutParams', () => {
       tier: TIERS.full,
       tierKey: 'full',
       repoUrl: VALID_REPO,
-      baseUrl: 'https://staging.gatetest.ai',
+      baseUrl: 'https://staging.gatetest.io',
     });
-    assert.match(params.get('success_url'), /^https:\/\/staging\.gatetest\.ai\//);
-    assert.match(params.get('cancel_url'), /^https:\/\/staging\.gatetest\.ai\//);
+    assert.match(params.get('success_url'), /^https:\/\/staging\.gatetest\.io\//);
+    assert.match(params.get('cancel_url'), /^https:\/\/staging\.gatetest\.io\//);
   });
 
   it('encodes Full Scan ($99) price correctly', () => {
@@ -212,7 +212,7 @@ describe('buildStripeCheckoutParams', () => {
       tier: TIERS.full,
       tierKey: 'full',
       repoUrl: VALID_REPO,
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(
       params.get('line_items[0][price_data][unit_amount]'),
@@ -227,7 +227,7 @@ describe('buildStripeCheckoutParams', () => {
 describe('createCheckoutSession', () => {
   const BASE_ENV = {
     STRIPE_SECRET_KEY: 'sk_test_abc123',
-    NEXT_PUBLIC_BASE_URL: 'https://gatetest.ai',
+    NEXT_PUBLIC_BASE_URL: 'https://gatetest.io',
   };
 
   it('returns 503 when STRIPE_SECRET_KEY is unset', async () => {
@@ -402,7 +402,7 @@ describe('createCheckoutSession', () => {
     assert.match(result.error, /Stripe HTTP 500/);
   });
 
-  it('falls back to https://gatetest.ai when NEXT_PUBLIC_BASE_URL is unset', async () => {
+  it('falls back to https://gatetest.io when NEXT_PUBLIC_BASE_URL is unset', async () => {
     const { fetchImpl, calls } = makeMockFetch({
       body: { id: 'cs_test_2', url: 'https://checkout.stripe.com/cs_test_2' },
     });
@@ -413,7 +413,7 @@ describe('createCheckoutSession', () => {
     });
     assert.strictEqual(result.ok, true);
     const sent = new URLSearchParams(calls[0].init.body);
-    assert.match(sent.get('success_url'), /^https:\/\/gatetest\.ai\//);
-    assert.match(sent.get('cancel_url'), /^https:\/\/gatetest\.ai\//);
+    assert.match(sent.get('success_url'), /^https:\/\/gatetest\.io\//);
+    assert.match(sent.get('cancel_url'), /^https:\/\/gatetest\.io\//);
   });
 });

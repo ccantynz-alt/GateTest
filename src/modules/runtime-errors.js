@@ -30,6 +30,7 @@
 'use strict';
 
 const BaseModule = require('./base-module');
+const { botUserAgent } = require('../core/site-url');
 
 const HYDRATION_HINTS = [
   /hydration mismatch/i,
@@ -129,7 +130,7 @@ class RuntimeErrorsModule extends BaseModule {
     const ctx = await browser.newContext({
       ignoreHTTPSErrors: false,
       viewport: { width: 1280, height: 800 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot)',
+      userAgent: botUserAgent(),
     });
     const page = await ctx.newPage();
 

@@ -1,4 +1,4 @@
-// WordPress side product landing page — lives at /wp until wp.gatetest.ai
+// WordPress side product landing page — lives at /wp until wp.gatetest.io
 // subdomain DNS lands (Boss Rule #4 — Craig).
 //
 // Voice: plain English for non-technical WordPress owners. No "module fired"

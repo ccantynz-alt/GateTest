@@ -24,9 +24,12 @@
 "use strict";
 
 const crypto = require("crypto");
+const { siteHost } = require("../site-url");
 
 const INDEXNOW_ENDPOINT = "https://api.indexnow.org/IndexNow";
-const HOST = "gatetest.ai";
+// IndexNow rejects a batch whose `host` disagrees with the submitted URLs, so
+// this MUST track the canonical origin rather than being stated independently.
+const HOST = siteHost();
 const MAX_URLS_PER_BATCH = 10_000; // IndexNow protocol limit
 const SOFT_RATE_LIMIT = 1_000;     // honour per-batch quota courtesy
 
@@ -97,7 +100,7 @@ function partitionByOriginValid(urls) {
  * @param {object} args
  * @param {string[]} args.urls
  * @param {string} args.key                IndexNow key (same one hosted at the key file)
- * @param {string} [args.host=gatetest.ai]
+ * @param {string} [args.host=gatetest.io]
  * @param {function} [args._fetch]
  * @returns {Promise<{
  *   submitted: number,

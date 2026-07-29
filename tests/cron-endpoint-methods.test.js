@@ -8,7 +8,7 @@
 //
 // /api/watches/tick exported only GET, so every POST scheduler received a
 // silent 405 and watches never ran off-Vercel. Verified live against
-// gatetest.ai on 2026-07-26:
+// gatetest.io on 2026-07-26:
 //
 //     /api/watches/tick -> HTTP 405
 //

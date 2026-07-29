@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Install GateTest — GitHub App · Private repo scanning",
   description:
-    "Install GateTest on GitHub free. Auto-scans every push and PR with a quick quality gate — syntax, lint, and secrets detection. Deeper 120-module scans and auto-fix PRs available on gatetest.ai.",
+    "Install GateTest on GitHub free. Auto-scans every push and PR with a quick quality gate — syntax, lint, and secrets detection. Deeper 120-module scans and auto-fix PRs available on gatetest.io.",
 };
 
 const AFTER_INSTALL = [
@@ -16,7 +16,7 @@ const AFTER_INSTALL = [
   { t: "dim",  text: "       hardcoded API key detected" },
   { t: "sep",  text: "" },
   { t: "sum",  text: "  Commit status: FAILED. PR comment posted." },
-  { t: "dim",  text: "  Want the full 120-module scan + auto-fix PR? → gatetest.ai" },
+  { t: "dim",  text: "  Want the full 120-module scan + auto-fix PR? → gatetest.io" },
 ];
 
 const T: Record<string, string> = {
@@ -70,7 +70,7 @@ export default function GitHubSetup() {
             <span className="text-teal-400">install once, forget about config.</span>
           </h1>
           <p className="text-white/50 text-base leading-relaxed max-w-xl mx-auto">
-            Free the moment you install: every push and PR gets a quick quality gate — syntax, lint, and hardcoded-secret detection — with results posted as commit statuses and PR comments. Want the full 120-module scan, AI code review, and auto-fix PRs? Run a deeper scan or subscribe to Continuous at <a href="https://gatetest.ai" className="text-teal-400 hover:underline">gatetest.ai</a>.
+            Free the moment you install: every push and PR gets a quick quality gate — syntax, lint, and hardcoded-secret detection — with results posted as commit statuses and PR comments. Want the full 120-module scan, AI code review, and auto-fix PRs? Run a deeper scan or subscribe to Continuous at <a href="https://gatetest.io" className="text-teal-400 hover:underline">gatetest.io</a>.
           </p>
         </div>
 
@@ -119,7 +119,7 @@ export default function GitHubSetup() {
             { n: "1", title: "Install the app", desc: "Pick individual repos or the whole org. Takes 30 seconds. Free, no card required." },
             { n: "2", title: "Push or open a PR", desc: "GateTest hooks into GitHub webhooks — no config file needed. Free quick gate runs automatically on every push." },
             { n: "3", title: "See results in your PR", desc: "Commit status (pass/fail) and a PR comment with what the quick gate found." },
-            { n: "4", title: "Go deeper (optional, paid)", desc: "Full 120-module scan with AI code review, or a $49/mo Continuous subscription that also opens auto-fix PRs — both purchased separately at gatetest.ai." },
+            { n: "4", title: "Go deeper (optional, paid)", desc: "Full 120-module scan with AI code review, or a $49/mo Continuous subscription that also opens auto-fix PRs — both purchased separately at gatetest.io." },
           ].map((s) => (
             <div key={s.n} className="flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
               <div className="w-7 h-7 rounded-lg bg-teal-600/20 border border-teal-500/30 flex items-center justify-center shrink-0">

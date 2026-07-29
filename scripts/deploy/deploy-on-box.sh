@@ -54,7 +54,7 @@ fi
 
 # Post-deploy smoke: the endpoints that burned us when the box served a stale build.
 sleep 3
-for probe in "https://gatetest.ai/api/status" "https://gatetest.ai/icon.png"; do
+for probe in "https://gatetest.io/api/status" "https://gatetest.io/icon.png"; do
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$probe" || echo 000)
   echo "[deploy] smoke $probe -> $code"
 done

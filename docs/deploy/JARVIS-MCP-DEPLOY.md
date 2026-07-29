@@ -4,7 +4,7 @@
 > plan was superseded by an in-repo Vercel route and that this box didn't need
 > the deployment. That's out of date — `gatetest-mcp.service` **is** live on
 > this box (confirmed via `systemctl status`, 2026-07-16 incident investigation)
-> and `mcp.gatetest.ai` → 66.42.121.161 is an active, in-use DNS record, not a
+> and `mcp.gatetest.io` → 66.42.121.161 is an active, in-use DNS record, not a
 > leftover. Treat the steps below as the real, current deploy path for this
 > service, not a fallback. See `JARVIS-WEB-DEPLOY.md` for the companion website
 > deploy and the two-box topology (this box = frontend/MCP, Vapron box 158 =
@@ -12,20 +12,20 @@
 >
 > Original 2026-07-07 note, kept for history: "Superseded — Craig chose to host
 > the endpoint in-repo on Vercel (`website/app/api/mcp/route.ts`, live at
-> `https://gatetest.ai/api/mcp`)... you do NOT need to deploy this on the Jarvis
+> `https://gatetest.io/api/mcp`)... you do NOT need to deploy this on the Jarvis
 > box." Reality diverged from that plan at some point before 2026-07-16; both
-> `gatetest.ai/api/mcp` (Vercel-style route, now served via the Jarvis box per
-> the current hosting model) and `mcp.gatetest.ai` (this dedicated service)
+> `gatetest.io/api/mcp` (Vercel-style route, now served via the Jarvis box per
+> the current hosting model) and `mcp.gatetest.io` (this dedicated service)
 > exist today — worth Craig's call on whether to keep both or consolidate.
 
 **From:** GateTest engineering session (Claude Code, 2026-07-07, Craig-authorized)
 **To:** Jarvis (66.42.121.161) — only if a dedicated box is chosen
-**Task:** Deploy the GateTest hosted MCP endpoint on this box, behind `mcp.gatetest.ai`.
+**Task:** Deploy the GateTest hosted MCP endpoint on this box, behind `mcp.gatetest.io`.
 
 ## Context
 
 GateTest is shipping a hosted MCP endpoint so claude.ai web/mobile users can use
-GateTest tools with zero install. DNS is already live: `mcp.gatetest.ai` → A record
+GateTest tools with zero install. DNS is already live: `mcp.gatetest.io` → A record
 → `66.42.121.161` (this box), DNS-only/grey-cloud. The code is in the GateTest repo
 at `packages/mcp-remote/` — a Bun + Hono service, no Playwright, no heavy deps
 (single dependency: hono). It is deliberately co-located on this box so Jarvis can
@@ -37,8 +37,8 @@ control GateTest directly.
 2. The service binds `127.0.0.1:8787`. If 8787 is taken on this box, pick a free
    port and use it consistently in both the systemd unit (`Environment=PORT=...`)
    and the Caddy reverse_proxy line.
-3. No secrets required. The service holds no keys — it proxies gatetest.ai APIs
-   and validates customer keys against gatetest.ai/api/mcp/validate.
+3. No secrets required. The service holds no keys — it proxies gatetest.io APIs
+   and validates customer keys against gatetest.io/api/mcp/validate.
 4. Telemetry writes to `/var/log/gatetest/mcp-telemetry.jsonl` (the service
    creates the directory itself; ensure the service user can write there).
 
@@ -62,7 +62,7 @@ kill %1
 # 3. systemd unit
 cat >/etc/systemd/system/gatetest-mcp.service <<'EOF'
 [Unit]
-Description=GateTest remote MCP endpoint (mcp.gatetest.ai)
+Description=GateTest remote MCP endpoint (mcp.gatetest.io)
 After=network.target
 
 [Service]
@@ -79,30 +79,30 @@ EOF
 systemctl daemon-reload && systemctl enable --now gatetest-mcp
 
 # 4. Caddy site (append to the existing Caddyfile — do not overwrite)
-# mcp.gatetest.ai {
+# mcp.gatetest.io {
 #     reverse_proxy 127.0.0.1:8787
 # }
 # then: systemctl reload caddy
 # If this box uses nginx instead of Caddy, use an equivalent server block +
-# certbot for the mcp.gatetest.ai cert.
+# certbot for the mcp.gatetest.io cert.
 ```
 
 ## Verify (all four must pass)
 
 ```bash
-curl -s https://mcp.gatetest.ai/healthz
+curl -s https://mcp.gatetest.io/healthz
 # → {"ok":true,"server":"gatetest-remote-mcp"}
 
-curl -s -X POST https://mcp.gatetest.ai/mcp -H 'Content-Type: application/json' \
+curl -s -X POST https://mcp.gatetest.io/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
 # → serverInfo.name "gatetest"
 
-curl -s -X POST https://mcp.gatetest.ai/mcp -H 'Content-Type: application/json' \
+curl -s -X POST https://mcp.gatetest.io/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 # → 8 tools
 
-curl -s -X POST https://mcp.gatetest.ai/mcp -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scan_url","arguments":{"url":"https://gatetest.ai"}}}'
+curl -s -X POST https://mcp.gatetest.io/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scan_url","arguments":{"url":"https://gatetest.io"}}}'
 # → a real scan result with a health score (takes ~10-30s)
 ```
 

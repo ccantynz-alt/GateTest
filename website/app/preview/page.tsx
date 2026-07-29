@@ -1,5 +1,5 @@
 /**
- * GateTest.ai — standalone premium homepage (greenfield prototype).
+ * GateTest.io — standalone premium homepage (greenfield prototype).
  *
  * Self-contained to this route: every section, the motion layer, and the icon
  * set live under `app/preview/` (private `_components` / `_lib` folders). No

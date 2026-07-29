@@ -24,7 +24,7 @@ export default function CweIndexPage() {
     url: `${SITE_URL}/find`,
     hasPart: CWE_TOP_25.map((cwe) => ({
       "@type": "WebPage",
-      url: `https://gatetest.ai/find/${cwe.slug}`,
+      url: `https://gatetest.io/find/${cwe.slug}`,
       name: `CWE-${cwe.id} ${cwe.name}`,
       description: cwe.shortDesc,
     })),

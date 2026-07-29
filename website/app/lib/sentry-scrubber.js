@@ -1,4 +1,4 @@
-// Shared Sentry scrubber for gatetest.ai.
+// Shared Sentry scrubber for gatetest.io.
 //
 // PURPOSE: Sentry server/edge/client configs all set sendDefaultPii=true,
 // includeLocalVariables=true (server), and enableLogs=true. Without an

@@ -104,7 +104,7 @@ record what they say — you cannot commit to a refund yourself.
 
 ## Data handling
 
-- URL scans probe a public website from gatetest.ai infrastructure.
+- URL scans probe a public website from gatetest.io infrastructure.
   We do not log or store the customer's source code.
 - Repo scans require Git access via the connected account. Source is
   read into a temporary workspace, scanned, then deleted.

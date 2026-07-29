@@ -100,7 +100,7 @@ test.describe("SEO & Meta Tags", () => {
     );
     await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
       "content",
-      "https://gatetest.ai"
+      "https://gatetest.io"
     );
     await expect(page.locator('meta[property="og:type"]')).toHaveAttribute(
       "content",

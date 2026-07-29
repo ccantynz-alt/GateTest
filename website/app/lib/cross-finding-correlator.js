@@ -276,7 +276,7 @@ function renderCorrelationReport(result) {
   }
   lines.push('---');
   lines.push('');
-  lines.push('<sub>Cross-finding correlation is part of the <a href="https://gatetest.ai">GateTest $399 Nuclear</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>');
+  lines.push('<sub>Cross-finding correlation is part of the <a href="https://gatetest.io">GateTest $399 Nuclear</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>');
   return lines.join('\n');
 }
 

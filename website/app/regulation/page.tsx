@@ -26,7 +26,7 @@ export default function RegulationIndexPage() {
     url: `${SITE_URL}/regulation`,
     hasPart: REGULATIONS.map((r) => ({
       "@type": "WebPage",
-      url: `https://gatetest.ai/regulation/${r.slug}`,
+      url: `https://gatetest.io/regulation/${r.slug}`,
       name: `${r.name} — ${r.longName}`,
       description: r.whyDevsCareThisYear,
     })),

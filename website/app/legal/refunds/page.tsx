@@ -98,7 +98,7 @@ export default function Refunds() {
             <p className="mt-2">
               <strong>What counts as &quot;delivered&quot;.</strong> The Service is delivered when
               a scan run completes and a scan report is made available to you through any of the
-              following channels: the web UI at gatetest.ai, the dashboard or scan-status page, an
+              following channels: the web UI at gatetest.io, the dashboard or scan-status page, an
               email containing the report or a link to it, a pull-request comment or commit-status
               check on your repository, or an API response. The scan report, analysis results, and
               any auto-fix pull requests constitute the delivered service.
@@ -276,7 +276,7 @@ export default function Refunds() {
           </div>
           <div className="mt-6">
             <Link href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-              &larr; Back to gatetest.ai
+              &larr; Back to gatetest.io
             </Link>
           </div>
         </div>

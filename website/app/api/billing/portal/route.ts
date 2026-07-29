@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
       sendBillingPortalEmail: (opts: { to: string; links: Array<{ url: string; source: string }> }) => Promise<{ ok: boolean; error?: string }>;
     };
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
     const result = await requestPortalLink(email, {
       sql: getDb(),
       sendEmailFn: sendBillingPortalEmail,

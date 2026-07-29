@@ -41,6 +41,7 @@
 
 const path = require('path');
 const BaseModule = require('./base-module');
+const { botUserAgent } = require('../core/site-url');
 
 // Matched against the error/warning TEXT. Deliberately narrow (specific
 // script names / vendor phrasing) rather than broad keyword matches, so
@@ -184,7 +185,7 @@ class ConsoleErrorsModule extends BaseModule {
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) ConsoleErrors',
+      userAgent: botUserAgent('ConsoleErrors'),
     });
     const page = await context.newPage();
 

@@ -74,7 +74,7 @@ of our own marketing claims found numbers that had drifted from reality
 scanner's findings forced the copy to change, and that's now a test in
 our CI: marketing claims that drift from the product fail the build.
 
-Try it free, no signup: https://gatetest.ai/web scans any public site in
+Try it free, no signup: https://gatetest.io/web scans any public site in
 a real browser. The CLI is MIT: npx -p @gatetest/cli gatetest
 
 Happy to answer anything, including "why should I trust an AI to write
@@ -109,7 +109,7 @@ regression test and never auto-merges.
 | Angle used | |
 | Posted (UTC + ET) | |
 | Peak rank / points / comments | |
-| gatetest.ai visits in 24h | |
+| gatetest.io visits in 24h | |
 | Free scans run | |
 | Paid conversions | |
 | What we'd change | |

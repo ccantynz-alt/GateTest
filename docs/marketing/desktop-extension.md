@@ -30,7 +30,7 @@ mcpb pack . ../../dist/gatetest.mcpb
 
 ## Distributing it
 - Attach `gatetest.mcpb` to a GitHub Release on `crclabs-hq/gatetest`.
-- Link it from `gatetest.ai/mcp` as a "Claude Desktop — one-click install" button.
+- Link it from `gatetest.io/mcp` as a "Claude Desktop — one-click install" button.
 - Optionally submit to any Desktop-extension directory Anthropic runs.
 
 ## Install experience for the user

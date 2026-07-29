@@ -80,12 +80,12 @@ test('buildDispatchPayload — happy path', () => {
     scanId: 'scn_abc',
     targetUrl: 'https://example.com',
     suite: 'web',
-    callbackUrl: 'https://gatetest.ai/api/web/scan/runtime-callback',
+    callbackUrl: 'https://gatetest.io/api/web/scan/runtime-callback',
   });
   assert.equal(p.scanId, 'scn_abc');
   assert.equal(p.targetUrl, 'https://example.com');
   assert.equal(p.suite, 'web');
-  assert.equal(p.callbackUrl, 'https://gatetest.ai/api/web/scan/runtime-callback');
+  assert.equal(p.callbackUrl, 'https://gatetest.io/api/web/scan/runtime-callback');
   assert.equal(p.deadlineSec, 60);
 });
 
@@ -164,7 +164,7 @@ test('dispatchRuntimeScan — happy path with injected fetch', async () => {
     scanId: 'scn_abc',
     targetUrl: 'https://example.com',
     suite: 'web',
-    callbackUrl: 'https://gatetest.ai/cb',
+    callbackUrl: 'https://gatetest.io/cb',
     deps: {
       baseUrl: 'https://vapron.test',
       apiToken: 'tok_xyz',

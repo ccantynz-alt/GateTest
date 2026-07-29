@@ -8,7 +8,7 @@ name: Weekly Developer Digest
 #
 # Secrets needed in the repo:
 #   GATETEST_ADMIN_PASSWORD  — must match the env var in Vercel
-#   GATETEST_BASE_URL        — default https://gatetest.ai; override for staging
+#   GATETEST_BASE_URL        — default https://gatetest.io; override for staging
 
 on:
   schedule:
@@ -27,7 +27,7 @@ jobs:
         id: trigger
         env:
           ADMIN_PASSWORD: ${{ secrets.GATETEST_ADMIN_PASSWORD }}
-          BASE_URL: ${{ vars.GATETEST_BASE_URL || 'https://gatetest.ai' }}
+          BASE_URL: ${{ vars.GATETEST_BASE_URL || 'https://gatetest.io' }}
         run: |
           echo "Triggering weekly digest at ${BASE_URL}/api/digest"
 

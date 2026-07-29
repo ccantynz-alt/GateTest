@@ -53,7 +53,7 @@ POST {VAPRON_BASE_URL}/api/jobs/web-runtime-scan
   "scanId": "scn_xxx",
   "targetUrl": "https://customer-site.example",
   "suite": "web",
-  "callbackUrl": "https://gatetest.ai/api/web/scan/runtime-callback",
+  "callbackUrl": "https://gatetest.io/api/web/scan/runtime-callback",
   "deadlineSec": 60,
   "auth": {
     "headers": { "Cookie": "…" },
@@ -80,7 +80,7 @@ GateTest's dispatch times out after **5 seconds** and never throws — a slow or
 ## 3. Outbound — Vapron calls GateTest back
 
 ```
-POST https://gatetest.ai/api/web/scan/runtime-callback
+POST https://gatetest.io/api/web/scan/runtime-callback
 ```
 
 Send this on **success and failure alike**. A job that dies silently leaves the customer's report showing "runtime checks pending" forever.

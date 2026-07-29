@@ -86,7 +86,7 @@
                 html += '<div class="gatetest-hc-paywall">';
                 html += '<h3>' + data.paywall.remainingCount + ' more finding(s) hidden in the free preview</h3>';
                 html += '<p>Upgrade to GateTest Starter ($29/mo) to see them all + get auto-fix.</p>';
-                html += '<p><a href="https://gatetest.ai/pricing?from=wp-plugin" target="_blank" rel="noopener" class="button button-primary">See pricing</a></p>';
+                html += '<p><a href="https://gatetest.io/pricing?from=wp-plugin" target="_blank" rel="noopener" class="button button-primary">See pricing</a></p>';
                 html += '</div>';
             }
 

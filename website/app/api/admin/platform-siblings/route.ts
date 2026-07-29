@@ -14,7 +14,7 @@
  * docs/PLATFORM_STATUS.md:
  *   - VAPRON_STATUS_URL  (default https://vapron.ai/api/platform-status)
  *   - GLUECRON_STATUS_URL  (default https://gluecron.com/api/platform-status)
- *   - GATETEST_STATUS_URL  (default https://gatetest.ai/api/platform-status)
+ *   - GATETEST_STATUS_URL  (default https://gatetest.io/api/platform-status)
  *
  * Admin-gated: mirrors the same two-method auth as /api/admin/health.
  */
@@ -79,7 +79,7 @@ const SIBLINGS: Array<{ id: SiblingId; name: string; envVar: string; defaultUrl:
     id: "gatetest",
     name: "GateTest",
     envVar: "GATETEST_STATUS_URL",
-    defaultUrl: "https://gatetest.ai/api/platform-status",
+    defaultUrl: "https://gatetest.io/api/platform-status",
   },
 ];
 

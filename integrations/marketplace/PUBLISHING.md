@@ -147,7 +147,7 @@ step — works the moment the file is on `main`.
 | MCP | `npx gatetest-mcp` | npm publish (Craig) |
 | Homebrew | `brew install crclabs-hq/gatetest/gatetest` | tap repo + formula bump (Craig) |
 | Drop-in CI | `curl ... | bash` | Already live (no action) |
-| Hosted SaaS | gatetest.ai | Already live |
+| Hosted SaaS | gatetest.io | Already live |
 | GitHub Marketplace | Install from marketplace | App listing approval (Craig, 2-3 weeks) |
 
 ---

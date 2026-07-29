@@ -6,7 +6,7 @@
  *
  * Returns an SVG badge showing the latest scan grade (A+ to F).
  * Designed to be embedded in GitHub READMEs:
- *   ![GateTest](https://gatetest.ai/api/badge?repo=crclabs-hq/GateTest)
+ *   ![GateTest](https://gatetest.io/api/badge?repo=crclabs-hq/GateTest)
  *
  * Uses the scan database to look up the latest completed scan for the repo.
  * If no scan exists, returns a "not scanned" badge.

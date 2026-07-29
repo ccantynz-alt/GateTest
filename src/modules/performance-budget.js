@@ -36,6 +36,7 @@
 
 const path = require('path');
 const BaseModule = require('./base-module');
+const { botUserAgent } = require('../core/site-url');
 
 const DEFAULT_RUNS = 3;
 const DEFAULT_BUDGETS = {
@@ -207,7 +208,7 @@ class PerformanceBudgetModule extends BaseModule {
   async _measureOnce(browser, url, timeout) {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) PerformanceBudget',
+      userAgent: botUserAgent('PerformanceBudget'),
     });
     const page = await context.newPage();
     let pageWeightBytes = 0;

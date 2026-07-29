@@ -15,6 +15,7 @@
 'use strict';
 
 const path = require('path');
+const { botUserAgent } = require('./site-url');
 
 function slugifyRoute(route) {
   const cleaned = String(route).replace(/^\/+/, '').replace(/\/+$/, '');
@@ -94,7 +95,7 @@ async function captureUrlScreenshot(opts = {}) {
   try {
     const context = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) ScreenshotCapture',
+      userAgent: botUserAgent('ScreenshotCapture'),
     });
     const page = await context.newPage();
     try {

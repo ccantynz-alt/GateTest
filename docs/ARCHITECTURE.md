@@ -24,7 +24,7 @@ Every tool here was chosen because it is the **best in its class right now.** If
 | **Framework** | Next.js 16 (App Router) | Latest, fastest, Vercel-native |
 | **Styling** | Tailwind CSS 4 | Utility-first, dark theme, zero unused CSS |
 | **Hosting** | **Vapron** (Craig 2026-07-14 cutover; re-confirmed "zero old services" 2026-07-23) | Craig's platform; deploy per `docs/deploy/VAPRON-DEPLOY.md`. Vercel is RETIRED for production — its GitHub integration may still build PR previews until Craig disconnects it. |
-| **Domain** | gatetest.ai | Secured |
+| **Domain** | gatetest.io | Secured |
 
 ### Payments
 | Layer | Choice | Why |
@@ -98,7 +98,7 @@ GateTest/
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
 ├── tests/                  ← 200+ tests (MUST ALL PASS)
-└── website/                ← gatetest.ai (Next.js 16 + Tailwind 4)
+└── website/                ← gatetest.io (Next.js 16 + Tailwind 4)
     └── app/
         ├── page.tsx                 ← Main page
         ├── layout.tsx               ← Root layout
@@ -191,7 +191,7 @@ GateTest/
 |----------|---------|
 | `STRIPE_SECRET_KEY` | Stripe API (sk_live_... or sk_test_...) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe client key |
-| `NEXT_PUBLIC_BASE_URL` | https://gatetest.ai |
+| `NEXT_PUBLIC_BASE_URL` | https://gatetest.io |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing |
 | `GLUECRON_BASE_URL` | Gluecron deployment URL (default https://gluecron.com) |
 | `GLUECRON_API_TOKEN` | Gluecron PAT (scope: `repo`, format `glc_<64hex>`) |

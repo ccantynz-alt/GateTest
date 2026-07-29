@@ -12,7 +12,7 @@ GitHub Marketplace allows up to 10 screenshots. Capture at least 5. All screensh
 **What to capture:**
 - Open a pull request on a test repository where GateTest is installed and the scan passes.
 - Scroll to the **Checks** section at the bottom of the PR (below the timeline, above the merge button).
-- The GateTest check should show a green checkmark with whatever text the LIVE App check actually renders. IMPORTANT: the free App install runs the quick gate (syntax, lint, hardcoded-secrets) — NOT all 120 modules — so do not stage a "120 modules passed" subtitle. Capture the real status text the App posts (generated from real module counts in `github-callback.js`); a screenshot claiming more coverage than the free install delivers is exactly what a reviewer flags. Full 120-module scans are the separately-purchased gatetest.ai flow, not this App check.
+- The GateTest check should show a green checkmark with whatever text the LIVE App check actually renders. IMPORTANT: the free App install runs the quick gate (syntax, lint, hardcoded-secrets) — NOT all 120 modules — so do not stage a "120 modules passed" subtitle. Capture the real status text the App posts (generated from real module counts in `github-callback.js`); a screenshot claiming more coverage than the free install delivers is exactly what a reviewer flags. Full 120-module scans are the separately-purchased gatetest.io flow, not this App check.
 - The merge button should be green and unblocked.
 - Frame the screenshot to show: the PR title at the top, the diff summary line, and the full checks section.
 - Include the browser chrome (URL bar showing `github.com/...`) for authenticity.
@@ -49,7 +49,7 @@ GitHub Marketplace allows up to 10 screenshots. Capture at least 5. All screensh
 **Caption:** "GateTest opens a fix PR automatically — review the diff, merge, done"
 
 **What to capture:**
-- Open the auto-fix PR that GateTest created (on Scan + Fix or Forensic tier — Forensic was renamed from "Nuclear" 2026-06-02). NOTE: auto-fix is a paid gatetest.ai tier, not part of the free App install — if this screenshot appears on the free Marketplace listing, caption it clearly as a gatetest.ai feature so it doesn't imply the free App auto-fixes.
+- Open the auto-fix PR that GateTest created (on Scan + Fix or Forensic tier — Forensic was renamed from "Nuclear" 2026-06-02). NOTE: auto-fix is a paid gatetest.io tier, not part of the free App install — if this screenshot appears on the free Marketplace listing, caption it clearly as a gatetest.io feature so it doesn't imply the free App auto-fixes.
 - Show the **Files changed** tab of the fix PR.
 - The diff should show a real, sensible fix — for example:
   - Before: `rejectUnauthorized: false` in an HTTPS agent options object
@@ -64,12 +64,12 @@ GitHub Marketplace allows up to 10 screenshots. Capture at least 5. All screensh
 
 ---
 
-## Screenshot 4 — gatetest.ai landing page
+## Screenshot 4 — gatetest.io landing page
 
-**Caption:** "Scan any repository in seconds from gatetest.ai"
+**Caption:** "Scan any repository in seconds from gatetest.io"
 
 **What to capture:**
-- Navigate to `https://gatetest.ai` in a browser with the dark theme rendering correctly.
+- Navigate to `https://gatetest.io` in a browser with the dark theme rendering correctly.
 - Capture the **hero section** (top of the page, above the fold) showing:
   - The GateTest logo and headline
   - The animated background / terminal animation (capture mid-animation if possible)
@@ -88,7 +88,7 @@ GitHub Marketplace allows up to 10 screenshots. Capture at least 5. All screensh
 **Caption:** "Watch 120 modules scan your repo in real time"
 
 **What to capture:**
-- Navigate to the scan status page (`https://gatetest.ai/scan/status?session_id=...`) for a completed scan.
+- Navigate to the scan status page (`https://gatetest.io/scan/status?session_id=...`) for a completed scan.
 - The page should be in its **completed** state — showing the full results breakdown, not the loading state.
 - Ideally shows:
   - The "Scan Complete" header with a green pass indicator
@@ -117,7 +117,7 @@ GitHub Marketplace allows up to 10 screenshots. Capture at least 5. All screensh
 ## Tips for all screenshots
 
 - Use a **real browser** (Chrome or Safari), not a headless screenshot tool — the rendering looks more authentic.
-- **Dark mode** for the gatetest.ai screenshots (the site is designed for it).
+- **Dark mode** for the gatetest.io screenshots (the site is designed for it).
 - **No browser extensions visible** — hide extension icons from the toolbar.
 - **No personal account names visible** — use a test GitHub account or blur your username.
 - **Consistent resolution** — 1280×800 or 2560×1600 (retina) for all screenshots.

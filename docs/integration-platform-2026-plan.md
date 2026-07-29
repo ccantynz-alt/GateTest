@@ -18,10 +18,10 @@ Direction B is what "any website can connect to GateTest" means. Direction A is 
 ### 1. OAuth 2.0 provider — GateTest issues tokens
 
 ```
-Partner app registers at:        gatetest.ai/developers/apps/new
+Partner app registers at:        gatetest.io/developers/apps/new
   → gets client_id + client_secret
 
-Partner sends user to:           https://gatetest.ai/oauth/authorize?
+Partner sends user to:           https://gatetest.io/oauth/authorize?
                                    response_type=code&
                                    client_id=<partner_id>&
                                    redirect_uri=<partner_callback>&
@@ -34,12 +34,12 @@ GateTest asks user:              "Partner X wants to scan repos + create fix
 User clicks Allow.
 GateTest redirects:              <partner_callback>?code=<auth_code>&state=<random>
 
-Partner exchanges code:          POST https://gatetest.ai/api/v1/oauth/token
+Partner exchanges code:          POST https://gatetest.io/api/v1/oauth/token
                                    { grant_type, code, client_id, client_secret }
                                  → { access_token, refresh_token, expires_in,
                                      scope, token_type: "Bearer" }
 
-Partner makes API calls:         GET https://gatetest.ai/api/v1/account
+Partner makes API calls:         GET https://gatetest.io/api/v1/account
                                    Authorization: Bearer <access_token>
 ```
 
@@ -104,11 +104,11 @@ Partner verifies HMAC against the body+secret they were given at registration.
 ### 4. Developer platform — registration, docs, sandbox
 
 ```
-gatetest.ai/developers          — landing for integration developers
-gatetest.ai/developers/apps     — list of apps the developer owns
-gatetest.ai/developers/apps/new — register a new OAuth app
-gatetest.ai/developers/docs     — full API + webhook + OAuth reference
-gatetest.ai/developers/sandbox  — try API calls against a test environment
+gatetest.io/developers          — landing for integration developers
+gatetest.io/developers/apps     — list of apps the developer owns
+gatetest.io/developers/apps/new — register a new OAuth app
+gatetest.io/developers/docs     — full API + webhook + OAuth reference
+gatetest.io/developers/sandbox  — try API calls against a test environment
 ```
 
 This is the developer surface — what they hit when they want to integrate.

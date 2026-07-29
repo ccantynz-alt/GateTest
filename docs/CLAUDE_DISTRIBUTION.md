@@ -91,7 +91,7 @@ Optional environment variables you can set:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `GATETEST_HOSTED_BASE_URL` | Override the hosted-API base. Useful if you self-host the gatetest.ai service. | `https://www.gatetest.ai` |
+| `GATETEST_HOSTED_BASE_URL` | Override the hosted-API base. Useful if you self-host the gatetest.io service. | `https://www.gatetest.io` |
 
 ---
 
@@ -99,8 +99,8 @@ Optional environment variables you can set:
 
 When Claude invokes the **remote** tools (`scan_remote_preview`,
 `start_paid_scan`, `check_remote_scan`), the repo URL is sent to
-gatetest.ai's hosted scanner. The scanner only reads PUBLIC repos by
-default and never executes code. See https://gatetest.ai/legal/privacy
+gatetest.io's hosted scanner. The scanner only reads PUBLIC repos by
+default and never executes code. See https://gatetest.io/legal/privacy
 for the full policy.
 
 The **local** tools (`scan_local`, `run_module`) run entirely on your
@@ -114,7 +114,7 @@ disk.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `Preview request failed: fetch failed` | hosted service unreachable from your network | retry; check status.gatetest.ai |
+| `Preview request failed: fetch failed` | hosted service unreachable from your network | retry; check status.gatetest.io |
 | `rate limit — wait 10 seconds` | you ran two previews within 10s | wait 10s OR upgrade to Quick ($29) which has no rate limit |
 | `Cannot access owner/repo — auth provider unreachable` | the repo is private (preview only works on public repos) | use `scan_local` for private repos OR upgrade to Full ($99) which has authenticated repo access |
 | MCP tools don't appear in Claude | client didn't pick up the config change | restart Claude Code completely (quit + relaunch, not just reload) |

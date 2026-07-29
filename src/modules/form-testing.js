@@ -26,7 +26,7 @@
  *
  * Everything else — contact forms, newsletter signup, search, feedback,
  * generic multi-field forms — gets filled with GateTest-branded benign
- * values (the email field always resolves to `test@gatetest.ai` so a
+ * values (the email field always resolves to FIXTURE_EMAIL so a
  * form that DOES send a real email never reaches a real inbox) and
  * submitted for real. A checkbox is only checked when its label reads
  * like a required legal consent (terms/privacy) — anything that reads
@@ -41,6 +41,7 @@
 
 const path = require('path');
 const BaseModule = require('./base-module');
+const { botUserAgent, FIXTURE_EMAIL, siteUrl } = require('../core/site-url');
 
 const PAYMENT_FIELD_PATTERNS = [
   /card.?number/i, /cc.?number/i, /cardnum/i, /\bcvv\b/i, /\bcvc\b/i,
@@ -99,9 +100,9 @@ function escapeAttrValue(str) {
 
 function inferFieldValue(field) {
   const n = `${field.name || ''} ${field.id || ''} ${field.placeholder || ''} ${field.autocomplete || ''}`.toLowerCase();
-  if (field.type === 'email' || /email/.test(n)) return 'test@gatetest.ai';
+  if (field.type === 'email' || /email/.test(n)) return FIXTURE_EMAIL;
   if (field.type === 'tel' || /phone|tel\b/.test(n)) return '+15555550100';
-  if (field.type === 'url' || /url|website/.test(n)) return 'https://gatetest.ai';
+  if (field.type === 'url' || /url|website/.test(n)) return siteUrl();
   if (field.type === 'number') return '1';
   if (field.type === 'date') return new Date().toISOString().slice(0, 10);
   if (/message|comment|feedback/.test(n)) return 'GateTest automated form test — please disregard.';
@@ -189,7 +190,7 @@ class FormTestingModule extends BaseModule {
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) FormTesting',
+      userAgent: botUserAgent('FormTesting'),
     });
     const page = await context.newPage();
     const visited = new Set();

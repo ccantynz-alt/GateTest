@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { siteUrl } = require('./core/site-url');
 const { execSync, execFileSync } = require('child_process');
 
 const PORT = process.env.PORT || 3333;
@@ -352,7 +353,7 @@ function formatPrComment(result) {
     }
   }
 
-  return `${status}\n\n${summary}${failureList}${issueDetails}\n\n---\n*Scanned by [GateTest](https://gatetest.ai) — the QA gate for AI-generated code*`;
+  return `${status}\n\n${summary}${failureList}${issueDetails}\n\n---\n*Scanned by [GateTest](${siteUrl()}) — the QA gate for AI-generated code*`;
 }
 
 // ============================================================
@@ -440,7 +441,7 @@ if (!APP_ID) {
 ║                                                          ║
 ║  2. Fill in:                                             ║
 ║     Name:        GateTest                                ║
-║     Homepage:    https://gatetest.ai                     ║
+║     Homepage:    https://gatetest.io                     ║
 ║     Webhook URL: https://your-server.com/webhook         ║
 ║     Secret:      (generate one, save it)                 ║
 ║                                                          ║

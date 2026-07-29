@@ -202,9 +202,9 @@ test('renderDriftAlert — includes unsubscribe link when supplied', () => {
   const baseline = makeScan({});
   const current = makeScan({});
   const diff = diffScans(baseline, current);
-  const r = renderDriftAlert({ targetUrl: 'https://example.com', diff, unsubscribeUrl: 'https://gatetest.ai/u/abc' });
+  const r = renderDriftAlert({ targetUrl: 'https://example.com', diff, unsubscribeUrl: 'https://gatetest.io/u/abc' });
   assert.ok(r.markdown.includes('Unsubscribe'));
-  assert.ok(r.markdown.includes('https://gatetest.ai/u/abc'));
+  assert.ok(r.markdown.includes('https://gatetest.io/u/abc'));
 });
 
 test('renderDriftAlert — plain-text strips markdown decorators', () => {

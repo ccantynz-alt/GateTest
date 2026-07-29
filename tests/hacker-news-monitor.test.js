@@ -262,7 +262,7 @@ test("monitor: returns report with gatetest mentions, competitor mentions, pain-
     "gatetest": [
       fixtureHit({ objectID: "1", text: "Tried GateTest, got a false positive on line 42" }),
     ],
-    "gatetest.ai": [
+    "gatetest.io": [
       fixtureHit({ objectID: "2", text: "GateTest.ai looks promising, would love python support" }),
     ],
     "Snyk": [
@@ -278,7 +278,7 @@ test("monitor: returns report with gatetest mentions, competitor mentions, pain-
   });
   const report = await monitor({
     queries: {
-      gatetest: ["gatetest", "gatetest.ai"],
+      gatetest: ["gatetest", "gatetest.io"],
       competitors: ["Snyk", "SonarQube", "Semgrep", "CodeQL", "DeepSource", "Codacy", "Veracode", "Checkmarx"],
       painPoints: ["false positive", "too slow"],
     },

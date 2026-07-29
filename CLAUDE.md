@@ -47,7 +47,7 @@ The following actions require **explicit authorization from Craig BEFORE executi
 1. **Major architectural changes** — swapping frameworks, changing core stack
 2. **New dependencies not already approved** — we don't add bloat
 3. **Pricing changes** — any modification to plans, tiers, or billing logic
-4. **Domain or DNS changes** — anything touching gatetest.ai
+4. **Domain or DNS changes** — anything touching gatetest.io
 5. **Production deployments** — first-time deploy and any rollback
 6. **Stripe configuration** — webhook URLs, price IDs, plan structures
 7. **External API integrations** — adding new third-party services
@@ -134,7 +134,7 @@ The `HostBridge` refactor is pre-authorized, and both bridges (GitHub + Gluecron
 
 ### How the integration works
 
-GateTest remains a **standalone subscription product** on gatetest.ai. Protected platforms consume the same engine — either by cloning this repo at CI time via the generic `integrations/` template (Vapron does this, with its own SHA-pinning hardening layered on top), or via a bespoke integration that calls GateTest a different way (Gluecron's API webhook). Either is a valid protection mechanism; what matters is that the platform is actually gated, not that every platform uses an identical file. Ship a fix here → every protected platform that consumes the generic template picks it up on the next CI run; bespoke integrations (like Gluecron's webhook) need their own update if the API contract changes.
+GateTest remains a **standalone subscription product** on gatetest.io. Protected platforms consume the same engine — either by cloning this repo at CI time via the generic `integrations/` template (Vapron does this, with its own SHA-pinning hardening layered on top), or via a bespoke integration that calls GateTest a different way (Gluecron's API webhook). Either is a valid protection mechanism; what matters is that the platform is actually gated, not that every platform uses an identical file. Ship a fix here → every protected platform that consumes the generic template picks it up on the next CI run; bespoke integrations (like Gluecron's webhook) need their own update if the API contract changes.
 
 ### What lives in THIS repo (`crclabs-hq/gatetest`)
 
@@ -266,7 +266,7 @@ Build the most advanced, most aggressive, most beautiful QA testing platform eve
 
 - [ ] Meta title and description set
 - [ ] Open Graph tags set
-- [ ] Canonical URL set to gatetest.ai
+- [ ] Canonical URL set to gatetest.io
 - [ ] Structured data valid
 
 ### 12. Deployment
@@ -485,8 +485,47 @@ chronically-dismissed high-fire modules auto-soften below the block threshold. S
 **v1.60.0 (2026-07-25):** authenticated crawls — `--crawl-header` /
 `--crawl-cookie` / `--crawl-storage-state` (+ hosted `/api/web/scan` auth,
 same-origin-gated engine-side); self-serve Stripe billing portal
-(gatetest.ai/billing); npm publishing via OIDC trusted publishing (token-free).
+(gatetest.io/billing); npm publishing via OIDC trusted publishing (token-free).
 Date stamp last fully reconciled: 2026-07-11 (core-engine program: every-scan
 flywheel + false-positive control + entry-level CLI recap).
+
+### THE DOMAIN — gatetest.io (moved 2026-07-30)
+
+**The canonical domain is `gatetest.io`. It was `gatetest.ai`.** Craig decided to
+keep the GateTest name and move the TLD (`baretest.ai` was considered and
+rejected on the merits — do not re-open it). The move became urgent rather than
+cosmetic when `gatetest.ai` entered **registry redemption on 2026-07-29** and
+started returning NXDOMAIN; see Known Issue #93 in `docs/ROADMAP.md`.
+
+**Never write a `gatetest.io` literal in runtime code.** The domain is ONE
+environment variable, resolved in two places:
+
+| File | Used by |
+|---|---|
+| `website/app/lib/site-url.js` | the Next app (reads `NEXT_PUBLIC_BASE_URL` as a static member expression so it inlines into client bundles) |
+| `src/core/site-url.js` | the engine, CLI, MCP server, reporters (standalone — the npm package ships `src/` + `bin/` without `website/`) |
+
+Precedence: `NEXT_PUBLIC_BASE_URL` → `GATETEST_PUBLIC_BASE_URL` → default.
+`tests/site-url.test.js` fails the suite if the two copies drift, or if a
+literal reappears in a guarded file. Import `siteUrl()` / `badgeUrl()` /
+`botUserAgent()` / `apiBaseUrl()` / `FIXTURE_EMAIL` instead.
+
+**Two things deliberately did NOT move. Do not "fix" either without reading why:**
+
+1. **Every e-mail address is still `@gatetest.ai`** — `hello@`, `watchdog@` (the
+   Resend `From`), the bot commit identities. An ESP will not send for a domain
+   it has not verified, and an unverified sending domain fails **silently**
+   (rejected or spam-foldered) where a wrong URL fails visibly. Verify
+   `gatetest.io` in Resend and set up forwarding, THEN set
+   `GATETEST_SUPPORT_EMAIL` + `RESEND_FROM`.
+2. **Historical records were not rewritten** — `docs/HISTORY.md`, `docs/proofs/`,
+   `docs/benchmarks/`, captured scan reports, and dated code comments still say
+   `gatetest.ai` because that is what was true when they were written. Editing
+   them would falsify evidence, not migrate a domain.
+
+**The old domain must keep serving or 301'ing indefinitely**, because badge
+markdown pasted into customers' READMEs is a URL we can never edit. Retiring
+`.ai` turns every customer's build status into a broken image, and if it reaches
+pendingDelete someone else can serve images inside our customers' repos.
 
 **Full version-by-version changelog:** see `docs/HISTORY.md`.

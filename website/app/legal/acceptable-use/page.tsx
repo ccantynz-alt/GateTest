@@ -209,7 +209,7 @@ export default function AcceptableUse() {
             <h2 className="text-lg font-semibold text-foreground mb-2">11. Changes to This Policy</h2>
             <p>
               We may update this AUP from time to time. We will notify you of material changes
-              by posting a notice on gatetest.ai or by emailing you. Your continued use of the
+              by posting a notice on gatetest.io or by emailing you. Your continued use of the
               Service after the effective date of a revised AUP constitutes acceptance of the
               revised policy. If you disagree with a change, you may terminate your account in
               accordance with the Terms of Service.
@@ -236,7 +236,7 @@ export default function AcceptableUse() {
           </div>
           <div className="mt-6">
             <Link href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-              &larr; Back to gatetest.ai
+              &larr; Back to gatetest.io
             </Link>
           </div>
         </div>

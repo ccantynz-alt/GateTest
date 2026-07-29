@@ -115,6 +115,98 @@ describe('site-url — badge origin', () => {
   });
 });
 
+describe('site-url — engine and website copies must not drift', () => {
+  // There are deliberately TWO implementations: the website copy reads
+  // NEXT_PUBLIC_BASE_URL as a static member expression so Next.js can inline it
+  // into client bundles, and the engine copy must stand alone because the
+  // published npm package ships src/ and bin/ WITHOUT website/.
+  //
+  // Two copies of a decision is exactly how a domain move half-happens, so
+  // these tests are the thing that makes the duplication safe.
+  const web = require('../website/app/lib/site-url');
+  const engine = require('../src/core/site-url');
+
+  it('agrees on the default origin', () => {
+    assert.strictEqual(engine.DEFAULT_SITE_URL, web.DEFAULT_SITE_URL);
+  });
+
+  it('agrees on the legacy origin', () => {
+    assert.strictEqual(engine.LEGACY_SITE_URL, web.LEGACY_SITE_URL);
+  });
+
+  it('agrees on the resolved origin and host', () => {
+    assert.strictEqual(engine.SITE_URL, web.SITE_URL);
+    assert.strictEqual(engine.siteHost(), web.siteHost());
+  });
+
+  it('resolves every env shape identically', () => {
+    const cases = [
+      {},
+      { NEXT_PUBLIC_BASE_URL: 'https://a.example' },
+      { GATETEST_PUBLIC_BASE_URL: 'https://b.example' },
+      { NEXT_PUBLIC_BASE_URL: 'https://a.example', GATETEST_PUBLIC_BASE_URL: 'https://b.example' },
+      { NEXT_PUBLIC_BASE_URL: 'bare.example' },
+      { NEXT_PUBLIC_BASE_URL: 'https://trailing.example/' },
+      { NEXT_PUBLIC_BASE_URL: 'https://' },
+      { NEXT_PUBLIC_BASE_URL: '   ' },
+    ];
+    for (const env of cases) {
+      assert.strictEqual(
+        engine.resolveSiteUrl(env),
+        web.resolveSiteUrl(env),
+        `divergent resolution for ${JSON.stringify(env)}`,
+      );
+    }
+  });
+
+  it('normalises identically, including the rejection cases', () => {
+    for (const raw of [
+      'gatetest.io', 'https://gatetest.io/', 'http://localhost:3000',
+      'https://x.io/a/b?c=1#d', 'https://', '', '   ', undefined, null, 42,
+    ]) {
+      assert.strictEqual(
+        engine.normaliseOrigin(raw),
+        web.normaliseOrigin(raw),
+        `divergent normalisation for ${JSON.stringify(raw)}`,
+      );
+    }
+  });
+
+  it('agrees on the support address', () => {
+    assert.strictEqual(engine.SUPPORT_EMAIL, web.SUPPORT_EMAIL);
+  });
+});
+
+describe('site-url — the domain move', () => {
+  const web = require('../website/app/lib/site-url');
+
+  it('defaults to the .io origin', () => {
+    // The .ai domain went into registry redemption on 2026-07-29 and returns
+    // NXDOMAIN. Defaulting to it means defaulting to a name that does not
+    // resolve, which is why this assertion is worth pinning.
+    assert.strictEqual(web.DEFAULT_SITE_URL, 'https://gatetest.io');
+  });
+
+  it('keeps the support address on the legacy domain ON PURPOSE', () => {
+    // Do NOT "fix" this to match the site origin without first verifying
+    // gatetest.io in the Resend dashboard. An unverified sending domain is a
+    // silent failure: mail is rejected or spam-foldered and nobody notices.
+    // A wrong URL is visible; a wrong MX is not.
+    assert.ok(
+      web.SUPPORT_EMAIL.endsWith('@gatetest.ai'),
+      'support address moved without an accompanying MX/Resend verification step',
+    );
+  });
+
+  it('lets one env var move every URL', () => {
+    assert.strictEqual(
+      web.resolveSiteUrl({ NEXT_PUBLIC_BASE_URL: 'https://gatetest.ai' }),
+      'https://gatetest.ai',
+      'the move must stay reversible from the environment alone',
+    );
+  });
+});
+
 describe('site-url — no new hardcoded domains', () => {
   // Scoped to the files where a wrong domain breaks a paying customer:
   // payment redirects, OAuth callbacks, and the snippets customers paste

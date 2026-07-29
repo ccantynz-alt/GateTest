@@ -28,7 +28,7 @@ export default function Terms() {
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">1. Agreement to Terms</h2>
             <p>
-              By accessing or using GateTest (&quot;Service&quot;), including the website at gatetest.ai,
+              By accessing or using GateTest (&quot;Service&quot;), including the website at gatetest.io,
               the GateTest GitHub App, the GateTest CLI tool, and any associated APIs, you
               (&quot;Customer&quot;, &quot;you&quot;, &quot;your&quot;) agree to be bound by these Terms
               of Service (&quot;Terms&quot;). If you do not agree to these Terms, do not use the Service.
@@ -833,7 +833,7 @@ export default function Terms() {
 
         <div className="mt-12">
           <Link href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-            &larr; Back to gatetest.ai
+            &larr; Back to gatetest.io
           </Link>
         </div>
       </div>

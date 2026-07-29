@@ -59,10 +59,10 @@ test("isValidKey: enforces protocol shape (8-128 alphanumeric+hyphen)", () => {
 
 test("partitionByOriginValid: only allows our host on HTTPS", () => {
   const r = partitionByOriginValid([
-    "https://gatetest.ai/",
-    "https://gatetest.ai/modules",
+    "https://gatetest.io/",
+    "https://gatetest.io/modules",
     "https://evil.example.com/inject",
-    "http://gatetest.ai/insecure",
+    "http://gatetest.io/insecure",
     "not a url",
     null,
   ]);
@@ -215,16 +215,16 @@ test("readModuleNamesFromSource: parses module names out of the live TS file", (
 
 test("buildAllUrls: includes home, modules index, all comparisons, all for, all legal", () => {
   const urls = buildAllUrls();
-  assert.ok(urls.includes("https://gatetest.ai"));
-  assert.ok(urls.includes("https://gatetest.ai/modules"));
+  assert.ok(urls.includes("https://gatetest.io"));
+  assert.ok(urls.includes("https://gatetest.io/modules"));
   for (const slug of COMPARISON_SLUGS) {
-    assert.ok(urls.includes(`https://gatetest.ai/compare/${slug}`));
+    assert.ok(urls.includes(`https://gatetest.io/compare/${slug}`));
   }
   for (const slug of FOR_SLUGS) {
-    assert.ok(urls.includes(`https://gatetest.ai/for/${slug}`));
+    assert.ok(urls.includes(`https://gatetest.io/for/${slug}`));
   }
   for (const slug of LEGAL_SLUGS) {
-    assert.ok(urls.includes(`https://gatetest.ai/legal/${slug}`));
+    assert.ok(urls.includes(`https://gatetest.io/legal/${slug}`));
   }
 });
 
@@ -240,7 +240,7 @@ test("buildAllUrls: every URL is HTTPS on the site origin (no leaks)", () => {
 
 test("buildAllUrls: emits a URL for every module slug (deduped)", () => {
   const urls = buildAllUrls();
-  const moduleUrls = urls.filter((u) => u.startsWith("https://gatetest.ai/modules/"));
+  const moduleUrls = urls.filter((u) => u.startsWith("https://gatetest.io/modules/"));
   // Sanity — should hit the full module set + the index
   assert.ok(moduleUrls.length >= 100, `expected >= 100 module URLs, got ${moduleUrls.length}`);
   // No duplicates

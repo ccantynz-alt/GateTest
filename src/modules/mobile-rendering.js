@@ -25,6 +25,7 @@
 
 const path = require('path');
 const BaseModule = require('./base-module');
+const { botUserAgent } = require('../core/site-url');
 
 const DEFAULT_VIEWPORTS = [
   { name: 'iphone', width: 390, height: 844 },
@@ -142,7 +143,7 @@ class MobileRenderingModule extends BaseModule {
   async _checkOne({ browser, baseUrl, route, viewport, minFontPx, waitMs, timeout, stats }) {
     const context = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) MobileRendering',
+      userAgent: botUserAgent('MobileRendering'),
     });
     const page = await context.newPage();
 

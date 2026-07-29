@@ -66,7 +66,7 @@ LICENSE → MIT (not Apache-2.0)
 | Gluecron.com used | `HomeTrust.tsx:80-87`, `README.md:225`, `listing-draft.md:74` | Same — Craig-owned, "INTEGRATING" | YES — same caveat |
 | MIT license | `README.md:11,213,252`, `legal/refunds:202`, `legal/terms:249` | LICENSE = MIT | YES |
 | Apache-2.0 license | `HomeCode.tsx:118` | LICENSE = MIT | NO — drift |
-| "gatetest.io" canonical OG | `layout.tsx:47` (openGraph.url) | site is gatetest.ai | NO — wrong TLD typo |
+| "gatetest.io" canonical OG | `layout.tsx:47` (openGraph.url) | site is gatetest.io | NO — wrong TLD typo |
 | "v1.42 · 91 modules live" badge | `Hero.tsx:60` | version in `package.json` = 1.0.0; CLAUDE.md mentions v1.41.0/v1.42.0 | UNVERIFIED — v1.42 string is from CLAUDE.md but `package.json` says 1.0.0 |
 | "claude-sonnet-4-20250514" | `CLAUDE.md` (internal — out of scope) | n/a | n/a |
 | "GateTestHQ" GitHub App name | `GITHUB-APP-SETUP.md:11` | external check needed | UNVERIFIED |
@@ -512,10 +512,10 @@ When a journalist or HN crawler reads the OG card on a link share, they see "67 
 47: url: "https://gatetest.io",
 ```
 
-**Risk:** Wrong TLD — site is `gatetest.ai`. OG renderers will resolve the wrong URL, potentially exposing a typosquat opportunity. If `gatetest.io` exists and shows different content, we're inadvertently driving share-link traffic to it.
+**Risk:** Wrong TLD — site is `gatetest.io`. OG renderers will resolve the wrong URL, potentially exposing a typosquat opportunity. If `gatetest.io` exists and shows different content, we're inadvertently driving share-link traffic to it.
 
 **Suggested redline:**
-> Change to `"https://gatetest.ai"`.
+> Change to `"https://gatetest.io"`.
 
 ---
 
@@ -885,10 +885,10 @@ SonarQube® and Snyk® are registered marks.
 
 ---
 
-### 5.3 `docs/marketplace/listing-draft.md:113` — "Live chat at https://gatetest.ai. No email support intake (per Craig's directive)."
+### 5.3 `docs/marketplace/listing-draft.md:113` — "Live chat at https://gatetest.io. No email support intake (per Craig's directive)."
 
 ```
-113: Live chat at https://gatetest.ai. No email support intake (per Craig's directive).
+113: Live chat at https://gatetest.io. No email support intake (per Craig's directive).
 ```
 
 Conflicts with the 20+ `hello@gatetest.ai` mentions elsewhere. Pick one model and apply it consistently.
@@ -907,7 +907,7 @@ This file's voice is "internal investor pitch" (revenue math, $5K MRR targets, "
 
 ---
 
-### 5.6 README.md mentions "gatetest.ai/web" and "gatetest.ai/wp" — verify both routes work
+### 5.6 README.md mentions "gatetest.io/web" and "gatetest.io/wp" — verify both routes work
 
 Both routes exist at `website/app/web/page.tsx` and `website/app/wp/page.tsx` — verified. Good.
 

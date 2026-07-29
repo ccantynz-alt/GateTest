@@ -198,7 +198,7 @@ describe('insertFingerprint', () => {
     );
   });
 
-  it('defaults host to gatetest.ai when not supplied', async () => {
+  it('defaults host to gatetest.io when not supplied', async () => {
     const sql = makeFakeSql([[{ id: 1 }]]);
     await insertFingerprint({
       sql,
@@ -208,7 +208,7 @@ describe('insertFingerprint', () => {
       moduleFindings: {},
       fingerprintSignature: 'sig',
     });
-    assert.ok(sql.calls[0].values.includes('gatetest.ai'));
+    assert.ok(sql.calls[0].values.includes('gatetest.io'));
   });
 });
 

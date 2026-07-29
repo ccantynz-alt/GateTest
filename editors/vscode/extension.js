@@ -9,7 +9,7 @@
  * engine, same as `gatetest --suite quick` on the CLI.
  *
  * Deeper scans (all 120 modules, AI code review, auto-fix PRs) are a
- * separate purchase at gatetest.ai — this extension does not attempt to
+ * separate purchase at gatetest.io — this extension does not attempt to
  * replicate that; it's the free tier's IDE-native surface, matching what's
  * already true of the GitHub App.
  */

@@ -28,7 +28,7 @@
 | $399 tier name | **Forensic** | Renamed from "Nuclear" 2026-06-02. |
 | npm package | **Published** ✅ | `npm view @gatetest/cli version` → live (currently 1.58.1). Note the package has two bins (gatetest, gatetest-mcp), so plain `npx @gatetest/cli` fails with "could not determine executable to run" — verified 2026-07-19. Use `npx -p @gatetest/cli gatetest --suite quick ./` in the post instead. |
 | GitHub Marketplace | **Rejected 2026-05-14, resubmitting free-only** ⭐ | Do not claim "on the Marketplace" until it's actually approved — check `github.com/organizations/crclabs-hq/settings/apps/gatetest-hq` for current status before posting. Install the Action by ref or `npx -p @gatetest/cli gatetest` until then. |
-| gatetest.ai live + scan works ⭐ | verify in incognito before posting | |
+| gatetest.io live + scan works ⭐ | verify in incognito before posting | |
 | Stripe test checkout works ⭐ | verify with 4242 4242 4242 4242 before posting | |
 
 ---
@@ -44,7 +44,7 @@ badly to that even when the Bible loves it).
 
 ## URL to submit
 
-`https://gatetest.ai` — the website is the demo. The repo link goes in the body.
+`https://gatetest.io` — the website is the demo. The repo link goes in the body.
 
 ## Body (copy-paste ready)
 
@@ -60,7 +60,7 @@ to open a pull request that fixes what it found. You review and merge; it
 never auto-merges. Every fix passes a syntax gate and a re-scan gate
 before the PR opens.
 
-Try it free, no signup, no install: https://gatetest.ai (paste a repo or
+Try it free, no signup, no install: https://gatetest.io (paste a repo or
 a live URL).
 
 Run the CLI locally (MIT-licensed, free):
@@ -154,7 +154,7 @@ Marketplace listing isn't up yet — use npx or the Action in the meantime.
 
 ## Launch-hour checklist
 
-1. ⭐ `https://gatetest.ai` loads and a Quick scan completes, in incognito,
+1. ⭐ `https://gatetest.io` loads and a Quick scan completes, in incognito,
    on desktop **and** phone.
 2. ⭐ One real Stripe checkout end-to-end with `4242 4242 4242 4242` reaches
    a result.

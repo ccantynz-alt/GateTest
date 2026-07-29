@@ -1,14 +1,14 @@
-# GateTest website deploy — gatetest.ai on box 161
+# GateTest website deploy — gatetest.io on box 161
 
-Deployed by Jarvis session 50, 2026-07-08. Companion to `JARVIS-MCP-DEPLOY.md` (mcp.gatetest.ai).
+Deployed by Jarvis session 50, 2026-07-08. Companion to `JARVIS-MCP-DEPLOY.md` (mcp.gatetest.io).
 Implements the two-box-estate-model (Craig, 2026-07-08): box 161 hosts and serves the web pages;
 box 158 (Vapron, 149.28.119.158) provides backend services (email/SMS/storage/AI) over HTTPS only.
-Never SSH between boxes. DNS follows hosting: `gatetest.ai` A → 66.42.121.161, never → 158.
+Never SSH between boxes. DNS follows hosting: `gatetest.io` A → 66.42.121.161, never → 158.
 
 ## Topology
 
 ```
-Cloudflare DNS (gatetest.ai, www → A 66.42.121.161, DNS-only)
+Cloudflare DNS (gatetest.io, www → A 66.42.121.161, DNS-only)
   → coolify-proxy (Traefik v3.6 container, owns :80/:443 on this box)
       file-provider route: /data/coolify/proxy/dynamic/gatetest-web.yaml
   → http://10.0.1.1:3000  (host gateway IP on the `coolify` docker network)
@@ -17,7 +17,7 @@ Cloudflare DNS (gatetest.ai, www → A 66.42.121.161, DNS-only)
 
 - **Front-door decision (deliberate, per onboarding brief):** written doctrine mentioned a
   bun-gateway owning 80/443, but Traefik (`coolify-proxy`) is what actually listens and already
-  serves gluecron.com and mcp.gatetest.ai. Traefik serves gatetest.ai. Revisit only as part of a
+  serves gluecron.com and mcp.gatetest.io. Traefik serves gatetest.io. Revisit only as part of a
   planned front-door migration (Vapron/other) — swing the route, don't run two owners of :80/:443.
 - **Bind address:** the app binds `10.0.1.1:3000` only (`-H 10.0.1.1`). Literal 127.0.0.1-only is
   impossible here — Traefik runs in a container and cannot reach host loopback. 10.0.1.1 is not
@@ -26,7 +26,7 @@ Cloudflare DNS (gatetest.ai, www → A 66.42.121.161, DNS-only)
   `gatetest-web: traefik->host service`) — same pattern as the MCP rule for :8787. Without it,
   Traefik → host times out and the site 504s.
 - **TLS:** Traefik ACME (`certResolver: letsencrypt`, HTTP-01), cert in
-  `/data/coolify/proxy/acme.json`, SANs `gatetest.ai` + `www.gatetest.ai`. Auto-renews.
+  `/data/coolify/proxy/acme.json`, SANs `gatetest.io` + `www.gatetest.io`. Auto-renews.
 
 ## Pieces
 
@@ -44,7 +44,7 @@ Cloudflare DNS (gatetest.ai, www → A 66.42.121.161, DNS-only)
 cd /opt/gatetest && git pull
 cd website && npm ci && npm run build     # NEXT_PUBLIC_* vars bake in at build time
 systemctl restart gatetest-web
-curl -s -o /dev/null -w '%{http_code}' https://gatetest.ai/   # expect 200
+curl -s -o /dev/null -w '%{http_code}' https://gatetest.io/   # expect 200
 ```
 
 ## Vapron backend wiring (strict — old providers being cancelled)
@@ -69,11 +69,11 @@ Vercel — schedule replacements (systemd timers or Vapron) when those features 
 ## Verify (Rule 2 artifacts, all green 2026-07-08)
 
 ```
-https://gatetest.ai/        → 200, LE cert (issuer C=US O=Let's Encrypt)
-https://www.gatetest.ai/    → 200
-http://gatetest.ai/         → 301 → https
+https://gatetest.io/        → 200, LE cert (issuer C=US O=Let's Encrypt)
+https://www.gatetest.io/    → 200
+http://gatetest.io/         → 301 → https
 curl 66.42.121.161:3000     → unreachable (bind + ufw)
-co-tenants: https://gluecron.com 200 · mcp.gatetest.ai app answering (404 on /, 405 on GET /mcp — normal for POST-only MCP endpoint)
+co-tenants: https://gluecron.com 200 · mcp.gatetest.io app answering (404 on /, 405 on GET /mcp — normal for POST-only MCP endpoint)
 systemctl is-active gatetest-web → active, survives restart
 ```
 
@@ -81,10 +81,10 @@ systemctl is-active gatetest-web → active, survives restart
 
 `/opt/gatetest` had drifted to commit `b6a9f85` (2026-07-08) while `origin/main` moved on ~110
 commits — nobody had run the deploy procedure above since the initial 2026-07-08 setup. Symptom:
-`gatetest.ai/` served a cached "Page Not Found" page (200 status, `s-maxage=31536000` — a stale
+`gatetest.io/` served a cached "Page Not Found" page (200 status, `s-maxage=31536000` — a stale
 Next.js response cached for a year), `/api/status`, `/api/mcp`, `/icon.png` all 404.
 
-Also found: the live DNS zone had a **second** `A gatetest.ai → 149.28.119.158` record (and one
+Also found: the live DNS zone had a **second** `A gatetest.io → 149.28.119.158` record (and one
 for `www`) alongside the correct `66.42.121.161` one — direct violation of this doc's own "DNS
 follows hosting... never → 158" rule above. Port 443 on 158 isn't listening at all (it's a
 backend-only box per the two-box model), so any client whose DNS resolver picked that IP in the

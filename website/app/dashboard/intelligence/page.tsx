@@ -322,7 +322,7 @@ export default function IntelligenceDashboard() {
             )}
 
             <p className="text-center text-xs text-muted pt-4">
-              Powered by the GateTest cross-repo intelligence brain · gatetest.ai
+              Powered by the GateTest cross-repo intelligence brain · gatetest.io
             </p>
           </div>
         )}

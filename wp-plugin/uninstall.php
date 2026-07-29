@@ -5,9 +5,9 @@
  * Runs when the user clicks "Delete" on the plugin in the WordPress admin.
  * Cleans up all plugin-created options + transients + scheduled events.
  *
- * NOTE: scans are tracked on gatetest.ai's side (linked to the customer's
+ * NOTE: scans are tracked on gatetest.io's side (linked to the customer's
  * API key); uninstalling the plugin does NOT delete the customer's account
- * or scan history. Customer manages that at gatetest.ai/account.
+ * or scan history. Customer manages that at gatetest.io/account.
  */
 
 if (!defined('WP_UNINSTALL_PLUGIN')) {

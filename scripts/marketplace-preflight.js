@@ -20,7 +20,7 @@
  *   - The module count in the listing is static, manually-pasted copy, and
  *     this repo has a documented history of that number going stale.
  *
- * Usage:  node scripts/marketplace-preflight.js [--base https://gatetest.ai]
+ * Usage:  node scripts/marketplace-preflight.js [--base https://gatetest.io]
  * Exit 0 = safe to submit. Exit 1 = at least one BLOCKER.
  *
  * `gh`-dependent checks degrade to SKIP (not failure) when gh is unavailable
@@ -36,7 +36,7 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
 const BASE = (() => {
   const i = process.argv.indexOf('--base');
-  return i > -1 && process.argv[i + 1] ? process.argv[i + 1].replace(/\/$/, '') : 'https://gatetest.ai';
+  return i > -1 && process.argv[i + 1] ? process.argv[i + 1].replace(/\/$/, '') : 'https://gatetest.io';
 })();
 
 const APP_SLUG = 'gatetesthq';

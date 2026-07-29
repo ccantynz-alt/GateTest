@@ -7,7 +7,7 @@ yellow squiggles on the offending line, entries in the Problems panel.
 
 This is the free tier's IDE-native surface — it does not attempt to
 replicate the paid 120-module scan, AI code review, or auto-fix PRs, which
-remain a separate purchase at [gatetest.ai](https://gatetest.ai). See
+remain a separate purchase at [gatetest.io](https://gatetest.io). See
 `docs/COMPETITIVE-BENCHMARK.md` for what the full scan catches that this
 free quick gate doesn't.
 

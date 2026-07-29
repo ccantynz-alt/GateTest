@@ -271,12 +271,12 @@ describe('response shape', () => {
   });
 
   it('badge URL contains "pass" when passed', () => {
-    const badge = `https://gatetest.ai/badge/${true ? 'pass' : 'fail'}`;
+    const badge = `https://gatetest.io/badge/${true ? 'pass' : 'fail'}`;
     assert.ok(badge.includes('pass'));
   });
 
   it('badge URL contains "fail" when not passed', () => {
-    const badge = `https://gatetest.ai/badge/${false ? 'pass' : 'fail'}`;
+    const badge = `https://gatetest.io/badge/${false ? 'pass' : 'fail'}`;
     assert.ok(badge.includes('fail'));
   });
 });

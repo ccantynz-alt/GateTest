@@ -7,7 +7,7 @@
 <!-- Our own live GateTest grade — the flagship example of the embeddable
      badge at /badge/:owner/:repo (dynamic SVG, cached 5 min, "not scanned"
      fallback when no scan is on record yet — see website/app/badge). -->
-[![GateTest](https://gatetest.ai/badge/crclabs-hq/GateTest)](https://gatetest.ai)
+[![GateTest](https://gatetest.io/badge/crclabs-hq/GateTest)](https://gatetest.io)
 [![npm](https://img.shields.io/npm/v/@gatetest/cli.svg)](https://www.npmjs.com/package/@gatetest/cli)
 [![CI](https://github.com/crclabs-hq/GateTest/actions/workflows/ci.yml/badge.svg)](https://github.com/crclabs-hq/GateTest/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -143,7 +143,7 @@ gatetest --crawl https://app.example.com --crawl-cookie "session=${SESSION}"
 gatetest --crawl https://app.example.com --crawl-storage-state state.json
 ```
 
-Session material is only ever sent to the target's own origin — never to third-party links, assets, or cross-origin redirects. Without a session, a crawl that hits a login wall tells you exactly which flag to add rather than silently skipping the protected pages. The hosted scanner at [gatetest.ai](https://gatetest.ai) accepts the same session auth.
+Session material is only ever sent to the target's own origin — never to third-party links, assets, or cross-origin redirects. Without a session, a crawl that hits a login wall tells you exactly which flag to add rather than silently skipping the protected pages. The hosted scanner at [gatetest.io](https://gatetest.io) accepts the same session auth.
 
 ### Claude Code / MCP — give Claude eyes, ears & hands
 
@@ -167,7 +167,7 @@ Works with Claude Code, Cursor, Windsurf, Continue, and Cline. See [`packages/mc
 
 ### Website — no install at all
 
-Visit [gatetest.ai/web](https://gatetest.ai/web) and paste any URL. You get a free preview and a paid full report. For WordPress sites use [gatetest.ai/wp](https://gatetest.ai/wp).
+Visit [gatetest.io/web](https://gatetest.io/web) and paste any URL. You get a free preview and a paid full report. For WordPress sites use [gatetest.io/wp](https://gatetest.io/wp).
 
 ### Replay a failing CI run locally
 
@@ -266,13 +266,13 @@ One config, one bill, one gate decision. Twelve-plus tools dissolve into single 
 | _(none — no static tool exists)_           | `redos`, `moneyFloat`, `logPii`, `tlsSecurity`     |
 | _(none — runtime profilers only)_          | `resourceLeak`, `raceCondition`, `retryHygiene`    |
 
-**Twelve-plus tools. One config. One bill.** Full module catalogue: run `node bin/gatetest.js --list` or read it on [gatetest.ai](https://gatetest.ai).
+**Twelve-plus tools. One config. One bill.** Full module catalogue: run `node bin/gatetest.js --list` or read it on [gatetest.io](https://gatetest.io).
 
 ---
 
 ## Tiers and pricing
 
-Scan tiers are one-time payments via Stripe at checkout — no auto-renew. Continuous and MCP are monthly subscriptions; manage or cancel them yourself at [gatetest.ai/billing](https://gatetest.ai/billing) (enter your checkout email, get a secure Stripe portal link by email — update your card, view invoices, change plan, or cancel). Refunds only at our discretion for scans that failed to start or crashed mid-way without producing a report (contact `hello@gatetest.ai`).
+Scan tiers are one-time payments via Stripe at checkout — no auto-renew. Continuous and MCP are monthly subscriptions; manage or cancel them yourself at [gatetest.io/billing](https://gatetest.io/billing) (enter your checkout email, get a secure Stripe portal link by email — update your card, view invoices, change plan, or cancel). Refunds only at our discretion for scans that failed to start or crashed mid-way without producing a report (contact `hello@gatetest.ai`).
 
 | Tier              | Price   | What you get                                                                                                                                       |
 | ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -283,7 +283,7 @@ Scan tiers are one-time payments via Stripe at checkout — no auto-renew. Conti
 | **Continuous**    | $49/mo  | Scan every push via the GitHub App. Unlimited deterministic push scans plus a monthly Claude AI-review allowance. Fix PRs are a per-scan upsell.    |
 | **MCP**           | $29/mo  | The **hosted** remote MCP endpoint — use GateTest from claude.ai web/mobile or locked-down machines, plus hosted scan history (`gtmcp_` key delivered by email after checkout). The **local** MCP server (`npx @gatetest/mcp-server`) is 100% free — every tool runs on your machine with your keys. |
 
-Live prices and Stripe checkout at [gatetest.ai](https://gatetest.ai).
+Live prices and Stripe checkout at [gatetest.io](https://gatetest.io).
 
 ---
 
@@ -302,7 +302,7 @@ The full Known Issues table (with severity and status) lives in [CLAUDE.md](CLAU
 
 **Static engine.** 120 modules, every one extending `BaseModule`. Each module is a self-contained scanner that emits checks at three severity levels (error blocks the gate, warning reports, info is informational). The runner is `EventEmitter`-based, supports parallel execution, diff-mode (`--diff` scans only git-changed files), watch mode, and five output formats (Console, JSON, HTML, SARIF for the GitHub Security tab, JUnit XML for any CI). The gate has four small runtime dependencies (`acorn`, `pngjs`, `pixelmatch`, and the MCP SDK) — `node bin/gatetest.js --list` runs anywhere Node 20+ runs.
 
-**Website and payments.** [gatetest.ai](https://gatetest.ai) is Next.js 16 with the App Router, Tailwind 4, and Stripe in per-scan upfront-charge mode. One-time payment per scan at checkout — no subscription, no auto-renew, no hold-then-capture flow. All scan state is persisted in Stripe metadata so the serverless functions stay stateless across requests — there is no shared in-memory state and no webhook is required for the critical user flow. The scan executes inside the function response and reports back directly.
+**Website and payments.** [gatetest.io](https://gatetest.io) is Next.js 16 with the App Router, Tailwind 4, and Stripe in per-scan upfront-charge mode. One-time payment per scan at checkout — no subscription, no auto-renew, no hold-then-capture flow. All scan state is persisted in Stripe metadata so the serverless functions stay stateless across requests — there is no shared in-memory state and no webhook is required for the critical user flow. The scan executes inside the function response and reports back directly.
 
 **AI layer.** Claude (Anthropic). On the GitHub Action the customer brings their own `ANTHROPIC_API_KEY` and pays Anthropic directly. On the website the key is managed and the cost is folded into the tier price. Every Claude success is distilled into a recipe by the flywheel orchestrator (see [`lib/`](lib/) and the AI CI-fixer at [`scripts/ai-ci-fixer.js`](scripts/ai-ci-fixer.js)) so subsequent runs on the same pattern are deterministic and free.
 
@@ -348,6 +348,6 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 <sub>
-GateTest is built and maintained at <a href="https://gatetest.ai">gatetest.ai</a>.
+GateTest is built and maintained at <a href="https://gatetest.io">gatetest.io</a>.
 Talk to the team via the chat on the site. File bugs at <a href="https://github.com/crclabs-hq/GateTest/issues">GitHub Issues</a>.
 </sub>

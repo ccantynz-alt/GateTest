@@ -48,9 +48,9 @@ test("glossary: catalogue, all-urls, and sitemap stay in lockstep", () => {
   assert.deepEqual([...cat].sort(), [...GLOSSARY_SLUGS].sort(), "all-urls GLOSSARY_SLUGS drifted from catalogue");
   for (const slug of cat) {
     assert.ok(sitemap.includes(`/glossary/`), "sitemap missing glossary section");
-    assert.ok(allUrls.includes(`https://gatetest.ai/glossary/${slug}`), `all-urls missing /glossary/${slug}`);
+    assert.ok(allUrls.includes(`https://gatetest.io/glossary/${slug}`), `all-urls missing /glossary/${slug}`);
   }
-  assert.ok(allUrls.includes("https://gatetest.ai/glossary"), "all-urls missing glossary index");
+  assert.ok(allUrls.includes("https://gatetest.io/glossary"), "all-urls missing glossary index");
 });
 
 test("glossary detail page: DefinedTerm + FAQPage + BreadcrumbList + 404", () => {
@@ -78,7 +78,7 @@ test("use-cases: catalogue, all-urls, and sitemap stay in lockstep", () => {
   assert.ok(cat.length >= 7, `expected >= 7 use cases, got ${cat.length}`);
   assert.deepEqual([...cat].sort(), [...USE_CASE_SLUGS].sort(), "all-urls USE_CASE_SLUGS drifted from catalogue");
   for (const slug of cat) {
-    assert.ok(allUrls.includes(`https://gatetest.ai/use-cases/${slug}`), `all-urls missing /use-cases/${slug}`);
+    assert.ok(allUrls.includes(`https://gatetest.io/use-cases/${slug}`), `all-urls missing /use-cases/${slug}`);
   }
   assert.ok(sitemap.includes("/use-cases/"), "sitemap missing use-cases section");
 });
@@ -106,7 +106,7 @@ test("blog: catalogue, all-urls, and sitemap stay in lockstep", () => {
   assert.ok(cat.length >= 3, `expected >= 3 posts, got ${cat.length}`);
   assert.deepEqual([...cat].sort(), [...BLOG_SLUGS].sort(), "all-urls BLOG_SLUGS drifted from catalogue");
   for (const slug of cat) {
-    assert.ok(allUrls.includes(`https://gatetest.ai/blog/${slug}`), `all-urls missing /blog/${slug}`);
+    assert.ok(allUrls.includes(`https://gatetest.io/blog/${slug}`), `all-urls missing /blog/${slug}`);
   }
   assert.ok(sitemap.includes("/blog/"), "sitemap missing blog section");
 });
@@ -134,7 +134,7 @@ test("compare hub index exists with canonical + CollectionPage + in sitemap", ()
   assert.match(idx, /path:\s*"\/compare"/);
   assert.match(idx, /collectionPageSchema/);
   assert.ok(sitemap.includes("/compare"), "sitemap missing /compare hub");
-  assert.ok(allUrls.includes("https://gatetest.ai/compare"), "all-urls missing /compare");
+  assert.ok(allUrls.includes("https://gatetest.io/compare"), "all-urls missing /compare");
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -145,7 +145,14 @@ test("robots: opts in named AI crawlers and points at the sitemap", () => {
   for (const agent of ["GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"]) {
     assert.ok(robots.includes(agent), `robots missing AI crawler ${agent}`);
   }
-  assert.match(robots, /sitemap:\s*"https:\/\/gatetest\.ai\/sitemap\.xml"/);
+  // This used to assert a hardcoded "https://gatetest.ai/sitemap.xml" literal,
+  // which is precisely what made the domain move risky: robots.txt could go on
+  // advertising a host the pages no longer serve on, and the test would agree.
+  // Assert the WIRING instead, plus that the resolver yields a sane absolute URL.
+  assert.match(robots, /sitemap:\s*siteUrl\(\s*"\/sitemap\.xml"\s*\)/, "robots must derive the sitemap URL");
+  assert.match(robots, /host:\s*SITE_URL/, "robots must derive the host");
+  const { siteUrl } = require("../website/app/lib/site-url");
+  assert.match(siteUrl("/sitemap.xml"), /^https:\/\/[^/]+\/sitemap\.xml$/);
   // sensitive surfaces stay out of the index
   for (const dis of ["/api/", "/admin", "/dashboard"]) {
     assert.ok(robots.includes(dis), `robots should disallow ${dis}`);

@@ -53,6 +53,6 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         run: |
           sleep 5
-          status=$(curl -s --max-time 20 https://gatetest.ai/api/status || true)
+          status=$(curl -s --max-time 20 https://gatetest.io/api/status || true)
           echo "$status" | head -c 400
           echo "$status" | grep -q '"ready"' || { echo "::error::/api/status did not return JSON — deploy may not have taken"; exit 1; }

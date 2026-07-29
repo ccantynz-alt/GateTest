@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
   if (slackWebhook && !result.error) {
     void notifyScanComplete(payload, {
       webhookUrl: slackWebhook,
-      scanUrl: repoUrl ? `${process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai"}/scan/status?repo=${encodeURIComponent(repoUrl)}` : undefined,
+      scanUrl: repoUrl ? `${process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io"}/scan/status?repo=${encodeURIComponent(repoUrl)}` : undefined,
     }).catch(() => { /* best-effort — slack errors never surface to the API caller */ });
   }
 

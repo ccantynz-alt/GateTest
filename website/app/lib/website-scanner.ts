@@ -127,7 +127,7 @@ export async function scanWebsite(rawUrl: string): Promise<WebScanResult> {
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        "User-Agent": "GateTest/1.0 Site Scanner (gatetest.ai)",
+        "User-Agent": "GateTest/1.0 Site Scanner (gatetest.io)",
         "Accept": "text/html,application/xhtml+xml",
       },
     });

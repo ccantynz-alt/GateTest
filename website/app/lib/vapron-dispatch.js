@@ -20,7 +20,7 @@
  *         scanId: "scn_xxx",         // links results back to the right scan
  *         targetUrl: "https://...",
  *         suite: "web" | "wp",
- *         callbackUrl: "https://gatetest.ai/api/web/scan/runtime-callback",
+ *         callbackUrl: "https://gatetest.io/api/web/scan/runtime-callback",
  *         deadlineSec: 60
  *       }
  *     response:

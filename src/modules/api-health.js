@@ -56,6 +56,7 @@ const {
   discoverFromHtml,
   mergeDiscoveries,
 } = require('../core/endpoint-discovery');
+const { FIXTURE_EMAIL, siteUrl } = require('../core/site-url');
 
 const DEFAULT_MAX_ENDPOINTS = 30;
 const DEFAULT_SLOW_MS = 5000;
@@ -63,8 +64,8 @@ const DEFAULT_CRITICAL_MS = 15000;
 
 function inferBenignValue(paramName) {
   const n = (paramName || '').toLowerCase();
-  if (/email/.test(n)) return 'test@gatetest.ai';
-  if (/url|link|redirect|callback|return/.test(n)) return 'https://gatetest.ai';
+  if (/email/.test(n)) return FIXTURE_EMAIL;
+  if (/url|link|redirect|callback|return/.test(n)) return siteUrl();
   if (/id\b|count|page|limit|number|age|qty|quantity/.test(n)) return '1';
   if (/phone|tel/.test(n)) return '+15555550100';
   if (/password|pwd|pass\b/.test(n)) return 'GateTest-Probe-1!';

@@ -364,7 +364,7 @@ function renderArchitectureComment(annotationResult) {
   const sampleNote = annotationResult.sampleFiles && annotationResult.sampleFiles.length > 0
     ? `\n\n<sub>Sampled ${annotationResult.sampleFiles.length} of ${annotationResult.summary?.sourceFiles ?? '?'} source files for this analysis (largest first).</sub>`
     : '';
-  const footer = `\n\n---\n\n<sub>Architecture observations are part of the <a href="https://gatetest.ai">GateTest $199 Scan + Fix</a> tier. This report is INFORMATIONAL — GateTest never auto-refactors your architecture. Your senior engineer decides whether to act on these observations.</sub>${sampleNote}`;
+  const footer = `\n\n---\n\n<sub>Architecture observations are part of the <a href="https://gatetest.io">GateTest $199 Scan + Fix</a> tier. This report is INFORMATIONAL — GateTest never auto-refactors your architecture. Your senior engineer decides whether to act on these observations.</sub>${sampleNote}`;
   return annotationResult.body + footer;
 }
 

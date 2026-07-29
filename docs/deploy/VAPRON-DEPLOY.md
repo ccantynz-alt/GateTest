@@ -1,4 +1,4 @@
-# Deploying gatetest.ai to Vapron
+# Deploying gatetest.io to Vapron
 
 > **Why this exists:** the live site spent days serving a stale build —
 > "118 modules", "Sonnet 4.6", "18 tools" — while `main` was already correct.
@@ -43,7 +43,7 @@ missing. The site returns `503` until every REQUIRED var is set.
 | `SESSION_SECRET` | customer + admin session encryption |
 | `STRIPE_SECRET_KEY` | checkout / payments (use `sk_live_` in production) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe.js on the checkout page |
-| `NEXT_PUBLIC_BASE_URL` | `https://gatetest.ai` — redirect + callback URLs |
+| `NEXT_PUBLIC_BASE_URL` | `https://gatetest.io` — redirect + callback URLs |
 
 **Important (features silently degrade without them):**
 | Var | Purpose |
@@ -67,9 +67,9 @@ set, and each needs a redirect URI registered in that provider's console.
 
 | Var | Provider | Redirect URI to register in the provider console |
 |---|---|---|
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub | `https://gatetest.ai/api/auth/callback` |
-| `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab | `https://gatetest.ai/api/auth/gitlab/callback` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google | `https://gatetest.ai/api/auth/google/callback` |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub | `https://gatetest.io/api/auth/callback` |
+| `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab | `https://gatetest.io/api/auth/gitlab/callback` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google | `https://gatetest.io/api/auth/google/callback` |
 
 **Google setup (Google Cloud Console):** APIs & Services → Credentials →
 Create OAuth client ID → **Web application** → add the redirect URI above →
@@ -108,10 +108,10 @@ Any scheduler works (Vapron's own cron, a systemd timer, or a GitHub Actions
 
 ```bash
 # 1. Build is FRESH — commit must match `git rev-parse HEAD` on main, NOT "unknown"
-curl -s https://gatetest.ai/api/platform-status | jq '{version, commit, builtAt}'
+curl -s https://gatetest.io/api/platform-status | jq '{version, commit, builtAt}'
 
 # 2. Config is complete — ready:true, no missing_required
-curl -s https://gatetest.ai/api/status | jq '{ready, missing_required, stripe}'
+curl -s https://gatetest.io/api/status | jq '{ready, missing_required, stripe}'
 ```
 
 Then eyeball the live site:

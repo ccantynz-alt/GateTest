@@ -69,11 +69,11 @@ touches `website/app/` must run the visual spec and *look at* the changed
 screenshots before committing. "I rendered it and looked at it" replaces
 "it compiles."
 
-### 1.2 Deployed-site smoke tests (pre-authorized once gatetest.ai URL is confirmed live)
+### 1.2 Deployed-site smoke tests (pre-authorized once gatetest.io URL is confirmed live)
 
 Nightly workflow `prod-smoke.yml`:
 
-- `GET https://gatetest.ai/` → 200, OG tags present, hero H1 matches expected.
+- `GET https://gatetest.io/` → 200, OG tags present, hero H1 matches expected.
 - `POST /api/web/scan` against a known stable target → returns health score.
 - Lighthouse CI run → fails under Performance 90 / SEO 95 / A11y 95.
 - On failure: opens a GitHub Issue automatically (same pattern as the existing
@@ -89,7 +89,7 @@ product.
 
 ### 1.4 Dogfood-the-storefront
 
-The `/web` scanner already exists. Point it at `https://gatetest.ai` nightly
+The `/web` scanner already exists. Point it at `https://gatetest.io` nightly
 and publish the result as a **live self-scan badge** on the homepage (the
 `HomeSelfScan` component already exists for the repo scan — add the URL scan).
 If GateTest's own site scores below A, the nightly opens an issue. This is

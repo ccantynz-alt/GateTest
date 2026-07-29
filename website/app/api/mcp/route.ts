@@ -1,8 +1,8 @@
 /**
- * Remote MCP endpoint — POST /api/mcp  (the hosted mcp.gatetest.ai transport).
+ * Remote MCP endpoint — POST /api/mcp  (the hosted mcp.gatetest.io transport).
  *
  * Runs the transport-agnostic MCP core (website/app/lib/mcp-remote-core.cjs) as
- * a Next.js route on Vercel, IN this repo, deployed with gatetest.ai. This is
+ * a Next.js route on Vercel, IN this repo, deployed with gatetest.io. This is
  * the deliberately-isolated home for the endpoint: it shares nothing with the
  * Jarvis / Vapron / Gluecron machines (Craig 2026-07-07 — no cross-contamination
  * between agents and sites). The Bun/Hono wrapper in packages/mcp-remote is the
@@ -26,10 +26,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300; // fix_issue opens a PR — generous ceiling
 
-// One core per warm instance. apiBase defaults to gatetest.ai (this same
+// One core per warm instance. apiBase defaults to gatetest.io (this same
 // deployment), so the tools proxy the site's own /api routes.
 const core = createMcpCore({
-  apiBase: process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai",
+  apiBase: process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io",
 });
 
 const CORS_HEADERS: Record<string, string> = {

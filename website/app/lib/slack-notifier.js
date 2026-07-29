@@ -127,7 +127,7 @@ function buildScanCompleteBlocks(result, opts = {}) {
   }
 
   // Footer
-  blocks.push(_context([`GateTest · gatetest.ai · ${new Date().toISOString().split('T')[0]}`]));
+  blocks.push(_context([`GateTest · gatetest.io · ${new Date().toISOString().split('T')[0]}`]));
 
   return blocks;
 }
@@ -194,7 +194,7 @@ function buildDigestBlocks(digest) {
     blocks.push(_section('*Recurring Patterns*\n' + patLines.join('\n')));
   }
 
-  blocks.push(_context(['GateTest · gatetest.ai · Weekly digest — powered by persistent codebase memory']));
+  blocks.push(_context(['GateTest · gatetest.io · Weekly digest — powered by persistent codebase memory']));
   return blocks;
 }
 

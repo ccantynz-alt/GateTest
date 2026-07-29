@@ -73,7 +73,7 @@ Every Claude win is distilled into a reusable recipe — so the
 next time the same pattern appears (your repo or someone else's),
 it's handled for free.
 
-The hosted version at gatetest.ai is pay-per-scan: $29 Quick,
+The hosted version at gatetest.io is pay-per-scan: $29 Quick,
 $99 Full, $199 Scan + Fix (auto-fix PR + pair-review), $399
 Forensic (Claude diagnosis + attack-chain correlation + CISO
 report). No subscription. No seats. Pay if you use it.
@@ -107,7 +107,7 @@ the Claude pipeline, or how we handle false positives. Roast me.
 
 | # | What it shows | Caption |
 |---|---|---|
-| 1 | **Hero shot** — gatetest.ai landing page with the hero text and the four pricing tiers visible. Dark theme. | "One gate. 120 modules. Pay per scan." |
+| 1 | **Hero shot** — gatetest.io landing page with the hero text and the four pricing tiers visible. Dark theme. | "One gate. 120 modules. Pay per scan." |
 | 2 | **Live scan in progress** — `/scan/status` page mid-run with the module ticker animating. | "Watch the scan in real time — every module, every finding." |
 | 3 | **The auto-fix PR** — screenshot of a real GitHub PR opened by GateTest, with the fix diff and the regression-test diff side-by-side. | "Findings come back as a PR — fix + regression test, ready to merge." |
 | 4 | **Forensic report** — the executive summary section of a Forensic-tier PR comment (headline, posture, top-3 actions). | "CTO-readable executive summary. Board-ready CISO report on $399 tier." |

@@ -10,7 +10,7 @@
  * What it does
  * ------------
  *   1. Searches Hacker News (via the public Algolia search API) for:
- *      - Direct mentions of GateTest / gatetest.ai
+ *      - Direct mentions of GateTest / gatetest.io
  *      - Mentions of competitors (Snyk, SonarQube, Semgrep, CodeQL,
  *        DeepSource, ESLint, Codacy)
  *      - Pain-point phrases in QA / SAST / CI tooling
@@ -45,7 +45,12 @@ const HN_ALGOLIA_BASE = "https://hn.algolia.com/api/v1/search_by_date";
 
 // Queries we always run on the nightly sweep
 const DEFAULT_QUERIES = {
-  gatetest: ["gatetest", "gatetest.ai"],
+  // Both domains, deliberately. The product moved .ai -> .io on 2026-07-30,
+  // but inbound links, old posts and people's memories keep the legacy name
+  // alive for a long time — dropping it would silently stop surfacing real
+  // mentions. The bare "gatetest" term catches most of it; these are belt and
+  // braces for people who write the full domain.
+  gatetest: ["gatetest", "gatetest.io", "gatetest.ai"],
   competitors: [
     "Snyk",
     "SonarQube",
@@ -277,7 +282,7 @@ function draftResponse(mention) {
       break;
     case "question":
       body = `${handle}, happy to help. Short version: ${mention.text.slice(0, 60)}... — ` +
-        `the long version is in the docs at https://gatetest.ai. Want a more specific answer? ` +
+        `the long version is in the docs at https://gatetest.io. Want a more specific answer? ` +
         `Drop the exact use case and we'll come back with a concrete walk-through.`;
       break;
     case "praise":

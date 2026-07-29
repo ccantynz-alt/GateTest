@@ -39,7 +39,7 @@ const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
 const _checkoutLimiter = createLimiter(PRESETS.checkout);
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
 
 function stripeRequest(
   method: string,

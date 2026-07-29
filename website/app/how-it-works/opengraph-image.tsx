@@ -129,7 +129,7 @@ export default async function Image() {
             fontSize: 18,
           }}
         >
-          <span>gatetest.ai/how-it-works</span>
+          <span>gatetest.io/how-it-works</span>
           <span>From $29 · One-time per scan</span>
         </div>
       </div>

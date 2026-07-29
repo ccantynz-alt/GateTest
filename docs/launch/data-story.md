@@ -14,7 +14,7 @@
 
 ## 1. The corpus scan (runbook)
 
-**What:** run the `/web` scanner (same engine as gatetest.ai/web — headers,
+**What:** run the `/web` scanner (same engine as gatetest.io/web — headers,
 TLS, cookies, a11y, SEO, links, performance + headless-browser runtime
 errors where the worker is available) across a corpus of public sites.
 
@@ -27,7 +27,7 @@ errors where the worker is available) across a corpus of public sites.
 - Both, contrasted ("the top 1k vs everyone else") — best article, 2x work.
 
 **How to run it (any of):**
-1. Against production: `POST https://gatetest.ai/api/web/scan` with
+1. Against production: `POST https://gatetest.io/api/web/scan` with
    `{ "url": "<target>" }`, ~1/second max, from a local machine or an
    API-keyed Claude session WITH network egress (this remote env's
    allowlist blocks arbitrary hosts — it cannot run the corpus).
@@ -46,7 +46,7 @@ anonymised — only aggregates published.
 
 ---
 
-## 2. Article skeleton (target: gatetest.ai/blog/state-of-web-quality-2026)
+## 2. Article skeleton (target: gatetest.io/blog/state-of-web-quality-2026)
 
 **Title options:**
 - "We scanned [N] public websites with a real browser. [X]% ship JavaScript errors on their own homepage."
@@ -59,7 +59,7 @@ anonymised — only aggregates published.
 4. **Grade distribution** — the A-F curve. `[TODO]` (a bell curve centred on C/D is itself a story)
 5. **Three anonymised horror stories** — concrete chains, e.g. "a checkout page with [X] + [Y] = session takeover surface." `[TODO]`
 6. **What the best sites do differently** — the positive counter-pattern. `[TODO]`
-7. **Footer disclosure:** "Scans were run with GateTest's public website scanner — the same free scan at gatetest.ai/web. Check your own site against this dataset."
+7. **Footer disclosure:** "Scans were run with GateTest's public website scanner — the same free scan at gatetest.io/web. Check your own site against this dataset."
 
 **The CTA is the dataset, not the product:** "see how your site compares"
 converts better than "buy a scan."

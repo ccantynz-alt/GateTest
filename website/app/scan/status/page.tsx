@@ -911,7 +911,7 @@ export default function ScanStatus() {
 
             {/* Branding */}
             <p className="text-center text-xs text-muted pt-2">
-              Scanned by GateTest &middot; gatetest.ai
+              Scanned by GateTest &middot; gatetest.io
             </p>
           </div>
         )}

@@ -13,6 +13,18 @@
 
 const https = require('https');
 
+/**
+ * Sending address. DELIBERATELY still on the legacy domain after the
+ * .ai -> .io move of 2026-07-30.
+ *
+ * An ESP will not send for a domain it has not verified — Resend needs the
+ * SPF/DKIM records present on whichever domain this names. Flipping this to
+ * gatetest.io before gatetest.io is verified in the Resend dashboard turns
+ * every digest, MCP key delivery and billing e-mail into a hard failure.
+ *
+ * To move it: verify gatetest.io in Resend, then set RESEND_FROM. Do not
+ * change this default without checking the dashboard first.
+ */
 const DEFAULT_FROM = 'GateTest <watchdog@gatetest.ai>';
 
 // ── HTML email builder ────────────────────────────────────────────────────────
@@ -146,7 +158,7 @@ function buildDigestEmailHtml(digest) {
   <tr><td style="padding:20px 0 0;border-top:1px solid #1e293b;text-align:center;">
     <p style="margin:0;font-size:12px;color:#475569;">
       GateTest &nbsp;&middot;&nbsp;
-      <a href="https://gatetest.ai" style="color:#475569;text-decoration:none;">gatetest.ai</a>
+      <a href="https://gatetest.io" style="color:#475569;text-decoration:none;">gatetest.io</a>
       &nbsp;&middot;&nbsp; Weekly developer digest
     </p>
     ${unsubscribeUrl ? `<p style="margin:10px 0 0;font-size:11px;"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#374151;text-decoration:underline;">Unsubscribe</a></p>` : ''}
@@ -205,7 +217,7 @@ function buildDigestEmailText(digest) {
     lines.push('', `View full history: ${dashboardUrl}`);
   }
 
-  lines.push('', '---', 'GateTest · gatetest.ai · Weekly developer digest');
+  lines.push('', '---', 'GateTest · gatetest.io · Weekly developer digest');
   return lines.join('\n');
 }
 
@@ -329,13 +341,13 @@ async function sendApiKeyEmail(opts) {
       <a href="mailto:hello@gatetest.ai" style="color:#22c55e;">hello@gatetest.ai</a>.
     </p>
 
-    <a href="https://gatetest.ai/mcp" style="display:inline-block;background:#22c55e;color:#09090b;font-weight:700;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    <a href="https://gatetest.io/mcp" style="display:inline-block;background:#22c55e;color:#09090b;font-weight:700;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:8px;">
       View Tool Reference →
     </a>
   </td></tr>
   <tr><td style="padding-top:24px;text-align:center;">
     <p style="color:#52525b;font-size:11px;margin:0;">
-      GateTest · <a href="https://gatetest.ai" style="color:#52525b;">gatetest.ai</a>
+      GateTest · <a href="https://gatetest.io" style="color:#52525b;">gatetest.io</a>
     </p>
   </td></tr>
 </table>
@@ -357,7 +369,7 @@ async function sendApiKeyEmail(opts) {
     '',
     'Keep this key secret. To regenerate contact hello@gatetest.ai.',
     '',
-    '-- GateTest | gatetest.ai',
+    '-- GateTest | gatetest.io',
   ].join('\n');
 
   const body = JSON.stringify({ from, to: [to], subject: 'Your GateTest MCP API Key', html, text });
@@ -438,7 +450,7 @@ async function sendBillingPortalEmail(opts) {
     <p style="color:#a1a1aa;font-size:14px;margin:0 0 24px;">
       Use the secure link below to update your payment method, view invoices,
       change plan, or cancel. The link expires shortly after being issued —
-      request a fresh one from gatetest.ai/billing any time.
+      request a fresh one from gatetest.io/billing any time.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0">${linkBlocks}</table>
     <p style="color:#71717a;font-size:12px;margin:16px 0 0;">
@@ -448,7 +460,7 @@ async function sendBillingPortalEmail(opts) {
     </p>
   </td></tr>
   <tr><td style="padding-top:24px;text-align:center;">
-    <p style="color:#3f3f46;font-size:11px;margin:0;">GateTest &middot; gatetest.ai</p>
+    <p style="color:#3f3f46;font-size:11px;margin:0;">GateTest &middot; gatetest.io</p>
   </td></tr>
 </table>
 </td></tr>
@@ -461,7 +473,7 @@ async function sendBillingPortalEmail(opts) {
     '',
     ...links.map(l => `${sourceLabel[l.source] || 'Subscription'}: ${l.url}`),
     '',
-    'The link expires shortly after being issued — request a fresh one from gatetest.ai/billing any time.',
+    'The link expires shortly after being issued — request a fresh one from gatetest.io/billing any time.',
     "Didn't request this? Ignore this email.",
   ].join('\n');
 

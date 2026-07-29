@@ -1,33 +1,33 @@
 <?php
 /**
  * Plugin Name:       GateTest Health Check
- * Plugin URI:        https://gatetest.ai
+ * Plugin URI:        https://gatetest.io
  * Description:       Audit your WordPress site for 18+ security, performance, and quality issues. Plain-language report. Powered by the GateTest engine.
  * Version:           0.1.0
  * Requires at least: 6.0
  * Tested up to:      6.7
  * Requires PHP:      7.4
  * Author:            GateTest
- * Author URI:        https://gatetest.ai
+ * Author URI:        https://gatetest.io
  * License:           MIT
  * License URI:       https://opensource.org/licenses/MIT
  * Text Domain:       gatetest-health-check
  * Domain Path:       /languages
  *
- * GateTest Health Check is a thin client for the gatetest.ai scan engine.
- * It does NOT do the scanning locally — that runs at gatetest.ai. This plugin:
+ * GateTest Health Check is a thin client for the gatetest.io scan engine.
+ * It does NOT do the scanning locally — that runs at gatetest.io. This plugin:
  *
  *   1. Adds an admin menu page under Tools → GateTest
  *   2. Captures the site's identifying info (URL, WP version, theme, plugins)
- *   3. Sends a scan request to https://gatetest.ai/api/wp/scan
+ *   3. Sends a scan request to https://gatetest.io/api/wp/scan
  *   4. Renders the plain-language report inside the admin UI
  *
- * No source code is sent. The scan probes the site over HTTP from gatetest.ai's
+ * No source code is sent. The scan probes the site over HTTP from gatetest.io's
  * infrastructure — same way a customer running a manual scan on the website
  * would experience it. Plugin acts as the convenient launcher + result viewer.
  *
  * Privacy: site URL + WP version are sent. No content, no credentials, no
- * database data. See https://gatetest.ai/legal/privacy for the full data
+ * database data. See https://gatetest.io/legal/privacy for the full data
  * handling contract.
  *
  * Pre-authorisation: Craig 2026-05-13 — WordPress side product Boss Rule D.
@@ -41,7 +41,7 @@ if (!defined('ABSPATH')) {
 define('GATETEST_HC_VERSION', '0.1.0');
 define('GATETEST_HC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('GATETEST_HC_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('GATETEST_HC_API_BASE', 'https://gatetest.ai');
+define('GATETEST_HC_API_BASE', 'https://gatetest.io');
 define('GATETEST_HC_TEXT_DOMAIN', 'gatetest-health-check');
 
 // Load includes.

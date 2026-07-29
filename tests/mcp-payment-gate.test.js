@@ -80,7 +80,7 @@ test('GATED_TOOLS members return 🔒 message when key missing', async () => {
   const result = simulateGate('capture_screenshot', {});
   assert.ok(result !== null, 'gate should fire');
   assert.ok(result.content[0].text.includes('🔒'), 'response must include 🔒');
-  assert.ok(result.content[0].text.includes('gatetest.ai/mcp'), 'response must link to subscription page');
+  assert.ok(result.content[0].text.includes('gatetest.io/mcp'), 'response must link to subscription page');
 });
 
 test('scan_local with quick suite passes without key', async () => {
@@ -207,7 +207,7 @@ function simulateGate(toolName, args) {
     return {
       content: [{
         type: 'text',
-        text: `🔒 **${toolName}** requires a GateTest MCP subscription ($29/mo).\n\nSubscribe at https://gatetest.ai/mcp — API key delivered by email instantly.`,
+        text: `🔒 **${toolName}** requires a GateTest MCP subscription ($29/mo).\n\nSubscribe at https://gatetest.io/mcp — API key delivered by email instantly.`,
       }],
     };
   }

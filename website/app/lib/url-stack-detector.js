@@ -30,7 +30,7 @@ function fetchProbe(url, timeoutMs = FETCH_TIMEOUT_MS) {
     const req = client.get(url, {
       timeout: timeoutMs,
       headers: {
-        'User-Agent': 'GateTest/1.0 (URL Stack Detector +https://gatetest.ai/bot)',
+        'User-Agent': 'GateTest/1.0 (URL Stack Detector +https://gatetest.io/bot)',
         Accept: 'text/html,application/xhtml+xml,*/*',
       },
     }, (res) => {

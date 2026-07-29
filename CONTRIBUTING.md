@@ -64,6 +64,6 @@ Routine bug fixes, refactors inside the approved stack, new test cases, doc impr
 ## Where to ask
 
 - [GitHub Issues](https://github.com/crclabs-hq/GateTest/issues) — bugs, feature requests, public discussion.
-- Live chat on [gatetest.ai](https://gatetest.ai) — fastest reply.
+- Live chat on [gatetest.io](https://gatetest.io) — fastest reply.
 
 That is the whole guide. Open the PR.

@@ -10,7 +10,7 @@
   "icon": "images/icon.png",
   "galleryBanner": { "color": "#0a0a0a", "theme": "dark" },
   "repository": { "type": "git", "url": "https://github.com/crclabs-hq/gatetest" },
-  "homepage": "https://gatetest.ai",
+  "homepage": "https://gatetest.io",
   "bugs": { "url": "https://github.com/crclabs-hq/gatetest/issues" },
   "license": "MIT",
   "activationEvents": [
@@ -103,7 +103,7 @@
         },
         "gatetest.apiBaseUrl": {
           "type": "string",
-          "default": "https://gatetest.ai",
+          "default": "https://gatetest.io",
           "description": "GateTest API base URL (leave as default unless self-hosting)."
         }
       }

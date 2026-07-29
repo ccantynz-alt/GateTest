@@ -11,7 +11,7 @@ available through the US morning for comments.
 
 - **Name:** GateTest
 - **Tagline (60 chars max):** Give Claude verified eyes, ears & hands on your codebase
-- **Links:** https://gatetest.ai (primary) · https://github.com/crclabs-hq/GateTest
+- **Links:** https://gatetest.io (primary) · https://github.com/crclabs-hq/GateTest
 - **Topics:** Developer Tools · Artificial Intelligence · GitHub · SaaS
 - **Pricing label:** Free options (free scan tools, paid tiers from $29)
 
@@ -48,6 +48,6 @@ available through the US morning for comments.
 - [ ] Optional 30s screen capture: scan_url → findings → fix PR
 
 ## Pre-launch checklist
-- [ ] gatetest.ai live (Gate 0 in SUBMISSION-RUNBOOK.md)
+- [ ] gatetest.io live (Gate 0 in SUBMISSION-RUNBOOK.md)
 - [ ] Show HN done (link it in a comment if it went well)
 - [ ] Before/after fix PRs linked from README

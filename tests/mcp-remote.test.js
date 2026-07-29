@@ -1,7 +1,7 @@
 // ============================================================================
 // Remote MCP core — packages/mcp-remote/src/core.cjs
 //
-// The hosted mcp.gatetest.ai endpoint's transport-agnostic JSON-RPC core.
+// The hosted mcp.gatetest.io endpoint's transport-agnostic JSON-RPC core.
 // Tests use an injected fetchImpl so no network is touched.
 // ============================================================================
 const { describe, it } = require('node:test');
@@ -195,7 +195,7 @@ describe('remote MCP — subscription gate', () => {
       params: { name: 'explain_finding', arguments: { module: 'x', detail: 'y' } },
     });
     assert.equal(res.result.isError, true);
-    assert.match(res.result.content[0].text, /gatetest\.ai\/mcp/);
+    assert.match(res.result.content[0].text, /gatetest\.io\/mcp/);
   });
 
   it('gated tool with a valid key goes through', async () => {
@@ -203,7 +203,7 @@ describe('remote MCP — subscription gate', () => {
       ['/api/mcp/validate', { body: { valid: true } }],
       ['/api/scan/guidance', { body: { guidance: [{ module: 'x', title: 'T', why: 'W', steps: ['s1'] }] } }],
     ]);
-    const core = createMcpCore({ apiBase: 'https://gatetest.ai', fetchImpl });
+    const core = createMcpCore({ apiBase: 'https://gatetest.io', fetchImpl });
     const res = await core.handleRpc(
       {
         jsonrpc: '2.0', id: 3, method: 'tools/call',

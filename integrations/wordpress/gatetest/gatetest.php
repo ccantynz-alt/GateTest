@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: GateTest — AI Code Quality Scanner
- * Plugin URI:  https://gatetest.ai
+ * Plugin URI:  https://gatetest.io
  * Description: Scan your WordPress theme, plugin, or custom code repository with 67 AI-powered quality modules. Catches security vulnerabilities, N+1 queries, accessibility issues, PII leaks, and more. Auto-fix PRs included.
  * Version:     1.0.0
  * Author:      GateTest
- * Author URI:  https://gatetest.ai
+ * Author URI:  https://gatetest.io
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain: gatetest
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'GATETEST_VERSION', '1.0.0' );
-define( 'GATETEST_API_BASE', 'https://gatetest.ai/api/v1' );
+define( 'GATETEST_API_BASE', 'https://gatetest.io/api/v1' );
 define( 'GATETEST_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GATETEST_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -124,10 +124,10 @@ function gatetest_settings_page() {
                             printf(
                                 wp_kses(
                                     /* translators: %s: link to API keys page */
-                                    __( 'Get your API key from <a href="%s" target="_blank" rel="noopener noreferrer">gatetest.ai/admin → API Keys</a>.', 'gatetest' ),
+                                    __( 'Get your API key from <a href="%s" target="_blank" rel="noopener noreferrer">gatetest.io/admin → API Keys</a>.', 'gatetest' ),
                                     array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) )
                                 ),
-                                'https://gatetest.ai/admin'
+                                'https://gatetest.io/admin'
                             );
                             ?>
                         </p>
@@ -391,7 +391,7 @@ function gatetest_render_results( $result, $scanned_at ) {
             </div>
             <?php if ( $repo_url ) : ?>
             <a
-                href="<?php echo esc_url( 'https://gatetest.ai/scan/status?repo=' . rawurlencode( $repo_url ) ); ?>"
+                href="<?php echo esc_url( 'https://gatetest.io/scan/status?repo=' . rawurlencode( $repo_url ) ); ?>"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="button"

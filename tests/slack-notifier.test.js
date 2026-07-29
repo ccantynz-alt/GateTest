@@ -76,7 +76,7 @@ test('buildScanCompleteBlocks lists top failed modules (up to 5)', () => {
 test('buildScanCompleteBlocks adds CTA button when scanUrl provided', () => {
   const blocks = buildScanCompleteBlocks(
     { tier: 'quick', totalIssues: 0, modules: [] },
-    { scanUrl: 'https://gatetest.ai/scan/status?repo=foo' }
+    { scanUrl: 'https://gatetest.io/scan/status?repo=foo' }
   );
   const hasButton = blocks.some(b => b.type === 'actions');
   assert.ok(hasButton, 'expected CTA button block');

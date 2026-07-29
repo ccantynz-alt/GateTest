@@ -50,9 +50,13 @@ test('module does not depend on playwright (pure HTTP, no browser)', () => {
 });
 
 test('inferBenignValue picks a plausible value per param name shape', () => {
-  assert.equal(inferBenignValue('email'), 'test@gatetest.ai');
-  assert.equal(inferBenignValue('userEmail'), 'test@gatetest.ai');
-  assert.equal(inferBenignValue('redirectUrl'), 'https://gatetest.ai');
+  // Bound to the resolver rather than to literals: these probe values are sent
+  // into a customer's API, so what matters is that they stay GateTest-owned and
+  // track the canonical origin — not which TLD is current this quarter.
+  const { FIXTURE_EMAIL, siteUrl } = require('../src/core/site-url');
+  assert.equal(inferBenignValue('email'), FIXTURE_EMAIL);
+  assert.equal(inferBenignValue('userEmail'), FIXTURE_EMAIL);
+  assert.equal(inferBenignValue('redirectUrl'), siteUrl());
   assert.equal(inferBenignValue('id'), '1');
   assert.equal(inferBenignValue('userId'), '1');
   assert.equal(inferBenignValue('phone'), '+15555550100');

@@ -258,6 +258,16 @@ test('_checkForm treats a fired non-GET request with no visible confirmation as 
 });
 
 test('inferFieldValue-style email fields always resolve to a GateTest-owned address (never a real inbox)', () => {
+  // Asserts the PROPERTY, not the spelling. This used to grep the source for a
+  // literal 'test@gatetest.ai', which broke the moment the domain moved while
+  // saying nothing about whether the address was still ours.
+  const { FIXTURE_EMAIL } = require('../src/core/site-url');
+  assert.match(FIXTURE_EMAIL, /^test@gatetest\.(io|ai)$/, 'probe address must stay GateTest-owned');
+
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', 'form-testing.js'), 'utf-8');
-  assert.match(src, /test@gatetest\.ai/);
+  assert.match(
+    src,
+    /FIXTURE_EMAIL/,
+    'form-testing must take the probe address from site-url rather than hardcoding one',
+  );
 });

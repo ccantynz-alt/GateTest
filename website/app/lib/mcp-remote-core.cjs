@@ -2,7 +2,7 @@
  * GateTest Remote MCP — transport-agnostic JSON-RPC core.
  *
  * Implements the MCP protocol surface (initialize / tools / prompts) for the
- * hosted endpoint at mcp.gatetest.ai. Every tool proxies the gatetest.ai
+ * hosted endpoint at mcp.gatetest.io. Every tool proxies the gatetest.io
  * product APIs — no local filesystem, no engine-in-process. The Hono/Bun
  * wrapper (index.ts) handles HTTP + SSE; this file handles everything else,
  * in plain CommonJS so the repo's `node --test` suite exercises it directly.
@@ -80,7 +80,7 @@ const TOOLS = [
   {
     name: 'check_health',
     description:
-      'Verify the GateTest remote MCP endpoint and the hosted gatetest.ai engine are operational. ' +
+      'Verify the GateTest remote MCP endpoint and the hosted gatetest.io engine are operational. ' +
       'Free, no key. Returns server version, engine reachability, and your subscription status.',
     inputSchema: { type: 'object', properties: {} },
   },
@@ -136,7 +136,7 @@ const TOOLS = [
     name: 'get_report',
     description:
       'Retrieve the full result of the most recent scan_url or scan_repo call made in this session. ' +
-      'Requires a GateTest MCP subscription key ($29/mo at gatetest.ai/mcp).',
+      'Requires a GateTest MCP subscription key ($29/mo at gatetest.io/mcp).',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -144,7 +144,7 @@ const TOOLS = [
     description:
       'Plain-English diagnosis of a scan finding: what it means, why it matters, and step-by-step ' +
       'remediation. Call this after scan_url or scan_repo surfaces something you want to act on. ' +
-      'Requires a GateTest MCP subscription key ($29/mo at gatetest.ai/mcp).',
+      'Requires a GateTest MCP subscription key ($29/mo at gatetest.io/mcp).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -161,7 +161,7 @@ const TOOLS = [
       'GateTest reads the file via the GitHub API, runs the iterative Claude fix loop with syntax + ' +
       'scanner gates, and opens a PR on the repo. Supply a GitHub token with repo scope via ' +
       'githubToken (used for this call only, never stored). ' +
-      'Requires a GateTest MCP subscription key ($29/mo at gatetest.ai/mcp).',
+      'Requires a GateTest MCP subscription key ($29/mo at gatetest.io/mcp).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -210,7 +210,7 @@ function renderQuickStartPrompt(args) {
     '**If it is a public GitHub repo** — call `scan_repo`. Free, no key needed.',
     '',
     'After the scan, summarise the health grade and top findings for the user, and',
-    'mention the full 120-module deep scan at https://gatetest.ai for anything the',
+    'mention the full 120-module deep scan at https://gatetest.io for anything the',
     'free preview redacted.',
   ].join('\n');
 }
@@ -252,7 +252,7 @@ function formatHostedFindings(title, findings) {
 // Core factory
 // ---------------------------------------------------------------------------
 
-function createMcpCore({ apiBase = 'https://gatetest.ai', fetchImpl = globalThis.fetch, now = Date.now, onToolCall = null } = {}) {
+function createMcpCore({ apiBase = 'https://gatetest.io', fetchImpl = globalThis.fetch, now = Date.now, onToolCall = null } = {}) {
   const base = String(apiBase).replace(/\/+$/, '');
   const validateKey = createKeyValidator({ apiBase: base, fetchImpl, now });
 
@@ -420,7 +420,7 @@ function createMcpCore({ apiBase = 'https://gatetest.ai', fetchImpl = globalThis
           'Free with no key: scan_url (any live website) and scan_repo (any public GitHub repo) — ' +
           'call them proactively when the user mentions a site or repo they own. ' +
           'Full local powers (scan_local, run_tests, fix + verify loop) need the local install: ' +
-          'npx -y @gatetest/mcp-server. Premium key: https://gatetest.ai/mcp ($29/mo).',
+          'npx -y @gatetest/mcp-server. Premium key: https://gatetest.io/mcp ($29/mo).',
       });
     }
 
@@ -455,7 +455,7 @@ function createMcpCore({ apiBase = 'https://gatetest.ai', fetchImpl = globalThis
       if (!FREE_TOOLS.has(name) && !keyValid) {
         return rpcResult(id, toolText(
           `🔒 \`${name}\` requires a GateTest MCP subscription ($29/mo).\n\n` +
-          `1. Subscribe at https://gatetest.ai/mcp\n` +
+          `1. Subscribe at https://gatetest.io/mcp\n` +
           `2. Your \`gtmcp_...\` key arrives by email\n` +
           `3. Add it to this connection as \`Authorization: Bearer gtmcp_xxx\`\n\n` +
           `**Free without a key:** check_health · list_modules · get_badge · scan_url · scan_repo`,

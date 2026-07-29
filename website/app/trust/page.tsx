@@ -122,7 +122,7 @@ export default function TrustPage() {
             />
 
             <ScopeCard
-              path="Public URL scan (gatetest.ai / wp / web)"
+              path="Public URL scan (gatetest.io / wp / web)"
               doList={[
                 "We fetch the public pages of the URL you supply, with the same User-Agent any browser would.",
                 "We store the URL, the timestamp, and the scan results (no auth, no cookies, no personal data) to power the trust badge and the recurring continuous-scan tier.",
@@ -229,7 +229,7 @@ export default function TrustPage() {
           </h2>
           <p className="text-muted text-center max-w-2xl mx-auto mb-10">
             We have a centralised fix-recipe store at{" "}
-            <code className="text-foreground">gatetest.ai/api/recipes</code>{" "}
+            <code className="text-foreground">gatetest.io/api/recipes</code>{" "}
             so successful fixes from one customer can speed up the same
             fix on every other customer&apos;s next scan. <strong>It is
             OFF by default.</strong> Here&apos;s exactly what enabling it

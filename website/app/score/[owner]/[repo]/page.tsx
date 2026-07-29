@@ -6,6 +6,7 @@
  * Embeddable badge available at /api/score?owner=X&repo=Y&format=badge
  */
 import Link from "next/link";
+import { SITE_URL } from "@/app/lib/site-url";
 export const dynamic = "force-dynamic";
 
 interface ScoreData {
@@ -28,7 +29,10 @@ interface ScoreData {
 }
 
 async function fetchScore(owner: string, repo: string): Promise<ScoreData> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "https://gatetest.ai";
+  // SITE_URL rather than a raw env read: the resolver strips a trailing slash,
+  // which a hand-typed env var usually has, and which turns this into a
+  // double-slash fetch.
+  const base = SITE_URL;
   try {
     const res = await fetch(`${base}/api/score?owner=${owner}&repo=${repo}`, { cache: "no-store" });
     return res.json();
@@ -84,7 +88,7 @@ export default async function ScorePage({
       {/* Header */}
       <div className="border-b border-white/8 px-6 py-4 flex items-center justify-between max-w-5xl mx-auto">
         <Link href="/" className="flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm">
-          <span className="text-lg">←</span> gatetest.ai
+          <span className="text-lg">←</span> gatetest.io
         </Link>
         <span className="text-xs text-white/30 font-mono">public quality score</span>
       </div>
@@ -117,7 +121,7 @@ export default async function ScorePage({
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <a
-                    href={`https://gatetest.ai?repo=${encodeURIComponent(`${owner}/${repo}`)}`}
+                    href={`https://gatetest.io?repo=${encodeURIComponent(`${owner}/${repo}`)}`}
                     className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition-colors"
                   >
                     Improve this score →
@@ -182,7 +186,7 @@ export default async function ScorePage({
               {owner}/{repo} hasn&apos;t been scanned yet. Run a GateTest scan to get a public score.
             </p>
             <a
-              href={`https://gatetest.ai#pricing`}
+              href={`https://gatetest.io#pricing`}
               className="inline-block px-8 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold transition-colors"
             >
               Scan this repo →

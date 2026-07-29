@@ -2,7 +2,7 @@ import { chromium, devices } from 'playwright';
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-const TARGET_URL   = process.env.TARGET_URL   || 'https://gatetest.ai';
+const TARGET_URL   = process.env.TARGET_URL   || 'https://gatetest.io';
 const BASELINE_DIR = process.env.BASELINE_DIR || 'C:/Program Files/Git/opt/jarvis/visual-baselines/gatetest';
 
 function ensureDir(d) { if (!existsSync(d)) mkdirSync(d, { recursive: true }); }
@@ -77,7 +77,7 @@ await browser.close();
 
 // ─── REPORT ────────────────────────────────────────────────────────────────
 console.log('\n\n╔══════════════════════════════════════════════════════════════╗');
-console.log('║     VISUAL ASSESSMENT REPORT — gatetest.ai                  ║');
+console.log('║     VISUAL ASSESSMENT REPORT — gatetest.io                  ║');
 console.log('╚══════════════════════════════════════════════════════════════╝\n');
 
 for (const r of results) {

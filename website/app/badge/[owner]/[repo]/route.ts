@@ -1,7 +1,7 @@
 /**
  * Embeddable Quality Badge — GET /badge/:owner/:repo[.svg]
  *
- * ![GateTest](https://gatetest.ai/badge/facebook/react)
+ * ![GateTest](https://gatetest.io/badge/facebook/react)
  *
  * Shows the repo's most recent completed scan as one glance:
  *   [GateTest] [B] [4 issues · 3d ago]

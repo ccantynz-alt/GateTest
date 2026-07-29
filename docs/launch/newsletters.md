@@ -9,7 +9,7 @@
 > and inclusions are persistent (archives rank on Google).
 >
 > **Verified facts (re-verified 2026-07-19, do not drift):** 120 modules ·
-> free no-signup scan at gatetest.ai · CLI via
+> free no-signup scan at gatetest.io · CLI via
 > `npx -p @gatetest/cli gatetest` (npm package published, but note the
 > package has two bins so plain `npx @gatetest/cli` fails — use the `-p`
 > form above) · pay-per-scan $29/$99/$199/$399 · $49/mo Continuous is LIVE
@@ -47,7 +47,7 @@ second AI pass before the PR ships. Pay-per-scan, no subscription, no
 seats.
 
 Two things your readers can try in under a minute, free, no signup:
-- Scan any public website in a real browser: https://gatetest.ai/web
+- Scan any public website in a real browser: https://gatetest.io/web
 - Run the MIT-licensed CLI on any repo: `npx -p @gatetest/cli gatetest`
 
 Honest detail your readers will appreciate: we run GateTest on GateTest —
@@ -62,7 +62,7 @@ Happy to provide a demo repo, screenshots, or anything else useful.
 
 ## Template B — link suggestion (TLDR, Bytes, JS Weekly — they want a LINK, not a pitch)
 
-Suggested link: https://gatetest.ai
+Suggested link: https://gatetest.io
 Suggested blurb (their voice, feel free to edit):
 
 > **GateTest** — a QA gate with a party trick: it doesn't just fail your
@@ -83,7 +83,7 @@ errors, CSP, TLS, cookies, headers — not just static checks) and wrote up
 what we found: [1-2 headline stats, e.g. "X% ship at least one uncaught
 runtime error on their homepage"].
 
-Full methodology + data: [link to gatetest.ai/blog post]
+Full methodology + data: [link to gatetest.io/blog post]
 
 It's vendor-neutral enough to stand on its own — the scanner we used is
 ours, which is disclosed in the writeup.

@@ -36,7 +36,7 @@ test('buildSystemPrompt — includes the agent rules', () => {
 
 test('buildSystemPrompt — does NOT route customers to email (Craig: no email channel)', () => {
   const p = buildSystemPrompt();
-  assert.equal(/hello@gatetest\.ai/i.test(p), false, 'agent must not direct users to a support email address');
+  assert.equal(/hello@gatetest\.(ai|io)/i.test(p), false, 'agent must not direct users to a support email address');
   // The phrases "No email support" / "no email channel" are HONEST disclosures
   // about what we DON'T offer — those are fine. We only fail on routing
   // language: "email us", "send an email to", "via email", "email the team".
@@ -69,7 +69,7 @@ test('AGENT_RULES explicitly forbids inventing facts', () => {
 
 test('AGENT_RULES explicitly forbids redirecting to email / phone', () => {
   assert.match(AGENT_RULES, /NEVER suggest emailing/i);
-  assert.equal(/hello@gatetest\.ai/i.test(AGENT_RULES), false);
+  assert.equal(/hello@gatetest\.(ai|io)/i.test(AGENT_RULES), false);
 });
 
 test('CHAT_MODEL is the latest Opus identifier (per Craig 2026-05-20 directive)', () => {

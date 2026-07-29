@@ -28,6 +28,7 @@
 
 const path = require('path');
 const BaseModule = require('./base-module');
+const { botUserAgent } = require('../core/site-url');
 
 const DEFAULT_MAX_PAGES = 5;
 const DEFAULT_MAX_ELEMENTS_PER_PAGE = 1500;
@@ -161,7 +162,7 @@ class DesignSystemComplianceModule extends BaseModule {
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) DesignSystemCompliance',
+      userAgent: botUserAgent('DesignSystemCompliance'),
     });
     const page = await context.newPage();
     const visited = new Set();

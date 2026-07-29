@@ -57,7 +57,7 @@ impossible. One of them, a parseFloat on a trust-account balance
 in a legal-tech product, was a textbook fintech bug that would
 have been a regulatory event.
 
-Built it in three months. Live now at gatetest.ai. Trying it on
+Built it in three months. Live now at gatetest.io. Trying it on
 a real repo is the fastest way to judge it.
 
 #DevTools #CodeQuality #DevSecOps #SaaS #StartUp
@@ -105,7 +105,7 @@ tools nobody runs together.
 120 modules. One gate. Pay per scan.
 
 CLI is free: npx -p @gatetest/cli gatetest --suite quick
-Hosted scans: gatetest.ai
+Hosted scans: gatetest.io
 
 #DevSecOps #FinTech #SaaS #CodeQuality
 ```
@@ -141,7 +141,7 @@ That's 89% less than the equivalent SonarQube + Snyk combo, and
 you get the auto-fix PR in the bargain.
 
 The math is the pitch. Try it for the cost of a coffee:
-  gatetest.ai → paste repo URL → $29
+  gatetest.io → paste repo URL → $29
 
 #DevTools #SaaS #CodeQuality #FinOps
 ```
@@ -175,7 +175,7 @@ The math is the pitch. Try it for the cost of a coffee:
 ## CTA — what to put in your LinkedIn "About" section while the launch is live
 
 ```
-Founder, GateTest (gatetest.ai)
+Founder, GateTest (gatetest.io)
 
 One CI gate. 120 modules. Replaces SonarQube + Snyk + ESLint +
 Cypress + Lighthouse + 7 others. Auto-fix PR ships on the $199

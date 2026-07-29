@@ -8,7 +8,7 @@ Stable tag: 0.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Audit your WordPress site for security, performance, accessibility, SEO and quality issues. 18 modules, plain-language report. Powered by gatetest.ai.
+Audit your WordPress site for security, performance, accessibility, SEO and quality issues. 18 modules, plain-language report. Powered by gatetest.io.
 
 == Description ==
 
@@ -45,16 +45,16 @@ We are the **audit** layer. We tell you exactly what's wrong, where, and how to 
 
 = How it works =
 
-1. Get a free API key at [gatetest.ai/account](https://gatetest.ai/account)
+1. Get a free API key at [gatetest.io/account](https://gatetest.io/account)
 2. Paste the key into the GateTest tab under **Tools** in WordPress
 3. Click "Scan my site now"
 4. Read the report
 
-The scan runs on gatetest.ai's infrastructure — your site is probed over HTTP from outside, same way an attacker would see it. No source code is sent to us; only your site's URL and WordPress version.
+The scan runs on gatetest.io's infrastructure — your site is probed over HTTP from outside, same way an attacker would see it. No source code is sent to us; only your site's URL and WordPress version.
 
 = Pricing =
 
-The free preview shows the top 3 most urgent findings. To see the full report, opt into auto-fix, or enable weekly scheduled scans, you'll need a paid GateTest plan starting at $29/month. Full pricing: [gatetest.ai/pricing](https://gatetest.ai/pricing).
+The free preview shows the top 3 most urgent findings. To see the full report, opt into auto-fix, or enable weekly scheduled scans, you'll need a paid GateTest plan starting at $29/month. Full pricing: [gatetest.io/pricing](https://gatetest.io/pricing).
 
 == Installation ==
 
@@ -66,9 +66,9 @@ The free preview shows the top 3 most urgent findings. To see the full report, o
 
 = Does this plugin slow down my site? =
 
-No. The scan runs on gatetest.ai's servers — not yours. Your site experiences the same network traffic as a regular visitor making a few HTTP requests. There are no background processes, no continuous monitoring loops, and the plugin file weighs less than 50KB.
+No. The scan runs on gatetest.io's servers — not yours. Your site experiences the same network traffic as a regular visitor making a few HTTP requests. There are no background processes, no continuous monitoring loops, and the plugin file weighs less than 50KB.
 
-= What data is sent to gatetest.ai? =
+= What data is sent to gatetest.io? =
 
 Your site's public URL, your WordPress version, and your GateTest API key. No source code, no database content, no credentials, no plugin list, no theme data. The scan probes your site from the outside.
 
@@ -88,4 +88,4 @@ Wordfence is a firewall — it blocks attacks in real time. GateTest is an audit
 
 == Privacy ==
 
-Full privacy policy at [gatetest.ai/legal/privacy](https://gatetest.ai/legal/privacy).
+Full privacy policy at [gatetest.io/legal/privacy](https://gatetest.io/legal/privacy).

@@ -96,7 +96,7 @@ and Continuous:
 
 | Item | Why deferred |
 |------|--------------|
-| 3 real-public-repo dogfood scans | Sandbox can't reliably do live HTTP scans against arbitrary public repos in this run. **Recommended you dogfood gatetest.ai + 2 owned URLs yourself within first 30 min of waking — confirms the engine works on real targets before HN.** |
+| 3 real-public-repo dogfood scans | Sandbox can't reliably do live HTTP scans against arbitrary public repos in this run. **Recommended you dogfood gatetest.io + 2 owned URLs yourself within first 30 min of waking — confirms the engine works on real targets before HN.** |
 | Auto-refund on failed scans | Boss Rule #6 + #9 (Stripe config + money). Awaiting your nod. |
 | `/api/recipes/` rate-limit fix | Crontech integration coming — that solves it. |
 | `$999 Pen Test` tier in Stripe | Boss Rule #3 (pricing) + #6 (Stripe). Waits for legal layer (~6 weeks). |

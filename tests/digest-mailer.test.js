@@ -37,8 +37,8 @@ const FULL_DIGEST = {
   patterns:      [{ description: 'errorSwallow fires in 90% of scans' }],
   grade:         'B',
   score:         78,
-  dashboardUrl:  'https://gatetest.ai/dashboard',
-  unsubscribeUrl: 'https://gatetest.ai/account/notifications',
+  dashboardUrl:  'https://gatetest.io/dashboard',
+  unsubscribeUrl: 'https://gatetest.io/account/notifications',
 };
 
 describe('buildDigestEmailHtml', () => {
@@ -85,7 +85,7 @@ describe('buildDigestEmailHtml', () => {
 
   test('includes dashboard link', () => {
     const html = buildDigestEmailHtml(FULL_DIGEST);
-    assert.ok(html.includes('https://gatetest.ai/dashboard'));
+    assert.ok(html.includes('https://gatetest.io/dashboard'));
   });
 
   test('includes unsubscribe link', () => {
@@ -172,7 +172,7 @@ describe('buildDigestEmailText', () => {
 
   test('includes dashboard URL as plain text', () => {
     const text = buildDigestEmailText(FULL_DIGEST);
-    assert.ok(text.includes('https://gatetest.ai/dashboard'));
+    assert.ok(text.includes('https://gatetest.io/dashboard'));
   });
 
   test('includes top module', () => {

@@ -75,18 +75,18 @@ describe('billing-portal — createPortalSession', () => {
       calls.push({ method, path: p, body });
       return { url: 'https://billing.stripe.com/p/session_x' };
     };
-    const { url } = await Portal.createPortalSession('cus_A', 'https://gatetest.ai/billing', stripeStub);
+    const { url } = await Portal.createPortalSession('cus_A', 'https://gatetest.io/billing', stripeStub);
     assert.strictEqual(url, 'https://billing.stripe.com/p/session_x');
     assert.strictEqual(calls[0].method, 'POST');
     assert.strictEqual(calls[0].path, '/v1/billing_portal/sessions');
     const params = new URLSearchParams(calls[0].body);
     assert.strictEqual(params.get('customer'), 'cus_A');
-    assert.strictEqual(params.get('return_url'), 'https://gatetest.ai/billing');
+    assert.strictEqual(params.get('return_url'), 'https://gatetest.io/billing');
   });
 
   it('rejects when Stripe returns no url', async () => {
     await assert.rejects(
-      () => Portal.createPortalSession('cus_A', 'https://gatetest.ai/billing', async () => ({})),
+      () => Portal.createPortalSession('cus_A', 'https://gatetest.io/billing', async () => ({})),
       /missing url/
     );
   });
@@ -100,7 +100,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sql,
       stripeRequestFn: async () => { stripeCalls += 1; return {}; },
       sendEmailFn: async () => { emails += 1; return { ok: true }; },
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.deepStrictEqual(result, { matched: 0, sent: false, failed: 0, failures: [] });
     assert.strictEqual(stripeCalls, 0);
@@ -114,7 +114,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sql,
       stripeRequestFn: async () => ({ url: 'https://billing.stripe.com/p/s1' }),
       sendEmailFn: async (opts) => { sentEmails.push(opts); return { ok: true }; },
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(result.matched, 1);
     assert.strictEqual(result.sent, true);
@@ -132,7 +132,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sql,
       stripeRequestFn: async () => { stripeCalls += 1; return { url: `https://billing.stripe.com/p/s${stripeCalls}` }; },
       sendEmailFn: async () => ({ ok: true }),
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(stripeCalls, Portal.MAX_PORTAL_SESSIONS_PER_REQUEST);
   });
@@ -150,7 +150,7 @@ describe('billing-portal — requestPortalLink flow', () => {
         return { url: 'https://billing.stripe.com/p/good' };
       },
       sendEmailFn: async (opts) => { sentEmails.push(opts); return { ok: true }; },
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(result.sent, true);
     assert.strictEqual(sentEmails[0].links.length, 1);
@@ -172,7 +172,7 @@ describe('billing-portal — requestPortalLink flow', () => {
         return { url: 'https://billing.stripe.com/p/good' };
       },
       sendEmailFn: async () => ({ ok: true }),
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(result.sent, true, 'the good link still ships');
     assert.strictEqual(result.failed, 1, 'the failure count is surfaced');
@@ -188,7 +188,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sql,
       stripeRequestFn: async () => { throw new Error('Stripe down'); },
       sendEmailFn: async () => { emails += 1; return { ok: true }; },
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(result.sent, false);
     assert.strictEqual(result.failed, 1);
@@ -203,7 +203,7 @@ describe('billing-portal — requestPortalLink flow', () => {
       sql,
       stripeRequestFn: async () => ({ url: 'https://billing.stripe.com/p/s1' }),
       sendEmailFn: async () => ({ ok: true }),
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
     });
     assert.strictEqual(result.failed, 0);
     assert.deepStrictEqual(result.failures, []);

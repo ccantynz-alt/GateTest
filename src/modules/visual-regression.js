@@ -43,6 +43,7 @@ const { resolvePlaywright, slugifyRoute } = require('../core/screenshot-capture'
 // the live DOM (selector + computed styles) so the report says WHAT to
 // edit, not just THAT pixels changed.
 const { extractDiffRegions, collectVisualFacts, renderFactsDigest } = require('../core/visual-facts');
+const { botUserAgent } = require('../core/site-url');
 
 const DEFAULT_VIEWPORTS = [
   { name: 'desktop', width: 1280, height: 900 },
@@ -277,7 +278,7 @@ class VisualRegressionModule extends BaseModule {
   async _captureScreenshot(browser, baseUrl, route, viewport, waitMs, maskSelectors, autoMaskDynamicContent = true) {
     const context = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) VisualRegression',
+      userAgent: botUserAgent('VisualRegression'),
     });
     const page = await context.newPage();
     try {
@@ -425,7 +426,7 @@ class VisualRegressionModule extends BaseModule {
   async _collectFactsFromLivePage({ browser, baseUrl, route, viewport, regions }) {
     const context = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) VisualFacts',
+      userAgent: botUserAgent('VisualFacts'),
     });
     const page = await context.newPage();
     try {

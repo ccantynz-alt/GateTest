@@ -84,7 +84,7 @@ function gatetest_hc_render_admin_page() {
                 <p>
                     <?php
                     esc_html_e(
-                        'GateTest will probe your public URL from gatetest.ai and report any issues found. No source code or credentials are sent.',
+                        'GateTest will probe your public URL from gatetest.io and report any issues found. No source code or credentials are sent.',
                         GATETEST_HC_TEXT_DOMAIN
                     );
                     ?>
@@ -98,10 +98,10 @@ function gatetest_hc_render_admin_page() {
                     <p class="gatetest-hc-warning">
                         <?php
                         printf(
-                            /* translators: %s: gatetest.ai signup URL */
+                            /* translators: %s: gatetest.io signup URL */
                             esc_html__('You need a GateTest API key. %s to get one (free, takes 60 seconds).', GATETEST_HC_TEXT_DOMAIN),
                             '<a href="' . esc_url(GATETEST_HC_API_BASE . '/account?from=wp-plugin') . '" target="_blank" rel="noopener">' .
-                            esc_html__('Sign up at gatetest.ai', GATETEST_HC_TEXT_DOMAIN) .
+                            esc_html__('Sign up at gatetest.io', GATETEST_HC_TEXT_DOMAIN) .
                             '</a>'
                         );
                         ?>
@@ -153,9 +153,9 @@ function gatetest_hc_render_admin_page() {
                                 <p class="description">
                                     <?php
                                     printf(
-                                        /* translators: %s: link to gatetest.ai/account */
+                                        /* translators: %s: link to gatetest.io/account */
                                         esc_html__('Find or generate yours at %s.', GATETEST_HC_TEXT_DOMAIN),
-                                        '<a href="' . esc_url(GATETEST_HC_API_BASE . '/account?from=wp-plugin') . '" target="_blank" rel="noopener">gatetest.ai/account</a>'
+                                        '<a href="' . esc_url(GATETEST_HC_API_BASE . '/account?from=wp-plugin') . '" target="_blank" rel="noopener">gatetest.io/account</a>'
                                     );
                                     ?>
                                 </p>
@@ -191,7 +191,7 @@ function gatetest_hc_render_admin_page() {
 
         <p class="gatetest-hc-footer">
             <?php esc_html_e('Powered by the GateTest engine.', GATETEST_HC_TEXT_DOMAIN); ?>
-            <a href="<?php echo esc_url(GATETEST_HC_API_BASE); ?>" target="_blank" rel="noopener">gatetest.ai</a>
+            <a href="<?php echo esc_url(GATETEST_HC_API_BASE); ?>" target="_blank" rel="noopener">gatetest.io</a>
             ·
             <a href="<?php echo esc_url(GATETEST_HC_API_BASE . '/legal/privacy'); ?>" target="_blank" rel="noopener">
                 <?php esc_html_e('Privacy policy', GATETEST_HC_TEXT_DOMAIN); ?>

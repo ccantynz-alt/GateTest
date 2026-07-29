@@ -80,7 +80,7 @@ test("find/[slug]/page.tsx: generateStaticParams + generateMetadata exported", (
 
 test("find/[slug]/page.tsx: canonical URL points at /find/<slug>", () => {
   const src = fs.readFileSync(CWE_PAGE_PATH, "utf8");
-  assert.match(src, /https:\/\/gatetest\.ai\/find\/\$\{cwe\.slug\}/);
+  assert.match(src, /https:\/\/gatetest\.io\/find\/\$\{cwe\.slug\}/);
   assert.match(src, /alternates:\s*\{\s*canonical/);
 });
 

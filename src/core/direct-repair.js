@@ -27,6 +27,7 @@ const path    = require('path');
 const os      = require('os');
 const crypto  = require('crypto');
 const { spawnSync } = require('child_process');
+const { siteHost } = require('./site-url');
 
 // ─── pattern cache (in-process; persisted to disk if cacheDir is set) ──────
 
@@ -440,7 +441,7 @@ class DirectRepair {
     }
 
     const author = options.author || 'GateTest';
-    const email  = options.email  || 'bot@gatetest.ai';
+    const email  = options.email  || `bot@${siteHost()}`;
     const summary = `fix: ${report.fixes.length} issue(s) repaired by GateTest direct-repair`;
     const body = report.fixes
       .map(f => `- ${f.finding.module}: ${f.finding.detail.slice(0, 80)} [${f.strategy}]`)

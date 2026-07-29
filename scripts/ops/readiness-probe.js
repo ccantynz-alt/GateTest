@@ -4,7 +4,7 @@
 /**
  * Production readiness probe — CLI wrapper.
  *
- *   node scripts/ops/readiness-probe.js                       # probe gatetest.ai
+ *   node scripts/ops/readiness-probe.js                       # probe gatetest.io
  *   node scripts/ops/readiness-probe.js --expect-head          # ...and require the
  *                                                              #    live commit to
  *                                                              #    match local HEAD
@@ -44,7 +44,7 @@ function localHead() {
 }
 
 (async () => {
-  const baseUrl = arg('--base', 'https://gatetest.ai');
+  const baseUrl = arg('--base', 'https://gatetest.io');
   let expectedCommit = arg('--expect-commit', null);
   if (!expectedCommit && hasFlag('--expect-head')) {
     expectedCommit = localHead();

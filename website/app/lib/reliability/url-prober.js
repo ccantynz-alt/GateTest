@@ -32,7 +32,7 @@ const { resolveAndValidateUrl } = require("../ssrf-guard");
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const DEFAULT_USER_AGENT = "GateTest-Reliability/1.0 (+https://gatetest.ai)";
+const DEFAULT_USER_AGENT = "GateTest-Reliability/1.0 (+https://gatetest.io)";
 const MAX_BODY_BYTES = 256 * 1024; // 256 KB — enough for header / form scan
 
 const REQUIRED_SECURITY_HEADERS = [

@@ -39,6 +39,7 @@
 const path = require('path');
 const BaseModule = require('./base-module');
 const { checkUrl, fetchPage } = require('./live-crawler-http-helpers');
+const { botUserAgent } = require('../core/site-url');
 
 const DESTRUCTIVE_PATTERNS = [
   /\bdelete\b/i,
@@ -210,7 +211,7 @@ class InteractiveElementsModule extends BaseModule {
 
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: 'GateTest/1.0 (+https://gatetest.ai/bot) InteractiveElements',
+      userAgent: botUserAgent('InteractiveElements'),
     });
     const page = await context.newPage();
 

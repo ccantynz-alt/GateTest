@@ -11,7 +11,7 @@
 
 **Body:**
 ```
-I've been building GateTest (gatetest.ai) — a 120-module code quality gate
+I've been building GateTest (gatetest.io) — a 120-module code quality gate
 that runs as an MCP server inside Claude Code, Cursor, Windsurf, etc.
 
 The problem I kept running into: AI agents write UI blind, never hear the app
@@ -60,7 +60,7 @@ GateTest MCP (open source, 24 tools) closes all three:
 
 claude mcp add gatetest -- npx -y @gatetest/mcp-server
 
-gatetest.ai / github.com/crclabs-hq/GateTest
+gatetest.io / github.com/crclabs-hq/GateTest
 ```
 
 ---

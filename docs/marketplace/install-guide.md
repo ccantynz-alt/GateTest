@@ -234,13 +234,13 @@ The action falls back to cloning the repo at runtime when `@gatetest/cli` is not
 | Nuclear | $399 | 102 modules + per-finding Claude diagnosis, attack-chain correlation, mutation testing, chaos/fuzz, executive summary |
 | Continuous | $49/month | Unlimited push-triggered scans |
 
-All paid tiers are pay-on-completion — you are only charged once a scan delivers. Sign up and manage subscriptions at https://gatetest.ai/pricing.
+All paid tiers are pay-on-completion — you are only charged once a scan delivers. Sign up and manage subscriptions at https://gatetest.io/pricing.
 
 ---
 
 ## Where things live
 
 - Source repo: https://github.com/crclabs-hq/gatetest
-- Web app and pricing: https://gatetest.ai
-- Privacy policy: https://gatetest.ai/legal/privacy
-- Live chat support: https://gatetest.ai
+- Web app and pricing: https://gatetest.io
+- Privacy policy: https://gatetest.io/legal/privacy
+- Live chat support: https://gatetest.io

@@ -1,4 +1,4 @@
-// Sentry server-side init for gatetest.ai.
+// Sentry server-side init for gatetest.io.
 //
 // Runs in the Node.js runtime — every API route, every server
 // component. Catches errors that the client-side SDK can't see

@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/app/lib/db";
+import { SITE_URL } from "@/app/lib/site-url";
  
 const sentry = require("@/app/lib/sentry-client.js") as {
   exchangeOAuthCode: (opts: {
@@ -31,7 +32,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const clientId = process.env.SENTRY_CLIENT_ID || "";
   const clientSecret = process.env.SENTRY_CLIENT_SECRET || "";
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+  // Must resolve identically to the redirect_uri sent in connect/route.ts —
+  // see the note there about exact-match comparison.
+  const baseUrl = SITE_URL;
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(

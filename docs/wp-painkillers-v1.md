@@ -79,7 +79,7 @@ GateTest's existing 94-module engine already handles 1, 3, 4, 9, 10 with general
 
 ## Brand contract
 
-- **Subdomain:** `wp.gatetest.ai` (DNS pending — Boss Rule #4)
+- **Subdomain:** `wp.gatetest.io` (DNS pending — Boss Rule #4)
 - **In code:** lives under `/wp` routes for now until DNS lands
 - **Voice:** plain English. No "module fired" or "AST traversal." Sentences like "Your site is leaking the file `wp-config.php.bak` — anyone can read your database password by visiting `yoursite.com/wp-config.php.bak`. Fix: delete the file from your server."
 - **Cross-promotion:** "Built on the GateTest engine" small footer link. Cross-sell only, not co-marketing.
@@ -98,6 +98,6 @@ These limitations are deliberate — they keep us out of Wordfence / Sucuri / Je
 | # | Item | Owner |
 |---|---|---|
 | 1 | Stripe products: `WP Health Check $19`, `WP Full Audit $49`, `WP Continuous $19/mo` | Craig (Boss Rule #6) |
-| 2 | DNS for `wp.gatetest.ai` → same Vercel project | Craig (Boss Rule #4) |
+| 2 | DNS for `wp.gatetest.io` → same Vercel project | Craig (Boss Rule #4) |
 | 3 | Brand copy review on `/wp` landing page before public traffic | Craig (Boss Rule #8) |
 | 4 | WordPress plugin directory listing for the eventual "WP Health Check" companion plugin (optional, future) | Craig (Boss Rule #8) |

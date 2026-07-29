@@ -333,12 +333,12 @@ function openFixDashboard() {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const repoName = root ? path.basename(root) : 'your-repo';
   void vscode.env.openExternal(
-    vscode.Uri.parse(`https://gatetest.ai?repo=${encodeURIComponent(repoName)}`)
+    vscode.Uri.parse(`https://gatetest.io?repo=${encodeURIComponent(repoName)}`)
   );
 }
 
 function openDashboard() {
-  void vscode.env.openExternal(vscode.Uri.parse('https://gatetest.ai'));
+  void vscode.env.openExternal(vscode.Uri.parse('https://gatetest.io'));
 }
 
 function showPanel() {

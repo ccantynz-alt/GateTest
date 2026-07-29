@@ -74,8 +74,8 @@ key).
 
 Standard install:
   npm install -g gatetest                    (once published)
-  curl -sSL https://gatetest.ai/install.sh | bash   (CI gate today)
-  https://gatetest.ai                        (paid web scans today)
+  curl -sSL https://gatetest.io/install.sh | bash   (CI gate today)
+  https://gatetest.io                        (paid web scans today)
 
 Repo is open source: https://github.com/crclabs-hq/gatetest
 
@@ -98,7 +98,7 @@ A few things I want to call out before HN beats me to it:
 - The 90-module count includes modules at different maturity levels.
   ~60 are "I'd bet my company on this." ~25 are "good and improving."
   ~5 are "infant — pattern-match level only." Module list is at
-  gatetest.ai/modules with maturity tags.
+  gatetest.io/modules with maturity tags.
 
 - Pricing is per-scan, not per-month. The Continuous tier is on the
   roadmap but not built — don't sign up for that yet.
@@ -125,12 +125,12 @@ Suggested HN flair (don't add — HN convention is no tags in titles, but check 
 ## Pre-launch checklist before posting
 
 - [ ] PR `claude/fix-scan-timeout-issues-UJWLi` → main is **merged** (so customers see the shipped surgical mode, not the broken whole-file)
-- [ ] `gatetest.ai` is live and the $29 Quick Scan completes end-to-end (smoke test yourself with test card 4242 4242 4242 4242)
+- [ ] `gatetest.io` is live and the $29 Quick Scan completes end-to-end (smoke test yourself with test card 4242 4242 4242 4242)
 - [ ] `npm install -g gatetest` works (publish completed)
 - [ ] Stripe production webhook is set and secret matches
 - [ ] Sentry config is either fixed or removed (deploy log clean)
 - [ ] Rate limiter is live on `/api/checkout` + `/api/scan/run` + `/api/scan/fix`
-- [ ] Status page exists at gatetest.ai/status (Anthropic / Stripe / GitHub health)
+- [ ] Status page exists at gatetest.io/status (Anthropic / Stripe / GitHub health)
 - [ ] Anthropic limit increase request submitted (if you're on default tier)
 - [ ] You have 8 hours of clear schedule (HN front-page traffic peaks in the first 6 hours)
 - [ ] Coffee, water, snacks within arm's reach

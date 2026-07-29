@@ -20,7 +20,7 @@
  * using the identical formula the website's playground uses
  * (website/app/api/playground/scan/route.ts computeHealthScore) so a
  * grade means the same thing whether you saw it in CI or on
- * gatetest.ai — base = passed/total*100, penalty = min(50, errors*3).
+ * gatetest.io — base = passed/total*100, penalty = min(50, errors*3).
  *
  * Failures here are NEVER fatal — same contract as every other
  * post-*.js script in this directory. The gate's own exit code is the
@@ -114,7 +114,7 @@ function renderBody({ grade, runUrl }) {
     lines.push('', '</details>', '');
   }
 
-  lines.push(`[Full run](${runUrl}) · [gatetest.ai](https://gatetest.ai)`);
+  lines.push(`[Full run](${runUrl}) · [gatetest.io](https://gatetest.io)`);
   return lines.join('\n');
 }
 

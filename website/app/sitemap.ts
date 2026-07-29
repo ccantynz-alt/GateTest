@@ -6,9 +6,13 @@ import { getAllCountrySlugs } from "./for/countries";
 import { getAllGlossarySlugs } from "./glossary/glossary-catalog";
 import { getAllUseCaseSlugs } from "./use-cases/use-cases-catalog";
 import { getAllBlogSlugs } from "./blog/blog-catalog";
+import { SITE_URL } from "./lib/site-url";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://gatetest.ai";
+  // Must come from the resolver, not a literal: a sitemap that advertises a
+  // different host than the pages actually serve on is how you ask Google to
+  // index a domain you no longer own.
+  const base = SITE_URL;
   const now = new Date();
 
   const core: MetadataRoute.Sitemap = [

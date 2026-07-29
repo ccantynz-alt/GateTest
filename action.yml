@@ -15,7 +15,7 @@
 
 name: 'GateTest Quality Gate'
 description: '120-module AI-powered quality gate with self-healing CI'
-author: 'GateTest (gatetest.ai)'
+author: 'GateTest (gatetest.io)'
 
 branding:
   icon: 'shield'
@@ -55,7 +55,7 @@ inputs:
     required: false
     default: 'false'
   threshold:
-    description: 'Minimum acceptable letter grade (A/B/C/D) computed from the scan (same A-F scale as gatetest.ai/playground). When set, the gate ALSO fails if the computed grade is below this — on top of, not instead of, the `block`/`fail-on-warning` error-count gate. Default empty = grade never gates on its own.'
+    description: 'Minimum acceptable letter grade (A/B/C/D) computed from the scan (same A-F scale as gatetest.io/playground). When set, the gate ALSO fails if the computed grade is below this — on top of, not instead of, the `block`/`fail-on-warning` error-count gate. Default empty = grade never gates on its own.'
     required: false
     default: ''
   summary-comment:
@@ -67,11 +67,11 @@ inputs:
     required: false
     default: 'false'
   share-learnings:
-    description: 'OPT-IN: sync successful fix recipes (anonymised — no paths, no repo names, no source code outside the 2KB before/after snippet) to gatetest.ai so every other customer benefits from this fix. Default off. See https://gatetest.ai/trust for what is and is not shared.'
+    description: 'OPT-IN: sync successful fix recipes (anonymised — no paths, no repo names, no source code outside the 2KB before/after snippet) to gatetest.io so every other customer benefits from this fix. Default off. See https://gatetest.io/trust for what is and is not shared.'
     required: false
     default: 'false'
   recipe-store-url:
-    description: 'HTTP endpoint to sync fix recipes to. Defaults to https://gatetest.ai/api/recipes when share-learnings is true. Set to your own URL for a private recipe store (the Action will sync there instead).'
+    description: 'HTTP endpoint to sync fix recipes to. Defaults to https://gatetest.io/api/recipes when share-learnings is true. Set to your own URL for a private recipe store (the Action will sync there instead).'
     required: false
     default: ''
   mutation:
@@ -109,7 +109,7 @@ outputs:
     description: 'Filesystem path to the generated report (empty when report-format is "console").'
     value: ${{ steps.gate.outputs.report-path }}
   grade:
-    description: 'Letter grade (A/B/C/D/F) computed from the scan — same A-F scale as gatetest.ai/playground. Empty when no JSON report was produced.'
+    description: 'Letter grade (A/B/C/D/F) computed from the scan — same A-F scale as gatetest.io/playground. Empty when no JSON report was produced.'
     value: ${{ steps.grade.outputs.grade }}
   score:
     description: 'Numeric 0-100 score the grade above is derived from.'
@@ -252,7 +252,7 @@ runs:
     # above always produces (json is in GateTest's DEFAULT_CONFIG.reporting
     # .formats regardless of the report-format input — --json/--sarif/
     # --junit ADD a format, they don't replace it). Same formula as
-    # gatetest.ai/playground (website/api/playground/scan/route.ts
+    # gatetest.io/playground (website/api/playground/scan/route.ts
     # computeHealthScore) so a grade means the same thing in CI as it does
     # on the website. Runs on every event type (not just pull_request) so
     # `threshold` gating works on push-triggered runs too.
@@ -320,12 +320,12 @@ runs:
         ANTHROPIC_API_KEY: ${{ env.ANTHROPIC_API_KEY }}
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
         # Memory-as-a-Service opt-in. When share-learnings is on, point the
-        # local recipe store at gatetest.ai/api/recipes (or the customer's
+        # local recipe store at gatetest.io/api/recipes (or the customer's
         # own URL if they supplied one). The remote-store glue
         # (website/app/lib/recipe-store-remote.js) reads this env var and
         # syncs successful fixes there. Off by default — strictly opt-in.
-        # See https://gatetest.ai/trust for the privacy guarantees.
-        GATETEST_RECIPE_STORE_URL: ${{ inputs.share-learnings == 'true' && (inputs.recipe-store-url != '' && inputs.recipe-store-url || 'https://gatetest.ai/api/recipes') || '' }}
+        # See https://gatetest.io/trust for the privacy guarantees.
+        GATETEST_RECIPE_STORE_URL: ${{ inputs.share-learnings == 'true' && (inputs.recipe-store-url != '' && inputs.recipe-store-url || 'https://gatetest.io/api/recipes') || '' }}
       run: |
         set -uo pipefail
         if [ -z "${ANTHROPIC_API_KEY:-}" ]; then

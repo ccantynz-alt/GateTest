@@ -1,4 +1,4 @@
-# Submission-Day Runbook — fire the moment gatetest.ai is back
+# Submission-Day Runbook — fire the moment gatetest.io is back
 
 **Created 2026-07-08.** The listing blitz was prepared while production was down
 (DNS pointed at 66.42.121.161 instead of Vercel — Traefik default cert, "no
@@ -15,11 +15,11 @@ still the canonical text to paste).
 ## Gate 0 — confirm the site is actually back (run all three)
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" https://gatetest.ai/           # expect 200
-curl -s https://gatetest.ai/api/status | head -c 400                  # expect JSON, ready:true-ish
-curl -s -X POST https://gatetest.ai/api/mcp -H 'Content-Type: application/json' \
+curl -s -o /dev/null -w "%{http_code}" https://gatetest.io/           # expect 200
+curl -s https://gatetest.io/api/status | head -c 400                  # expect JSON, ready:true-ish
+curl -s -X POST https://gatetest.io/api/mcp -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | head -c 400   # expect 8 tools
-curl -s -o /dev/null -w "%{http_code}" https://gatetest.ai/icon.png   # expect 200 (added to public/ 2026-07-08)
+curl -s -o /dev/null -w "%{http_code}" https://gatetest.io/icon.png   # expect 200 (added to public/ 2026-07-08)
 ```
 
 All four green → proceed top to bottom.
@@ -77,10 +77,10 @@ mcp-publisher publish ./server.stdio.json
 ```
 PulseMCP crawls this registry daily — publishing here gets PulseMCP for free.
 
-**Use `server.stdio.json` while gatetest.ai serves the stale build (Known Issue #36)** —
+**Use `server.stdio.json` while gatetest.io serves the stale build (Known Issue #36)** —
 it's the same manifest minus the remote streamable-http entry (whose URL 404s right now
 and may fail registry health checks) and with the icon pointed at GitHub raw instead of
-gatetest.ai/icon.png (also 404 on the stale build). Once Vapron lands and Gate 0 passes,
+gatetest.io/icon.png (also 404 on the stale build). Once Vapron lands and Gate 0 passes,
 re-publish with the full dual-transport `server.json` to add the remote endpoint.
 
 ### 1c. Cline MCP Marketplace — GitHub issue on `cline/mcp-marketplace`
@@ -122,5 +122,5 @@ only submit after Gate 0 passes. Fast-follow, not day-one (per directory-listing
 
 ## Standing notes
 - `packages/mcp-remote/` (Jarvis/Bun staging) stays untouched — superseded by the in-repo Vercel endpoint.
-- Every listing links back to `https://gatetest.ai/mcp`.
+- Every listing links back to `https://gatetest.io/mcp`.
 - If any directory requires OAuth for authed connectors: free tools satisfy the listing; OAuth front-end is a flagged fast-follow build (Craig authorization — new auth surface).

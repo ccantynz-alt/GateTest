@@ -69,7 +69,7 @@ Body:
     "scanId":      "scn_xxxxxxxxxxxxxxxxxx",   // 18-hex-char token
     "targetUrl":   "https://customer-site.example",
     "suite":       "web" | "wp",
-    "callbackUrl": "https://gatetest.ai/api/web/scan/runtime-callback",
+    "callbackUrl": "https://gatetest.io/api/web/scan/runtime-callback",
     "deadlineSec": 60
   }
 
@@ -92,7 +92,7 @@ Validate body with **Zod** in `packages/schemas/` (e.g. `webRuntimeScanRequest.s
 For each queued job, in a Crontech worker container with chromium available:
 
 1. Launch playwright.chromium with { headless: true, timeout: 15000 }
-2. Open a new context: { ignoreHTTPSErrors: false, viewport 1280x800, userAgent "GateTest/1.0 (+https://gatetest.ai/bot)" }
+2. Open a new context: { ignoreHTTPSErrors: false, viewport 1280x800, userAgent "GateTest/1.0 (+https://gatetest.io/bot)" }
 3. Attach listeners for:
    - page.on('pageerror')      → "runtime-errors:page-error"   (severity: error)
    - page.on('console')        → "runtime-errors:console-error"/("console-warning"), plus CSP/mixed-content/hydration heuristics
@@ -126,7 +126,7 @@ Console-error text matching `CSP_HINT` also produces a `runtime-errors:csp-viola
 ### 3. Outbound callback — POST results back to GateTest
 
 ```
-POST {body.callbackUrl}          (always https://gatetest.ai/api/web/scan/runtime-callback)
+POST {body.callbackUrl}          (always https://gatetest.io/api/web/scan/runtime-callback)
 
 Headers:
   X-GateTest-Signature: hex(hmac-sha256(GATETEST_DISPATCH_SECRET, raw_body))
@@ -261,7 +261,7 @@ export async function captureRuntime(
   const ctx: BrowserContext = await browser.newContext({
     ignoreHTTPSErrors: false,
     viewport: { width: 1280, height: 800 },
-    userAgent: "GateTest/1.0 (+https://gatetest.ai/bot)",
+    userAgent: "GateTest/1.0 (+https://gatetest.io/bot)",
   });
   const page = await ctx.newPage();
 
@@ -420,7 +420,7 @@ After implementation, this is the smoke test that should pass:
 
 ```bash
 # From the GateTest side, hit /api/web/scan with a real URL
-curl -X POST https://gatetest.ai/api/web/scan \
+curl -X POST https://gatetest.io/api/web/scan \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 

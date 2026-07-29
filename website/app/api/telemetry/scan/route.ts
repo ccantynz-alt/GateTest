@@ -9,7 +9,7 @@
  * Defense in depth: the recorder already strips PII, and sanitizeRecord here
  * REJECTS any record carrying a path/content/message-shaped key. The store
  * degrades softly when DATABASE_URL is unset (returns 503 so the client keeps
- * buffering) — which is exactly today's state while gatetest.ai is stale.
+ * buffering) — which is exactly today's state while gatetest.io is stale.
  *
  *   200 { ok: true, accepted, rejected }   — persisted (client drops the batch)
  *   400 { ok: false, error }               — malformed / all records rejected

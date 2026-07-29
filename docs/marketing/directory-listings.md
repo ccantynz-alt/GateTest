@@ -4,12 +4,12 @@
 
 **Shared assets (use everywhere):**
 - **Name:** GateTest
-- **Homepage:** https://gatetest.ai
-- **MCP page:** https://gatetest.ai/mcp
+- **Homepage:** https://gatetest.io
+- **MCP page:** https://gatetest.io/mcp
 - **Repo:** https://github.com/crclabs-hq/gatetest
 - **Install (local):** `npx -y @gatetest/mcp-server`
-- **Install (remote URL):** `https://gatetest.ai/api/mcp`
-- **Icon:** https://gatetest.ai/icon.png
+- **Install (remote URL):** `https://gatetest.io/api/mcp`
+- **Icon:** https://gatetest.io/icon.png
 - **License:** MIT
 - **Category tags:** developer-tools, code-quality, security, testing, ai-agent
 - **One-liner:** Give Claude verified eyes, ears, and hands on your codebase.
@@ -38,7 +38,7 @@
 
 ## Cursor directory (cursor.directory / cursor.com/mcp)
 - Submit via their MCP directory form.
-- Emphasize the **remote URL** install (`https://gatetest.ai/api/mcp`) — Cursor supports URL-based MCP add, zero terminal.
+- Emphasize the **remote URL** install (`https://gatetest.io/api/mcp`) — Cursor supports URL-based MCP add, zero terminal.
 
 ## Cline MCP Marketplace (github.com/cline/mcp-marketplace)
 - Submit: open an issue/PR on the cline/mcp-marketplace repo per their template.
@@ -49,4 +49,4 @@
 
 ---
 
-**Cross-directory tip:** every listing should link back to `https://gatetest.ai/mcp` (which now has all 4 install paths). The consistent "eyes, ears & hands" framing + the free `scan_url`/`scan_repo` hook is what converts a directory browser into a first run.
+**Cross-directory tip:** every listing should link back to `https://gatetest.io/mcp` (which now has all 4 install paths). The consistent "eyes, ears & hands" framing + the free `scan_url`/`scan_repo` hook is what converts a directory browser into a first run.

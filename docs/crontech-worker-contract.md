@@ -7,7 +7,7 @@
 
 ## The flow
 
-1. **Customer** POSTs `https://gatetest.ai/api/web/scan` with `{url}`.
+1. **Customer** POSTs `https://gatetest.io/api/web/scan` with `{url}`.
 2. **GateTest serverless** runs static probes inline (headers, TLS,
    cookies, accessibility, SEO, links, performance) and immediately
    responds to the customer with those findings + a scan id +
@@ -39,7 +39,7 @@ Body:
     "scanId":      "scn_xxxxxxxxxxxxxxxxxx",
     "targetUrl":   "https://customer-site.example",
     "suite":       "web" | "wp",
-    "callbackUrl": "https://gatetest.ai/api/web/scan/runtime-callback",
+    "callbackUrl": "https://gatetest.io/api/web/scan/runtime-callback",
     "deadlineSec": 60
   }
 ```
@@ -69,7 +69,7 @@ The Playwright worker runs the URL through Chromium and captures:
 - Browser deprecation warnings
 
 ```
-POST {callbackUrl}    (always https://gatetest.ai/api/web/scan/runtime-callback)
+POST {callbackUrl}    (always https://gatetest.io/api/web/scan/runtime-callback)
 Headers:
   X-GateTest-Signature: hex(hmac-sha256(CRONTECH_DISPATCH_SECRET, body))
   X-GateTest-Timestamp: <unix-seconds>

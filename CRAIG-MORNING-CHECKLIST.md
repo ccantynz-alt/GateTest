@@ -7,14 +7,14 @@ session summary + `docs/HISTORY.md`.
 
 ## 1. Redeploy the website (10 min — HIGHEST VALUE)
 
-The live site at gatetest.ai serves a **stale build**: "118 modules",
+The live site at gatetest.io serves a **stale build**: "118 modules",
 "Claude Sonnet 4.6", a broken `npx gatetest` install command, "111-module"
 pricing card. All of it is already fixed in `main` — the Coolify box just
 hasn't rebuilt.
 
 - [ ] Open Coolify on the box (66.42.121.161:8000) → gatetest app → **Redeploy**
-- [ ] Verify: `https://gatetest.ai` hero should say "120 modules" and "Sonnet 5"
-- [ ] Verify: `https://gatetest.ai/api/platform-status` should stop saying `"version":"dev"`
+- [ ] Verify: `https://gatetest.io` hero should say "120 modules" and "Sonnet 5"
+- [ ] Verify: `https://gatetest.io/api/platform-status` should stop saying `"version":"dev"`
 
 (You deferred fixing this hosting path until Vapron ships — one redeploy
 doesn't restart that project, it just stops the site lying about the product.)
@@ -28,7 +28,7 @@ to a dated measured result — but live is better.)
 
 - [ ] Generate a token: `openssl rand -hex 32`
 - [ ] `gh secret set GATETEST_INTERNAL_TOKEN --repo crclabs-hq/gatetest`
-- [ ] `gh variable set SELF_SCAN_STATUS_URL --repo crclabs-hq/gatetest --body "https://gatetest.ai/api/internal/self-scan-status"`
+- [ ] `gh variable set SELF_SCAN_STATUS_URL --repo crclabs-hq/gatetest --body "https://gatetest.io/api/internal/self-scan-status"`
 - [ ] Set the SAME token as `GATETEST_INTERNAL_TOKEN` in the server env (Coolify app env vars)
 
 ## 3. Publish @gatetest/cli 1.59.x to npm (5 min)

@@ -22,8 +22,9 @@ const fs   = require('fs');
 const path = require('path');
 
 const { SCAN_FINDINGS_FILE, telemetryEnabled } = require('./scan-telemetry');
+const { siteUrl } = require('./site-url');
 
-const DEFAULT_URL = process.env.GATETEST_TELEMETRY_URL || 'https://gatetest.ai/api/telemetry/scan';
+const DEFAULT_URL = process.env.GATETEST_TELEMETRY_URL || siteUrl('/api/telemetry/scan');
 const DEFAULT_BATCH = 200;
 const MAX_BUFFER_LINES = 5000;
 const UPLOAD_TIMEOUT_MS = 4000;
@@ -50,7 +51,7 @@ function _writeLines(filePath, lines) {
  * local buffer. NEVER throws.
  *
  * @param {object} [opts]
- * @param {string} [opts.url]         — ingest endpoint (default gatetest.ai)
+ * @param {string} [opts.url]         — ingest endpoint (default: public origin)
  * @param {string} [opts.filePath]    — buffer path (default scan-findings.jsonl)
  * @param {number} [opts.batchSize]   — max records per flush
  * @param {string} [opts.projectRoot] — consent check

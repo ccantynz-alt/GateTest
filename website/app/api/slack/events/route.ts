@@ -3,7 +3,7 @@
  *
  * Handles Slack slash commands from the GateTest bot.
  * Configure the slash command endpoint in your Slack App settings:
- *   URL: https://gatetest.ai/api/slack/events
+ *   URL: https://gatetest.io/api/slack/events
  *   Command: /gatetest
  *
  * Supported commands:
@@ -34,7 +34,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET || "";
-const BASE_URL       = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+const BASE_URL       = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
 
 // Respond immediately (within Slack's 3s window) then fire async work
 export async function POST(req: NextRequest): Promise<NextResponse> {

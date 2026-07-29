@@ -59,6 +59,7 @@
 const path = require('path');
 const BaseModule = require('./base-module');
 const { compareScreenshots } = require('../core/visual-diff-engine');
+const { botUserAgent } = require('../core/site-url');
 
 const ENGINES = ['chromium', 'firefox', 'webkit'];
 const REFERENCE_ENGINE = 'chromium';
@@ -137,7 +138,7 @@ class CrossBrowserModule extends BaseModule {
     try {
       const context = await browser.newContext({
         viewport: DEFAULT_VIEWPORT,
-        userAgent: `GateTest/1.0 (+https://gatetest.ai/bot) CrossBrowser/${engine}`,
+        userAgent: botUserAgent(`CrossBrowser/${engine}`),
       });
       const page = await context.newPage();
 

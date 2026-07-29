@@ -13,7 +13,7 @@
 > **Rejection root cause (confirmed):** GitHub requires an app to already have
 > ≥100 installations AND be a verified publisher before it will let a listing
 > attach a paid pricing plan. The submitted listing described paid "Cloud AI"
-> functionality fulfilled through an external Stripe checkout on gatetest.ai —
+> functionality fulfilled through an external Stripe checkout on gatetest.io —
 > paid functionality with no real Marketplace plan behind it, on an app with
 > ~0 installs. That mismatch, on an app nowhere near the install threshold, is
 > why it was rejected.
@@ -22,7 +22,7 @@
 > attached — sidesteps the install/verified-publisher gate entirely, and it's
 > honest: installing the App for free already runs a real, ongoing quick-scan
 > gate (below) with zero payment required. Paid deeper scans are described as
-> what they are — available on gatetest.ai, not something bought through this
+> what they are — available on gatetest.io, not something bought through this
 > install.
 >
 > **Module count:** verify with `node bin/gatetest.js --list | grep -cE '^  [a-zA-Z]'`
@@ -40,7 +40,7 @@
 ## Short description (≤160 chars — Marketplace search card)
 
 ```
-120-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.ai.
+120-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.io.
 ```
 
 ---
@@ -57,7 +57,7 @@ secrets on every single push automatically once installed.
 For teams that want the full 120-module pass — security, reliability,
 infrastructure, accessibility, performance, and Claude-powered code review
 with automatic fix pull requests — deeper scans are available as a separate
-purchase on [gatetest.ai](https://gatetest.ai). This app install is not where
+purchase on [gatetest.io](https://gatetest.io). This app install is not where
 that payment happens; it's free the moment you add it to a repo.
 
 ### What the free tier checks on every push
@@ -66,7 +66,7 @@ that payment happens; it's free the moment you add it to a repo.
 - Hardcoded secrets (API keys, tokens, credentials)
 - Core code-quality issues
 
-### What the full 120-module scan adds (gatetest.ai, separate purchase)
+### What the full 120-module scan adds (gatetest.io, separate purchase)
 - Security: SSRF, ReDoS, TLS bypass, cookie misconfig, SQL migration safety
 - Reliability: N+1 queries, race conditions, resource leaks, async footguns
 - Infrastructure: Dockerfile, Kubernetes, Terraform/IaC, CI-workflow hardening
@@ -81,11 +81,11 @@ that payment happens; it's free the moment you add it to a repo.
 2. **Push** — every push triggers the free quick gate automatically.
 3. **See results** — a commit status and PR comment show what was found.
 4. **Go deeper (optional)** — run a full 120-module scan, or subscribe to
-   continuous full-depth scanning, at [gatetest.ai](https://gatetest.ai).
+   continuous full-depth scanning, at [gatetest.io](https://gatetest.io).
 
 ### Privacy
 Code is scanned to produce a result; see the privacy policy for exactly what
-is retained and for how long: https://gatetest.ai/legal/privacy
+is retained and for how long: https://gatetest.io/legal/privacy
 ```
 
 ---
@@ -103,7 +103,7 @@ Select **Free** in the Marketplace pricing editor. Do not attach a second
 plan — GateTest is not eligible for a paid Marketplace plan yet (requires
 ≥100 installs + verified publisher status; revisit once installs clear that
 threshold, see `docs/ROADMAP.md`). Paid tiers are sold separately on
-gatetest.ai and must not be described as purchasable through this listing.
+gatetest.io and must not be described as purchasable through this listing.
 
 ### Free plan — configuration reference
 - **Plan name:** Free
@@ -114,23 +114,23 @@ gatetest.ai and must not be described as purchasable through this listing.
   - Syntax + lint + hardcoded-secret detection
   - Commit status on every PR
   - No credit card required
-  - Deeper scans and auto-fix available separately at gatetest.ai
+  - Deeper scans and auto-fix available separately at gatetest.io
 
 ---
 
 ## Installation URL
 ```
-https://gatetest.ai/github/setup
+https://gatetest.io/github/setup
 ```
 
 ## Privacy Policy URL
 ```
-https://gatetest.ai/legal/privacy
+https://gatetest.io/legal/privacy
 ```
 
 ## Terms of Service URL
 ```
-https://gatetest.ai/legal/terms
+https://gatetest.io/legal/terms
 ```
 
 ## Support URL
@@ -155,9 +155,9 @@ resubmitting rather than starting over.
 
 | Setting | Value |
 |---------|-------|
-| **Setup URL** | `https://gatetest.ai/github/setup` |
-| **Webhook URL** | `https://gatetest.ai/api/webhook` |
-| **Callback URL** | `https://gatetest.ai/api/github/callback` |
+| **Setup URL** | `https://gatetest.io/github/setup` |
+| **Webhook URL** | `https://gatetest.io/api/webhook` |
+| **Callback URL** | `https://gatetest.io/api/github/callback` |
 | **Webhook events** | `push`, `pull_request`, `workflow_run` |
 | **Contents permission** | Read |
 | **Pull requests permission** | Read & write |

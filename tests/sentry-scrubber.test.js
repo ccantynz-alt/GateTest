@@ -148,7 +148,7 @@ describe('sentry-scrubber — scrubObject', () => {
 describe('sentry-scrubber — scrubRequest', () => {
   it('removes body (data), cookies, and sensitive headers', () => {
     const req = {
-      url: 'https://gatetest.ai/api/scan/fix',
+      url: 'https://gatetest.io/api/scan/fix',
       method: 'POST',
       data: 'huge customer code body',
       cookies: 'session=abc',
@@ -166,7 +166,7 @@ describe('sentry-scrubber — scrubRequest', () => {
     assert.strictEqual(out.headers['authorization'], '[redacted: sensitive]');
     assert.strictEqual(out.headers['x-api-key'], '[redacted: sensitive]');
     assert.strictEqual(out.headers['cookie'], '[redacted: sensitive]');
-    assert.strictEqual(out.url, 'https://gatetest.ai/api/scan/fix');
+    assert.strictEqual(out.url, 'https://gatetest.io/api/scan/fix');
     assert.strictEqual(out.method, 'POST');
   });
 

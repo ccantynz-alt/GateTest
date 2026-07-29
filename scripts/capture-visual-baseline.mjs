@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Capture visual baselines for gatetest.ai — desktop + mobile full-page.
+ * Capture visual baselines for gatetest.io — desktop + mobile full-page.
  * Saves to /opt/jarvis/visual-baselines/gatetest/{desktop,mobile}/
  * Then runs a diff pass to compare vs any existing baseline.
  *
@@ -12,7 +12,7 @@ import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
-const TARGET_URL   = process.env.TARGET_URL   || 'https://gatetest.ai';
+const TARGET_URL   = process.env.TARGET_URL   || 'https://gatetest.io';
 const BASELINE_DIR = process.env.BASELINE_DIR || '/opt/jarvis/visual-baselines/gatetest';
 const DIFF_ONLY    = process.argv.includes('--diff-only');
 
@@ -129,7 +129,7 @@ async function main() {
 
   // ─── REPORT ───────────────────────────────────────────────────────────────
   console.log('\n\n═══════════════════════════════════════════════════════════');
-  console.log('  VISUAL ASSESSMENT REPORT — gatetest.ai');
+  console.log('  VISUAL ASSESSMENT REPORT — gatetest.io');
   console.log('═══════════════════════════════════════════════════════════\n');
 
   for (const result of results) {

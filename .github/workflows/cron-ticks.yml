@@ -34,7 +34,7 @@ jobs:
       - name: Hit tick endpoints
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          BASE_URL: https://gatetest.ai
+          BASE_URL: https://gatetest.io
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET repo secret is NOT SET — the production scan queue is not being drained. Pushes are enqueued by /api/webhook and never executed, so NO commit status or PR comment is ever posted. Fix: set the SAME value in both places — (1) gh secret set CRON_SECRET --repo crclabs-hq/gatetest, and (2) CRON_SECRET in the Vapron production environment. They must match or the tick 401s."

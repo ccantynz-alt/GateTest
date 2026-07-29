@@ -19,6 +19,7 @@ const COLORS = {
 };
 
 const { triageFindings } = require('../core/finding-triage');
+const { siteUrl } = require('../core/site-url');
 
 class ConsoleReporter {
   /**
@@ -291,7 +292,7 @@ class ConsoleReporter {
     console.log(
       `${COLORS.dim}     Claude opens a PR, re-scans each fix, and proves it worked:${COLORS.reset}`,
     );
-    console.log(`     ${COLORS.cyan}${COLORS.bold}→ https://gatetest.ai${COLORS.reset}  ${COLORS.dim}(Scan + Fix, one verified PR)${COLORS.reset}`);
+    console.log(`     ${COLORS.cyan}${COLORS.bold}→ ${siteUrl()}${COLORS.reset}  ${COLORS.dim}(Scan + Fix, one verified PR)${COLORS.reset}`);
     console.log(
       `${COLORS.dim}     Already have an Anthropic key? Fix locally: ${COLORS.reset}${COLORS.cyan}gatetest fix${COLORS.reset}`,
     );

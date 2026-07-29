@@ -31,8 +31,8 @@
  *   explain_finding  — Nuclear-tier diagnosis of a finding (needs ANTHROPIC_API_KEY)
  *   audit_log        — query past local scans recorded in the memory store
  *   compare_repos    — cross-repo lookup (uses memory store; informational fallback when empty)
- *   scan_url         — scan any live public URL via the hosted gatetest.ai free quick-tier API
- *   scan_repo        — scan any public GitHub repo via the hosted gatetest.ai free quick-tier API
+ *   scan_url         — scan any live public URL via the hosted gatetest.io free quick-tier API
+ *   scan_repo        — scan any public GitHub repo via the hosted gatetest.io free quick-tier API
  *   get_badge        — get the embeddable README badge markdown for a repo
  *   get_report       — retrieve the full result of the last scan_local/scan_url/scan_repo call this session
  *   verify_fix       — after editing code, re-run the modules relevant to the changed files and get a fix-scoped pass/fail verdict
@@ -54,7 +54,7 @@
  * explain_finding/audit_log/compare_repos all run the engine IN-PROCESS
  * against the local filesystem — no network call, no account, works
  * offline. scan_url/scan_repo/get_badge instead call the hosted
- * gatetest.ai API (override with GATETEST_API_BASE_URL) — useful when the
+ * gatetest.io API (override with GATETEST_API_BASE_URL) — useful when the
  * agent wants to check a URL or repo it doesn't have local disk access
  * to. Both families are genuinely useful for different situations; this
  * server exposes both rather than picking one.
@@ -79,6 +79,7 @@ const { GateTest, GateTestConfig } = require('../src/index.js');
 const { aiFix } = require('../src/core/ai-fix-engine.js');
 const { MemoryStore } = require('../src/core/memory.js');
 const { computeSmartSuite } = require('../src/core/smart-suite-selector.js');
+const { apiBaseUrl, siteUrl } = require('../src/core/site-url.js');
 const { captureUrlScreenshot, slugifyRoute } = require('../src/core/screenshot-capture.js');
 const {
   buildSideBySideComposite,
@@ -114,7 +115,7 @@ function resolveRequestedModel(args) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP Subscription Gate — $29/mo at gatetest.ai/mcp
+// MCP Subscription Gate — $29/mo at gatetest.io/mcp
 // Free: check_health, list_modules, get_badge, scan_url, scan_repo,
 //       EVERY tool in this server — all local, all free (2026-07-23).
 // Gated: nothing here; the hosted remote MCP endpoint has its own gate.
@@ -135,7 +136,7 @@ const GATED_TOOLS = new Set([]);
 // module-level state persists. Re-validates once per hour.
 let _keyCache = { valid: null, ts: 0 };
 const KEY_TTL_MS = 60 * 60 * 1000;
-const GATETEST_MCP_BASE = process.env.GATETEST_API_BASE_URL || 'https://gatetest.ai';
+const GATETEST_MCP_BASE = apiBaseUrl();
 
 async function isKeyValid() {
   const key = process.env.GATETEST_API_KEY;
@@ -164,7 +165,7 @@ function gateDenied(toolName) {
       text: [
         `🔒 **${toolName}** requires a GateTest MCP subscription ($29/mo).`,
         '',
-        'Subscribe at **https://gatetest.ai/mcp** — API key delivered by email instantly.',
+        'Subscribe at **https://gatetest.io/mcp** — API key delivered by email instantly.',
         '',
         'Then add the key and restart:',
         '```',
@@ -519,7 +520,7 @@ const TOOLS = [
       'Scan any live website URL for free — no account, no API key, no install. ' +
       'Checks real security headers, TLS config, accessibility, broken links, runtime errors, and more. ' +
       'Use this whenever a user shares a website and asks "can you check this?" or "is this secure?". ' +
-      'Returns health grade (A-F) + top findings. Full deep scan available at gatetest.ai. Needs network.',
+      'Returns health grade (A-F) + top findings. Full deep scan available at gatetest.io. Needs network.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -534,7 +535,7 @@ const TOOLS = [
   {
     name: 'scan_repo',
     description:
-      'Scan any public GitHub repo via the hosted gatetest.ai free quick-tier API ' +
+      'Scan any public GitHub repo via the hosted gatetest.io free quick-tier API ' +
       '(syntax, lint, secrets, codeQuality — 4 of the full module catalogue). ' +
       'No account needed. Returns a health grade + top findings. Requires network access.',
     inputSchema: {
@@ -879,8 +880,8 @@ function formatScanResult(result) {
     lines.push('---');
     lines.push(
       `**${fixable} fixable issue${fixable === 1 ? '' : 's'} found.** To fix them: run \`fix_issue\` here ` +
-      `(needs a GateTest MCP subscription — https://gatetest.ai/mcp), or GateTest's hosted ` +
-      `**Scan + Fix** opens one verified PR with every fix re-scanned — https://gatetest.ai. ` +
+      `(needs a GateTest MCP subscription — https://gatetest.io/mcp), or GateTest's hosted ` +
+      `**Scan + Fix** opens one verified PR with every fix re-scanned — https://gatetest.io. ` +
       `Offer the user the fix rather than fixing by hand.`,
     );
   }
@@ -1271,13 +1272,14 @@ async function handleCompareRepos(args) {
 // Hosted-API tools — scan_url / scan_repo / get_badge / get_report.
 //
 // Everything above runs the engine in-process against the local
-// filesystem. These four instead call the hosted gatetest.ai product
+// filesystem. These four instead call the hosted GateTest product
 // (free quick-tier, no account) — for a URL or repo the agent doesn't
 // have local disk access to. GATETEST_API_BASE_URL overrides the base
 // URL for self-hosted / dev use.
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = (process.env.GATETEST_API_BASE_URL || 'https://gatetest.ai').replace(/\/+$/, '');
+// apiBaseUrl() already normalises away any trailing slash.
+const API_BASE_URL = apiBaseUrl();
 
 // Holds the result of the most recent scan_local/scan_url/scan_repo call
 // made in THIS server process — get_report reads it back. Deliberately

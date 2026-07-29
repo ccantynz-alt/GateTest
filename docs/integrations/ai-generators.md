@@ -2,7 +2,7 @@
 
 Scan AI-generated code before it reaches your users.
 
-**Endpoint:** `POST https://gatetest.ai/api/integrations/ai-generators`
+**Endpoint:** `POST https://gatetest.io/api/integrations/ai-generators`
 
 ---
 
@@ -15,7 +15,7 @@ v0, Lovable, Bolt.new, Replit Agent, and Cursor generate working code fast — b
 ## Quick Start
 
 ```bash
-curl -X POST https://gatetest.ai/api/integrations/ai-generators \
+curl -X POST https://gatetest.io/api/integrations/ai-generators \
   -H "Authorization: Bearer gt_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -48,7 +48,7 @@ curl -X POST https://gatetest.ai/api/integrations/ai-generators \
     }
   ],
   "summary": { "errors": 1, "warnings": 0, "passed": false },
-  "badge": "https://gatetest.ai/badge/fail"
+  "badge": "https://gatetest.io/badge/fail"
 }
 ```
 
@@ -62,7 +62,7 @@ Add a post-generation step in your v0 workflow or CI:
 
 ```typescript
 // After v0 generates files, scan before committing
-const result = await fetch('https://gatetest.ai/api/integrations/ai-generators', {
+const result = await fetch('https://gatetest.io/api/integrations/ai-generators', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${process.env.GATETEST_API_KEY}`,
@@ -87,7 +87,7 @@ if (!scan.summary.passed) {
 In your Lovable project, add GateTest as a post-generation webhook:
 
 1. Project Settings → Integrations → Webhooks
-2. URL: `https://gatetest.ai/api/integrations/ai-generators`
+2. URL: `https://gatetest.io/api/integrations/ai-generators`
 3. Events: `code.generated`
 4. Headers: `Authorization: Bearer gt_your_api_key`
 
@@ -108,7 +108,7 @@ Add to your Bolt project's `package.json`:
 import { readdir, readFile } from 'fs/promises';
 
 const files = await collectFiles('./src');
-const res = await fetch('https://gatetest.ai/api/integrations/ai-generators', {
+const res = await fetch('https://gatetest.io/api/integrations/ai-generators', {
   method: 'POST',
   headers: { Authorization: `Bearer ${process.env.GATETEST_API_KEY}` },
   body: JSON.stringify({ generator: 'bolt', suite: 'security', files }),
@@ -127,7 +127,7 @@ Add a shell command after generation completes:
 ```bash
 # .replit — add to postInstall or run command
 gatetest-scan() {
-  curl -sf -X POST https://gatetest.ai/api/integrations/ai-generators \
+  curl -sf -X POST https://gatetest.io/api/integrations/ai-generators \
     -H "Authorization: Bearer $GATETEST_API_KEY" \
     -H "Content-Type: application/json" \
     -d "$(node -e "
@@ -155,7 +155,7 @@ FILES_JSON=$(echo "$STAGED" | while read f; do
   echo "{\"path\":\"$f\",\"content\":$(cat "$f" | jq -Rs .)}"
 done | jq -s '.')
 
-RESULT=$(curl -sf -X POST https://gatetest.ai/api/integrations/ai-generators \
+RESULT=$(curl -sf -X POST https://gatetest.io/api/integrations/ai-generators \
   -H "Authorization: Bearer $GATETEST_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"generator\":\"cursor\",\"files\":$FILES_JSON}")

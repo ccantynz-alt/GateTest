@@ -29,6 +29,7 @@
 
 const https = require('https');
 const http = require('http');
+const { siteUrl } = require('./site-url');
 
 const DEFAULT_OPTS = {
   perRequestTimeoutMs: 10_000,
@@ -38,7 +39,7 @@ const DEFAULT_OPTS = {
   maxConcurrency: 8,
   maxRequestsPerScan: 500,
   maxWallclockMs: 5 * 60 * 1000,
-  userAgent: 'GateTest-Pentest/1.0 (+https://gatetest.ai/pentest)',
+  userAgent: `GateTest-Pentest/1.0 (+${siteUrl('/pentest')})`,
 };
 
 // ─── Forbidden payload patterns — these never go out, no matter what. ────

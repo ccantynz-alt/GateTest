@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
   // Filter out archived and forked repos
   const activeRepos = repos.filter((r) => !r.archived && !r.fork).slice(0, 20); // Cap at 20
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.ai";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
 
   // Scan each repo (sequential to avoid overwhelming the API)
   const results: RepoHealth[] = [];

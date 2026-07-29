@@ -13,7 +13,7 @@ const BUILT_AT = buildInfo.builtAt ?? null;
 const SIBLINGS = {
   vapron: "https://vapron.ai/api/platform-status",
   gluecron: "https://gluecron.com/api/platform-status",
-  gatetest: "https://gatetest.ai/api/platform-status",
+  gatetest: "https://gatetest.io/api/platform-status",
 } as const;
 
 export const dynamic = "force-dynamic";

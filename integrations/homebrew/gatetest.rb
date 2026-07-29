@@ -14,7 +14,7 @@
 
 class Gatetest < Formula
   desc "Unified quality gate for AI-generated code — 90 modules, one decision"
-  homepage "https://gatetest.ai"
+  homepage "https://gatetest.io"
   url "https://registry.npmjs.org/gatetest/-/gatetest-1.0.0.tgz"
   sha256 "REPLACE_WITH_TARBALL_SHA256_AFTER_PUBLISH"
   license "MIT"

@@ -15,7 +15,7 @@
 //
 // so the queue never drained: pushes were enqueued by /api/webhook and never
 // scanned, and no commit status was ever posted. Verified live on
-// gatetest.ai 2026-07-26.
+// gatetest.io 2026-07-26.
 //
 // The fix was to delete the duplicate and have the route delegate to
 // ensureScanQueueTable(). These tests keep it that way.

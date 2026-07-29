@@ -11,7 +11,7 @@
 > 2. **Lead with the free, no-signup scan — never the price.** Give first.
 >
 > **Honest facts to keep straight (re-verified 2026-07-19, don't drift):**
-> 120 modules · gatetest.ai · free no-signup scan · MIT CLI via
+> 120 modules · gatetest.io · free no-signup scan · MIT CLI via
 > `npx -p @gatetest/cli gatetest` (npm published; note the `-p` form is
 > required — plain `npx @gatetest/cli` fails, the package has two bins) ·
 > pay-per-scan $29 / $99 / $199 / $399 + $49/mo Continuous (LIVE) ·
@@ -23,7 +23,7 @@
 ## 0. Master assets (reuse these everywhere)
 
 **One-liner (short):**
-> GateTest — one scan, 120 checks, opens an AI-written PR that fixes what it finds. Free to try, no signup. https://gatetest.ai
+> GateTest — one scan, 120 checks, opens an AI-written PR that fixes what it finds. Free to try, no signup. https://gatetest.io
 
 **One-liner (directory / 160 chars):**
 > One scan runs 120 modules (security, quality, perf, a11y, SEO, infra) and opens an AI PR that fixes findings. Free MIT CLI, pay-per-scan hosted.
@@ -45,7 +45,7 @@ GateTest: point it at a repo or a live URL, it runs 120 checks in one
 pass, then on the paid tiers it uses Claude to open a PR that fixes what
 it found. Never auto-merges — you review.
 
-Free, no signup: https://gatetest.ai  (CLI is MIT and runs locally too.)
+Free, no signup: https://gatetest.io  (CLI is MIT and runs locally too.)
 
 Honest status: soft-launched on HN overnight and it was quiet (1am NZ
 time wasn't the move 😅). Regrouping, and I'd rather get real builder
@@ -81,7 +81,7 @@ The honest audience is solo devs and small teams who'll never wire up 10
 enterprise tools.
 
 ## Try it / tell me I'm wrong
-Free, no signup: https://gatetest.ai
+Free, no signup: https://gatetest.io
 CLI (MIT): npx -p @gatetest/cli gatetest --suite quick ./
 
 What would you actually want a tool like this to do?
@@ -95,7 +95,7 @@ What would you actually want a tool like this to do?
 ```
 Solo-built this over the last while. Paste a repo or URL → 120-module
 scan (security, quality, perf, a11y, SEO, infra) → on paid tiers it
-opens an AI PR that fixes findings. Free, no signup: https://gatetest.ai
+opens an AI PR that fixes findings. Free, no signup: https://gatetest.io
 Quiet HN launch overnight so I'm regrouping — would love honest feedback
 on where it's noisy or useful.
 ```
@@ -105,7 +105,7 @@ on where it's noisy or useful.
 Built a code-QA tool (120 checks + AI auto-fix PR). Went pay-per-scan
 ($29/$99/$199/$399) instead of per-seat, plus one $49/mo "scan every
 push" plan. Curious what this sub thinks of per-scan vs subscription for
-a dev tool. Free demo, no signup: https://gatetest.ai
+a dev tool. Free demo, no signup: https://gatetest.io
 ```
 
 **r/webdev** — (strict; frame as useful, not an ad) Title: `Made a free no-signup scanner for security/perf/a11y/SEO issues`
@@ -113,7 +113,7 @@ a dev tool. Free demo, no signup: https://gatetest.ai
 Wired up too many separate tools too many times, so I built one scan
 that covers security, performance, accessibility, SEO and more, and (on
 paid tiers) opens a PR that fixes findings. Free preview, no signup:
-https://gatetest.ai — keen to hear where it's wrong or noisy.
+https://gatetest.io — keen to hear where it's wrong or noisy.
 ```
 
 **r/selfhosted / r/opensource** — Title: `MIT-licensed CLI that runs 120 code-quality + security checks locally`
@@ -134,7 +134,7 @@ service adds the AI auto-fix PR, but the scanner itself is free + local.
 ```
 Free, no signup: paste your site URL and it checks for plugin CVEs,
 version leaks, user enumeration, XML-RPC exposure, exposed backups and
-missing security headers. https://gatetest.ai  Not a firewall — think of
+missing security headers. https://gatetest.io  Not a firewall — think of
 it as a fast second-opinion health check, handy before handing a site to
 a client. Tell me what it misses.
 ```
@@ -144,7 +144,7 @@ a client. Tell me what it misses.
 ## 4. X / Twitter  (#buildinpublic thread)
 ```
 1/ I built GateTest: one scan, 120 code checks, and on the paid tiers it
-opens a PR that FIXES what it finds. Free, no signup → gatetest.ai
+opens a PR that FIXES what it finds. Free, no signup → gatetest.io
 
 2/ Why: I was sick of wiring SonarQube + Snyk + ESLint + Lighthouse + axe
 into every project. Different config, dashboard, bill for each.
@@ -202,7 +202,7 @@ tags `web`, `security`, `testing`. Same first-hour comment protocol as HN.
 ## 7. HN second chance  (you already launched; don't re-submit blindly)
 Email **hn@ycombinator.com**, short + polite:
 ```
-Hi — I posted a Show HN for GateTest (gatetest.ai) overnight my time
+Hi — I posted a Show HN for GateTest (gatetest.io) overnight my time
 (NZ), which landed at a quiet hour for the US audience and didn't get
 much visibility. It's a genuine project — would you consider it for the
 second-chance pool so it gets a fairer run? Thanks either way.

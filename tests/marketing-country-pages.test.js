@@ -343,10 +343,10 @@ describe("IndexNow all-urls.js includes country URLs", () => {
     const urls = mod.buildAllUrls();
     for (const slug of EXPECTED_SLUGS) {
       assert.ok(
-        urls.includes(`https://gatetest.ai/for/${slug}`),
+        urls.includes(`https://gatetest.io/for/${slug}`),
         `buildAllUrls missing /for/${slug}`,
       );
     }
-    assert.ok(urls.includes("https://gatetest.ai/for"), "buildAllUrls missing /for index");
+    assert.ok(urls.includes("https://gatetest.io/for"), "buildAllUrls missing /for index");
   });
 });

@@ -184,11 +184,11 @@ describe('processGitHubEvent', () => {
     eventType: 'push',
     delivery: DELIVERY,
     signatureHeader: null,
-    env: { GITHUB_WEBHOOK_SECRET: SECRET, NEXT_PUBLIC_BASE_URL: 'https://gatetest.ai' },
+    env: { GITHUB_WEBHOOK_SECRET: SECRET, NEXT_PUBLIC_BASE_URL: 'https://gatetest.io' },
     sql: async () => [],
     queueStore: makeQueueStore(),
     fetchImpl: makeFetchImpl(),
-    baseUrl: 'https://gatetest.ai',
+    baseUrl: 'https://gatetest.io',
   });
 
   it('returns 503 when GITHUB_WEBHOOK_SECRET is not set', async () => {
@@ -361,7 +361,7 @@ describe('processGitHubEvent — workflow_run ci_fix', () => {
       sql: null,
       queueStore: makeQueueStore(),
       fetchImpl: (url, opts) => { kicks.push({ url, opts }); return Promise.resolve({ ok: true }); },
-      baseUrl: 'https://gatetest.ai',
+      baseUrl: 'https://gatetest.io',
       _kicks: kicks,
     };
   }

@@ -173,7 +173,7 @@ const HELP = `
     gatetest --module security        Security scan only
     gatetest --module visual          Visual regression only
     gatetest --suite quick            Fast pre-commit checks
-    gatetest --server https://gatetest.ai    Scan server SSL, headers, DNS
+    gatetest --server https://gatetest.io    Scan server SSL, headers, DNS
     gatetest --crawl https://zoobicon.com   Crawl and test live site
     gatetest --crawl https://app.example.com --crawl-cookie "session=\${SESSION}"
                                       Authenticated crawl (reaches /dashboard/*)

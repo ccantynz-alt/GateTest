@@ -28,7 +28,7 @@
  *   2. `scanOutputForLeaks(text)` — regex-screens Claude's output for
  *      known leak shapes: our system-prompt fragments, raw API keys
  *      (sk-ant-*, ghp_*, github_pat_*, sk_live_*, sk_test_*), internal
- *      URLs (gatetest.ai/admin, vercel.app paths), and "system prompt"
+ *      URLs (gatetest.io/admin, vercel.app paths), and "system prompt"
  *      reflection attempts. Returns { safe, leaks } so callers can
  *      reject + log + alert on any positive hit.
  *
@@ -206,7 +206,10 @@ const LEAK_PATTERNS = [
   { id: 'leak:role-disclosure', pattern: /\b(?:my\s+(?:system\s+)?prompt|my\s+instructions|developer'?s?\s+instructions)\s+(?:is|are|says?|told\s+me)\b/gi, severity: 'high', redact: false },
   { id: 'leak:model-disclosure', pattern: /\b(?:I\s+am|I'm)\s+(?:Claude|GPT|claude-(?:sonnet|opus|haiku)|gpt-[0-9])/gi, severity: 'high', redact: false },
   // ---- Internal URL / admin paths (HIGH) ----
-  { id: 'leak:admin-url',      pattern: /\bgatetest\.ai\/admin\b/g,         severity: 'high', redact: true },
+  // Both TLDs on purpose: the product moved .ai -> .io on 2026-07-30, and a
+  // leak detector that only knows the current domain stops catching the old
+  // one — which is still what injected content and stale docs will quote.
+  { id: 'leak:admin-url',      pattern: /\bgatetest\.(?:ai|io)\/admin\b/g,   severity: 'high', redact: true },
   { id: 'leak:vercel-internal', pattern: /\b[a-z0-9-]+\.vercel\.app\/[a-z0-9/_.-]+/gi, severity: 'high', redact: true },
   // ---- Jailbreak markers in the output (informational signal) ----
   { id: 'leak:ignore-previous', pattern: /\b(?:ignore|disregard|forget)\s+(?:previous|prior|above|all)\s+instructions?\b/gi, severity: 'high', redact: false },

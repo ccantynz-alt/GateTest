@@ -312,7 +312,7 @@ function renderReviewComment(reviews, averages) {
   }
   lines.push('---');
   lines.push('');
-  lines.push('<sub>A second Claude agent reviewed each fix on a fixed rubric. This is part of the GateTest <a href="https://gatetest.ai">$199 Scan + Fix</a> tier — pair review is included with every fix PR.</sub>');
+  lines.push('<sub>A second Claude agent reviewed each fix on a fixed rubric. This is part of the GateTest <a href="https://gatetest.io">$199 Scan + Fix</a> tier — pair review is included with every fix PR.</sub>');
   return lines.join('\n');
 }
 

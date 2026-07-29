@@ -25,6 +25,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { FIXTURE_EMAIL, siteUrl } = require('../core/site-url');
 
 class ExplorerModule extends BaseModule {
   constructor() {
@@ -450,11 +451,11 @@ class ExplorerModule extends BaseModule {
           if (!el) return interaction;
 
           if (element.inputType === 'email') {
-            await el.fill('test@gatetest.ai').catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
+            await el.fill(FIXTURE_EMAIL).catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
           } else if (element.inputType === 'number') {
             await el.fill('42').catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
           } else if (element.inputType === 'url') {
-            await el.fill('https://gatetest.ai').catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
+            await el.fill(siteUrl()).catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
           } else if (element.inputType === 'tel') {
             await el.fill('+1234567890').catch(() => {}); // error-ok — Playwright fill failure is non-fatal in exploration
           } else if (element.inputType === 'search' || element.inputType === 'text') {

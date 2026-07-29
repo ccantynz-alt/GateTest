@@ -5,7 +5,7 @@
 This guide walks Craig through submitting GateTest to the GitHub Marketplace as a **FREE** GitHub App listing.
 Complete every step in order. The listing will be reviewed by GitHub staff (typically 3–7 business days).
 
-> **Canonical copy lives in [`listing.md`](listing.md), not here.** This file is the click-through procedure; `listing.md` is the exact text to paste. The 2026-05-14 submission was rejected for describing PAID functionality on an app below GitHub's ≥100-install threshold — so the listing is **Free-only** (no paid Marketplace plan attached; paid tiers are sold separately on gatetest.ai and must never be described as purchasable through this install). Any field below that still reads "paid," "67 modules," or "enter payment details" is stale — defer to `listing.md`.
+> **Canonical copy lives in [`listing.md`](listing.md), not here.** This file is the click-through procedure; `listing.md` is the exact text to paste. The 2026-05-14 submission was rejected for describing PAID functionality on an app below GitHub's ≥100-install threshold — so the listing is **Free-only** (no paid Marketplace plan attached; paid tiers are sold separately on gatetest.io and must never be described as purchasable through this install). Any field below that still reads "paid," "67 modules," or "enter payment details" is stale — defer to `listing.md`.
 
 ---
 
@@ -37,7 +37,7 @@ On the **Marketplace listing** page:
 | Field | Value |
 |-------|-------|
 | **Listing name** | GateTest — AI Code Quality |
-| **Short description** | (use the verified copy in `listing.md` → "Short description": 120-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.ai.) |
+| **Short description** | (use the verified copy in `listing.md` → "Short description": 120-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.io.) |
 | **Categories** | Code quality (primary) · Security (secondary) — per `listing.md` |
 | **Primary language** | (leave blank — GateTest is language-agnostic) |
 
@@ -74,9 +74,9 @@ Confirm these are already set on the GitHub App itself (under **Permissions & ev
 - `push`
 - `pull_request`
 
-**Setup URL:** `https://gatetest.ai/github/setup`
-**Callback URL:** `https://gatetest.ai/api/github/callback`
-**Webhook URL:** `https://gatetest.ai/api/webhook`
+**Setup URL:** `https://gatetest.io/github/setup`
+**Callback URL:** `https://gatetest.io/api/github/callback`
+**Webhook URL:** `https://gatetest.io/api/webhook`
 
 ---
 
@@ -84,10 +84,10 @@ Confirm these are already set on the GitHub App itself (under **Permissions & ev
 
 In the **Optional features** section of the App settings (not the Marketplace listing), confirm:
 
-- **Setup URL (after installation):** `https://gatetest.ai/github/setup`
+- **Setup URL (after installation):** `https://gatetest.io/github/setup`
   - This is where GitHub redirects users immediately after they install the app.
-  - The page at this URL (gatetest.ai/github/setup) explains the free install — it must NOT prompt for payment. The free App install runs the quick gate with no card; paid deeper scans live separately on gatetest.ai.
-- **Redirect on update:** `https://gatetest.ai/github/setup`
+  - The page at this URL (gatetest.io/github/setup) explains the free install — it must NOT prompt for payment. The free App install runs the quick gate with no card; paid deeper scans live separately on gatetest.io.
+- **Redirect on update:** `https://gatetest.io/github/setup`
 
 ---
 
@@ -95,7 +95,7 @@ In the **Optional features** section of the App settings (not the Marketplace li
 
 In the Marketplace listing editor, scroll to **Pricing and setup**. GitHub offers two billing models:
 
-### The chosen approach — Free plan only, Stripe on gatetest.ai (see `listing.md`)
+### The chosen approach — Free plan only, Stripe on gatetest.io (see `listing.md`)
 
 **Submit with a single Free plan.** The 2026-05-14 submission was rejected for
 describing paid functionality without meeting GitHub's ≥100-install threshold for
@@ -105,10 +105,10 @@ without re-reading `listing.md`'s header note.
 
 | Plan name | Unit | Price | Description (shown to buyer) |
 |-----------|------|-------|-------------------------------|
-| Free | — | $0/month | Continuous quality gate on every push and PR. Deeper scans and auto-fix PRs available at gatetest.ai. |
+| Free | — | $0/month | Continuous quality gate on every push and PR. Deeper scans and auto-fix PRs available at gatetest.io. |
 
-Payment stays on Stripe via gatetest.ai: the **Setup URL**
-(`https://gatetest.ai/github/setup`) drives users to the site, where the real
+Payment stays on Stripe via gatetest.io: the **Setup URL**
+(`https://gatetest.io/github/setup`) drives users to the site, where the real
 tiers live — Quick $29 / Full $99 / Scan + Fix $199 / Forensic $399 (one-time)
 plus Continuous $49/mo and MCP $29/mo. Marketplace copy must never quote a
 module count other than **120** (the engine total; the website suite runs 88
@@ -143,8 +143,8 @@ This agreement covers revenue sharing (GitHub takes 0% as of 2024 for new listin
 | "App must be installable" | Install the app on at least one repo first |
 | "Description too short" | Full description must be 40+ words |
 | "Missing screenshots" | Upload at least 1 screenshot (5 recommended) |
-| "Webhook URL unreachable" | Ensure `https://gatetest.ai/api/webhook` returns 200 on a GET request (add a health-check handler if needed) |
-| "Setup URL not responding" | Ensure `https://gatetest.ai/github/setup` loads without auth errors |
+| "Webhook URL unreachable" | Ensure `https://gatetest.io/api/webhook` returns 200 on a GET request (add a health-check handler if needed) |
+| "Setup URL not responding" | Ensure `https://gatetest.io/github/setup` loads without auth errors |
 | "Pricing plans incomplete" | Each paid plan needs a description and unit price |
 
 ---

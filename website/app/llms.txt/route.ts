@@ -16,10 +16,11 @@ import { BLOG_POSTS } from "../blog/blog-catalog";
 import { getAllCweSlugs } from "../find/cwe-catalog";
 import { getAllRegulationSlugs } from "../regulation/catalog";
 import siteStats from "../data/site-stats.json";
+import { SITE_URL } from "../lib/site-url";
 
 export const dynamic = "force-static";
 
-const BASE = "https://gatetest.ai";
+const BASE = SITE_URL;
 
 // The site-wide marketed module count, taken from the same generated stats
 // file the homepage hero uses (scripts/generate-site-stats.js), so the public

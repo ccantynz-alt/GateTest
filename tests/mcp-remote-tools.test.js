@@ -24,7 +24,7 @@ const originalFetch = global.fetch;
 // from CJS test runner. This keeps the test focused on the contract
 // (request shape, response formatting) without spawning a child process.
 
-const HOSTED = 'https://www.gatetest.ai';
+const HOSTED = 'https://www.gatetest.io';
 
 function mockFetchSequence(responses) {
   const calls = [];

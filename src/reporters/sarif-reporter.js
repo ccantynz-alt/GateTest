@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { siteUrl } = require('../core/site-url');
 
 // Module → CWE / OWASP / security-severity mapping. Findings emitted by
 // these modules get enriched SARIF metadata that renders as filterable
@@ -265,7 +266,7 @@ class SarifReporter {
           driver: {
             name: 'GateTest',
             version: '1.1.0',
-            informationUri: 'https://gatetest.ai',
+            informationUri: siteUrl(),
             rules,
           },
         },

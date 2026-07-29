@@ -54,7 +54,7 @@ describe('playwright-stability — isThirdPartyUrl', () => {
   it('does NOT match the customer\'s own domain', () => {
     assert.ok(!PS.isThirdPartyUrl('https://gluecron.com/api/x'));
     assert.ok(!PS.isThirdPartyUrl('https://crontech.ai/dashboard'));
-    assert.ok(!PS.isThirdPartyUrl('https://gatetest.ai/api/scan'));
+    assert.ok(!PS.isThirdPartyUrl('https://gatetest.io/api/scan'));
   });
 
   it('returns false for non-string input', () => {
@@ -172,7 +172,7 @@ describe('playwright-stability — installThirdPartyStubs', () => {
       fulfill: async (resp) => { fulfilled.push({ url: 'customer', resp }); },
       continue: async () => { continued.push('customer'); },
     };
-    await handler(customerRoute, { url: () => 'https://gatetest.ai/api/scan' });
+    await handler(customerRoute, { url: () => 'https://gatetest.io/api/scan' });
 
     assert.strictEqual(fulfilled.length, 1, 'one fulfill (GA)');
     assert.strictEqual(fulfilled[0].resp.status, 204);

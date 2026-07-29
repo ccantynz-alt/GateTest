@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
  * publish-self-scan.js — best-effort publish of the latest self-scan
- * report to gatetest.ai for the live trust badge.
+ * report to gatetest.io for the live trust badge.
  *
  * Called from `.github/workflows/ci.yml` AFTER the self-scan step.
  * Reads `.gatetest/reports/gatetest-report-latest.json`, derives the
  * badge payload, HMAC-signs the body with `GATETEST_INTERNAL_TOKEN`,
- * and POSTs to `${SELF_SCAN_STATUS_URL || "https://gatetest.ai"}/api/internal/self-scan-status`.
+ * and POSTs to `${SELF_SCAN_STATUS_URL || "https://gatetest.io"}/api/internal/self-scan-status`.
  *
  * FAIL-SOFT: this script ALWAYS exits 0. The CI workflow must not be
  * broken by a stats publish that didn't reach the website (e.g.
- * gatetest.ai is down, the token isn't configured on a fork PR).
+ * gatetest.io is down, the token isn't configured on a fork PR).
  * Use the human-readable stderr output to diagnose.
  */
 
@@ -80,7 +80,7 @@ async function postPayload(url, body, signature) {
 }
 
 async function main() {
-  const baseUrl = envOr('SELF_SCAN_STATUS_URL', 'https://gatetest.ai');
+  const baseUrl = envOr('SELF_SCAN_STATUS_URL', 'https://gatetest.io');
   const endpoint = `${baseUrl}/api/internal/self-scan-status`;
   const secret = envOr('GATETEST_INTERNAL_TOKEN', '');
 

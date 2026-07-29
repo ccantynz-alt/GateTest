@@ -1,4 +1,4 @@
-// Sentry edge-runtime init for gatetest.ai.
+// Sentry edge-runtime init for gatetest.io.
 //
 // Runs in the Vercel Edge runtime — middleware, edge route handlers.
 // Separate runtime from Node.js so it needs its own SDK init even

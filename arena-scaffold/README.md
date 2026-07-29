@@ -1,12 +1,12 @@
 # GateTest Arena
 
-Live training + proof environment for [GateTest](https://gatetest.ai).
+Live training + proof environment for [GateTest](https://gatetest.io).
 
 ## What this repo does
 
 Every 2 hours, a workflow injects a known bug into `src/math.js`, opens a PR, and lets CI fail. The `ai-ci-fixer` workflow then runs against the failure and opens a follow-up PR with the fix already written. If the fix's CI is green, `auto-merge-fix.yml` merges it.
 
-**The whole loop is public.** Every cycle — bug injection, fix attempt, merge outcome — is visible at [gatetest.ai/testing](https://gatetest.ai/testing).
+**The whole loop is public.** Every cycle — bug injection, fix attempt, merge outcome — is visible at [gatetest.io/testing](https://gatetest.io/testing).
 
 ## Why
 

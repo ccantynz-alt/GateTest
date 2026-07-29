@@ -4,24 +4,24 @@
   "version": "1.57.0",
   "description": "120-module QA gate. Give Claude eyes (screenshots), ears (Sentry errors), hands (verify fixes), and debug tools (run_tests, stream_logs, query_db, http_request).",
   "license": "MIT",
-  "homepage": "https://gatetest.ai",
+  "homepage": "https://gatetest.io",
   "repository": {
     "source": "github",
     "url": "https://github.com/crclabs-hq/GateTest"
   },
-  "icon": "https://gatetest.ai/icon.png",
+  "icon": "https://gatetest.io/icon.png",
   "versions": [
     {
       "registryType": "remote",
       "version": "1.1.3",
       "transport": {
         "type": "streamable-http",
-        "url": "https://gatetest.ai/api/mcp"
+        "url": "https://gatetest.io/api/mcp"
       },
       "environmentVariables": [
         {
           "name": "GATETEST_API_KEY",
-          "description": "Premium MCP subscription key ($29/mo at gatetest.ai/mcp), sent as Authorization: Bearer. Free tools work without it: check_health, list_modules, get_badge, scan_url, scan_repo.",
+          "description": "Premium MCP subscription key ($29/mo at gatetest.io/mcp), sent as Authorization: Bearer. Free tools work without it: check_health, list_modules, get_badge, scan_url, scan_repo.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
@@ -89,7 +89,7 @@
         },
         {
           "name": "GATETEST_API_KEY",
-          "description": "Premium MCP subscription key ($29/mo at gatetest.ai/mcp). Unlocks full 120-module scans, AI fix, Eyes (screenshot), Ears (production errors), Hands (verify_fix). Free tools work without a key: check_health, list_modules, get_badge, scan_url, scan_local (quick suite only).",
+          "description": "Premium MCP subscription key ($29/mo at gatetest.io/mcp). Unlocks full 120-module scans, AI fix, Eyes (screenshot), Ears (production errors), Hands (verify_fix). Free tools work without a key: check_health, list_modules, get_badge, scan_url, scan_local (quick suite only).",
           "isRequired": false,
           "isSecret": true,
           "format": "string"

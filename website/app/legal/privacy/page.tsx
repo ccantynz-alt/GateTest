@@ -33,7 +33,7 @@ export default function Privacy() {
             <h2 className="text-lg font-semibold text-foreground mb-2">1. Who We Are</h2>
             <p>
               GateTest (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) operates the website
-              gatetest.ai and provides automated code quality scanning services. This Privacy
+              gatetest.io and provides automated code quality scanning services. This Privacy
               Policy explains what personal data we collect, how we use it, how we protect it, and
               your rights regarding your data. It applies to all users of our website, GitHub App,
               CLI tool, and paid scanning services.
@@ -255,7 +255,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">7. Data Security</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li>All connections to gatetest.ai are encrypted via TLS 1.2+ (HTTPS)</li>
+              <li>All connections to gatetest.io are encrypted via TLS 1.2+ (HTTPS)</li>
               <li>Payment processing is handled entirely by Stripe (PCI-DSS Level 1 compliant)</li>
               <li>Repository access uses GitHub&apos;s authenticated API with time-limited installation tokens</li>
               <li>Minimal permissions requested — read-only for contents, write only for PR comments and commit statuses</li>
@@ -541,7 +541,7 @@ export default function Privacy() {
               </li>
               <li>
                 <strong>Functional Software, Inc. (Sentry)</strong> (United States) — application
-                error tracking and performance monitoring for the gatetest.ai website and APIs.
+                error tracking and performance monitoring for the gatetest.io website and APIs.
                 <br />
                 <em>Sees:</em> stack traces of uncaught exceptions and unhandled rejections, HTTP
                 request metadata (URL, method, IP, user-agent, response code), browser session
@@ -777,7 +777,7 @@ export default function Privacy() {
 
         <div className="mt-12">
           <Link href="/" className="text-sm text-muted hover:text-foreground transition-colors">
-            &larr; Back to gatetest.ai
+            &larr; Back to gatetest.io
           </Link>
         </div>
       </div>

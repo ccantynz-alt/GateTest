@@ -48,10 +48,10 @@ function BadgePreview({ grade, score, color }: { grade: string; score: number; c
 
 export default function BadgePage() {
   const exampleRepo = "crclabs-hq/GateTest";
-  const badgeUrl    = `https://gatetest.ai/api/badge?repo=${exampleRepo}`;
-  const markdownEmbed = `[![GateTest](${badgeUrl})](https://gatetest.ai/playground)`;
-  const htmlEmbed     = `<a href="https://gatetest.ai/playground"><img src="${badgeUrl}" alt="GateTest"></a>`;
-  const rstEmbed      = `.. image:: ${badgeUrl}\n   :target: https://gatetest.ai/playground\n   :alt: GateTest`;
+  const badgeUrl    = `https://gatetest.io/api/badge?repo=${exampleRepo}`;
+  const markdownEmbed = `[![GateTest](${badgeUrl})](https://gatetest.io/playground)`;
+  const htmlEmbed     = `<a href="https://gatetest.io/playground"><img src="${badgeUrl}" alt="GateTest"></a>`;
+  const rstEmbed      = `.. image:: ${badgeUrl}\n   :target: https://gatetest.io/playground\n   :alt: GateTest`;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
@@ -128,7 +128,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">Markdown (README.md)</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 break-all">
-                      {`[![GateTest](https://gatetest.ai/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`)](https://gatetest.ai/playground)`}
+                      {`[![GateTest](https://gatetest.io/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`)](https://gatetest.io/playground)`}
                     </code>
                     <CopyButton text={markdownEmbed} />
                   </div>
@@ -139,7 +139,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">HTML</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 break-all">
-                      {`<a href="https://gatetest.ai/playground"><img src="https://gatetest.ai/api/badge?repo=`}
+                      {`<a href="https://gatetest.io/playground"><img src="https://gatetest.io/api/badge?repo=`}
                       <span className="text-emerald-400">owner/repo</span>
                       {`" alt="GateTest"></a>`}
                     </code>
@@ -152,7 +152,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">reStructuredText</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 whitespace-pre-wrap break-all">
-                      {`.. image:: https://gatetest.ai/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`\n   :target: https://gatetest.ai/playground\n   :alt: GateTest`}
+                      {`.. image:: https://gatetest.io/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`\n   :target: https://gatetest.io/playground\n   :alt: GateTest`}
                     </code>
                     <CopyButton text={rstEmbed} />
                   </div>
@@ -197,7 +197,7 @@ export default function BadgePage() {
             </table>
           </div>
           <p className="text-xs text-white/30 font-mono">
-            Endpoint: <span className="text-white/50">GET https://gatetest.ai/api/badge?repo=owner/repo</span>
+            Endpoint: <span className="text-white/50">GET https://gatetest.io/api/badge?repo=owner/repo</span>
           </p>
           <p className="text-xs text-white/30 font-mono">
             Cache: <span className="text-white/50">5 minutes (CDN) · Stale-while-revalidate</span>
