@@ -18,9 +18,22 @@ const COLORS = {
   bgYellow: '\x1b[43m',
 };
 
+const { triageFindings } = require('../core/finding-triage');
+
 class ConsoleReporter {
-  constructor(runner) {
+  /**
+   * @param {object} runner
+   * @param {object} [opts]
+   * @param {boolean} [opts.showAll=false] — restore the full per-module dump
+   *   (`gatetest --all`). Off by default: a scan of this repo streams 813
+   *   warnings inline, which reads as noise even though every one is real,
+   *   and the developer closes the terminal. Default output is now a ranked
+   *   shortlist at the end. Nothing is dropped silently — the count of what
+   *   is not shown, and the flag to see it, are printed every time.
+   */
+  constructor(runner, opts = {}) {
     this.runner = runner;
+    this.showAll = Boolean(opts.showAll);
     this._attach();
   }
 
@@ -30,6 +43,68 @@ class ConsoleReporter {
     this.runner.on('module:end', (result) => this._onModuleEnd(result));
     this.runner.on('module:skip', (result) => this._onModuleSkip(result));
     this.runner.on('suite:end', (summary) => this._onSuiteEnd(summary));
+  }
+
+  /**
+   * The shortlist. This is the part a first-time user actually reads.
+   *
+   * "813 warnings" tells a developer nothing they can act on and reads as
+   * noise even when every finding is real — so they close the terminal and
+   * never run it again. "3 things, here they are, here is the line" gets
+   * trusted. The confidence score that ranks these already existed; nothing
+   * was using it to decide what to show.
+   *
+   * Blocking errors are listed in full and never capped — they stop the
+   * build, so hiding any of them would be indefensible. Everything else
+   * competes for three slots, spread across modules so one noisy module
+   * cannot fill the list.
+   *
+   * The hidden count and the flag to see them are always printed. Quietly
+   * showing 3 of 813 is the same dishonesty as reporting 813, in the other
+   * direction.
+   */
+  _whatMatters(summary) {
+    if (this.showAll) return;
+
+    const { blocking, top, hiddenCount } = triageFindings(summary.results, {
+      blockThreshold: summary.confidenceThreshold,
+    });
+    if (blocking.length === 0 && top.length === 0) return;
+
+    const line = (f, mark) => {
+      const c = f.check;
+      const where = c.file ? `${c.file}${c.line ? `:${c.line}` : ''}` : f.module;
+      console.log(`  ${mark} ${COLORS.bold}${where}${COLORS.reset}`);
+      const msg = c.message || c.name;
+      if (msg) console.log(`      ${msg}`);
+      if (c.suggestion) console.log(`      ${COLORS.dim}→ ${c.suggestion}${COLORS.reset}`);
+    };
+
+    // A repo with 200 blockers should not open with 200 lines of scroll —
+    // that recreates the wall this whole section exists to remove. Worst
+    // first, a readable slice, and the remainder disclosed rather than
+    // dropped. The gate decision is untouched: all of them still block.
+    const BLOCKING_SHOWN = 10;
+    const blockingShown = blocking.slice(0, BLOCKING_SHOWN);
+    const blockingHidden = blocking.length - blockingShown.length;
+
+    console.log('');
+    if (blocking.length > 0) {
+      console.log(`${COLORS.bold}  What's blocking you${COLORS.reset}${blocking.length > BLOCKING_SHOWN ? ` ${COLORS.dim}(worst ${BLOCKING_SHOWN} of ${blocking.length})${COLORS.reset}` : ''}`);
+      for (const f of blockingShown) line(f, `${COLORS.red}✗${COLORS.reset}`);
+      if (blockingHidden > 0) {
+        console.log(`      ${COLORS.dim}…and ${blockingHidden} more blocking finding(s).${COLORS.reset}`);
+      }
+      if (top.length > 0) console.log('');
+    }
+    if (top.length > 0) {
+      console.log(`${COLORS.bold}  ${blocking.length > 0 ? 'Also worth a look' : 'Worth a look'}${COLORS.reset}`);
+      for (const f of top) line(f, `${COLORS.yellow}~${COLORS.reset}`);
+    }
+    if (hiddenCount > 0) {
+      console.log('');
+      console.log(`  ${COLORS.dim}${hiddenCount} more finding(s) not shown — ${COLORS.reset}gatetest --all${COLORS.dim} for everything.${COLORS.reset}`);
+    }
   }
 
   _onSuiteStart(data) {
@@ -56,11 +131,14 @@ class ConsoleReporter {
       if (warnings > 0) extra += `, ${warnings} warnings`;
       if (fixes > 0) extra += `, ${fixes} auto-fixed`;
       console.log(`${COLORS.green}[PASS]${COLORS.reset} ${COLORS.dim}(${extra})${COLORS.reset}`);
-      // Show warnings even on pass
-      for (const check of result.warningChecks) {
-        console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
-        if (check.message) {
-          console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+      // Warnings are collected and ranked for the shortlist at the end.
+      // Streaming every one inline is what produced 813 lines of scroll.
+      if (this.showAll) {
+        for (const check of result.warningChecks) {
+          console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
+          if (check.message) {
+            console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+          }
         }
       }
     } else {
@@ -89,11 +167,14 @@ class ConsoleReporter {
           console.log(`      ${COLORS.yellow}fix: ${check.suggestion}${COLORS.reset}`);
         }
       }
-      // Then warnings
-      for (const check of result.warningChecks) {
-        console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
-        if (check.message) {
-          console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+      // Then warnings — same reasoning as the pass branch. Errors above are
+      // always shown; they are why the module failed.
+      if (this.showAll) {
+        for (const check of result.warningChecks) {
+          console.log(`    ${COLORS.yellow}~ ${check.name}${COLORS.reset}`);
+          if (check.message) {
+            console.log(`      ${COLORS.dim}${check.message}${COLORS.reset}`);
+          }
         }
       }
     }
@@ -172,6 +253,8 @@ class ConsoleReporter {
         console.log(`    ${COLORS.red}- ${fm.module}: ${fm.error}${COLORS.reset}`);
       }
     }
+
+    this._whatMatters(summary);
 
     this._upsell(summary);
 

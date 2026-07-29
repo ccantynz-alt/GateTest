@@ -68,6 +68,10 @@ const HELP = `
                        mutation testing) to a nightly run.
     --validate         Validate the CLAUDE.md file
     --report           Display the latest test report
+    --all              Show every finding. By default the scan ends with a
+                       short ranked list of what matters plus a count of
+                       what was not shown — 800 streamed warnings is not a
+                       report, it is a wall.
     --noise            Show which modules are noisy for this repo (fire-rate +
                        dismissals, learned from scan history) and which have
                        been auto-softened. Silence noise via .gatetestignore.
@@ -354,6 +358,10 @@ async function main() {
     autoFix: args.fix || false,
     diffOnly: args.diff || false,
     sarif: args.sarif || false,
+    // --all restores the full per-module finding dump. Default output is a
+    // ranked shortlist: 813 streamed warnings reads as noise and the
+    // developer stops running the tool.
+    showAll: args.all || false,
     junit: args.junit || false,
     githubAnnotations: args.githubAnnotations || false,
     // Report-only mode — gate reports findings but never fails the
@@ -1007,6 +1015,7 @@ function parseArgs(argv) {
     else if (arg === '--list') args.list = true;
     else if (arg === '--report') args.report = true;
     else if (arg === '--noise') args.noise = true;
+    else if (arg === '--all') args.all = true;
     else if (arg === '--init') args.init = true;
     else if (arg === '--init-claude-md') args.initClaudeMd = true;
     else if (arg === '--health') args.health = true;

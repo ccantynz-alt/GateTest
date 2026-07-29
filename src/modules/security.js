@@ -198,6 +198,12 @@ class SecurityModule extends BaseModule {
               // Carried so the confidence scorer can judge the exact
               // position rather than falling back to a whole-line guess.
               column: match.index,
+              // Structured, not just prose in the message. Every one of
+              // these is severity:'error', so without this the triage
+              // shortlist ranked "Math.random() for security" (moderate)
+              // above SQL injection (critical) — the first thing a new user
+              // reads should be the worst thing found.
+              impact: pattern.severity,
               message: `${pattern.severity.toUpperCase()}: ${pattern.name} detected`,
               suggestion: `Review and replace ${pattern.name} with a safe alternative`,
             });
@@ -273,6 +279,7 @@ class SecurityModule extends BaseModule {
   _reportSqlInjection(result, relPath, lineNo) {
     result.addCheck(`security:sql-injection:${relPath}:${lineNo}`, false, {
       file: relPath,
+      impact: 'critical',
       line: lineNo,
       message: `CRITICAL: SQL injection risk — SQL query built via string concatenation/interpolation of an identifier at ${relPath}:${lineNo}`,
       suggestion: 'Use parameterised queries (e.g. conn.query("...WHERE id = ?", [id])) or a tagged-template SQL builder (sql`...`) instead of concatenating/interpolating identifiers into SQL text',
@@ -343,6 +350,7 @@ class SecurityModule extends BaseModule {
         const algo = m[1].toLowerCase();
         result.addCheck(`security:weak-password-hash:${relPath}:${i + 1}`, false, {
           file: relPath,
+          impact: 'critical',
           line: i + 1,
           column: m.index,
           severity: 'error',
@@ -411,6 +419,7 @@ class SecurityModule extends BaseModule {
 
         result.addCheck(`security:prototype-pollution:${relPath}:${i + 1}`, false, {
           file: relPath,
+          impact: 'critical',
           line: i + 1,
           column: m.index,
           severity: 'error',
@@ -477,6 +486,7 @@ class SecurityModule extends BaseModule {
 
         result.addCheck(`security:path-traversal:${relPath}:${i + 1}`, false, {
           file: relPath,
+          impact: 'critical',
           line: i + 1,
           column: m.index,
           severity: 'error',

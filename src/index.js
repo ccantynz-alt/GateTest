@@ -138,7 +138,7 @@ class GateTest {
     }
 
     // Attach reporters — skip ConsoleReporter in silent mode (e.g. MCP server)
-    if (!this.options.silent) new ConsoleReporter(runner);
+    if (!this.options.silent) new ConsoleReporter(runner, { showAll: this.options.showAll });
     new JsonReporter(runner, this.config);
     new HtmlReporter(runner, this.config);
     if (this.options.sarif) new SarifReporter(runner, this.config);
