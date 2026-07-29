@@ -269,7 +269,14 @@ jobs:
             echo "no tracked files to scan"
             exit 0
           fi
-          HITS="$(printf '%s\n' "$FILES" | xargs -d '\n' grep -EnH "$PATTERN" 2>/dev/null || true)"
+          # AWS publishes AKIAIOSFODNN7EXAMPLE / AKIAI44QH8DHBEXAMPLE as
+          # deliberately non-functional documentation keys, and src/modules/secrets.js
+          # names one in a comment explaining why its `example` suppression is
+          # word-bounded. A secrets DETECTOR has to be able to write down the
+          # shapes it detects. Filtering only the documented ...EXAMPLE form keeps
+          # every real-shaped AKIA key failing this step.
+          ALLOW='AKIA[0-9A-Z]*EXAMPLE'
+          HITS="$(printf '%s\n' "$FILES" | xargs -d '\n' grep -EnH "$PATTERN" 2>/dev/null | grep -Ev "$ALLOW" || true)"
           if [ -n "$HITS" ]; then
             echo "FAIL: secret-shape strings found in tracked files:" >&2
             printf '%s\n' "$HITS" >&2
