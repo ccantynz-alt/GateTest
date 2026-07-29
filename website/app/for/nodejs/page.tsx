@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     "Node.js CI gate",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/for/nodejs",
+    canonical: "/for/nodejs",
   },
   openGraph: {
     title: "Node.js Security & Quality Scanning — GateTest",
     description:
       "Security headers, SQL injection detection, N+1 queries, resource leaks, SSRF vulnerabilities, ReDoS patterns, race conditions — GateTest covers every Node.js failure mode.",
-    url: "https://gatetest.ai/for/nodejs",
+    url: "/for/nodejs",
     siteName: "GateTest",
     type: "website",
   },

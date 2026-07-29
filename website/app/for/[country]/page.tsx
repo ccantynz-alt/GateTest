@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SITE_URL } from "@/app/lib/site-url";
 import {
   COUNTRIES,
   getAllCountrySlugs,
@@ -31,7 +32,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
     `${MODULE_COUNT} GateTest modules built for ${data.name} dev shops — catches the technical findings ${data.primaryRegulation} auditors look for across ${data.popularStack.slice(0, 3).join(", ")}.`,
     160,
   );
-  const canonical = `https://gatetest.ai/for/${data.slug}`;
+  const canonical = `/for/${data.slug}`;
   return {
     title,
     description,
@@ -135,12 +136,12 @@ export default async function CountryPage({ params }: PageParams) {
       "@type": "Offer",
       price: "29",
       priceCurrency: "USD",
-      url: "https://gatetest.ai/scan",
+      url: `${SITE_URL}/scan`,
     },
     publisher: {
       "@type": "Organization",
       name: "GateTest",
-      url: "https://gatetest.ai",
+      url: SITE_URL,
     },
   };
 

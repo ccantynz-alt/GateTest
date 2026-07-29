@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "DeepSource replacement",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/deepsource",
+    canonical: "/compare/deepsource",
   },
   openGraph: {
     title: "GateTest vs DeepSource — AI-Native Code Quality in 2026",
     description:
       "DeepSource finds issues. GateTest finds them and — at the Scan + Fix tier ($199) and above — fixes them. 120 modules, per-scan pricing, no per-seat licensing, AI auto-fix PRs.",
-    url: "https://gatetest.ai/compare/deepsource",
+    url: "/compare/deepsource",
     siteName: "GateTest",
     type: "website",
   },

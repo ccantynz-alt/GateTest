@@ -15,7 +15,9 @@
 
 "use strict";
 
-const SITEMAP_URL = "https://gatetest.ai/sitemap.xml";
+const { siteUrl } = require("../site-url");
+
+const SITEMAP_URL = siteUrl("/sitemap.xml");
 
 /**
  * Per-engine ping URL builder. Each engine takes the sitemap URL as a

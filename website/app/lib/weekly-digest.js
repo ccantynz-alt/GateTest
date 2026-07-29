@@ -21,7 +21,7 @@ const { getRepoHistory }  = require('./scan-history-store');
 const { notifyDigest }    = require('./slack-notifier');
 const { sendDigestEmail } = require('./digest-mailer');
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://gatetest.ai';
+const { SITE_URL: BASE_URL } = require('./site-url');
 
 // ── Trend computation ─────────────────────────────────────────────────────────
 

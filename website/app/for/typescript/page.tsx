@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     "TypeScript security",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/for/typescript",
+    canonical: "/for/typescript",
   },
   openGraph: {
     title: "TypeScript Code Quality & Strict Mode Enforcement — GateTest",
     description:
       "GateTest enforces TypeScript strict mode, catches @ts-ignore abuse, detects any-type leaks, and flags tsconfig regressions before they reach production.",
-    url: "https://gatetest.ai/for/typescript",
+    url: "/for/typescript",
     siteName: "GateTest",
     type: "website",
   },

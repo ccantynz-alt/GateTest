@@ -57,7 +57,7 @@ test("modules/[slug]/page.tsx: produces canonical URL", () => {
   // We compute the canonical as a const above the metadata block, so the
   // page is canonical-URL aware whether the literal string or a variable
   // reference appears here.
-  assert.match(src, /https:\/\/gatetest\.ai\/modules\/\$\{mod\.slug\}/);
+  assert.match(src, /canonical\s*=\s*`\/modules\/\$\{mod\.slug\}`/);
   assert.match(src, /alternates:\s*\{\s*canonical/);
 });
 

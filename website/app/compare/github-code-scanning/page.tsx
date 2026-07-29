@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "GHAS alternative",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/github-code-scanning",
+    canonical: "/compare/github-code-scanning",
   },
   openGraph: {
     title: "GateTest vs GitHub Code Scanning — The Complete QA Platform",
     description:
       "GitHub Code Scanning covers security basics. GateTest covers 120 quality dimensions: security, performance, accessibility, AI safety, visual regression, chaos testing (via GitHub Action), and auto-fix at the Scan + Fix tier and above.",
-    url: "https://gatetest.ai/compare/github-code-scanning",
+    url: "/compare/github-code-scanning",
     siteName: "GateTest",
     type: "website",
   },

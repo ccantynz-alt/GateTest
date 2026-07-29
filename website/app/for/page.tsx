@@ -16,12 +16,12 @@ export const metadata: Metadata = {
   title: "GateTest by country and stack — compliance scanning for your market",
   description: `GateTest's ${MODULE_COUNT} modules tuned for your region's compliance regime — HIPAA / GDPR / Privacy Act / PDPA / PIPEDA — and your stack — Next.js, TypeScript, Node.js.`,
   alternates: {
-    canonical: "https://gatetest.ai/for",
+    canonical: "/for",
   },
   openGraph: {
     title: "GateTest by country and stack",
     description: `Country-specific and framework-specific landing pages for GateTest's ${MODULE_COUNT}-module scan suite.`,
-    url: "https://gatetest.ai/for",
+    url: "/for",
     siteName: "GateTest",
     type: "website",
   },

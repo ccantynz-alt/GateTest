@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
+import { badgeUrl } from "@/app/lib/site-url";
 
 function computeScore(scan: {
   errors: number;
@@ -169,7 +170,7 @@ export async function GET(req: NextRequest) {
       errors: scan.errors,
       warnings: scan.warnings,
     },
-    badge: `https://gatetest.ai/api/score?owner=${owner}&repo=${repo}&format=badge`,
-    readme: `[![GateTest Score](https://gatetest.ai/api/score?owner=${owner}&repo=${repo}&format=badge)](https://gatetest.ai/score/${owner}/${repo})`,
+    badge: badgeUrl(`/api/score?owner=${owner}&repo=${repo}&format=badge`),
+    readme: `[![GateTest Score](${badgeUrl(`/api/score?owner=${owner}&repo=${repo}&format=badge`)})](${badgeUrl(`/score/${owner}/${repo}`)})`,
   });
 }

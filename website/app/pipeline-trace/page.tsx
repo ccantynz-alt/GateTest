@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { SITE_URL } from "@/app/lib/site-url";
 
 /**
  * Public marketing page for the Pipeline Trace workflow.
@@ -178,11 +179,11 @@ export default function PipelineTracePage() {
       price: "29",
       priceCurrency: "USD",
     },
-    url: "https://gatetest.ai/pipeline-trace",
+    url: `${SITE_URL}/pipeline-trace`,
     publisher: {
       "@type": "Organization",
       name: "GateTest",
-      url: "https://gatetest.ai",
+      url: SITE_URL,
     },
   };
 

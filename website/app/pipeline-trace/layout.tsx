@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "GateTest pipeline trace",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/pipeline-trace",
+    canonical: "/pipeline-trace",
   },
   openGraph: {
     title:
       "Pipeline Trace — find where in your deploy chain the update is stuck",
     description:
       "Source HEAD, CI, deploy, live — four probes, one verdict. A 10-rule cascade points at the exact stage holding your update. From $29.",
-    url: "https://gatetest.ai/pipeline-trace",
+    url: "/pipeline-trace",
     siteName: "GateTest",
     type: "website",
   },

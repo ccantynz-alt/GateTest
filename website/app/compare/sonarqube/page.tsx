@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "static analysis alternative",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/sonarqube",
+    canonical: "/compare/sonarqube",
   },
   openGraph: {
     title: "GateTest vs SonarQube — The Smarter Alternative in 2026",
     description:
       "GateTest replaces SonarQube with 120 AI-powered modules, AI auto-fix PRs at the Scan + Fix tier and above, and per-scan pricing. No complex setup. No per-seat licensing.",
-    url: "https://gatetest.ai/compare/sonarqube",
+    url: "/compare/sonarqube",
     siteName: "GateTest",
     type: "website",
   },

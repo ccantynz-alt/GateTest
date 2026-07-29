@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getModulesByCategory, getTotalModuleCount } from "../components/howitworks/module-slugs";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: `${getTotalModuleCount()} GateTest modules — one config, every QA check in 2026`,
   description: `Browse all ${getTotalModuleCount()} modules in the GateTest scan suite — security, IaC, accessibility, performance, AI-app safety, code quality, and more. One config, AI auto-fix PR included.`,
-  alternates: { canonical: "https://gatetest.ai/modules" },
+  alternates: { canonical: "/modules" },
   openGraph: {
     title: `${getTotalModuleCount()} GateTest modules — one config replaces 12 tools`,
     description: `Every QA check GateTest runs. Browse by category — security, IaC, accessibility, performance, code quality, more.`,
-    url: "https://gatetest.ai/modules",
+    url: "/modules",
     siteName: "GateTest",
     type: "website",
   },
@@ -31,7 +32,7 @@ export default function ModulesIndexPage() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: `GateTest modules — ${total} checks in one config`,
-    url: "https://gatetest.ai/modules",
+    url: `${SITE_URL}/modules`,
     hasPart: categories.flatMap((cat) =>
       cat.modules.map((mod) => ({
         "@type": "WebPage",

@@ -8,6 +8,7 @@ import {
   moduleNameToSlug,
 } from "../catalog";
 import { contentMetadata } from "../../lib/seo/schema";
+import { SITE_URL } from "../../lib/site-url";
 
 interface PageParams {
   params: Promise<{ slug: string }>;
@@ -43,7 +44,9 @@ export default async function RegulationPage({ params }: PageParams) {
   const reg = getRegulationBySlug(slug);
   if (!reg) notFound();
 
-  const canonical = `https://gatetest.ai/regulation/${reg.slug}`;
+  // Absolute, not relative: this feeds JSON-LD only (no `alternates` here),
+  // and schema.org consumers do not resolve against metadataBase.
+  const canonical = `${SITE_URL}/regulation/${reg.slug}`;
 
   // SoftwareApplication structured data
   const softwareJsonLd = {
@@ -67,8 +70,8 @@ export default async function RegulationPage({ params }: PageParams) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "GateTest", item: "https://gatetest.ai" },
-      { "@type": "ListItem", position: 2, name: "Regulations", item: "https://gatetest.ai/regulation" },
+      { "@type": "ListItem", position: 1, name: "GateTest", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "Regulations", item: `${SITE_URL}/regulation` },
       { "@type": "ListItem", position: 3, name: reg.name, item: canonical },
     ],
   };

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: "GateTest MCP — The 120-Module Engine in Your Editor",
     description:
       `Give Claude eyes, ears & hands: all ${TOOL_COUNT} tools — live-page screenshots (eyes), Sentry/Datadog/Rollbar errors (ears), pass/fail fix verification (hands) — free on your machine. $29/mo for the hosted endpoint (claude.ai web/mobile) + hosted history.`,
-    url: "https://gatetest.ai/mcp",
+    url: "/mcp",
   },
 };
 

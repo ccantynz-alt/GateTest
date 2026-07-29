@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "static analysis 2026",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/eslint",
+    canonical: "/compare/eslint",
   },
   openGraph: {
     title: "GateTest vs ESLint — Why 2026 Developers Are Moving On",
     description:
       "ESLint is one tool. GateTest is 120. Security, performance, accessibility, visual regression, mutation testing, AI code review — all in one gate.",
-    url: "https://gatetest.ai/compare/eslint",
+    url: "/compare/eslint",
     siteName: "GateTest",
     type: "website",
   },

@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: LayoutParams): Promise<Metada
     `${MODULE_COUNT} GateTest modules built for ${data.name} dev shops — catches the technical findings ${data.primaryRegulation} auditors look for across ${data.popularStack.slice(0, 3).join(", ")}.`,
     160,
   );
-  const canonical = `https://gatetest.ai/for/${data.slug}`;
+  const canonical = `/for/${data.slug}`;
   return {
     title,
     description,

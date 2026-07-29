@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { REGULATIONS } from "./catalog";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: "Compliance regulations — what GateTest catches for GDPR, HIPAA, SOC 2, CCPA, PCI DSS, ISO 27001",
   description:
     "Browse the technical findings GateTest catches under the world's major compliance regimes. One scan covers code-level evidence auditors sample.",
-  alternates: { canonical: "https://gatetest.ai/regulation" },
+  alternates: { canonical: "/regulation" },
   openGraph: {
     title: "Compliance regulations — what GateTest catches",
     description:
       "Technical findings GateTest catches under GDPR, HIPAA, SOC 2, CCPA, PCI DSS, and ISO 27001.",
-    url: "https://gatetest.ai/regulation",
+    url: "/regulation",
     siteName: "GateTest",
     type: "website",
   },
@@ -22,7 +23,7 @@ export default function RegulationIndexPage() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Compliance regulations — GateTest coverage",
-    url: "https://gatetest.ai/regulation",
+    url: `${SITE_URL}/regulation`,
     hasPart: REGULATIONS.map((r) => ({
       "@type": "WebPage",
       url: `https://gatetest.ai/regulation/${r.slug}`,

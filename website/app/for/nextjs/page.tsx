@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     "Next.js TypeScript strict mode",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/for/nextjs",
+    canonical: "/for/nextjs",
   },
   openGraph: {
     title: "Code Quality for Next.js Apps — GateTest",
     description:
       "120 checks built for Next.js: App Router route validation, React Hook exhaustive-deps, TypeScript strict mode, Core Web Vitals, OpenGraph tags, accessibility, security headers. AI-powered fixes at the Scan + Fix tier and above.",
-    url: "https://gatetest.ai/for/nextjs",
+    url: "/for/nextjs",
     siteName: "GateTest",
     type: "website",
   },

@@ -3,6 +3,7 @@ import { Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { ChatWidget } from "./components/ChatWidget";
 import { organizationSchema, webSiteSchema, jsonLd } from "./lib/seo/schema";
+import { SITE_URL } from "./lib/site-url";
 
 // Editorial display face for headlines — gives the marketing surfaces a
 // distinctive, premium voice without restyling body copy. Exposed as a CSS
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://gatetest.ai"),
+  // Every relative `canonical` and `openGraph.url` in the app resolves
+  // against this. Page-level metadata must use relative paths ("/compare/snyk")
+  // so a domain move stays a one-variable change.
+  metadataBase: new URL(SITE_URL),
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
     "120 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay per scan, no subscription.",
@@ -49,13 +53,13 @@ export const metadata: Metadata = {
     "SEO audit",
   ],
   alternates: {
-    canonical: "https://gatetest.ai",
+    canonical: "/",
   },
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
       "120 modules scan your entire codebase. We find the bugs AND fix them. Pay per scan, no subscription.",
-    url: "https://gatetest.ai",
+    url: "/",
     siteName: "GateTest",
     type: "website",
     locale: "en_US",
@@ -106,7 +110,7 @@ export default function RootLayout({
               name: "GateTest",
               applicationCategory: "DeveloperApplication",
               operatingSystem: "Any",
-              url: "https://gatetest.ai",
+              url: SITE_URL,
               description:
                 "AI-powered QA platform that scans your entire codebase with 120 modules — security, supply chain, auth flaws, CI hardening, and more. Pay per scan via Stripe. One-time payment, no subscription.",
               offers: [

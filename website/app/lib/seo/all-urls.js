@@ -12,7 +12,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const BASE = "https://gatetest.ai";
+const { SITE_URL: BASE } = require("../site-url");
 
 const COMPARISON_SLUGS = [
   "sonarqube",

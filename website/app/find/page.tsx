@@ -1,15 +1,16 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { CWE_TOP_25 } from "./cwe-catalog";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: "CWE Top 25 — what GateTest catches and how to fix it",
   description: "Browse the 2023 MITRE CWE Top 25 most dangerous software weaknesses. See which GateTest modules catch each class, with examples and fix recommendations.",
-  alternates: { canonical: "https://gatetest.ai/find" },
+  alternates: { canonical: "/find" },
   openGraph: {
     title: "CWE Top 25 — what GateTest catches and how to fix it",
     description: "Browse all 25 most dangerous software weaknesses. See which GateTest modules catch each class.",
-    url: "https://gatetest.ai/find",
+    url: "/find",
     siteName: "GateTest",
     type: "website",
   },
@@ -20,7 +21,7 @@ export default function CweIndexPage() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "CWE Top 25 — GateTest coverage",
-    url: "https://gatetest.ai/find",
+    url: `${SITE_URL}/find`,
     hasPart: CWE_TOP_25.map((cwe) => ({
       "@type": "WebPage",
       url: `https://gatetest.ai/find/${cwe.slug}`,

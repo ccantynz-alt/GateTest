@@ -14,12 +14,13 @@
  */
 
 import type { Metadata } from "next";
+import { SITE_URL } from "../site-url";
 
 export const SITE = {
-  baseUrl: "https://gatetest.ai",
+  baseUrl: SITE_URL,
   name: "GateTest",
   twitter: "@gatetest",
-  ogImage: "https://gatetest.ai/og.png",
+  ogImage: `${SITE_URL}/og.png`,
   locale: "en_US",
 } as const;
 

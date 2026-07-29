@@ -294,7 +294,9 @@ describe("/for/[country]/layout.tsx", () => {
     assert.match(src, /export async function generateMetadata/, "layout missing generateMetadata");
   });
   it("layout sets canonical URL", () => {
-    assert.match(src, /canonical[\s\S]{0,80}gatetest\.ai\/for/, "canonical URL missing");
+    // Relative — metadataBase in the root layout resolves it. Asserting the
+    // literal domain here is what made a domain move a 148-file edit.
+    assert.match(src, /canonical[\s\S]{0,80}["'`]\/for/, "canonical URL missing");
   });
 });
 
@@ -305,7 +307,7 @@ describe("/for/page.tsx (index page)", () => {
     assert.match(src, /COUNTRIES/, "index does not import COUNTRIES");
   });
   it("has a canonical URL set", () => {
-    assert.match(src, /canonical:\s*"https:\/\/gatetest\.ai\/for"/, "canonical missing on /for");
+    assert.match(src, /canonical:\s*"\/for"/, "canonical missing on /for");
   });
 });
 

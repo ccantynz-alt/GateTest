@@ -17,13 +17,13 @@ export const metadata: Metadata = {
     "Gluecron integration",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/how-it-works",
+    canonical: "/how-it-works",
   },
   openGraph: {
     title: "How GateTest works — Architecture, modules, flywheel, tiers",
     description:
       "120 modules — deterministic first. One Claude pass when it's worth it. The full technical architecture behind GateTest.",
-    url: "https://gatetest.ai/how-it-works",
+    url: "/how-it-works",
     siteName: "GateTest",
     type: "article",
   },

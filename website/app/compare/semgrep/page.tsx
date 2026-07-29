@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "code security scanning 2026",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/semgrep",
+    canonical: "/compare/semgrep",
   },
   openGraph: {
     title: "GateTest vs Semgrep — 120 modules vs pattern matching in 2026",
     description:
       "Semgrep is excellent at finding patterns you wrote rules for. GateTest uses Claude to find what nobody wrote a rule for — plus 109 other checks — and opens a fix PR.",
-    url: "https://gatetest.ai/compare/semgrep",
+    url: "/compare/semgrep",
     siteName: "GateTest",
     type: "website",
   },

@@ -203,12 +203,20 @@ test("layout emits Organization + WebSite + SoftwareApplication JSON-LD", () => 
 test("landing layout keeps SoftwareApplication JSON-LD and canonical", () => {
   const layout = read("layout.tsx");
   assert.match(layout, /"@type":\s*"SoftwareApplication"/);
-  assert.match(layout, /canonical:\s*"https:\/\/gatetest\.ai"/);
+  assert.match(layout, /canonical:\s*"\/"/);
+  // metadataBase is what turns every relative canonical in the app into an
+  // absolute one. Losing it makes them all silently invalid.
+  assert.match(layout, /metadataBase:\s*new URL\(SITE_URL\)/);
 });
 
-test("every IndexNow URL is canonical https on gatetest.ai (no leaks)", () => {
+test("every IndexNow URL is canonical https on the site origin (no leaks)", () => {
+  // Bound to SITE_URL rather than a literal: the leak this catches (a URL
+  // pointing at some other host) is real regardless of which domain we run
+  // on, and hardcoding the domain here made it a false failure on a move.
+  const { SITE_URL } = require("../website/app/lib/site-url");
   for (const url of allUrls) {
-    assert.ok(url.startsWith("https://gatetest.ai"), `non-canonical URL leaked: ${url}`);
+    assert.ok(url.startsWith(`${SITE_URL}/`) || url === SITE_URL,
+      `non-canonical URL leaked: ${url}`);
   }
   // de-duped
   assert.equal(new Set(allUrls).size, allUrls.length, "duplicate URLs in IndexNow list");

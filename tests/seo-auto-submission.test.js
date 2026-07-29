@@ -191,8 +191,9 @@ test("pingAllEngines: results for every engine, parallel", async () => {
   assert.equal(calls, Object.keys(ENGINES).length);
 });
 
-test("SITEMAP_URL is the canonical https://gatetest.ai/sitemap.xml", () => {
-  assert.equal(SITEMAP_URL, "https://gatetest.ai/sitemap.xml");
+test("SITEMAP_URL is /sitemap.xml on the canonical site origin", () => {
+  const { SITE_URL } = require("../website/app/lib/site-url");
+  assert.equal(SITEMAP_URL, `${SITE_URL}/sitemap.xml`);
 });
 
 // ---------------------------------------------------------------------------
@@ -227,10 +228,13 @@ test("buildAllUrls: includes home, modules index, all comparisons, all for, all 
   }
 });
 
-test("buildAllUrls: every URL is HTTPS on gatetest.ai (no leaks)", () => {
+test("buildAllUrls: every URL is HTTPS on the site origin (no leaks)", () => {
+  const { SITE_URL } = require("../website/app/lib/site-url");
   const urls = buildAllUrls();
   for (const url of urls) {
-    assert.ok(url.startsWith("https://gatetest.ai"), `non-canonical URL leaked: ${url}`);
+    assert.ok(url.startsWith("https://"), `non-HTTPS URL leaked: ${url}`);
+    assert.ok(url.startsWith(`${SITE_URL}/`) || url === SITE_URL,
+      `non-canonical URL leaked: ${url}`);
   }
 });
 

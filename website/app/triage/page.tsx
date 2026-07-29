@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { SITE_URL } from "@/app/lib/site-url";
 
 /**
  * Public marketing page for the Triage workflow.
@@ -172,11 +173,11 @@ export default function TriagePage() {
       price: "29",
       priceCurrency: "USD",
     },
-    url: "https://gatetest.ai/triage",
+    url: `${SITE_URL}/triage`,
     publisher: {
       "@type": "Organization",
       name: "GateTest",
-      url: "https://gatetest.ai",
+      url: SITE_URL,
     },
   };
 

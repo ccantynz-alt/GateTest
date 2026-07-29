@@ -21,6 +21,8 @@
  *   - `fetchImpl` override allows unit testing without real HTTP calls.
  */
 
+const { siteUrl, resolveSiteUrl } = require('./site-url');
+
 const GITHUB_API = 'https://api.github.com';
 const STATUS_CONTEXT = 'gatetest / scan';
 const USER_AGENT = 'GateTest/1.0';
@@ -296,7 +298,7 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
 
   lines.push('');
   lines.push('---');
-  lines.push('*Posted by [GateTest](https://gatetest.ai) — unified code quality*');
+  lines.push(`*Posted by [GateTest](${siteUrl()}) — unified code quality*`);
   // Idempotency marker — postPrComment looks for this string to find a
   // prior bot comment and PATCH it in place instead of stacking duplicates
   // on every push (Known Issue #23). Hidden HTML comment, customer-invisible.
@@ -530,7 +532,7 @@ async function sendGithubCallback(opts) {
   const [owner, repo] = parts;
 
   const doFetch = opts.fetchImpl || fetch;
-  const baseUrl = env.NEXT_PUBLIC_BASE_URL || 'https://gatetest.ai';
+  const baseUrl = resolveSiteUrl(env);
   const targetUrl = `${baseUrl}/scan/status`;
 
   // Read repo's gate mode. Fresh installs default to 'advisory' so a

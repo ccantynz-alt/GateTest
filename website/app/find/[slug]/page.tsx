@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SITE_URL } from "@/app/lib/site-url";
 import {
   getAllCweSlugs,
   getCweBySlug,
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   }
   const title = `${cwe.name} (CWE-${cwe.id}) — how to detect + fix | GateTest`;
   const description = `${cwe.shortDesc} ${cwe.modules.length > 0 ? `Caught by GateTest's ${cwe.modules.join(", ")} module${cwe.modules.length === 1 ? "" : "s"}.` : "Not currently covered by GateTest."}`;
-  const canonical = `https://gatetest.ai/find/${cwe.slug}`;
+  const canonical = `/find/${cwe.slug}`;
   return {
     title,
     description,
@@ -101,7 +102,7 @@ export default async function CwePage({ params }: PageParams) {
     headline: `${cwe.name} (CWE-${cwe.id}) — detection and remediation`,
     description: cwe.shortDesc,
     author: { "@type": "Organization", name: "GateTest" },
-    publisher: { "@type": "Organization", name: "GateTest", url: "https://gatetest.ai" },
+    publisher: { "@type": "Organization", name: "GateTest", url: SITE_URL },
     mainEntityOfPage: `https://gatetest.ai/find/${cwe.slug}`,
   };
 

@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // Keep description in the 150-160 char band.
   const baseDesc = `${reg.name} (${reg.longName}) — ${reg.jurisdiction.split("—")[0].trim()}. GateTest catches the technical findings ${reg.topThreeModules.join(", ")} for ${reg.name}.`;
   const description = baseDesc.length > 160 ? baseDesc.slice(0, 157) + "..." : baseDesc;
-  const canonical = `https://gatetest.ai/regulation/${reg.slug}`;
+  const canonical = `/regulation/${reg.slug}`;
   return {
     title,
     description,

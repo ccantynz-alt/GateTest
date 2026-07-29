@@ -18,6 +18,7 @@
  */
 
 const https = require('https');
+const { SITE_URL } = require('./site-url');
 
 const MAX_PORTAL_SESSIONS_PER_REQUEST = 3;
 
@@ -141,7 +142,7 @@ async function requestPortalLink(email, deps) {
   const customers = await findStripeCustomersByEmail(sql, email);
   if (customers.length === 0) return { matched: 0, sent: false, failed: 0, failures: [] };
 
-  const returnUrl = `${(baseUrl || 'https://gatetest.ai').replace(/\/$/, '')}/billing`;
+  const returnUrl = `${(baseUrl || SITE_URL).replace(/\/$/, '')}/billing`;
   const links = [];
   const failures = [];
   for (const c of customers.slice(0, MAX_PORTAL_SESSIONS_PER_REQUEST)) {

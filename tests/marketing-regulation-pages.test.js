@@ -261,8 +261,8 @@ test("regulation factory layout: exports generateMetadata with regulation-specif
   // The title must reference both the short name and the longName
   assert.match(src, /reg\.name/);
   assert.match(src, /reg\.longName/);
-  // Canonical URL points at /regulation/<slug>
-  assert.match(src, /https:\/\/gatetest\.ai\/regulation\//);
+  // Canonical points at /regulation/<slug> — relative, resolved by metadataBase.
+  assert.match(src, /canonical\s*=\s*`\/regulation\//);
 });
 
 test("regulation factory layout: no eslint-disable directives", () => {
@@ -285,7 +285,7 @@ test("regulation index page: lists all 6 regulations by mapping REGULATIONS", ()
 
 test("regulation index page: has canonical metadata for /regulation", () => {
   const src = readSrc(INDEX_PAGE);
-  assert.match(src, /canonical:\s*["']https:\/\/gatetest\.ai\/regulation["']/);
+  assert.match(src, /canonical:\s*["']\/regulation["']/);
 });
 
 test("regulation index page: no eslint-disable directives", () => {

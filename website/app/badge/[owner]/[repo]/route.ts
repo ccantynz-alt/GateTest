@@ -28,6 +28,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/app/lib/db";
 import { scoreToGrade, renderBadge, relativeTimeShort } from "@/app/lib/badge-svg";
+import { siteUrl } from "@/app/lib/site-url";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ function notScannedBadge(owner: string, repo: string): string {
       { text: "GateTest", bg: "#555" },
       { text: "not scanned", bg: "#9ca3af" },
     ],
-    `GateTest: ${owner}/${repo} has not been scanned yet — https://gatetest.ai/playground`
+    `GateTest: ${owner}/${repo} has not been scanned yet — ${siteUrl('/playground')}`
   );
 }
 
@@ -87,7 +88,7 @@ export async function GET(
         { text: grade.letter, bg: grade.bgColor, fg: grade.color },
         { text: issuesText, bg: "#374151" },
       ],
-      `GateTest: ${owner}/${repo} scored ${grade.letter} (${scan.score}/100), ${issuesText} — https://gatetest.ai`
+      `GateTest: ${owner}/${repo} scored ${grade.letter} (${scan.score}/100), ${issuesText} — ${siteUrl()}`
     );
 
     return new NextResponse(svg, { headers });

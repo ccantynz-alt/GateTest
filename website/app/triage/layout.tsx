@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     "GateTest triage",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/triage",
+    canonical: "/triage",
   },
   openGraph: {
     title:
       "Triage — find where the bug actually lives between source, server, and browser",
     description:
       "Three scans in parallel, one verdict. A heuristic 9-rule cascade localises the bug to SOURCE, SERVER, BROWSER, BUILD, or MIXED. From $29.",
-    url: "https://gatetest.ai/triage",
+    url: "/triage",
     siteName: "GateTest",
     type: "website",
   },

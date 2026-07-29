@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "SAST with AI fix",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/codeql",
+    canonical: "/compare/codeql",
   },
   openGraph: {
     title: "GateTest vs CodeQL — minutes, not 30, in 2026",
     description:
       "CodeQL does deep taint analysis. GateTest does the same security classes plus everything else — 120 modules total — in minutes — and opens the fix PR.",
-    url: "https://gatetest.ai/compare/codeql",
+    url: "/compare/codeql",
     siteName: "GateTest",
     type: "website",
   },

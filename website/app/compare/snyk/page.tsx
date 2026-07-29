@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     "source code security",
   ],
   alternates: {
-    canonical: "https://gatetest.ai/compare/snyk",
+    canonical: "/compare/snyk",
   },
   openGraph: {
     title: "GateTest vs Snyk — One config, every QA tool in 2026",
     description:
       "Snyk ships separate Open Source, Code, Container, and IaC products. GateTest unifies them — plus quality, performance, accessibility, and AI safety — into a single config and a single bill (120 modules).",
-    url: "https://gatetest.ai/compare/snyk",
+    url: "/compare/snyk",
     siteName: "GateTest",
     type: "website",
   },

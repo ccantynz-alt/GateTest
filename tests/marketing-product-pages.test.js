@@ -116,7 +116,7 @@ test("triage layout: exports metadata with correct title/canonical", () => {
   const src = readSrc(TRIAGE_LAYOUT);
   assert.match(src, /export\s+const\s+metadata\s*:\s*Metadata/);
   assert.match(src, /title:[\s\S]{0,180}Triage/);
-  assert.match(src, /canonical:\s*["']https:\/\/gatetest\.ai\/triage["']/);
+  assert.match(src, /canonical:\s*["']\/triage["']/);
   assert.match(src, /description:[\s\S]{0,400}9-rule cascade/);
 });
 
@@ -205,7 +205,7 @@ test("pipeline-trace layout: exports metadata with correct title/canonical", () 
   const src = readSrc(PIPELINE_LAYOUT);
   assert.match(src, /export\s+const\s+metadata\s*:\s*Metadata/);
   assert.match(src, /title:[\s\S]{0,200}Pipeline Trace/);
-  assert.match(src, /canonical:\s*["']https:\/\/gatetest\.ai\/pipeline-trace["']/);
+  assert.match(src, /canonical:\s*["']\/pipeline-trace["']/);
   assert.match(src, /description:[\s\S]{0,400}10-rule cascade/);
 });
 
