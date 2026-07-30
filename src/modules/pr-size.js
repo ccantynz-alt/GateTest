@@ -210,6 +210,30 @@ class PrSizeModule extends BaseModule {
     const totalRemoved = counted.reduce((s, f) => s + f.removed, 0);
     const totalLines = totalAdded + totalRemoved;
 
+    // Paths whose content git attributed to a copy/rename elsewhere in this same
+    // diff — `git diff -C` emits both `0 0 {old => new}/file` and the source
+    // path's own `+shim / -original`. Those removals are the copy's lines counted
+    // a second time.
+    const relocationSources = new Set(
+      counted.map((f) => f.relocatedFrom).filter(Boolean),
+    );
+
+    // Two figures, deliberately:
+    //   totalLines  — the true diff, always reported in the summary. Nothing hidden.
+    //   reviewLines — what a human actually has to review, which is what the
+    //                 ceilings are FOR. Relocated content has already been
+    //                 reviewed; re-reading it at its new path is not review work.
+    // Moving three modules into src/core produced +89 / -1038, of which 1019 was
+    // relocation. Charging that against a 1000-line ceiling blocks the gate on a
+    // change with 89 lines of actual new code.
+    const relocatedLines = counted
+      .filter((f) => relocationSources.has(f.path))
+      .reduce((s, f) => s + f.added + f.removed, 0);
+    const reviewLines = Math.max(0, totalLines - relocatedLines);
+    const relocNote = relocatedLines > 0
+      ? ` (${reviewLines} excluding ${relocatedLines} relocated line(s))`
+      : '';
+
     const bypassNote = bypass ? ' [pr-size-ok trailer present — downgraded to warning]' : '';
 
     // --- files-changed ceiling ---
@@ -229,21 +253,25 @@ class PrSizeModule extends BaseModule {
       });
     }
 
-    // --- lines-changed ceiling ---
-    if (totalLines > thresholds.maxLinesChangedError) {
+    // --- lines-changed ceiling (judged on reviewLines, reported with both) ---
+    if (reviewLines > thresholds.maxLinesChangedError) {
       result.addCheck('pr-size:too-many-lines', !!bypass, {
         severity: bypass ? 'warning' : 'error',
-        message: `${totalLines} lines changed (+${totalAdded} / -${totalRemoved}) — exceeds hard ceiling of ${thresholds.maxLinesChangedError}.${bypassNote}`,
+        message: `${totalLines} lines changed (+${totalAdded} / -${totalRemoved})${relocNote} — exceeds hard ceiling of ${thresholds.maxLinesChangedError}.${bypassNote}`,
         lines: totalLines,
+        reviewLines,
+        relocatedLines,
         added: totalAdded,
         removed: totalRemoved,
         threshold: thresholds.maxLinesChangedError,
       });
-    } else if (totalLines > thresholds.maxLinesChangedWarning) {
+    } else if (reviewLines > thresholds.maxLinesChangedWarning) {
       result.addCheck('pr-size:many-lines', false, {
         severity: 'warning',
-        message: `${totalLines} lines changed (+${totalAdded} / -${totalRemoved}) — review quality collapses above ${thresholds.maxLinesChangedWarning}.`,
+        message: `${totalLines} lines changed (+${totalAdded} / -${totalRemoved})${relocNote} — review quality collapses above ${thresholds.maxLinesChangedWarning}.`,
         lines: totalLines,
+        reviewLines,
+        relocatedLines,
         added: totalAdded,
         removed: totalRemoved,
         threshold: thresholds.maxLinesChangedWarning,
@@ -251,8 +279,33 @@ class PrSizeModule extends BaseModule {
     }
 
     // --- per-file size ---
+    //
+    // Paths whose content git attributed to a copy/rename elsewhere in this same
+    // diff. When a module is moved and a re-export shim is left behind, git emits
+    // BOTH `0 0 {old => new}/file` (the copy) and `11 517 old/file` (the shim
+    // replacing the original). The 517 removals are the same lines the copy line
+    // already accounted for, so charging the source path for them counts the
+    // relocation twice — and a file gutted to a one-line shim is the most trivially
+    // reviewable change there is, which is the opposite of what this ceiling exists
+    // to catch (see its doc comment: "a single-file rewrite that needs to be
+    // committed in stages").
+    //
+    // Downgraded to a warning, not dropped: the reviewer should still see that a
+    // file was emptied. Only paths git itself identified as a relocation source
+    // qualify — a genuine 600-line deletion with no copy still errors.
+    // (`relocationSources` is computed with the totals above.)
     for (const f of counted) {
       const fileLines = f.added + f.removed;
+      if (relocationSources.has(f.path) && fileLines > thresholds.maxLinesPerFileWarning) {
+        result.addCheck(`pr-size:relocated-source:${f.path}`, true, {
+          severity: 'warning',
+          message: `${f.path} lost ${f.removed} line(s) to a relocation (+${f.added} / -${f.removed}) — `
+            + 'content moved elsewhere in this diff, so it is not counted against the per-file ceiling.',
+          file: f.path,
+          lines: fileLines,
+        });
+        continue;
+      }
       if (fileLines > thresholds.maxLinesPerFileError) {
         result.addCheck(`pr-size:file-too-large:${f.path}`, false, {
           severity: 'error',
@@ -331,6 +384,32 @@ class PrSizeModule extends BaseModule {
     } catch { return false; }
   }
 
+  /**
+   * Every git strategy below passes `-C` (find copies), and that matters more
+   * than it looks.
+   *
+   * Without it, relocating a file counts as brand-new code. Moving a 521-line
+   * module into another directory reported `+521 / -0` and blocked the gate for
+   * exceeding the 500-line per-file ceiling — while the content was byte-identical
+   * and already reviewed. Nothing about that change carries the risk the ceiling
+   * exists to catch.
+   *
+   * `-M` (renames) is not enough on its own. A rename requires the source path to
+   * disappear; the common real-world shape is a move that leaves a re-export shim
+   * behind, so the old path still exists and git classifies it as add + modify.
+   * `-C` recognises that as a copy.
+   *
+   * Measured on the commit that exposed this: plain numstat gave
+   * `521  0  src/core/auto-distill.js`; with `-C` it gives
+   * `0  0  {website/app/lib => src/core}/auto-distill.js`, and a file that really
+   * was edited during the move still reports its real `5  2`. So this suppresses
+   * nothing except the miscount. `_parseDiff` already understood the
+   * `{old => new}/file` form — only the flag was missing.
+   *
+   * Directory reorganisation is routine; a gate that blocks it is a gate people
+   * route around (Bible Forbidden #25 — a false positive that stops the gate is
+   * the worst kind).
+   */
   _getDiff(projectRoot, runnerOptions, moduleConfig) {
     // 1. Explicit diff provided (tests / CI).
     if (moduleConfig.diff != null) return moduleConfig.diff;
@@ -355,7 +434,7 @@ class PrSizeModule extends BaseModule {
     const against = moduleConfig.against || runnerOptions.against;
     if (against) {
       const { stdout, exitCode } = this._exec(
-        `git diff --numstat ${against}...HEAD`,
+        `git diff --numstat -C ${against}...HEAD`,
         { cwd: projectRoot },
       );
       if (exitCode === 0 && stdout && stdout.trim()) return stdout;
@@ -374,9 +453,9 @@ class PrSizeModule extends BaseModule {
     }
 
     const fallbackCommands = [
-      'git diff --numstat --cached',
-      'git diff --numstat',
-      'git diff --numstat HEAD~1 HEAD',
+      'git diff --numstat -C --cached',
+      'git diff --numstat -C',
+      'git diff --numstat -C HEAD~1 HEAD',
     ];
     for (const cmd of fallbackCommands) {
       const { stdout, exitCode } = this._exec(cmd, { cwd: projectRoot });
@@ -406,7 +485,7 @@ class PrSizeModule extends BaseModule {
     if (!mergeBase) return null;
 
     const diffRes = this._exec(
-      `git diff --numstat ${mergeBase}..HEAD`,
+      `git diff --numstat -C ${mergeBase}..HEAD`,
       { cwd: projectRoot },
     );
     if (diffRes.exitCode !== 0) return null;
@@ -418,7 +497,7 @@ class PrSizeModule extends BaseModule {
   // ------------------------------------------------------------------
 
   /**
-   * Parses either `git diff --numstat` output (preferred) or a unified
+   * Parses either `git diff --numstat -C` output (preferred) or a unified
    * diff body (for test convenience). Returns
    *   [{ path, added, removed }, ...]
    */
@@ -436,17 +515,23 @@ class PrSizeModule extends BaseModule {
         const added = m[1] === '-' ? 0 : parseInt(m[1], 10);
         const removed = m[2] === '-' ? 0 : parseInt(m[2], 10);
         let filePath = m[3];
-        // numstat rename form: "old => new" or "src/{a => b}/file"
+        // numstat rename/copy form: "old => new" or "src/{a => b}/file".
+        // Capture the SOURCE path too — the per-file ceiling needs it to avoid
+        // counting relocated content twice (see the note on `relocatedFrom` use
+        // in run()).
+        let relocatedFrom = null;
         if (filePath.includes(' => ')) {
           const braceMatch = filePath.match(/^(.*)\{(.+?) => (.+?)\}(.*)$/);
           if (braceMatch) {
+            relocatedFrom = `${braceMatch[1]}${braceMatch[2]}${braceMatch[4]}`;
             filePath = `${braceMatch[1]}${braceMatch[3]}${braceMatch[4]}`;
           } else {
             const arrow = filePath.split(' => ');
+            relocatedFrom = arrow[0].trim();
             filePath = arrow[arrow.length - 1].trim();
           }
         }
-        files.push({ path: filePath, added, removed });
+        files.push({ path: filePath, added, removed, relocatedFrom });
       }
       return files;
     }

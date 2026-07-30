@@ -450,3 +450,120 @@ describe('PrSizeModule — unified diff fallback', () => {
     assert.strictEqual(s.removed, 1);
   });
 });
+
+// ── Relocation must not read as new code (real git, not an injected diff) ─────
+//
+// Every test above injects `config.diff`, so none of them ever ran the actual
+// `git diff` command — which is precisely how this shipped: `--numstat` was
+// missing `-C`, so moving a 521-line module into another directory reported
+// `+521 / -0` and blocked the gate on the per-file ceiling, for byte-identical
+// already-reviewed content.
+//
+// `-M` alone would not have caught it. A rename needs the old path to vanish;
+// the real-world shape is a move that leaves a re-export shim behind, so the old
+// path still exists and git sees add + modify. `-C` recognises the copy.
+//
+// These tests drive real git so the flag is actually exercised, and the second
+// one is the control: `-C` must not have simply switched the ceiling off.
+
+describe('PrSizeModule — relocation vs genuinely new code (real git)', () => {
+  let repo;
+
+  const git = (args, extra = '') =>
+    execSync(`git ${extra} ${args}`, { cwd: repo, stdio: 'pipe', encoding: 'utf8' });
+
+  const bigFile = (n, marker) => Array.from({ length: n }, (_, i) => `// ${marker} line ${i}`).join('\n') + '\n';
+
+  beforeEach(() => {
+    repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-prsz-git-'));
+    git('init -q');
+    git('config user.email test@example.com');
+    git('config user.name Test');
+    git('config commit.gpgsign false');
+  });
+
+  afterEach(() => cleanup(repo));
+
+  it('a 600-line file moved to a new directory (shim left behind) does NOT trip the per-file ceiling', async () => {
+    fs.mkdirSync(path.join(repo, 'old'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'old', 'mod.js'), bigFile(600, 'original'));
+    git('add -A');
+    git('commit -q -m baseline');
+
+    // The move: identical content at the new path, re-export shim at the old one.
+    fs.mkdirSync(path.join(repo, 'new'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'new', 'mod.js'), bigFile(600, 'original'));
+    fs.writeFileSync(path.join(repo, 'old', 'mod.js'), "module.exports = require('../new/mod.js');\n");
+    git('add -A');
+    git('commit -q -m relocate');
+
+    const r = await run(repo);
+    const offenders = r.checks.filter(
+      (c) => c.name.startsWith('pr-size:file-too-large') && c.severity === 'error',
+    );
+    assert.deepStrictEqual(
+      offenders.map((c) => c.name), [],
+      'a pure relocation is not new code — git -C reports it as a copy with 0 changed lines',
+    );
+  });
+
+  it('CONTROL: a genuinely new 600-line file DOES trip the per-file ceiling', async () => {
+    fs.writeFileSync(path.join(repo, 'seed.txt'), 'seed\n');
+    git('add -A');
+    git('commit -q -m baseline');
+
+    fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'src', 'brand-new.js'), bigFile(600, 'brand new logic'));
+    git('add -A');
+    git('commit -q -m add');
+
+    const r = await run(repo);
+    const hit = r.checks.find((c) => c.name === 'pr-size:file-too-large:src/brand-new.js');
+    assert.ok(hit, 'the ceiling must still fire on real new code — otherwise -C disabled the check');
+    assert.strictEqual(hit.severity, 'error');
+  });
+});
+
+// ── Relocated lines must not consume the AGGREGATE ceiling either ─────────────
+//
+// Same double-count, one level up. `git diff -C` emits the copy line AND the
+// source path's own `+shim / -original`, so the three-module move into src/core
+// totalled +89 / -1038 — of which 1019 was relocation. Charging that against the
+// 1000-line hard ceiling blocked a change containing 89 lines of new code.
+//
+// The summary still reports the true totals; only the ceiling comparison uses the
+// reviewable figure.
+describe('PrSizeModule — relocation and the aggregate ceiling', () => {
+  let tmp;
+  beforeEach(() => { tmp = makeFakeRepo(); });
+  afterEach(() => cleanup(tmp));
+
+  it('does not error when the bulk of the diff is relocated content', async () => {
+    const r = await run(tmp, {
+      diff: numstat([
+        [0, 0, '{old/dir => new/dir}/moved.js'],   // the copy git detected
+        [10, 900, 'old/dir/moved.js'],             // source, gutted to a shim
+        [20, 5, 'src/real-change.js'],             // the actual new work
+      ]),
+    });
+    const hard = r.checks.find((c) => c.name === 'pr-size:too-many-lines');
+    assert.strictEqual(hard, undefined,
+      'relocated lines are not review work and must not consume the ceiling');
+
+    const summary = r.checks.find((c) => c.name === 'pr-size:summary');
+    assert.strictEqual(summary.added, 30, 'the summary must still report the TRUE totals');
+    assert.strictEqual(summary.removed, 905);
+  });
+
+  it('CONTROL: the same volume of genuinely changed lines DOES error', async () => {
+    const r = await run(tmp, {
+      diff: numstat([
+        [500, 400, 'src/a.js'],
+        [300, 200, 'src/b.js'],
+      ]),
+    });
+    const hard = r.checks.find((c) => c.name === 'pr-size:too-many-lines');
+    assert.ok(hard, 'without a relocation, the hard ceiling must still fire');
+    assert.strictEqual(hard.severity, 'error');
+  });
+});
