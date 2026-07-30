@@ -23,6 +23,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/how-it-works`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/quickstart`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${base}/docs/configuration`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
   ];
 
   // Comparison hub index — links every "X alternative" page.

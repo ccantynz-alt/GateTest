@@ -271,6 +271,12 @@ gatetest --suite full`}</code>
             See pricing &rarr;
           </Link>
           <Link
+            href="/docs/configuration"
+            className="px-6 py-3 text-sm font-semibold rounded-xl border border-border text-foreground hover:border-accent/50 transition-colors"
+          >
+            Config &amp; suppression
+          </Link>
+          <Link
             href="/docs/api"
             className="px-6 py-3 text-sm font-semibold rounded-xl border border-border text-foreground hover:border-accent/50 transition-colors"
           >
