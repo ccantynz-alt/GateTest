@@ -7,6 +7,12 @@
 const fs = require('fs');
 const path = require('path');
 const { siteUrl } = require('../core/site-url');
+// The SARIF driver version is shown next to every alert in GitHub Security.
+// It was hardcoded at '1.1.0' while the product shipped 1.61.0 — customers
+// reading their own security tab saw a version that never existed in this
+// decade. Derived, never typed. (Note: the `version: '2.1.0'` below is the
+// SARIF SPEC version and must stay fixed.)
+const PKG_VERSION = require('../../package.json').version;
 
 // Module → CWE / OWASP / security-severity mapping. Findings emitted by
 // these modules get enriched SARIF metadata that renders as filterable
@@ -265,7 +271,7 @@ class SarifReporter {
         tool: {
           driver: {
             name: 'GateTest',
-            version: '1.1.0',
+            version: PKG_VERSION,
             informationUri: siteUrl(),
             rules,
           },

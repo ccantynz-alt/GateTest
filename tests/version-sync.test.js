@@ -95,6 +95,58 @@ test('no website page hardcodes a GateTest version string', () => {
   );
 });
 
+test('reporters derive the tool version instead of hardcoding one', () => {
+  // The SARIF driver version is displayed next to every alert in GitHub
+  // Security and was pinned at '1.1.0'; the JSON report claimed '1.0.0'.
+  // Both are the TOOL version. The one hardcoded version that must stay is the
+  // SARIF SPEC version (2.1.0) — that describes the file format, not us.
+  const SARIF_SPEC_VERSION = '2.1.0';
+  const dir = path.join(REPO_ROOT, 'src', 'reporters');
+  const offenders = [];
+
+  for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.js'))) {
+    const rel = `src/reporters/${name}`;
+    fs.readFileSync(path.join(dir, name), 'utf8').split('\n').forEach((line, i) => {
+      const t = line.trim();
+      if (t.startsWith('*') || t.startsWith('//') || t.startsWith('/*')) return;
+      const m = t.match(/version:\s*['"](\d+\.\d+\.\d+)['"]/);
+      if (!m) return;
+      if (m[1] === SARIF_SPEC_VERSION) return; // the format's own version
+      offenders.push(`${rel}:${i + 1}: ${t.slice(0, 80)}`);
+    });
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'hardcoded tool version in a reporter — use PKG_VERSION from package.json'
+  );
+});
+
+test('the SARIF spec version is still pinned (it must NOT track our version)', () => {
+  // Anti-overcorrection: the guard above exempts 2.1.0, so make sure the
+  // exemption is still doing something and nobody "helpfully" derived it.
+  //
+  // Scanned over EXECUTABLE lines only. A whole-file `assert.match` passed
+  // this test while the real declaration had been replaced, because the
+  // explanatory comment above it also contains the literal — the guard was
+  // satisfied by prose. Caught by a positive control that survived.
+  const lines = fs
+    .readFileSync(path.join(REPO_ROOT, 'src/reporters/sarif-reporter.js'), 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => !(l.startsWith('*') || l.startsWith('//') || l.startsWith('/*')));
+
+  assert.ok(
+    lines.some((l) => /^version:\s*'2\.1\.0',?$/.test(l)),
+    'SARIF output must declare spec version 2.1.0 in code, not only in a comment'
+  );
+  assert.ok(
+    lines.some((l) => /^version: PKG_VERSION,?$/.test(l)),
+    'the driver version must be derived from package.json'
+  );
+});
+
 test('the derived version is actually what the server would report', () => {
   // Anti-vacuity: the test above passes trivially if PKG_VERSION were missing
   // altogether. Assert the wiring exists and resolves to the real version.

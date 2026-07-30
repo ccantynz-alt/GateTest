@@ -4,6 +4,11 @@
 
 const fs = require('fs');
 const path = require('path');
+// Tool version, grouped with the run's timestamp and gateStatus. It read
+// '1.0.0' regardless of what actually ran. Nothing consumes this field
+// (consumers read gateStatus/timestamp) and no schema version is documented,
+// so deriving it makes it meaningful rather than decorative.
+const PKG_VERSION = require('../../package.json').version;
 
 class JsonReporter {
   constructor(runner, config) {
@@ -30,7 +35,7 @@ class JsonReporter {
 
     const report = {
       gatetest: {
-        version: '1.0.0',
+        version: PKG_VERSION,
         timestamp: summary.timestamp,
         gateStatus: summary.gateStatus,
       },
