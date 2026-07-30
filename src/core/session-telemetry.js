@@ -69,8 +69,12 @@ let _warnedOnce = false;
 function warnOnce(msg) {
   if (_warnedOnce) return;
   _warnedOnce = true;
-  // eslint-disable-next-line no-console
-  console.warn(`[session-telemetry] ${msg}`);
+  // process.stderr.write, matching src/core convention (see shipped-rules.js and
+  // fix-telemetry.js) — this module moved here from website/app/lib in the KI #74g
+  // ship-path fix, and a bare console call in library code is on the Bible's
+  // quality bar. stderr also keeps it clear of anything parsing stdout as report
+  // output.
+  try { process.stderr.write(`[session-telemetry] ${msg}\n`); } catch { /* best-effort */ } // error-ok
 }
 
 // ---------------------------------------------------------------------------

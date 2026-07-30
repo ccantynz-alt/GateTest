@@ -8,7 +8,7 @@ const {
   topFailure,
   knownClasses,
   RULES,
-} = require("../website/app/lib/ci-doctor/failure-classifier.js");
+} = require("../src/core/ci-doctor/failure-classifier.js");
 
 // ---------------------------------------------------------------------------
 // Sanity

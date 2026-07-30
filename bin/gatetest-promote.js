@@ -4,7 +4,7 @@
  *
  * Reads an aggregated recipe corpus (a local JSON file OR a remote
  * recipe-store URL), evaluates each recipe against the promotion criteria
- * defined in `website/app/lib/recipe-promotion.js`, prints a per-recipe
+ * defined in `src/core/recipe-promotion.js`, prints a per-recipe
  * decision table to stdout, and (unless --dry-run) writes new shipped-rule
  * JSON files to the output directory.
  *
@@ -44,7 +44,7 @@ const {
   buildShippedRuleFromRecipe,
   serializeShippedRule,
   DEFAULT_CRITERIA,
-} = require('../website/app/lib/recipe-promotion');
+} = require('../src/core/recipe-promotion');
 
 // ---------------------------------------------------------------------------
 // Arg parsing

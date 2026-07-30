@@ -2,7 +2,7 @@
 /**
  * gatetest-doctor — CLI entry for the CI Doctor (v0.4c).
  *
- * Thin shim over `website/app/lib/ci-doctor/diagnose.js`. Parses args
+ * Thin shim over `src/core/ci-doctor/diagnose.js`. Parses args
  * via `cli-args.js`, calls diagnose(), prints the report.
  *
  * Painkiller philosophy (Bible Forbidden #25): NEVER exits non-zero
@@ -14,7 +14,7 @@
  *   gatetest-doctor --owner crclabs-hq --repo GateTest --pr 42
  *   gatetest-doctor --owner x --repo y --run 12345 --apply
  *
- * The script reads from `website/app/lib/ci-doctor/` — relative path
+ * The script reads from `src/core/ci-doctor/` — relative path
  * is anchored at this file's parent directory.
  */
 
@@ -23,8 +23,8 @@
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const { parseDoctorArgs, USAGE } = require(path.join(ROOT, "website/app/lib/ci-doctor/cli-args.js"));
-const { diagnose, renderReport } = require(path.join(ROOT, "website/app/lib/ci-doctor/diagnose.js"));
+const { parseDoctorArgs, USAGE } = require(path.join(ROOT, "src/core/ci-doctor/cli-args.js"));
+const { diagnose, renderReport } = require(path.join(ROOT, "src/core/ci-doctor/diagnose.js"));
 
 async function main() {
   const args = parseDoctorArgs(process.argv.slice(2));

@@ -183,8 +183,8 @@ describe('marketing claim — self-healing CI', () => {
 
 describe('marketing claim — flywheel intelligence pipeline', () => {
   it('session-telemetry captures git history', () => {
-    assert.ok(fileExists('website/app/lib/session-telemetry.js'));
-    const src = readFile('website/app/lib/session-telemetry.js');
+    assert.ok(fileExists('src/core/session-telemetry.js'));
+    const src = readFile('src/core/session-telemetry.js');
     assert.match(src, /ingestGitHistory/);
     assert.match(src, /recordSessionFix/);
   });

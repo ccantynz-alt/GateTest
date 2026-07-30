@@ -12,7 +12,7 @@ const {
   authHeaders,
   validateOwnerRepo,
   GH_API,
-} = require("../website/app/lib/ci-doctor/github-actions-fetcher.js");
+} = require("../src/core/ci-doctor/github-actions-fetcher.js");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -294,7 +294,7 @@ test("fetchFailedJobLogs: empty failed list → empty map", async () => {
 
 test("integration: failed job logs → classifier produces a finding", async () => {
   // eslint-disable-next-line global-require
-  const { topFailure } = require("../website/app/lib/ci-doctor/failure-classifier.js");
+  const { topFailure } = require("../src/core/ci-doctor/failure-classifier.js");
   const _fetch = makeFetch({
     [`${GH_API}/repos/x/y/actions/runs/1/jobs?per_page=100`]: {
       body: {

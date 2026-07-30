@@ -7,7 +7,7 @@ const {
   applyFixProposal,
   applyEdit,
   validateProposal,
-} = require("../website/app/lib/ci-doctor/applier.js");
+} = require("../src/core/ci-doctor/applier.js");
 
 // ---------------------------------------------------------------------------
 // In-memory fs adapter for tests
@@ -389,7 +389,7 @@ test("applyFixProposal: summary tallies match outcomes", async () => {
 
 test("integration: lockfile-drift recipe → applier → npm install command runs", async () => {
   // eslint-disable-next-line global-require
-  const { recipeLockfileDrift } = require("../website/app/lib/ci-doctor/fix-recipes.js");
+  const { recipeLockfileDrift } = require("../src/core/ci-doctor/fix-recipes.js");
   const proposal = recipeLockfileDrift({ workspaceRoot: "/repo" });
   const exec = makeExec([{ exitCode: 0, stdout: "added 1 package", stderr: "" }]);
   const r = await applyFixProposal({

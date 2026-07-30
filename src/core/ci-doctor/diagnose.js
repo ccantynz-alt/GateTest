@@ -42,8 +42,6 @@ const { classifyCIFailures } = require("./failure-classifier.js");
 const { proposeFixForFinding } = require("./fix-recipes.js");
 const { applyFixProposal } = require("./applier.js");
 
-const DEFAULT_AUTH = {};
-
 /**
  * Resolve a PR number to the most recent workflow run on its head SHA.
  *
@@ -85,13 +83,20 @@ async function resolveRunIdForPR({ owner, repo, prNumber, token, _fetch }) {
  * Some recipes need workflow paths to patch (node-oom, runner-timeout),
  * others need the workspace root for commands (lockfile-drift, lint).
  * The caller passes their environment-specific values via
- * `recipeContext`; we merge with sensible defaults per class.
+ * `recipeContext`, which is passed through as-is.
  *
  * Anything the caller doesn't pre-supply for a particular class becomes
  * the responsibility of the operator to specify in the PR. We surface
  * missing-context failures as `proposal: null` with `error: "missing-context"`.
+ *
+ * NOTE: this used to be documented as merging "sensible defaults per class".
+ * It does not — the only derivation here is `jobName` from the job, and
+ * `finding` is accepted but unread. Corrected rather than left overstating,
+ * since a doc comment describing logic that does not exist is worse than none.
+ * `finding` stays in the signature because callers pass it and per-class
+ * defaults would belong here if they are ever added.
  */
-function buildRecipeContext({ finding, workspaceRoot, recipeContext, job }) {
+function buildRecipeContext({ finding: _finding, workspaceRoot, recipeContext, job }) {
   const base = {
     workspaceRoot,
     ...(recipeContext || {}),

@@ -113,7 +113,7 @@ function printHelp() {
 
 async function ingestSessionFixes(repoRoot) {
   try {
-    const ST = require('../website/app/lib/session-telemetry.js');
+    const ST = require('../src/core/session-telemetry.js');
     const stats = ST.ingestGitHistory({ repoRoot, since: '30 days ago' });
     return { ok: true, stats };
   } catch (err) {

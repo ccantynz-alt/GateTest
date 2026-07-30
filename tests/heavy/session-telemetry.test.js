@@ -1,7 +1,7 @@
 // =============================================================================
 // SESSION TELEMETRY TEST
 // =============================================================================
-// Tests for website/app/lib/session-telemetry.js
+// Tests for src/core/session-telemetry.js
 // Validates the capture-every-fix pathway that closes the "flywheel only
 // learns from production runs" gap.
 // =============================================================================
@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const ST = require('../../website/app/lib/session-telemetry.js');
+const ST = require('../../src/core/session-telemetry.js');
 
 let tmpRoot;
 

@@ -8,8 +8,8 @@ const {
   renderReport,
   resolveRunIdForPR,
   sanitiseJobName,
-} = require("../website/app/lib/ci-doctor/diagnose.js");
-const { GH_API } = require("../website/app/lib/ci-doctor/github-actions-fetcher.js");
+} = require("../src/core/ci-doctor/diagnose.js");
+const { GH_API } = require("../src/core/ci-doctor/github-actions-fetcher.js");
 
 // ---------------------------------------------------------------------------
 // Helpers

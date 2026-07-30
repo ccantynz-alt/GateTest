@@ -99,24 +99,25 @@ describe('published code never requires across the website/ boundary', () => {
   /**
    * KNOWN DEBT — shrink-only, never add.
    *
-   * These four binaries still load from website/, so they crash with
-   * MODULE_NOT_FOUND for anyone who installed from npm. They are listed rather
-   * than fixed in the same pass because each needs its own dependency tree moved
-   * into src/core (ci-doctor/, recipe-promotion, reliability/cli-runner,
-   * session-telemetry), and a half-moved tree is worse than a listed one.
+   * Started at four binaries that crashed with MODULE_NOT_FOUND for anyone who
+   * installed from npm. Three are fixed: gatetest-doctor, gatetest-promote and
+   * gatetest-train now load ci-doctor/, recipe-promotion and session-telemetry
+   * from src/core. Unlike auto-distill, those three had NO website importers —
+   * they were simply misfiled engine code — so they moved without needing shims.
+   *
+   * One left. `gatetest-reliability` is the most urgent of the original four
+   * (it is one of the three `bin` entries package.json declares, so it is an
+   * advertised command that cannot start) and also the deepest: reliability/ is
+   * 9 files and pulls in ssrf-guard, which pulls in pentest/dns-verify, and
+   * ssrf-guard is live in four website API routes — so that one needs shims and
+   * more care than a straight move.
    *
    * Same approach the CRLF debt took under KI #77: make the remaining set
-   * explicit and prevent growth, rather than pretend it is clean.
-   *
-   * `gatetest-reliability` is the most urgent — it is one of the three `bin`
-   * entries package.json declares, so it is an advertised command that cannot
-   * start. Tracked as Known Issue #74f.
+   * explicit and prevent growth, rather than pretend it is clean. Tracked as
+   * Known Issue #74g.
    */
   const KNOWN_DEBT = new Set([
-    'bin/gatetest-doctor.js',
-    'bin/gatetest-promote.js',
     'bin/gatetest-reliability.js',
-    'bin/gatetest-train.js',
   ]);
 
   it('the known-debt list only shrinks', () => {

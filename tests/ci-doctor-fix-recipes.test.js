@@ -17,7 +17,7 @@ const {
   KNOWN_GOOD_ACTIONS,
   getRecipe,
   proposeFixForFinding,
-} = require("../website/app/lib/ci-doctor/fix-recipes.js");
+} = require("../src/core/ci-doctor/fix-recipes.js");
 
 // Helper — apply a FixProposal's first fileEdit to a sample yaml and
 // return what the patched yaml looks like. Mirrors what the (future)

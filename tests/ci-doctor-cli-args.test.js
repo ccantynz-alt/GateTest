@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { parseDoctorArgs, DEFAULT_WORKFLOW_PATHS } = require("../website/app/lib/ci-doctor/cli-args.js");
+const { parseDoctorArgs, DEFAULT_WORKFLOW_PATHS } = require("../src/core/ci-doctor/cli-args.js");
 
 test("parseDoctorArgs: minimal valid run-by-id", () => {
   const a = parseDoctorArgs(["--owner", "crclabs-hq", "--repo", "GateTest", "--run", "12345"]);

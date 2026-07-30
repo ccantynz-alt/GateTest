@@ -10,7 +10,7 @@ const {
   recipeFingerprint,
   DEFAULT_CRITERIA,
   SHIPPED_RULE_SCHEMA_VERSION,
-} = require('../website/app/lib/recipe-promotion');
+} = require('../src/core/recipe-promotion');
 
 const { validateShippedRule } = require('../src/core/shipped-rules');
 

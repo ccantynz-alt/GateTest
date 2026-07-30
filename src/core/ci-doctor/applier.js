@@ -62,7 +62,7 @@ const path = require("path");
 
 const DEFAULT_FS = (() => {
   try {
-    return require("fs"); // eslint-disable-line global-require
+    return require("fs");
   } catch {
     return null;
   }
@@ -70,7 +70,6 @@ const DEFAULT_FS = (() => {
 
 const DEFAULT_EXEC = {
   async run(cmd, { cwd }) {
-    // eslint-disable-next-line global-require
     const cp = require("child_process");
     return new Promise((resolve) => {
       const child = cp.exec(cmd, { cwd, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
