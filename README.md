@@ -169,6 +169,33 @@ Works with Claude Code, Cursor, Windsurf, Continue, and Cline. See [`packages/mc
 
 Visit [gatetest.io/web](https://gatetest.io/web) and paste any URL. You get a free preview and a paid full report. For WordPress sites use [gatetest.io/wp](https://gatetest.io/wp).
 
+### Wire it into CI — GitHub, GitLab, or CircleCI
+
+Don't hand-write the pipeline. One command scaffolds a complete, conventional config:
+
+```bash
+gatetest --ci-init github     # .github/workflows/gatetest.yml
+gatetest --ci-init gitlab     # .gitlab-ci.yml
+gatetest --ci-init circleci   # .circleci/config.yml
+```
+
+Each generated config gates the right thing at the right time rather than running
+everything everywhere: a **quick, diff-scoped** scan on merge requests and pull
+requests, a **full** scan on the main branch, and a separate security stage. JUnit
+and SARIF are emitted to `.gatetest/reports/` and wired into the platform's native
+test-reporting and artifact storage, so failures show up in the UI instead of only
+in the log.
+
+On any other CI — Jenkins, Buildkite, Bitbucket, Drone — the CLI is the whole
+integration:
+
+```bash
+npx @gatetest/cli --suite full --junit --sarif
+```
+
+Onboarding an existing codebase? Pair this with **baseline mode** above so the gate
+only fails on new findings.
+
 ### Replay a failing CI run locally
 
 Reproduce any failing GitHub Actions run on your laptop in seconds:
