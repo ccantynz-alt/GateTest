@@ -375,6 +375,161 @@ describe('distillRecipes', () => {
   });
 });
 
+// ── distillRecipes — it must actually WRITE (KI #74) ──────────────────────────
+//
+// Every test above stops at a guard: missing args, no-change, no recipePath.
+// Not one drove distillRecipes far enough to call distillClaudeFix, which is
+// precisely how three bugs lived in that one call for months:
+//
+//   1. it passed `fixedContent` / `ruleKey` / `module` / `fileExt` / `modelId`,
+//      none of which distillClaudeFix reads — it wants `issue` /
+//      `patchedContent` / `originalModel`. So `issue` was always undefined and
+//      it bailed at its first guard.
+//   2. the success check was `if (!result)`. distillClaudeFix signals failure as
+//      `{ written: false, reason }` — truthy — so every rejection was reported
+//      as `{ distilled: true }`.
+//   3. it read the id from `result.id`; the recipe is at `result.recipe.id`.
+//
+// The test at "returns an object with distilled boolean in all cases" DID reach
+// the bug, and passed anyway, because asserting `typeof r.distilled === 'boolean'`
+// cannot fail. These tests assert the write.
+
+describe('distillRecipes — writes a real recipe', () => {
+  // Small literal diff: isTemplatey() accepts this shape (see auto-distill tests).
+  const BEFORE = "const opts = {\n  rejectUnauthorized: false,\n  host: 'api.example.com'\n};";
+  const AFTER = "const opts = {\n  rejectUnauthorized: true,\n  host: 'api.example.com'\n};";
+
+  const tmpStore = () => path.join(
+    os.tmpdir(),
+    `gt-flywheel-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+  );
+
+  test('a templatey fix is distilled and lands on disk', () => {
+    const store = tmpStore();
+    const r = distillRecipes({
+      originalContent: BEFORE,
+      fixedContent:    AFTER,
+      ruleKey:         'js-reject-unauthorized',
+      module:          'tlsSecurity',
+      fileExt:         '.js',
+      recipePath:      store,
+      modelId:         'claude-sonnet-5',
+    });
+
+    assert.equal(r.distilled, true, `expected a write, got ${JSON.stringify(r)}`);
+    assert.ok(r.recipeId, 'recipeId must be populated — it used to read result.id, which is undefined');
+
+    const persisted = JSON.parse(fs.readFileSync(store, 'utf-8'));
+    assert.equal(persisted.recipes.length, 1, 'the recipe must actually be on disk');
+    assert.equal(persisted.recipes[0].id, r.recipeId);
+    assert.equal(persisted.recipes[0].ruleKey, 'js-reject-unauthorized');
+    assert.equal(persisted.recipes[0].module, 'tlsSecurity');
+    assert.equal(persisted.recipes[0].fileExt, '.js', 'the extension must survive the issue.file hop');
+    assert.equal(persisted.recipes[0].provenance.originalModel, 'claude-sonnet-5',
+      'modelId must arrive as originalModel');
+
+    fs.unlinkSync(store);
+  });
+
+  test('a rejected write NEVER reports distilled:true', () => {
+    // A sprawling rewrite is not templatey, so distillClaudeFix returns
+    // { written: false, reason } — the truthy object that used to be misread.
+    const store = tmpStore();
+    const r = distillRecipes({
+      originalContent: 'function a() {\n  return 1;\n}\n',
+      fixedContent:    'function a() {\n  const x = compute();\n  const y = process(x);\n'
+                     + '  const z = persist(y);\n  return finalize(z);\n}\n',
+      ruleKey:         'whole-rewrite',
+      module:          'codeQuality',
+      fileExt:         '.js',
+      recipePath:      store,
+    });
+
+    assert.equal(r.distilled, false, 'a non-templatey diff must not be reported as distilled');
+    assert.ok(r.reason && r.reason !== 'not-written',
+      `the real reason must be propagated, got ${JSON.stringify(r.reason)}`);
+    assert.equal(fs.existsSync(store), false, 'nothing should have been written');
+  });
+
+  // This test documents a FOURTH break that the fixes above do not resolve, and
+  // isolates exactly which link in the chain is missing.
+  //
+  // The replay machinery works. Distillation now works. But a freshly distilled
+  // recipe is written `confidence: 'low'`, and executePlaybackSimulation asks for
+  // stable recipes only (`includeLowConfidence: false`). Promotion to stable
+  // happens in incrementApplicationCount at applicationCount >= 3 — and the only
+  // production caller of that is the playback path itself, which will never
+  // return a low-confidence recipe to apply.
+  //
+  // So: distil -> low -> never replayed -> never counted -> never promoted ->
+  // never replayed. A locally distilled recipe can never be used.
+  //
+  // Not resolved here on purpose: the fix is either "replay unproven recipes"
+  // (auto-applying an uncertified patch to a customer's code — a product-risk
+  // decision, not a bug fix) or "promote via the remote store" (which needs
+  // GATETEST_RECIPE_STORE_URL, unset — KI #74e). Both are Craig's call. Raised
+  // as a Known Issue rather than guessed at.
+  test('a distilled recipe is low-confidence, so playback deliberately skips it', () => {
+    const store = tmpStore();
+    const d = distillRecipes({
+      originalContent: BEFORE,
+      fixedContent:    AFTER,
+      ruleKey:         'js-reject-unauthorized',
+      module:          'tlsSecurity',
+      fileExt:         '.js',
+      recipePath:      store,
+    });
+    assert.equal(d.distilled, true, 'precondition: the recipe must exist');
+
+    const persisted = JSON.parse(fs.readFileSync(store, 'utf-8'));
+    assert.equal(persisted.recipes[0].confidence, 'low');
+    assert.equal(persisted.recipes[0].applicationCount, 0);
+
+    const play = executePlaybackSimulation({
+      content: BEFORE, issues: ['js-reject-unauthorized'],
+      fileExt: '.js', module: 'tlsSecurity', recipePath: store,
+    });
+    assert.equal(play.hit, false,
+      'an unproven recipe must NOT be auto-applied — this is the designed gate, not a defect');
+
+    fs.unlinkSync(store);
+  });
+
+  test('once promoted to stable, the same recipe replays — so only promotion is broken', () => {
+    // Proves the replay half of the flywheel is sound: drive the documented
+    // promotion path by hand (3 applications -> stable) and the recipe applies.
+    // Nothing in production drives it, which is the whole finding.
+    const store = tmpStore();
+    distillRecipes({
+      originalContent: BEFORE,
+      fixedContent:    AFTER,
+      ruleKey:         'js-reject-unauthorized',
+      module:          'tlsSecurity',
+      fileExt:         '.js',
+      recipePath:      store,
+    });
+
+    const autoDistill = require('../src/core/auto-distill');
+    const id = JSON.parse(fs.readFileSync(store, 'utf-8')).recipes[0].id;
+    for (let i = 0; i < 3; i += 1) autoDistill.incrementApplicationCount(id, store);
+
+    assert.equal(
+      JSON.parse(fs.readFileSync(store, 'utf-8')).recipes[0].confidence, 'stable',
+      'three applications must promote to stable',
+    );
+
+    const play = executePlaybackSimulation({
+      content: BEFORE, issues: ['js-reject-unauthorized'],
+      fileExt: '.js', module: 'tlsSecurity', recipePath: store,
+    });
+    assert.equal(play.hit, true, `expected a replay hit once stable, got ${JSON.stringify(play)}`);
+    assert.ok(play.code && play.code.includes('rejectUnauthorized: true'),
+      'the replayed patch must contain the fix, with zero API spend');
+
+    fs.unlinkSync(store);
+  });
+});
+
 // ── integration: record → cluster round-trip ──────────────────────────────────
 
 describe('record → cluster round-trip', () => {

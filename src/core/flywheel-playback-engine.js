@@ -36,18 +36,31 @@ const MAX_MODULE_LEN    = 100;
 const CLUSTER_MIN_COUNT = 3;
 const CLUSTER_MIN_CONF  = 0.85;
 
-// ── Defensive module loader ───────────────────────────────────────────────────
-
-function _safeRequire(specifier) {
-  try { return require(specifier); } catch { return null; }
-}
+// ── Flywheel dependencies ─────────────────────────────────────────────────────
+//
+// These are required DIRECTLY and at module load, not behind a try/catch.
+//
+// They used to be loaded from `../../website/app/lib/…` through a `_safeRequire`
+// that returned null on failure. `package.json` `files` ships `bin/ src/ lib/`
+// and `.npmignore` excludes `website/`, so in the published package those files
+// did not exist — every `npm i -g @gatetest/cli` user got null, and the catch
+// turned "the flywheel is not installed" into "the flywheel found nothing".
+// Recipe playback and distillation were both silently dead for months while the
+// product marketed them by name (Known Issue #74).
+//
+// A swallowed require is how that hid. Now they are siblings in src/core and a
+// missing one throws at load, which is the correct blast radius for a
+// dependency the engine genuinely needs: loud on the first run, not invisible
+// forever.
+const autoDistillMod = require('./auto-distill');
+const fixTelemetryMod = require('./fix-telemetry');
 
 function _loadAutoDistill() {
-  return _safeRequire(path.join(__dirname, '../../website/app/lib/auto-distill'));
+  return autoDistillMod;
 }
 
 function _loadTelemetry() {
-  return _safeRequire(path.join(__dirname, '../../website/app/lib/fix-telemetry'));
+  return fixTelemetryMod;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -364,18 +377,36 @@ function distillRecipes(opts) {
       return { distilled: false, reason: 'auto-distill-unavailable' };
     }
 
+    // The parameter names matter: distillClaudeFix's contract is
+    // ({ issue, originalContent, patchedContent, recipeStorePath, originalModel }).
+    // This used to pass `fixedContent` / `ruleKey` / `module` / `fileExt` /
+    // `modelId` — five names it does not read — so `issue` and `patchedContent`
+    // both arrived undefined and it bailed at its first guard, every time.
+    const safeRuleKey = _sanitiseStr(ruleKey, MAX_RULE_KEY_LEN) || 'unknown';
+    const safeModule = _sanitiseStr(mod, MAX_MODULE_LEN) || 'unknown';
+    const safeExt = _sanitiseStr(fileExt, 20) || '';
+
     const result = autoDistill.distillClaudeFix({
+      // distillClaudeFix derives the extension via fileExtOf(issue.file), so the
+      // extension has to travel as a filename. `recipe` is a placeholder stem —
+      // only the extension is read, and no real path is stored in the recipe.
+      issue: { ruleKey: safeRuleKey, module: safeModule, file: safeExt ? `recipe${safeExt}` : '' },
       originalContent,
-      fixedContent,
-      ruleKey:         _sanitiseStr(ruleKey, MAX_RULE_KEY_LEN) || '',
-      module:          _sanitiseStr(mod, MAX_MODULE_LEN) || '',
-      fileExt:         _sanitiseStr(fileExt, 20) || '',
+      patchedContent:  fixedContent,
       recipeStorePath: recipePath,
-      modelId,
+      originalModel:   modelId,
     });
 
-    if (!result) return { distilled: false, reason: 'not-templatey' };
-    return { distilled: true, recipeId: result.id };
+    // Check `written`, not truthiness. distillClaudeFix signals every failure as
+    // `{ written: false, reason }` — an OBJECT, which is truthy — so `if (!result)`
+    // classified opt-out, bad-content, duplicate and not-templatey as successes
+    // and returned `{ distilled: true, recipeId: undefined }`. Reporting a write
+    // that did not happen is the failure mode this engine is supposed to detect
+    // in other people's code.
+    if (!result || result.written !== true) {
+      return { distilled: false, reason: (result && result.reason) || 'not-written' };
+    }
+    return { distilled: true, recipeId: result.recipe && result.recipe.id };
   } catch {
     return { distilled: false, reason: 'exception' };
   }
