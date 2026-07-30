@@ -1,6 +1,6 @@
 # GateTest Module Reference
 
-The full competitive tool-replacement table — which of the 120 modules replaces which market tool.
+The full competitive tool-replacement table — which of the 121 modules replaces which market tool.
 
 > Split out of CLAUDE.md (the Bible) 2026-07-07 to keep every session's context lean.
 > The Bible holds rules + current truth; this file holds the detail. Nothing was deleted.
