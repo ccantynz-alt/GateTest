@@ -113,6 +113,60 @@ Now belt-and-braces rather than load-bearing — the code already defaults to
 
 ---
 
+## 8. Product decisions only you can make (added later the same day)
+
+None of these block the site coming back up. They are the things I found while
+working and deliberately did **not** decide for you, because each one touches
+money, public copy, or a design trade-off. Full detail is in `docs/ROADMAP.md`
+under the KI number.
+
+- [ ] **KI #95 — the cross-repo prior-art facade has no caller.**
+      `fetchPriorArt()` computes "what fires in similar codebases" and nothing
+      asks for it. Three options: wire it into the repo fix route, delete it, or
+      accept a dead export. It touches **AI spend on the $399 Forensic tier**
+      (an extra DB query plus a bigger prompt per scan), and there is already a
+      *second*, live prior-art system (`fix-pattern-recall`) on the fix route —
+      so "just wire it up" is a product call about what the model should be
+      told, not a mechanical fix. The silent-drop bug underneath it is already
+      fixed (`09fe694`).
+- [ ] **KI #84 — `try-fix.js` is named on `/how-it-works` but never runs.**
+      Predates today. Wire it in, retarget the copy, or delete it. The copy half
+      is Boss Rule #8, which is why I left it.
+- [ ] **KI #96 — no detector exists for that "shipped but unreachable" class.**
+      I tried five approaches, measured each, and shipped only the one that
+      worked. Four are recorded as rejected *with the measurement*, so nobody
+      repeats them. The remaining work needs real import resolution plus a
+      dynamic-registry pass; it is pre-authorized, just not started.
+- [ ] **`www.gatetest.io` certificate** is expired at Vercel — it resolves to
+      the retired project. Folds into item 1 (disconnect Vercel), but it is a
+      visible symptom if anyone hits the `www` host.
+
+## 9. What changed in the code since this file was written
+
+The domain work at the top is unchanged and still correct. Since then, working
+the "looks wired but isn't" thread turned up four real defects, all fixed,
+tested and pushed:
+
+- A cross-repo intelligence parameter was threaded through three layers of the
+  **paid Forensic path** and silently discarded (`09fe694`). The anti-template
+  guard that stops the model copying other codebases' findings had also been
+  deleted from the source; it is restored.
+- **`aiReview` reported "code looks clean" for a review that never ran**
+  (`d04bd39`) — an outage, a model refusal and genuinely clean code were
+  indistinguishable to the customer, and the indistinguishable outcome was the
+  reassuring one. This is the one I would most want you to know about.
+- Three JSDoc-documented options were phantoms; two were being passed by live
+  callers and thrown away (`f13fa76`).
+- `crawl:clean` could assert "Site is clean" off zero fetched pages
+  (`67dee6c`). Narrower than it sounds — an unreachable site was already caught
+  — but a verdict off zero evidence all the same.
+
+Nothing on this list changed as a result. Repo is green: 6983 fast + 323 heavy
+tests, website builds, 121 modules load, and the `.io` domain is verified
+**emitting** correctly at runtime across 11 surfaces, not just in source.
+
+---
+
 ## Carried over from the 2026-07-13 checklist — status NOT verified by me
 
 I did not re-check these; they may already be done.
