@@ -301,3 +301,68 @@ describe('shipDiagnosisAwareFix', () => {
     assert.strictEqual(r.enrichedIssues[1]._diagnosed, undefined);
   });
 });
+
+// ============================================================================
+// CONTRACT TEST — no test double between the enricher and the real diagnoser
+// ============================================================================
+// Every other test on this path injects `diagnoseFindings: fakeDiagnose`. That
+// is why the priorArt drop survived: the enricher threads `priorArt` into the
+// callee, seven tests assert the plumbing against a stub that happily accepts
+// whatever it is handed, and nothing ever ran the REAL diagnoser to check that
+// it destructures the key. The call is also indirected —
+// `const fn = diagnoseFindingsImpl || require('./nuclear-diagnoser.js').diagnoseFindings`
+// — so no static check resolves it either (see KI #96).
+//
+// This test deliberately omits the override so the lazy require resolves to the
+// real function, and asserts through the only observable output: the prompt.
+
+describe('enricher → real nuclear-diagnoser (no injected double)', () => {
+  const PRIOR_ART = 'PRIOR-ART (12 similar codebases scanned recently):\n- secrets fired in 75% of similar repos';
+
+  // The parser rejects a too-short RECOMMENDATION as "not useful" — a real
+  // quality guard. So the fixture has to be realistic; relaxing the assertion
+  // instead would have quietly disabled that guard for this test.
+  const REALISTIC_DIAGNOSIS = [
+    'EXPLANATION: The key is committed in plaintext and readable by anyone with repo access.',
+    'ROOT_CAUSE: The credential was hardcoded into config rather than read from the environment.',
+    'RECOMMENDATION: Rotate the key immediately, move it into an environment variable, and add a secrets scanner to CI so it cannot be reintroduced.',
+    'PLATFORM_NOTES:',
+  ].join('\n\n');
+
+  it('forwards priorArt through the real diagnoser into the prompt', async () => {
+    const prompts = [];
+    const result = await runDiagnosesForFixInputs({
+      issues: [{ file: 'src/a.ts', issue: 'error: hardcoded API key in config', module: 'secrets' }],
+      hostname: 'example.com',
+      priorArt: PRIOR_ART,
+      // no `diagnoseFindings` override — this resolves the real module
+      askClaudeForDiagnosis: async (prompt) => {
+        prompts.push(prompt);
+        return REALISTIC_DIAGNOSIS;
+      },
+    });
+
+    assert.strictEqual(prompts.length, 1, 'the real diagnoser should have been called once');
+    assert.match(prompts[0], /PRIOR-ART \(12 similar/);
+    assert.match(prompts[0], /secrets fired in 75%/);
+    // The guard must travel with it.
+    assert.match(prompts[0], /Do not copy from it/);
+    // And the diagnosis still completes.
+    assert.strictEqual(result.diagnoses.length, 1);
+    assert.strictEqual(result.diagnoses[0].ok, true);
+  });
+
+  it('omits prior-art from the real prompt when none is supplied', async () => {
+    const prompts = [];
+    await runDiagnosesForFixInputs({
+      issues: [{ file: 'src/a.ts', issue: 'error: hardcoded API key in config', module: 'secrets' }],
+      hostname: 'example.com',
+      askClaudeForDiagnosis: async (prompt) => {
+        prompts.push(prompt);
+        return REALISTIC_DIAGNOSIS;
+      },
+    });
+    assert.strictEqual(prompts.length, 1);
+    assert.ok(!prompts[0].includes('PRIOR-ART'));
+  });
+});
