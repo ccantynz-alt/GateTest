@@ -52,6 +52,13 @@ before(() => {
     // a real 2-node cycle
     'cyc1.js': "const two = require('./cyc2');\n",
     'cyc2.js': "const one = require('./cyc1');\n",
+    // dynamic-registry references: relative paths as plain STRINGS, the shape
+    // used by plugin registries / route tables / DI manifests.
+    'registry.js': "module.exports = {\n  cee: './c.js',\n  bee: './b.js',\n};\n",
+    // a path string that does NOT resolve is just a string, not an edge
+    'ghost.js': "const missing = './does-not-exist.js';\nmodule.exports = missing;\n",
+    // a non-path string must never be mistaken for one
+    'prose.js': "const msg = 'see ./docs for details';\nmodule.exports = msg;\n",
     // must be ignored entirely
     'node_modules/pkg/index.js': "require('./other');\n",
     'notes.md': 'not source\n',
@@ -215,5 +222,63 @@ describe('isTopLevel', () => {
     assert.strictEqual(isTopLevel("const x = require('./y');"), true);
     assert.strictEqual(isTopLevel("  const x = require('./y');"), false);
     assert.strictEqual(isTopLevel(''), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dynamic-registry edges (KI #96)
+// ---------------------------------------------------------------------------
+// Plugin registries reference code by PATH STRING, not by require:
+// `registry.js` maps every GateTest module as `accessibility: '../modules/…'`.
+// Because no resolver saw those, a dead-code signal called 115 live files
+// unreachable — including src/modules/accessibility.js. Measured on this repo:
+// 217 falsely-unreachable files before the pass, 102 after, while the one
+// genuinely dead file (try-fix.js, KI #84) stayed flagged.
+
+describe('path-literal edges (dynamic registries)', () => {
+  it('records an edge for a relative path string that resolves', () => {
+    const g = buildImportGraph({ projectRoot: ROOT });
+    const from = path.join(ROOT, 'registry.js');
+    const targets = [...(g.fullGraph.get(from) || [])].map((p) => relOf(g, p)).sort();
+    assert.deepStrictEqual(targets, ['b.js', 'c.js']);
+  });
+
+  it('labels them a distinct kind so callers can tell them apart', () => {
+    const g = buildImportGraph({ projectRoot: ROOT });
+    const kinds = g.edges
+      .filter((e) => relOf(g, e.from) === 'registry.js')
+      .map((e) => e.kind);
+    assert.deepStrictEqual([...new Set(kinds)], ['path-literal']);
+  });
+
+  it('NEGATIVE CONTROL — a path string that does not resolve is not an edge', () => {
+    // Otherwise every quoted filename in a comment or error message would
+    // invent coupling that does not exist.
+    const g = buildImportGraph({ projectRoot: ROOT });
+    const from = path.join(ROOT, 'ghost.js');
+    assert.deepStrictEqual([...(g.fullGraph.get(from) || [])], []);
+  });
+
+  it('NEGATIVE CONTROL — prose mentioning a path is not an edge', () => {
+    const g = buildImportGraph({ projectRoot: ROOT });
+    const from = path.join(ROOT, 'prose.js');
+    assert.deepStrictEqual([...(g.fullGraph.get(from) || [])], []);
+  });
+
+  it('does NOT change staticGraph — import-cycle must be unaffected', () => {
+    // staticGraph is the cycle-forming view and was verified byte-identical to
+    // import-cycle's old private graph. A registry reference is real coupling
+    // but cannot form a require-time cycle, so it must stay out of this view.
+    const g = buildImportGraph({ projectRoot: ROOT });
+    const from = path.join(ROOT, 'registry.js');
+    assert.deepStrictEqual([...(g.staticGraph.get(from) || [])], []);
+    for (const e of g.edges) {
+      if (e.kind === 'path-literal') {
+        assert.ok(
+          !(g.staticGraph.get(e.from) || new Set()).has(e.to),
+          'a path-literal edge leaked into staticGraph'
+        );
+      }
+    }
   });
 });

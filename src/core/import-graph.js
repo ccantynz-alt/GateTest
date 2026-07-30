@@ -54,6 +54,13 @@ const EXPORT_FROM_RE = /^\s*export\s+(?:type\s+)?(?:\*|\{[\s\S]*?\})\s+from\s+['
 const EXPORT_TYPE_RE = /^\s*export\s+type\b/;
 const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/;
 const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/;
+// A relative path written as a plain STRING, outside any import/require. This
+// is how plugin registries, route tables and DI manifests reference code:
+// `registry.js` maps every module as `accessibility: '../modules/accessibility.js'`.
+// Treating those as non-edges made 115 live files look unreachable from
+// production (KI #96 — measured on this repo before the pass was added).
+// Global: one line can list several.
+const PATH_LITERAL_RE = /['"`](\.\.?\/[A-Za-z0-9_\-./]+?\.(?:js|mjs|cjs|jsx|ts|tsx))['"`]/g;
 
 /**
  * Walk a project root and return every JS/TS source file (absolute paths).
@@ -185,7 +192,20 @@ function edgesForFile(absPath, fileSet) {
 
     // `await import('./x')` is lazy wherever it appears.
     const mDyn = DYNAMIC_IMPORT_RE.exec(line);
-    if (mDyn) push(mDyn[1], 'lazy', lineNo);
+    if (mDyn) { push(mDyn[1], 'lazy', lineNo); continue; }
+
+    // Dynamic-registry reference: a relative path string that resolves to a
+    // real file in this project, with no import syntax around it. Only reached
+    // for lines that produced no import/require/dynamic edge above, and only
+    // recorded when the path RESOLVES — an unresolvable string is just a
+    // string. This kind never enters staticGraph, so import-cycle's cycle
+    // detection is unchanged.
+    PATH_LITERAL_RE.lastIndex = 0;
+    let mLit = PATH_LITERAL_RE.exec(line);
+    while (mLit !== null) {
+      push(mLit[1], 'path-literal', lineNo);
+      mLit = PATH_LITERAL_RE.exec(line);
+    }
   }
 
   return out;
