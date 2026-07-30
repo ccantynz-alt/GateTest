@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+// Version + module count come from the generated stats, never typed here.
+// This demo line read "v1.59.0 — 121 modules" while the CLI printed v1.61.0.
+import siteStats from "../data/site-stats.json";
 
 const INSTALL_CMD = "curl -sSL https://raw.githubusercontent.com/crclabs-hq/gatetest/main/integrations/scripts/install.sh | bash";
 const SCAN_CMD = "gatetest scan --suite quick --diff";
@@ -56,7 +59,7 @@ const CATCHES = [
 
 const TERMINAL_LINES = [
   { t: "cmd",  text: "$ gatetest scan --suite quick --diff" },
-  { t: "info", text: "  GateTest v1.59.0 — 121 modules, Claude Sonnet 5" },
+  { t: "info", text: `  GateTest v${siteStats.version} — ${siteStats.modules.total} modules, Claude Sonnet 5` },
   { t: "info", text: "  Scanning 14 changed files vs main..." },
   { t: "pass", text: "  [PASS] syntax" },
   { t: "pass", text: "  [PASS] lint" },

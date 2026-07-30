@@ -58,6 +58,43 @@ test('the MCP server derives its version instead of hardcoding one', () => {
   );
 });
 
+test('no website page hardcodes a GateTest version string', () => {
+  // /developers showed "GateTest v1.59.0 — 121 modules" in its terminal demo
+  // while the CLI printed v1.61.0. It now reads both from the generated
+  // site-stats.json, the same mechanism the module count already uses.
+  const appDir = path.join(REPO_ROOT, 'website', 'app');
+  const offenders = [];
+
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === '.next') continue;
+        walk(full);
+        continue;
+      }
+      if (!/\.(tsx?|jsx?)$/.test(e.name)) continue;
+      const rel = path.relative(REPO_ROOT, full).split(path.sep).join('/');
+      // scans/page.tsx records dated measurements — a version there is evidence
+      // of what ran that day, not a claim about the current release.
+      if (rel === 'website/app/scans/page.tsx') continue;
+
+      fs.readFileSync(full, 'utf8').split('\n').forEach((line, i) => {
+        const t = line.trim();
+        if (t.startsWith('*') || t.startsWith('//') || t.startsWith('/*')) return;
+        if (/GateTest v\d+\.\d+\.\d+/.test(t)) offenders.push(`${rel}:${i + 1}: ${t.slice(0, 90)}`);
+      });
+    }
+  };
+  walk(appDir);
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'hardcoded GateTest version in website copy — read siteStats.version from app/data/site-stats.json'
+  );
+});
+
 test('the derived version is actually what the server would report', () => {
   // Anti-vacuity: the test above passes trivially if PKG_VERSION were missing
   // altogether. Assert the wiring exists and resolves to the real version.

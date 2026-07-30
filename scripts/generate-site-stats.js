@@ -112,6 +112,11 @@ function buildSiteStats({ tap, moduleCount, flywheel, previous = {}, green, scan
     generatedAt: new Date(now || Date.now()).toISOString(),
     source: 'scripts/generate-site-stats.js',
     note: 'Measured on every run. Displayed counts are rounded DOWN so the public "N+" claim is always an under-statement. Do not hand-edit — run the script.',
+    // Read from package.json, never typed. The MCP server shipped two
+    // hardcoded version literals that drifted two releases behind and were
+    // shown to customers (fixed in e231a1f); the site had a third on
+    // /developers. Wiring the version here means the page cannot go stale.
+    version: require('../package.json').version,
     tests: {
       total: tap.total,
       passing: tap.passing,
