@@ -134,9 +134,72 @@ function harvestImports(content) {
 
 // ─── module ────────────────────────────────────────────────────────────────
 
+/** Dependency names declared by one package.json. null when there is no file. */
+function readPkgDeps(pkgPath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(pkgPath, 'utf-8');
+  } catch {
+    return null; // no manifest here — not an error
+  }
+  const names = new Set();
+  try {
+    const pkg = JSON.parse(raw);
+    for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+      for (const key of Object.keys(pkg[field] || {})) names.add(key);
+    }
+    // A workspace package can import itself by name (`@acme/ui` -> its own root).
+    if (typeof pkg.name === 'string' && pkg.name) names.add(pkg.name);
+  } catch {
+    return null; // malformed manifest — treat as absent rather than guessing
+  }
+  return names;
+}
+
 class AiHallucinationDetector extends BaseModule {
   constructor() {
     super('aiHallucination', 'AI Hallucination Detector — fake imports, invented APIs, non-existent methods');
+  }
+
+  /**
+   * Dependencies visible to a file, by its directory: the nearest package.json
+   * plus every manifest between it and the project root, unioned.
+   *
+   * Before this existed, dependency resolution walked only UP from projectRoot,
+   * so a manifest BELOW the root was invisible. Any nested package — a monorepo
+   * workspace, a test fixture, an examples/ directory with its own deps — had
+   * every one of its imports reported as a possible hallucination. On this repo
+   * that was ~100 of 136 warnings (`playwright`, `express`, `openai`, `helmet`
+   * under benchmarks/bench-target/), and for a customer with a monorepo it means
+   * false positives across every workspace, which is the fastest way to teach
+   * someone to ignore a scanner.
+   *
+   * Ancestors are unioned rather than shadowed on purpose: npm and pnpm hoist,
+   * so a workspace package legitimately resolves the root's dependencies too.
+   * Reporting a hoisted import as missing would just trade one false positive
+   * class for another.
+   *
+   * Memoised per directory, and directories without a manifest SHARE the parent's
+   * Set rather than copying it — otherwise this is O(files x depth) allocations
+   * on a large monorepo, which is the cost that made this "more invasive" to
+   * begin with.
+   */
+  _depsForDir(dir, projectRoot, cache, rootDeps) {
+    const cached = cache.get(dir);
+    if (cached) return cached;
+
+    const parent = path.dirname(dir);
+    const atOrAboveRoot = dir === projectRoot || parent === dir || dir.length <= projectRoot.length;
+    const inherited = atOrAboveRoot
+      ? rootDeps
+      : this._depsForDir(parent, projectRoot, cache, rootDeps);
+
+    const own = readPkgDeps(path.join(dir, 'package.json'));
+    // No manifest here → same visibility as the parent. Share the object.
+    const set = own === null ? inherited : new Set([...inherited, ...own]);
+
+    cache.set(dir, set);
+    return set;
   }
 
   async run(result, config) {
@@ -144,7 +207,7 @@ class AiHallucinationDetector extends BaseModule {
 
     // Load known dependencies — check local package.json AND walk up to find
     // root workspace package.json (monorepos install deps at root, not per-package)
-    const knownDeps = new Set();
+    const rootDeps = new Set();
     const pkgRoots = [projectRoot];
     // Walk up to find workspace root (stop at fs root or after 4 levels)
     let cur = projectRoot;
@@ -159,10 +222,10 @@ class AiHallucinationDetector extends BaseModule {
       if (!fs.existsSync(pkgPath)) continue;
       try {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        for (const key of Object.keys(pkg.dependencies || {})) knownDeps.add(key);
-        for (const key of Object.keys(pkg.devDependencies || {})) knownDeps.add(key);
-        for (const key of Object.keys(pkg.peerDependencies || {})) knownDeps.add(key);
-        for (const key of Object.keys(pkg.optionalDependencies || {})) knownDeps.add(key);
+        for (const key of Object.keys(pkg.dependencies || {})) rootDeps.add(key);
+        for (const key of Object.keys(pkg.devDependencies || {})) rootDeps.add(key);
+        for (const key of Object.keys(pkg.peerDependencies || {})) rootDeps.add(key);
+        for (const key of Object.keys(pkg.optionalDependencies || {})) rootDeps.add(key);
       } catch { /* skip */ }
     }
 
@@ -174,9 +237,15 @@ class AiHallucinationDetector extends BaseModule {
 
     let issueCount = 0;
 
+    // dir -> deps visible from it. Populated lazily by _depsForDir.
+    const depsCache = new Map();
+
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
       if (rel.includes('node_modules') || rel.includes('.next')) continue;
+
+      // Nearest-manifest resolution, so a nested package's own dependencies count.
+      const knownDeps = this._depsForDir(path.dirname(file), projectRoot, depsCache, rootDeps);
 
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
@@ -196,13 +265,34 @@ class AiHallucinationDetector extends BaseModule {
         const lineNo  = content.slice(0, index).split(/\r?\n/).length;
         const lineText = lines[lineNo - 1] || '';
         if (lineText.includes('// hallucination-ok')) continue;
+
+        // An "import" inside a string literal or a comment is not an import.
+        //
+        // This module had NO string guard — it was one of the unguarded modules
+        // KI #77 recorded — and it is the single biggest remaining source of its
+        // false positives. Measured on this repo: 30 findings from
+        // tests/security-policy-applier.test.js and 17 from
+        // tests/prompt-safety.test.js, all of them FIXTURES, e.g.
+        //   assert.equal(detectFramework("const express = require('express');"), 'express')
+        // A module that tests framework detection has to contain sample code as
+        // data, and scanning that data as if it were code reports the fixture's
+        // dependencies as the project's hallucinations. The giveaway was two of
+        // the top "packages" being `${importPath}` and `*.node`, which cannot
+        // appear in a real specifier.
+        //
+        // Guarded by COLUMN, not by line: a genuine `import x from 'pkg'` has its
+        // match at the start of the line, so the quoted specifier never makes it
+        // look string-enclosed.
+        if (this._isCommentLine(lineText)) continue;
+        const lineStart = content.lastIndexOf('\n', index - 1) + 1;
+        if (this._isInsideStringLiteral(lineText, index - lineStart)) continue;
         // Type-only imports are erased at compile time — treat as warning, not error
         const isTypeOnly = /^\s*import\s+type\b/.test(lineText);
 
         issueCount++;
         result.addCheck(`ai-hallucination:unknown-pkg:${rel}:${pkg}`, false, {
           severity: isTypeOnly ? 'info' : 'warning',
-          message: `Import of \`${pkg}\` not found in package.json (checked local + workspace root) — possible AI hallucination or missing install`,
+          message: `Import of \`${pkg}\` not found in package.json (checked the nearest manifest and every one up to the project root) — possible AI hallucination or missing install`,
           file: rel,
           line: lineNo,
           fix: `Run \`npm install ${pkg}\` if the package is real, or remove the import if it was hallucinated.`,
