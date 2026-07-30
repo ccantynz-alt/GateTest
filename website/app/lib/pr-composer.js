@@ -221,7 +221,6 @@ function renderErrors(errors) {
  * @param {{ tests: object[], skipped: object[], summary: string }} [opts.testGen]
  * @param {Record<string, string[]>} [opts.originalFindingsByModule]
  * @param {Record<string, string[]>} [opts.postFixFindingsByModule]
- * @param {string} [opts.repoUrl]
  * @param {string} [opts.cveSection]  Pre-rendered CVE patches markdown section (from composeCveFixPrSection).
  * @param {Object} [opts.cisoReport]  Nuclear-tier CISO board-report descriptor.
  *   { path, riskLevel, complianceGaps, counts, failed }. See

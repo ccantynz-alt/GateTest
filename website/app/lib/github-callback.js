@@ -485,7 +485,6 @@ async function findExistingComment({ owner, repo, prNumber, token, fetchImpl, ma
  * @param {object} opts
  * @param {string} opts.repository         "owner/name"
  * @param {string} opts.sha                full 40-char commit SHA
- * @param {string|null} [opts.ref]
  * @param {number|null} [opts.pullRequestNumber]
  * @param {object} opts.scanResult
  * @param {string} [opts.token]            explicit GitHub token (App installation

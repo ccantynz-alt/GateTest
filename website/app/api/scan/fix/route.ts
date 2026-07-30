@@ -2376,7 +2376,6 @@ export async function POST(req: NextRequest) {
       testGen: { summary: testGenSummary },
       originalFindingsByModule: input.originalFindingsByModule,
       postFixFindingsByModule,
-      repoUrl,
       cveSection: cvePrSection || undefined,
       cisoReport: cisoReportDescriptor,
     });

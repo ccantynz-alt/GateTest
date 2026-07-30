@@ -76,7 +76,6 @@ async function dispatchCallback(args: CallbackArgs): Promise<void> {
     await sendGithubCallback({
       repository: args.repository,
       sha: args.sha,
-      ref: args.ref ?? null,
       pullRequestNumber: args.pullRequestNumber ?? null,
       scanResult: args.scanResult as object,
       dbAdminOrgs,
