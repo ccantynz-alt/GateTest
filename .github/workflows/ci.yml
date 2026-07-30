@@ -256,6 +256,17 @@ jobs:
             exit 1
           fi
 
+      # Blocking on purpose. Every other check in this file runs from a git
+      # checkout, where website/ exists — which is why KI #74 shipped SEVEN
+      # binaries that loaded from website/ and died with MODULE_NOT_FOUND for
+      # `npm i -g` users while this workflow stayed green. reliability-corpus.yml
+      # was literally invoking one of the broken binaries and passing.
+      #
+      # This packs the real tarball and runs every shipped binary from it, so it
+      # is the only check here that sees what a customer sees. ~4s.
+      - name: Published package actually runs (npm pack smoke)
+        run: node --test --test-force-exit --test-timeout=300000 tests/heavy/package-smoke.test.js
+
       - name: Self-scan green
         run: node bin/gatetest.js --suite quick --parallel
 
