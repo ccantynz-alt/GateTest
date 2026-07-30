@@ -64,6 +64,24 @@ describe('website lib shims re-export src/core canonicals (identity)', () => {
       assert.strictEqual(shim[k], core[k], `recipe-store-remote.${k} must be the same object`);
     }
   });
+
+  // Moved 2026-07-30 (KI #74g) so bin/gatetest-reliability could load them.
+  // Identity matters most here: two copies of an SSRF guard means two different
+  // ideas of which hosts are safe to reach, and only one of them gets patched.
+  it('ssrf-guard', () => {
+    const core = require('../src/core/ssrf-guard.js');
+    const shim = require('../website/app/lib/ssrf-guard.js');
+    assert.strictEqual(shim.resolveAndValidateUrl, core.resolveAndValidateUrl);
+    assert.strictEqual(shim.isPrivateOrReservedIp, core.isPrivateOrReservedIp);
+  });
+
+  it('reliability/url-prober', () => {
+    const core = require('../src/core/reliability/url-prober.js');
+    const shim = require('../website/app/lib/reliability/url-prober.js');
+    for (const k of Object.keys(core)) {
+      assert.strictEqual(shim[k], core[k], `url-prober.${k} must be the same object`);
+    }
+  });
 });
 
 // ============================================================================
@@ -99,26 +117,28 @@ describe('published code never requires across the website/ boundary', () => {
   /**
    * KNOWN DEBT — shrink-only, never add.
    *
-   * Started at four binaries that crashed with MODULE_NOT_FOUND for anyone who
-   * installed from npm. Three are fixed: gatetest-doctor, gatetest-promote and
-   * gatetest-train now load ci-doctor/, recipe-promotion and session-telemetry
-   * from src/core. Unlike auto-distill, those three had NO website importers —
-   * they were simply misfiled engine code — so they moved without needing shims.
+   * EMPTY as of 2026-07-30 — all four are fixed, and it stays empty.
    *
-   * One left. `gatetest-reliability` is the most urgent of the original four
-   * (it is one of the three `bin` entries package.json declares, so it is an
-   * advertised command that cannot start) and also the deepest: reliability/ is
-   * 9 files and pulls in ssrf-guard, which pulls in pentest/dns-verify, and
-   * ssrf-guard is live in four website API routes — so that one needs shims and
-   * more care than a straight move.
+   * It started at four binaries that crashed with MODULE_NOT_FOUND for anyone who
+   * installed from npm, because they loaded their implementation from website/,
+   * which the published package excludes:
    *
-   * Same approach the CRLF debt took under KI #77: make the remaining set
-   * explicit and prevent growth, rather than pretend it is clean. Tracked as
-   * Known Issue #74g.
+   *   gatetest-doctor      -> ci-doctor/ (6 files)      moved, no shim needed
+   *   gatetest-promote     -> recipe-promotion          moved, no shim needed
+   *   gatetest-train       -> session-telemetry         moved, no shim needed
+   *   gatetest-reliability -> reliability/ (9 files)    moved, url-prober shimmed
+   *                           + ssrf-guard              moved, shimmed (4 routes)
+   *                           + pentest/dns-verify      moved, no shim needed
+   *
+   * Shims exist only where website/app/ genuinely imports the path. The rest was
+   * misfiled engine code referenced solely by bin/ and tests, and a re-export
+   * nobody imports is a dead file pretending to be an API.
+   *
+   * Kept as an empty set rather than deleted: the assertion below turns any new
+   * entry into a failure, so the mechanism that let this reach seven places stays
+   * armed. Same approach the CRLF debt took under KI #77. Known Issue #74g.
    */
-  const KNOWN_DEBT = new Set([
-    'bin/gatetest-reliability.js',
-  ]);
+  const KNOWN_DEBT = new Set([]);
 
   it('the known-debt list only shrinks', () => {
     // If someone fixes one, this fails and tells them to delete the entry —

@@ -15,7 +15,6 @@
 
 "use strict";
 
-const path = require("path");
 const { loadCorpus, renderCorpusSummary } = require("./corpus-loader.js");
 const { runSuite } = require("./runner.js");
 const { createScannerAdapter } = require("./scanner-adapter.js");

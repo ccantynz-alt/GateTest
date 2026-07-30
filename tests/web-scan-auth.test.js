@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { GateTestConfig } = require('../src/core/config');
-const { probeUrl } = require('../website/app/lib/reliability/url-prober');
+const { probeUrl } = require('../src/core/reliability/url-prober');
 
 describe('GateTestConfig.set — dot-path setter', () => {
   it('sets a top-level key readable by get()', () => {

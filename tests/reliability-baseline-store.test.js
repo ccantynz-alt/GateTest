@@ -12,9 +12,9 @@ const {
   compareCaseToBaseline,
   baselinePath,
   BASELINE_VERSION,
-} = require("../website/app/lib/reliability/baseline-store.js");
+} = require("../src/core/reliability/baseline-store.js");
 
-const { runReliabilityCli } = require("../website/app/lib/reliability/cli-runner.js");
+const { runReliabilityCli } = require("../src/core/reliability/cli-runner.js");
 
 // ---------------------------------------------------------------------------
 // In-memory fs adapter

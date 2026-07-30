@@ -22,7 +22,7 @@
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const { runReliabilityCli } = require(path.join(ROOT, "website/app/lib/reliability/cli-runner.js"));
+const { runReliabilityCli } = require(path.join(ROOT, "src/core/reliability/cli-runner.js"));
 
 const USAGE = `
 Usage: gatetest-reliability [flags]

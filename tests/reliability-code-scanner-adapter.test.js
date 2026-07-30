@@ -9,7 +9,7 @@ const {
   createCodeScannerAdapter,
   findLatestReport,
   reportToFindings,
-} = require("../website/app/lib/reliability/code-scanner-adapter.js");
+} = require("../src/core/reliability/code-scanner-adapter.js");
 
 // ---------------------------------------------------------------------------
 // In-memory fs adapter

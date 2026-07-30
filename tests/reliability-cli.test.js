@@ -9,9 +9,9 @@ const {
   walkForManifests,
   renderCorpusSummary,
   isSkippable,
-} = require("../website/app/lib/reliability/corpus-loader.js");
+} = require("../src/core/reliability/corpus-loader.js");
 
-const { runReliabilityCli, renderSuiteMarkdown } = require("../website/app/lib/reliability/cli-runner.js");
+const { runReliabilityCli, renderSuiteMarkdown } = require("../src/core/reliability/cli-runner.js");
 
 // ---------------------------------------------------------------------------
 // In-memory fs adapter

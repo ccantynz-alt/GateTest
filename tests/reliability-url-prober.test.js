@@ -10,9 +10,9 @@ const {
   headerValue,
   allSetCookies,
   REQUIRED_SECURITY_HEADERS,
-} = require("../website/app/lib/reliability/url-prober.js");
+} = require("../src/core/reliability/url-prober.js");
 
-const { createScannerAdapter } = require("../website/app/lib/reliability/scanner-adapter.js");
+const { createScannerAdapter } = require("../src/core/reliability/scanner-adapter.js");
 
 // ---------------------------------------------------------------------------
 // Helpers — mock fetch & response

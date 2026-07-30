@@ -94,7 +94,6 @@ function reportToFindings(report, projectRoot) {
  */
 const DEFAULT_EXEC = {
   async run(cmd, args, opts) {
-    // eslint-disable-next-line global-require
     const cp = require("child_process");
     return new Promise((resolve) => {
       const child = cp.spawn(cmd, args, { cwd: opts.cwd, env: { ...process.env, ...(opts.env || {}) } });

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * SSRF guard — website/app/lib/ssrf-guard.js
+ * SSRF guard — src/core/ssrf-guard.js
  *
  * Covers the hardening added 2026-07-20 to /api/web/scan and /api/wp/scan:
  * previously each had its own hostname-string blocklist with no DNS
@@ -12,7 +12,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveAndValidateUrl, isPrivateOrReservedIp } = require('../website/app/lib/ssrf-guard.js');
+const { resolveAndValidateUrl, isPrivateOrReservedIp } = require('../src/core/ssrf-guard.js');
 
 // ---------------------------------------------------------------------------
 // isPrivateOrReservedIp

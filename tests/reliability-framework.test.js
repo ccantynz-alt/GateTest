@@ -9,21 +9,21 @@ const {
   compareToExpected,
   VALID_CATEGORIES,
   VALID_TIERS,
-} = require("../website/app/lib/reliability/manifest.js");
+} = require("../src/core/reliability/manifest.js");
 
 const {
   runCase,
   runSuite,
   tallyFindings,
   findingsSignature,
-} = require("../website/app/lib/reliability/runner.js");
+} = require("../src/core/reliability/runner.js");
 
 const {
   detectDrift,
   renderDriftReport,
   median,
   percentile,
-} = require("../website/app/lib/reliability/drift-detector.js");
+} = require("../src/core/reliability/drift-detector.js");
 
 // ---------------------------------------------------------------------------
 // validateManifest
