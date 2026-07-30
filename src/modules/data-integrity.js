@@ -186,19 +186,37 @@ class DataIntegrityModule extends BaseModule {
         regex.lastIndex = 0;
         // Check each line individually so suppression comments can work.
         // Also skip if the ENTIRE file has a file-level suppression.
-        let matched = false;
-        for (let i = 0; i < lines.length; i++) {
+        //
+        // exec, not test, so there is a match POSITION to judge — the same change
+        // KI #77 made to security.js and data-integrity's own SQL rule, for the
+        // same two reasons:
+        //   1. `console.log(user.password)` quoted inside a string literal, or sat
+        //      in a comment, does not log anything. Reported at ERROR severity it
+        //      blocks a build over a code sample (Forbidden #25). Caught by
+        //      tests/heavy/inert-fixture-sweep.test.js — this rule was the one
+        //      remaining unguarded PII path after the SQL rule was fixed.
+        //   2. the finding carried no line or column, so the confidence scorer had
+        //      no position to reason about and had to fall back to whole-line
+        //      guessing. Both are now passed through.
+        let hit = null;
+        for (let i = 0; i < lines.length && !hit; i++) {
           const line = lines[i];
           const prevLine = i > 0 ? lines[i - 1] : '';
           if (PII_OK.test(line) || PII_OK.test(prevLine)) continue;
+          if (this._isCommentLine(line)) continue;
           regex.lastIndex = 0;
-          if (regex.test(line)) { matched = true; break; }
+          const m = regex.exec(line);
+          if (!m) continue;
+          if (this._isInsideStringLiteral(line, m.index)) continue;
+          hit = { line: i + 1, column: m.index + 1 };
         }
-        if (matched) {
+        if (hit) {
           piiCount++;
           if (piiCount <= 5) {
             result.addCheck(`data:pii:${type}:${relPath}`, false, {
               file: relPath,
+              line: hit.line,
+              column: hit.column,
               severity: 'error',
               message: `Potential ${type} detected`,
               suggestion: 'Ensure PII is never logged, serialized unsafely, or stored in localStorage',
