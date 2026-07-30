@@ -318,3 +318,117 @@ test('renderDiagnosesReport — empty diagnoses', () => {
   assert.match(out, /Nuclear Diagnosis Report/);
   assert.match(out, /0 diagnosed/);
 });
+
+// ============================================================================
+// PRIOR-ART THREADING — regression guard
+// ============================================================================
+// `priorArt` was documented on diagnosis-enricher.js as "optional cross-repo
+// intelligence string" and threaded into diagnoseFindings(), but neither
+// diagnoseFindings nor diagnoseFinding nor buildDiagnosisPrompt destructured
+// it — so the cross-repo flywheel's contribution to the diagnosis prompt was
+// silently discarded. These tests pin the whole chain.
+
+const PRIOR_ART = [
+  'PRIOR-ART (12 similar codebases scanned recently):',
+  '- secrets fired in 75% of similar repos',
+].join('\n');
+
+const FINDING = {
+  module: 'secrets',
+  severity: 'error',
+  detail: 'hardcoded API key found in config/production.json',
+};
+
+test('buildDiagnosisPrompt — omits the prior-art block entirely when absent', () => {
+  const prompt = buildDiagnosisPrompt({ finding: FINDING, hostname: 'x.com' });
+  assert.ok(!prompt.includes('PRIOR-ART'), 'no PRIOR-ART header without prior-art');
+  assert.ok(!prompt.includes('Do not copy from it'), 'no anti-template guard without prior-art');
+  assert.ok(!prompt.includes('untrusted_prior_art'), 'no empty untrusted wrapper');
+  // The finding itself must still be present.
+  assert.match(prompt, /hardcoded API key found in config/);
+});
+
+test('buildDiagnosisPrompt — treats blank/non-string prior-art as absent', () => {
+  for (const blank of ['', '   ', '\n', null, undefined, 42, {}]) {
+    const prompt = buildDiagnosisPrompt({ finding: FINDING, hostname: 'x.com', priorArt: blank });
+    assert.ok(!prompt.includes('PRIOR-ART'), `blank prior-art leaked a block: ${JSON.stringify(blank)}`);
+  }
+});
+
+test('buildDiagnosisPrompt — embeds prior-art when supplied', () => {
+  const prompt = buildDiagnosisPrompt({ finding: FINDING, hostname: 'x.com', priorArt: PRIOR_ART });
+  assert.match(prompt, /PRIOR-ART \(12 similar/);
+  assert.match(prompt, /secrets fired in 75%/);
+  // Wrapped as untrusted, like every other externally-derived value.
+  assert.match(prompt, /<untrusted_prior_art>/);
+  assert.match(prompt, /<\/untrusted_prior_art>/);
+});
+
+test('buildDiagnosisPrompt — ships the anti-template guard with the prior-art', () => {
+  // Without this, the model templates its answer to the aggregate instead of
+  // reading the customer's evidence — the fortune-cookie failure this tier exists
+  // to replace. The guard is not optional: it travels with the block.
+  const prompt = buildDiagnosisPrompt({ finding: FINDING, hostname: 'x.com', priorArt: PRIOR_ART });
+  assert.match(prompt, /Do not copy from it/);
+  assert.match(prompt, /ONLY to prioritise/);
+  assert.match(prompt, /the finding wins/);
+  assert.match(prompt, /Never mention the prior-art/);
+});
+
+test('buildDiagnosisPrompt — the customer finding comes AFTER the prior-art', () => {
+  // Position bias: the customer's own evidence must be the last thing read.
+  const prompt = buildDiagnosisPrompt({ finding: FINDING, hostname: 'x.com', priorArt: PRIOR_ART });
+  assert.ok(
+    prompt.indexOf('PRIOR-ART') < prompt.indexOf('hardcoded API key found in config'),
+    'prior-art must precede the finding'
+  );
+});
+
+test('diagnoseFinding — forwards prior-art into the prompt', async () => {
+  let seen = null;
+  await diagnoseFinding({
+    finding: FINDING,
+    hostname: 'x.com',
+    priorArt: PRIOR_ART,
+    askClaudeForDiagnosis: async (prompt) => {
+      seen = prompt;
+      return 'EXPLANATION: x\n\nROOT_CAUSE: y\n\nRECOMMENDATION: z\n\nPLATFORM_NOTES:';
+    },
+  });
+  assert.ok(seen, 'Claude wrapper was never called');
+  assert.match(seen, /PRIOR-ART \(12 similar/);
+  assert.match(seen, /Do not copy from it/);
+});
+
+test('diagnoseFindings — applies prior-art to every finding in the batch', async () => {
+  const prompts = [];
+  const findings = [
+    { detail: 'first real finding with detail', module: 'secrets' },
+    { detail: 'second real finding with detail', module: 'lint' },
+  ];
+  await diagnoseFindings({
+    findings,
+    hostname: 'x.com',
+    priorArt: PRIOR_ART,
+    askClaudeForDiagnosis: async (prompt) => {
+      prompts.push(prompt);
+      return 'EXPLANATION: x\n\nROOT_CAUSE: y\n\nRECOMMENDATION: z\n\nPLATFORM_NOTES:';
+    },
+  });
+  assert.equal(prompts.length, 2);
+  for (const p of prompts) assert.match(p, /PRIOR-ART \(12 similar/);
+});
+
+test('diagnoseFindings — no prior-art supplied means no prior-art in any prompt', async () => {
+  const prompts = [];
+  await diagnoseFindings({
+    findings: [{ detail: 'a real finding with detail', module: 'secrets' }],
+    hostname: 'x.com',
+    askClaudeForDiagnosis: async (prompt) => {
+      prompts.push(prompt);
+      return 'EXPLANATION: x\n\nROOT_CAUSE: y\n\nRECOMMENDATION: z\n\nPLATFORM_NOTES:';
+    },
+  });
+  assert.equal(prompts.length, 1);
+  assert.ok(!prompts[0].includes('PRIOR-ART'));
+});

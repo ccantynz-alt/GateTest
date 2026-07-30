@@ -289,3 +289,65 @@ describe('nuclear-diagnoser integration — buildDiagnosisPrompt basic shape', (
     assert.match(prompt, /x\.com/);
   });
 });
+
+// ---------- the actual seam: renderPriorArtPrompt → buildDiagnosisPrompt ----------
+//
+// These two modules are the produce and consume halves of the cross-repo
+// flywheel, and nothing was asserting that they compose. They did not: the
+// `priorArt` argument was dropped between diagnosis-enricher and
+// buildDiagnosisPrompt, so a rendered prior-art block could never reach a
+// prompt. Assert the real composition, not each half in isolation.
+
+describe('cross-repo flywheel seam — rendered prior-art reaches the diagnosis prompt', () => {
+  const finding = { module: 'secrets', severity: 'error', detail: 'hardcoded API key found in config' };
+
+  const summary = {
+    sampleSize: 12,
+    moduleFireRate: [
+      { name: 'lint', rate: 0.92, count: 11 },
+      { name: 'secrets', rate: 0.75, count: 9 },
+    ],
+    topPatterns: [],
+    moduleFixSuccessRate: { lint: { rate: 0.88, attempted: 30, succeeded: 26 } },
+    medianTotalFindings: 14,
+    p90TotalFindings: 41,
+  };
+
+  it('carries real renderPriorArtPrompt output into the prompt verbatim', () => {
+    const priorArt = renderPriorArtPrompt(summary);
+    assert.ok(priorArt, 'fixture should produce a prior-art block');
+
+    const prompt = buildDiagnosisPrompt({ finding, hostname: 'x.com', priorArt });
+
+    // Every rendered line survives the trip into the prompt.
+    for (const line of priorArt.split('\n')) {
+      assert.ok(prompt.includes(line), `prompt lost prior-art line: ${line}`);
+    }
+    assert.match(prompt, /12 similar/);
+    assert.match(prompt, /secrets fired in 75%/);
+  });
+
+  it('pairs that content with the anti-template guard', () => {
+    const prompt = buildDiagnosisPrompt({
+      finding,
+      hostname: 'x.com',
+      priorArt: renderPriorArtPrompt(summary),
+    });
+    assert.match(prompt, /Do not copy from it/);
+    assert.match(prompt, /the finding wins/);
+    // The customer's own evidence is still last.
+    assert.ok(prompt.indexOf('PRIOR-ART') < prompt.indexOf('hardcoded API key found in config'));
+  });
+
+  it('when the summary yields no prior-art, the prompt has no prior-art block', () => {
+    // renderPriorArtPrompt returns null below the fire-rate threshold; that
+    // null must degrade to "no block", not "the string null".
+    const thin = { ...summary, moduleFireRate: [{ name: 'lint', rate: 0.01, count: 1 }] };
+    const priorArt = renderPriorArtPrompt(thin);
+    assert.equal(priorArt, null);
+
+    const prompt = buildDiagnosisPrompt({ finding, hostname: 'x.com', priorArt });
+    assert.ok(!prompt.includes('PRIOR-ART'));
+    assert.ok(!prompt.includes('null'), 'a null prior-art must not be stringified into the prompt');
+  });
+});
