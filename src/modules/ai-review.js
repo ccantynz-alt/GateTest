@@ -22,6 +22,68 @@ const MODEL = CHEAP_MODEL;
 const MAX_FILES_PER_REVIEW = 10;
 const MAX_FILE_SIZE = 50000; // 50KB per file
 
+/**
+ * Turn a raw Anthropic HTTP response into a review object, or throw.
+ *
+ * Extracted from the request handler so the failure modes can be tested
+ * without a live endpoint — they are the whole point of this function.
+ *
+ * The rule it enforces: **"no issues" is a claim, and we only make it when the
+ * model actually returned an issues array.** Previously a 200 carrying no
+ * content resolved to `{ issues: [] }`, which the caller reported to the
+ * customer as "AI review complete — code looks clean". An outage, a refusal
+ * and a genuinely clean codebase were indistinguishable, on a paid feature.
+ * (Bible Forbidden #16 — never silently fail.)
+ *
+ * @param {number} statusCode
+ * @param {string} raw  response body
+ * @returns {{issues: Array, summary?: string, unparsed?: boolean}}
+ */
+function interpretAnthropicResponse(statusCode, raw) {
+  let response;
+  try {
+    response = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Failed to parse AI response: ${err.message}`);
+  }
+
+  if (statusCode !== 200) {
+    throw new Error(`API returned ${statusCode}: ${response.error?.message || raw}`);
+  }
+
+  const text = response.content?.[0]?.text || '';
+
+  // A 200 with no content means the review did not happen. Reporting that as
+  // a clean review is a false negative the customer cannot detect.
+  if (!String(text).trim()) {
+    throw new Error(
+      'API returned HTTP 200 with no content — the review did not run. ' +
+      'This is an outage or a refusal, not a clean result.'
+    );
+  }
+
+  // Claude may wrap the JSON in markdown.
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    // The model replied, but not in the requested shape. Still not a clean
+    // review — flag it so the caller reports it as inconclusive.
+    return { issues: [], summary: text, unparsed: true };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    throw new Error(`Failed to parse AI response: ${err.message}`);
+  }
+
+  // Valid JSON without an issues array is not a clean review either.
+  if (!Array.isArray(parsed.issues)) {
+    return { issues: [], summary: parsed.summary || text, unparsed: true };
+  }
+  return parsed;
+}
+
 class AiReviewModule extends BaseModule {
   constructor() {
     super('aiReview', 'AI-Powered Code Review');
@@ -216,24 +278,9 @@ ${filesText}`;
         res.on('end', () => {
           const raw = Buffer.concat(chunks).toString('utf-8');
           try {
-            const response = JSON.parse(raw);
-
-            if (res.statusCode !== 200) {
-              reject(new Error(`API returned ${res.statusCode}: ${response.error?.message || raw}`));
-              return;
-            }
-
-            const text = response.content?.[0]?.text || '';
-
-            // Extract JSON from response (Claude may wrap it in markdown)
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              resolve(JSON.parse(jsonMatch[0]));
-            } else {
-              resolve({ issues: [], summary: text });
-            }
+            resolve(interpretAnthropicResponse(res.statusCode, raw));
           } catch (err) {
-            reject(new Error(`Failed to parse AI response: ${err.message}`));
+            reject(err);
           }
         });
       });
@@ -250,10 +297,20 @@ ${filesText}`;
   }
 
   _processReview(review, result, memory) {
-    if (!review || !review.issues) {
-      result.addCheck('ai-review:complete', true, {
-        severity: 'info',
-        message: 'AI review complete — no issues found',
+    // "No issues found" is only sayable when the model actually returned an
+    // issues array. A missing array, or a reply we could not parse, means the
+    // review did not produce a verdict — claiming it was clean there is a
+    // false negative on a paid feature. Non-blocking (warning, not error) so
+    // an AI hiccup never becomes the bottleneck, but visible so nobody reads
+    // it as a pass.
+    if (!review || !Array.isArray(review.issues) || review.unparsed) {
+      const said = review && review.summary
+        ? ` Model returned: ${String(review.summary).slice(0, 200)}`
+        : '';
+      result.addCheck('ai-review:inconclusive', false, {
+        severity: 'warning',
+        message: `AI review did not return a usable verdict — treat this code as NOT reviewed.${said}`,
+        suggestion: 'Re-run the scan. If it persists, verify ANTHROPIC_API_KEY and the configured model.',
       });
       return;
     }
@@ -378,3 +435,6 @@ ${filesText}`;
 }
 
 module.exports = AiReviewModule;
+// Attached as a static rather than changing the export shape — the registry
+// loads this file expecting the class itself.
+module.exports.interpretAnthropicResponse = interpretAnthropicResponse;
