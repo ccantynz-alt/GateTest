@@ -26,7 +26,7 @@ const FULL_ANIMATION_MODULES = [
   "undefinedRef", "flakyTests", "errorSwallow", "nPlusOne", "retryHygiene",
   "raceCondition", "resourceLeak", "ssrf", "hardcodedUrl", "envVars",
   "asyncIteration", "homoglyph", "openapiDrift", "prSize", "prQuality",
-  "redos", "cronExpression", "datetimeBug", "importCycle", "moneyFloat",
+  "redos", "cronExpression", "datetimeBug", "importCycle", "spineHealth", "moneyFloat",
   "logPii", "featureFlag", "tlsSecurity", "cookieSecurity", "crossFileTaint",
   "python", "go", "rust", "java", "ruby", "php", "csharp", "kotlin",
   "swift", "aiReview", "agentic", "fakeFixDetector", "claudeCompliance",

@@ -92,6 +92,7 @@ const BUILT_IN_MODULES = {
   cronExpression: '../modules/cron-expression.js',
   datetimeBug: '../modules/datetime-bug.js',
   importCycle: '../modules/import-cycle.js',
+  spineHealth: '../modules/spine-health.js',
   moneyFloat: '../modules/money-float.js',
   logPii: '../modules/log-pii.js',
   featureFlag: '../modules/feature-flag.js',

@@ -14,7 +14,9 @@ interface PageParams {
 }
 
 // Total live module count — keep in sync with CLAUDE.md VERSION section.
-const MODULE_COUNT = 120;
+// tests/marketing-country-pages.test.js asserts this equals the measured
+// `gatetest --list` count, so it cannot quietly go stale.
+const MODULE_COUNT = 121;
 
 export async function generateStaticParams(): Promise<{ country: string }[]> {
   return getAllCountrySlugs().map((country) => ({ country }));

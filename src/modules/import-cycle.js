@@ -79,27 +79,12 @@
  */
 
 const BaseModule = require('./base-module');
-const fs = require('fs');
 const path = require('path');
-
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
-
-const JS_EXTS = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts'];
-const JS_EXT_SET = new Set(JS_EXTS);
-
-
-const SUPPRESS_RE = /\bimport-cycle-ok\b/;
-
-// Static import / export / require / dynamic-import regexes.
-// We deliberately keep these line-level and conservative.
-const IMPORT_FROM_RE = /^\s*import\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/;
-const IMPORT_TYPE_RE = /^\s*import\s+type\b/;
-const EXPORT_FROM_RE = /^\s*export\s+(?:type\s+)?(?:\*|\{[\s\S]*?\})\s+from\s+['"]([^'"]+)['"]/;
-const EXPORT_TYPE_RE = /^\s*export\s+type\b/;
-const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/;
+// The graph builder was extracted to src/core so structural analysis could share
+// ONE definition of "what depends on what" — see the note at the top of that
+// file. `staticGraph` is exactly the graph this module used to build privately;
+// tests/import-graph.test.js pins that equivalence.
+const { collectSourceFiles, buildImportGraph, tarjanSCC } = require('../core/import-graph');
 
 class ImportCycleModule extends BaseModule {
   constructor() {
@@ -108,7 +93,7 @@ class ImportCycleModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = (config && config.projectRoot) || process.cwd();
-    const files = this._collect(projectRoot);
+    const files = collectSourceFiles(projectRoot);
 
     if (files.length === 0) {
       result.addCheck('import-cycle:no-files', true, {
@@ -124,20 +109,14 @@ class ImportCycleModule extends BaseModule {
       fileCount: files.length,
     });
 
-    // Build import graph: Map<absPath, Set<absPath>>
-    const graph = new Map();
-    const fileSet = new Set(files);
-    let edgeCount = 0;
+    // Only STATIC edges form runtime cycles: a function-scoped require defers
+    // to call time (the standard cycle workaround) and a type-only import is
+    // erased at build time. The shared builder also records those as 'lazy' and
+    // 'type' edges, which spineHealth uses for coupling — deliberately not here.
+    const { staticGraph: graph, staticEdgeCount: edgeCount } = buildImportGraph({ projectRoot, files });
 
-    for (const abs of files) {
-      const edges = this._edgesFor(abs, fileSet);
-      graph.set(abs, edges);
-      edgeCount += edges.size;
-    }
-
-    // Find SCCs via Tarjan's algorithm (iterative, avoids stack
-    // overflow on large graphs).
-    const sccs = this._tarjan(graph);
+    // SCCs via iterative Tarjan — iterative so a deep chain can't blow the stack.
+    const sccs = tarjanSCC(graph);
 
     // A cycle = SCC with 2+ nodes, OR a single-node SCC that has
     // an edge to itself.
@@ -187,214 +166,6 @@ class ImportCycleModule extends BaseModule {
       cycleCount: cycles.length,
       selfLoopCount: selfLoops.length,
     });
-  }
-
-  _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name.startsWith('.') && e.name !== '.') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (JS_EXT_SET.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(root);
-    return out;
-  }
-
-  /**
-   * Extract relative imports from a file and resolve them to
-   * absolute file paths that exist in `fileSet`.
-   */
-  _edgesFor(absPath, fileSet) {
-    const edges = new Set();
-    let text;
-    try {
-      text = fs.readFileSync(absPath, 'utf-8');
-    } catch {
-      return edges;
-    }
-    if (text.length > 2 * 1024 * 1024) return edges;
-
-    const lines = text.split(/\r?\n/);
-    const dir = path.dirname(absPath);
-
-    for (let i = 0; i < lines.length; i += 1) {
-      const raw = lines[i];
-      if (SUPPRESS_RE.test(raw)) continue;
-
-      // Strip line comments (keep simple — don't handle every edge
-      // case; block-comment noise is fine because the regexes need
-      // line-start anchors or explicit patterns).
-      const lineNoComment = this._stripLineComment(raw);
-
-      // Skip type-only imports / exports
-      if (IMPORT_TYPE_RE.test(lineNoComment)) continue;
-      if (EXPORT_TYPE_RE.test(lineNoComment)) continue;
-
-      const mImp = IMPORT_FROM_RE.exec(lineNoComment);
-      if (mImp) {
-        this._recordEdge(mImp[1], dir, fileSet, edges, lineNoComment);
-        continue;
-      }
-      const mExp = EXPORT_FROM_RE.exec(lineNoComment);
-      if (mExp) {
-        this._recordEdge(mExp[1], dir, fileSet, edges, lineNoComment);
-        continue;
-      }
-      // Top-level require — module-scope only. If it's inside a
-      // function body, it's lazy and doesn't form a cycle.
-      if (this._isTopLevel(lines, i)) {
-        const mReq = REQUIRE_RE.exec(lineNoComment);
-        if (mReq) this._recordEdge(mReq[1], dir, fileSet, edges, lineNoComment);
-      }
-    }
-
-    return edges;
-  }
-
-  _recordEdge(spec, dir, fileSet, edges, _line) {
-    // Only relative imports form cycles
-    if (!spec.startsWith('./') && !spec.startsWith('../') && spec !== '.' && spec !== '..') return;
-    const resolved = this._resolveImport(dir, spec, fileSet);
-    if (resolved) edges.add(resolved);
-  }
-
-  _resolveImport(dir, spec, fileSet) {
-    const base = path.resolve(dir, spec);
-    // Direct hit
-    if (fileSet.has(base)) return base;
-    // Try extensions
-    for (const ext of JS_EXTS) {
-      const cand = base + ext;
-      if (fileSet.has(cand)) return cand;
-    }
-    // Try /index.<ext>
-    for (const ext of JS_EXTS) {
-      const cand = path.join(base, 'index' + ext);
-      if (fileSet.has(cand)) return cand;
-    }
-    return null;
-  }
-
-  _stripLineComment(line) {
-    // Find `//` not inside a string literal.
-    let inStr = null;
-    for (let j = 0; j < line.length; j += 1) {
-      const ch = line[j];
-      if (inStr) {
-        if (ch === '\\') { j += 1; continue; }
-        if (ch === inStr) inStr = null;
-        continue;
-      }
-      if (ch === '"' || ch === "'" || ch === '`') {
-        inStr = ch;
-        continue;
-      }
-      if (ch === '/' && line[j + 1] === '/') return line.slice(0, j);
-    }
-    return line;
-  }
-
-  /**
-   * A simple heuristic: the line is "top level" if its indentation
-   * is 0 (no leading whitespace). This is imperfect but in practice
-   * catches the case we care about: the ambient module-scope
-   * `const x = require('./y')` that forms a real cycle, without
-   * false-positiving on lazy in-function `require(...)` calls.
-   */
-  _isTopLevel(lines, i) {
-    const line = lines[i];
-    if (!line) return false;
-    const m = line.match(/^(\s*)/);
-    return m && m[1].length === 0;
-  }
-
-  /**
-   * Iterative Tarjan's SCC. Returns an array of SCCs (each SCC is
-   * an array of nodes).
-   */
-  _tarjan(graph) {
-    const index = new Map();
-    const lowlink = new Map();
-    const onStack = new Set();
-    const stack = [];
-    const sccs = [];
-    let idx = 0;
-
-    const nodes = Array.from(graph.keys());
-
-    // Iterative DFS with a per-node iterator state
-    const call = (startNode) => {
-      const workStack = [{ node: startNode, iter: graph.get(startNode).values(), state: 'enter' }];
-      while (workStack.length > 0) {
-        const frame = workStack[workStack.length - 1];
-        const { node } = frame;
-
-        if (frame.state === 'enter') {
-          index.set(node, idx);
-          lowlink.set(node, idx);
-          idx += 1;
-          stack.push(node);
-          onStack.add(node);
-          frame.state = 'iter';
-        }
-
-        let nextFound = false;
-        for (;;) {
-          const next = frame.iter.next();
-          if (next.done) break;
-          const w = next.value;
-          if (!graph.has(w)) continue; // external or unresolved
-          if (!index.has(w)) {
-            workStack.push({ node: w, iter: graph.get(w).values(), state: 'enter', parent: node });
-            nextFound = true;
-            break;
-          }
-          if (onStack.has(w)) {
-            lowlink.set(node, Math.min(lowlink.get(node), index.get(w)));
-          }
-        }
-        if (nextFound) continue;
-
-        // Root of SCC?
-        if (lowlink.get(node) === index.get(node)) {
-          const scc = [];
-          for (;;) {
-            const w = stack.pop();
-            onStack.delete(w);
-            scc.push(w);
-            if (w === node) break;
-          }
-          sccs.push(scc);
-        }
-
-        // Propagate lowlink to parent
-        workStack.pop();
-        if (workStack.length > 0) {
-          const parent = workStack[workStack.length - 1].node;
-          lowlink.set(parent, Math.min(lowlink.get(parent), lowlink.get(node)));
-        }
-      }
-    };
-
-    for (const n of nodes) {
-      if (!index.has(n)) call(n);
-    }
-
-    return sccs;
   }
 
   /**

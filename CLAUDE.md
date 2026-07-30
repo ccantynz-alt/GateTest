@@ -448,7 +448,7 @@ If a competitor does something we don't, that's a GateTest bug. Fix it.
 
 ## VERSION
 
-GateTest v1.60.0 — **120 modules**, **hybrid AI layer** (Craig 2026-07-07;
+GateTest v1.61.0 — **121 modules** (spineHealth added 2026-07-30), **hybrid AI layer** (Craig 2026-07-07;
 Sonnet 5 upgrade + user-selectable model + BYOK Craig 2026-07-10):
 **Fable 5** (`claude-fable-5`) on the paid fix tiers (Scan+Fix, Forensic),
 **Sonnet 5** (`claude-sonnet-5`) on free/cheap/high-volume paths, **Opus
@@ -488,6 +488,54 @@ same-origin-gated engine-side); self-serve Stripe billing portal
 (gatetest.io/billing); npm publishing via OIDC trusted publishing (token-free).
 Date stamp last fully reconciled: 2026-07-11 (core-engine program: every-scan
 flywheel + false-positive control + entry-level CLI recap).
+
+### v1.61.0 (2026-07-30) — spineHealth: structural analysis, module #121
+
+**The first module that asks what it COSTS TO CHANGE the codebase**, rather than
+whether a line is wrong. Every other module scans files; this one analyses the
+dependency graph, where cost of change actually lives. A file can be clean by
+every lint rule and still be the most dangerous file in the repo because 230
+files transitively depend on it.
+
+Reports (all **warning** severity, deliberately — these are refactor-scale
+observations and blocking a build on "your fan-in distribution got worse" would
+make us the bottleneck, Forbidden #25; runtime cycles stay in `importCycle`
+where they block):
+- `fragile-spine` — load-bearing AND untested/oversized/high-fan-out
+- `layering-violation` — an import against the direction dependencies
+  demonstrably flow between two directories, with the grain **inferred from the
+  codebase** so it needs no config and cannot go stale
+- `god-file` — high fan-in AND high fan-out; cannot be moved
+- `unstable-dependency` — a widely-depended-on module importing a volatile one
+  (Martin's Stable Dependencies Principle)
+- `coupling-trend` — **the flywheel**: delta vs the last scan of this repo, from
+  `.gatetest/memory.json`, behind the same consent gate as all telemetry. A
+  coupling index of 0.83 means nothing in isolation; the direction of travel is
+  what a team can act on.
+
+New shared core: **`src/core/import-graph.js`** (one definition of "what depends
+on what" — extracted from `import-cycle.js`, which had it private; verified
+byte-identical on 1191 files / 930 static edges before the swap) and
+**`src/core/spine-metrics.js`** (pure maths, no fs, so it can be tested against
+hand-built graphs with known answers). The extraction also surfaced **199
+coupling edges the engine previously could not see** — 179 lazy `require`s and
+20 type-only imports, which do not form cycles but are absolutely still coupling.
+
+**Thresholds are calibrated per repo, never hardcoded** — percentiles over
+files that *participate* (non-zero degree), with absolute floors, nothing below
+20 source files. Three false positives were found by measurement and fixed
+before shipping: test files inflating fan-in (an entrypoint imported by its own
+8 tests was called a god file), percentiles over all files putting p90 at 2, and
+the "untested" signal firing whenever `tests/` was outside the scan scope.
+Tests include **negative controls** that plant a real god file / layering
+violation and assert the rules fire — without them, tightening thresholds until
+the repo goes quiet is indistinguishable from the rule working.
+
+**Public copy still says "120 modules" in ~30 places** (website prose,
+Marketplace listing, package descriptions). Left for Craig: it is
+brand/marketing copy (Boss Rule #8) and the Marketplace listing is mid-review.
+The drift is in the safe direction — understating coverage, not overstating it.
+The generated `site-stats.json` count is already 121.
 
 ### THE DOMAIN — gatetest.io (moved 2026-07-30)
 
