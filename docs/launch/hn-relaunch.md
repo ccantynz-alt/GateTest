@@ -61,7 +61,7 @@ blog post is live with real numbers.
 **Body draft (verify starred facts at launch hour, per show-hn-FINAL.md):**
 
 ```
-GateTest is a CI quality gate: 120 checks, and instead of just failing
+GateTest is a CI quality gate: 121 checks, and instead of just failing
 your build it opens a PR that fixes what it found — each fix re-scanned
 against the gate, with an auto-written regression test and a second-AI
 pair review before anything ships. Pay per scan, no subscription.

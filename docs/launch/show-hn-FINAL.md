@@ -68,7 +68,7 @@ Run the CLI locally (MIT-licensed, free):
 
 Pricing is per-scan, one-time, not a subscription:
   $29  Quick    — 4 fast modules, scan-only
-  $99  Full     — all 120 modules, scan-only
+  $99  Full     — all 121 modules, scan-only
   $199 Scan+Fix — auto-fix PR + a second Claude pair-reviews each fix
   $399 Forensic — per-finding diagnosis + cross-finding attack-chain
                   correlation + a CTO-readable executive summary
@@ -148,7 +148,7 @@ Marketplace listing isn't up yet — use npx or the Action in the meantime.
 > $199+ a second Claude pair-reviews every fix on a 4-axis rubric.
 
 **"Is it open source?"**
-> The CLI/engine is MIT in the repo — run the full 120-module scan locally
+> The CLI/engine is MIT in the repo — run the full 121-module scan locally
 > for free. The hosted auto-fix layer (the Claude calls, the PR
 > composition) is the paid product.
 

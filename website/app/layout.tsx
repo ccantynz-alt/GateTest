@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "GateTest — AI writes fast. GateTest keeps it honest.",
   description:
-    "120 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay per scan, no subscription.",
+    "121 modules scan your entire codebase. Security, accessibility, performance, and more. We find the bugs AND fix them. Pay per scan, no subscription.",
   keywords: [
     "QA",
     "testing",
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "120 modules scan your entire codebase. We find the bugs AND fix them. Pay per scan, no subscription.",
+      "121 modules scan your entire codebase. We find the bugs AND fix them. Pay per scan, no subscription.",
     url: "/",
     siteName: "GateTest",
     type: "website",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:
-      "120 modules scan your entire codebase. We find the bugs AND fix them. Pay per scan, no subscription.",
+      "121 modules scan your entire codebase. We find the bugs AND fix them. Pay per scan, no subscription.",
   },
   robots: {
     index: true,
@@ -112,7 +112,7 @@ export default function RootLayout({
               operatingSystem: "Any",
               url: SITE_URL,
               description:
-                "AI-powered QA platform that scans your entire codebase with 120 modules — security, supply chain, auth flaws, CI hardening, and more. Pay per scan via Stripe. One-time payment, no subscription.",
+                "AI-powered QA platform that scans your entire codebase with 121 modules — security, supply chain, auth flaws, CI hardening, and more. Pay per scan via Stripe. One-time payment, no subscription.",
               offers: [
                 {
                   "@type": "Offer",
@@ -127,7 +127,7 @@ export default function RootLayout({
                   price: "99.00",
                   priceCurrency: "USD",
                   description:
-                    "All 120 modules including AI code review, security, supply chain, auth flaws, and more",
+                    "All 121 modules including AI code review, security, supply chain, auth flaws, and more",
                 },
                 {
                   "@type": "Offer",
@@ -135,7 +135,7 @@ export default function RootLayout({
                   price: "199.00",
                   priceCurrency: "USD",
                   description:
-                    "All 120 modules plus an AI auto-fix pull request with regression tests, pair-review, and architecture annotations",
+                    "All 121 modules plus an AI auto-fix pull request with regression tests, pair-review, and architecture annotations",
                 },
                 {
                   "@type": "Offer",

@@ -34,7 +34,7 @@ const faqItems = [
   },
   {
     q: "How does GateTest pricing compare to SonarQube?",
-    a: "SonarQube Cloud charges per active user per month. SonarQube Community Edition requires you to run your own server. GateTest charges per scan — $29 for a quick scan, $99 for all 120 modules. You pay only when the scan completes and delivers results. No server to maintain, no per-seat licensing, no annual contracts.",
+    a: "SonarQube Cloud charges per active user per month. SonarQube Community Edition requires you to run your own server. GateTest charges per scan — $29 for a quick scan, $99 for all 121 modules. You pay only when the scan completes and delivers results. No server to maintain, no per-seat licensing, no annual contracts.",
   },
   {
     q: "Does GateTest post commit statuses and PR comments like SonarQube does?",
@@ -211,16 +211,16 @@ export default function SonarQubePage() {
                 body: "SonarQube requires a running server, a database, and ongoing maintenance. SonarQube Cloud still requires sonar-project.properties and scanner configuration per project. GateTest: paste URL, get results. No config files, no servers, no ops burden.",
               },
               {
-                title: "120 modules vs 1 focus",
+                title: "121 modules vs 1 focus",
                 body: "SonarQube focuses on code quality and security patterns. GateTest covers those plus accessibility, visual regression, performance, mutation testing (via the GitHub Action, which has a CI runner to drive it), N+1 queries, race conditions, TLS misconfigs, PII in logs, homoglyph attacks, and 40+ more dimensions — all in one scan.",
               },
               {
                 title: "Pay per scan, not per seat",
-                body: "SonarQube Cloud pricing scales with developer headcount — the more your team grows, the higher your bill. GateTest charges per result: $29 quick scan, $99 full 120-module scan. A 50-person team pays the same as a solo founder for the same scan.",
+                body: "SonarQube Cloud pricing scales with developer headcount — the more your team grows, the higher your bill. GateTest charges per result: $29 quick scan, $99 full 121-module scan. A 50-person team pays the same as a solo founder for the same scan.",
               },
               {
                 title: "Faster feedback loop",
-                body: "SonarQube quality gates can take minutes on large projects. GateTest quick scans complete in well under a minute; full 120-module scans typically complete in a few minutes. Every push gets fast feedback — no waiting for a background worker to catch up.",
+                body: "SonarQube quality gates can take minutes on large projects. GateTest quick scans complete in well under a minute; full 121-module scans typically complete in a few minutes. Every push gets fast feedback — no waiting for a background worker to catch up.",
               },
             ].map((card) => (
               <div
@@ -258,7 +258,7 @@ export default function SonarQubePage() {
             Ready to replace SonarQube?
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            Paste your repo URL and get a full 120-module scan in minutes. No server setup,
+            Paste your repo URL and get a full 121-module scan in minutes. No server setup,
             no config files, no per-seat pricing. One-time payment per scan.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

@@ -1,6 +1,6 @@
 # GateTest
 
-### One gate. 120 modules. Self-healing CI.
+### One gate. 121 modules. Self-healing CI.
 
 **AI-powered code quality. Pay per scan via Stripe.**
 
@@ -300,7 +300,7 @@ The full Known Issues table (with severity and status) lives in [CLAUDE.md](CLAU
 
 ## Architecture
 
-**Static engine.** 120 modules, every one extending `BaseModule`. Each module is a self-contained scanner that emits checks at three severity levels (error blocks the gate, warning reports, info is informational). The runner is `EventEmitter`-based, supports parallel execution, diff-mode (`--diff` scans only git-changed files), watch mode, and five output formats (Console, JSON, HTML, SARIF for the GitHub Security tab, JUnit XML for any CI). The gate has four small runtime dependencies (`acorn`, `pngjs`, `pixelmatch`, and the MCP SDK) — `node bin/gatetest.js --list` runs anywhere Node 20+ runs.
+**Static engine.** 121 modules, every one extending `BaseModule`. Each module is a self-contained scanner that emits checks at three severity levels (error blocks the gate, warning reports, info is informational). The runner is `EventEmitter`-based, supports parallel execution, diff-mode (`--diff` scans only git-changed files), watch mode, and five output formats (Console, JSON, HTML, SARIF for the GitHub Security tab, JUnit XML for any CI). The gate has four small runtime dependencies (`acorn`, `pngjs`, `pixelmatch`, and the MCP SDK) — `node bin/gatetest.js --list` runs anywhere Node 20+ runs.
 
 **Website and payments.** [gatetest.io](https://gatetest.io) is Next.js 16 with the App Router, Tailwind 4, and Stripe in per-scan upfront-charge mode. One-time payment per scan at checkout — no subscription, no auto-renew, no hold-then-capture flow. All scan state is persisted in Stripe metadata so the serverless functions stay stateless across requests — there is no shared in-memory state and no webhook is required for the critical user flow. The scan executes inside the function response and reports back directly.
 

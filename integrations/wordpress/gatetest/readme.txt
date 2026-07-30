@@ -16,7 +16,7 @@ Scan your WordPress theme, plugin, or custom code with 67 AI-powered quality mod
 
 Teams duct-tape 10+ tools together — ESLint for style, SonarQube for quality, Snyk for security, Lighthouse for performance, axe for accessibility. Each has its own config, its own dashboard, its own billing. GateTest replaces all of them with a single scan.
 
-**120 modules. One gate. One decision.**
+**121 modules. One gate. One decision.**
 
 = What GateTest scans =
 

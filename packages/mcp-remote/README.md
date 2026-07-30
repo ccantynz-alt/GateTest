@@ -36,7 +36,7 @@ Claude client ──HTTPS──▶ mcp.gatetest.io (Caddy TLS on the box)
 | Tool | Access | Proxies |
 |---|---|---|
 | `check_health` | free | `/api/v1/health` |
-| `list_modules` | free | (embedded engine list, 120 modules) |
+| `list_modules` | free | (embedded engine list, 121 modules) |
 | `get_badge` | free | `/badge/:owner/:repo` |
 | `scan_url` | free | `POST /api/web/scan` |
 | `scan_repo` | free | `POST /api/playground/scan` |

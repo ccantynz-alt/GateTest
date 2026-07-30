@@ -102,7 +102,7 @@ This is why we built a unified gate instead of another linter.
 The bugs that end companies live in the seams between the
 tools nobody runs together.
 
-120 modules. One gate. Pay per scan.
+121 modules. One gate. Pay per scan.
 
 CLI is free: npx -p @gatetest/cli gatetest --suite quick
 Hosted scans: gatetest.io
@@ -177,7 +177,7 @@ The math is the pitch. Try it for the cost of a coffee:
 ```
 Founder, GateTest (gatetest.io)
 
-One CI gate. 120 modules. Replaces SonarQube + Snyk + ESLint +
+One CI gate. 121 modules. Replaces SonarQube + Snyk + ESLint +
 Cypress + Lighthouse + 7 others. Auto-fix PR ships on the $199
 tier. Pay per scan — no subscription, no seats.
 

@@ -40,6 +40,40 @@ The Bible holds **rules + current truth only**. Deep reference material lives in
 
 ---
 
+## THE WEBSITE-SYNC RULE (Craig 2026-07-30, STRICT)
+
+**"All changes must reflect on the website at the same time."**
+
+When the engine, module set, tiers, or capabilities change, **the website changes
+in the SAME commit.** Never ship a product change and leave the site describing
+the old product; never defer site copy to "a later pass."
+
+**Why:** the site is the product's only public description. A gap between what
+ships and what the site claims is a correctness bug in the customer's view of the
+product, not a cosmetic follow-up.
+
+**This overrides the instinct to defer counts and capability copy to Craig under
+Boss Rule #8.** Factual sync — module counts, capability lists, what a tier
+includes — is expected work. Boss Rule #8 still governs genuine *brand*
+decisions: taglines, logos, positioning, pricing. "We have 121 modules, not 120"
+is a fact, not a brand decision.
+
+**Two things it does NOT mean:**
+1. **Never rewrite dated evidence.** A page recording "scanned with the
+   120-module engine on 2026-07-12, 137 errors" is a measurement, not a claim.
+   Updating it falsifies the record. `website/app/scans/page.tsx` is excluded
+   for exactly this reason.
+2. **Prefer generated values over hardcoded ones**, so the sync cannot rot:
+   `website/app/data/site-stats.json` derives the module count from a real
+   `gatetest --list` via `scripts/generate-site-stats.js`. Wire new claims to
+   that rather than typing a number.
+
+**Enforced by `tests/module-count-sync.test.js`** — any three-digit "N modules"
+claim in shipped copy must equal the live module count. Remembering a rule is
+weaker than a test that fails.
+
+---
+
 ## THE BOSS RULE — CRAIG MUST AUTHORIZE
 
 The following actions require **explicit authorization from Craig BEFORE execution**:
@@ -171,9 +205,9 @@ curl -sSL https://raw.githubusercontent.com/crclabs-hq/gatetest/main/integration
 
 ## THE MISSION
 
-Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 120 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-per-scan pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
+Build the most advanced, most aggressive, most beautiful QA testing platform ever made. 121 modules. One gate. One decision. AI-powered code review that no competitor can match. Pay-per-scan pricing that eliminates customer risk. A scan experience so visually stunning that customers WANT to watch it run.
 
-**The customer sees:** Their repo scanned by 120 modules in real time. Issues found. Issues fixed. Delivered.
+**The customer sees:** Their repo scanned by 121 modules in real time. Issues found. Issues fixed. Delivered.
 **The competition sees:** A force they cannot match without rebuilding from scratch.
 **Craig sees:** Recurring revenue with high margins on a moat that compounds over time.
 
@@ -382,8 +416,8 @@ When something breaks:
 | Tier | Price | Deliverable |
 |------|-------|---------|
 | Quick Scan | $29 | 4 modules (scan-only, no auto-fix) |
-| Full Scan | $99 | All 120 modules (scan-only, no auto-fix) |
-| Scan + Fix | $199 | 120 modules + auto-fix PR + pair-review + architecture annotator |
+| Full Scan | $99 | All 121 modules (scan-only, no auto-fix) |
+| Scan + Fix | $199 | 121 modules + auto-fix PR + pair-review + architecture annotator |
 | Forensic (renamed from Nuclear, Craig 2026-06-02) | $399 | Everything on the website-only scan: full deep scan, per-finding Claude diagnosis, cross-finding correlation, auto-fix PR, pair-review, executive summary, board-ready CISO report. Mutation testing + chaos / fuzz pass are NOT part of the website-only flow — they ship via the GitHub Action (`mutation: true` / `chaos: true`) because they need a CI runner to execute the customer's test suite and a headless browser. |
 | Continuous | $49/mo | **ORG-FLAT (Craig-authorized 2026-07-23): one subscription covers every repo under the same owner/org** — no per-seat, no per-repo; `findActiveByRepo` matches by host/owner prefix, exact-repo match preferred; the AI allowance is shared org-wide. Scan every push — **LIVE** (Craig green-light 2026-06-12). Stripe subscription checkout (mode=subscription, inline recurring price_data — no dashboard product needed). Unlimited deterministic scans (near-zero marginal cost); AI reviews metered by `continuous_ai_ledger` monthly allowance (default $10/mo, env `CONTINUOUS_AI_BUDGET_USD`). Fix PRs NOT included — per-scan upsell. Store: `website/app/lib/continuous-subscription-store.js` (19 tests). Lifecycle synced via `customer.subscription.updated/deleted` webhooks. |
 | MCP | $29/mo | **REPOSITIONED (Craig-authorized 2026-07-23, closes KI #39): the LOCAL stdio MCP server is now 100% free — `GATED_TOOLS` in `bin/gatetest-mcp.mjs` is empty; every tool runs on the user's own machine/keys (principle: free where it runs on your machine, paid where it runs on ours).** The $29/mo tier now sells the HOSTED remote MCP endpoint (claude.ai web/mobile, locked-down machines; `mcp-remote-core.cjs` keeps its gate) + hosted scan history, behind `GATETEST_API_KEY` (`gtmcp_` prefix, 70 chars), delivered by email after Stripe checkout — **LIVE** (Craig-authorized 2026-07-04). Free without a key: `check_health`, `list_modules`, `get_badge`, `scan_url`, `scan_repo`, `scan_local` (quick suite). `scan_repo` was fixed onto this list 2026-07-20 — it was already documented as free in the tool's own description/quick-start prompt, but `GATED_TOOLS` in `bin/gatetest-mcp.mjs` charged for it anyway; the code now matches. Store: `website/app/lib/mcp-subscription-store.js`. |
@@ -413,11 +447,11 @@ When something breaks:
 
 ### MCP Debug Protocol — MANDATORY
 When debugging ANY issue in this repo or any customer repo via GateTest MCP:
-1. **ALWAYS run `scan_local` FIRST** — never manually inspect files for bugs before scanning. The 120-module engine finds in seconds what manual inspection takes minutes to locate.
+1. **ALWAYS run `scan_local` FIRST** — never manually inspect files for bugs before scanning. The 121-module engine finds in seconds what manual inspection takes minutes to locate.
 2. **ALWAYS run `run_tests` after editing** — never assume a fix worked without verification.
 3. **ALWAYS call `get_production_errors` before deciding what to fix** on live customer issues.
 4. **Full debug loop:** `scan_local` → `explain_finding` → `fix_issue` → `run_tests` → `verify_fix`
-5. **Never bypass GateTest** to "just look at the code." The 120-module engine finds what manual inspection misses.
+5. **Never bypass GateTest** to "just look at the code." The 121-module engine finds what manual inspection misses.
 
 ### When something breaks:
 1. **FIX IT.** Don't ask. Don't wait. Don't patch symptoms.
@@ -531,11 +565,18 @@ Tests include **negative controls** that plant a real god file / layering
 violation and assert the rules fire — without them, tightening thresholds until
 the repo goes quiet is indistinguishable from the rule working.
 
-**Public copy still says "120 modules" in ~30 places** (website prose,
-Marketplace listing, package descriptions). Left for Craig: it is
-brand/marketing copy (Boss Rule #8) and the Marketplace listing is mid-review.
-The drift is in the safe direction — understating coverage, not overstating it.
-The generated `site-stats.json` count is already 121.
+**The website was synced in the same pass** — 231 count claims across 104 files
+(comparison pages, blog, glossary, quickstart, MCP tools, PR footers, OG images,
+package descriptions, the Marketplace listing, editor extensions). I had first
+deferred this as brand/marketing copy under Boss Rule #8; Craig ruled otherwise
+the same day — see **THE WEBSITE-SYNC RULE** below. `tests/module-count-sync.test.js`
+now enforces it, so the next module cannot ship with the site selling the old
+number.
+
+**Not swept:** `website/app/scans/page.tsx` labels dated scan results
+("Full suite · 120-module engine", 2026-07-12, 137 errors). Those runs really
+were on 120 modules; rewriting the label falsifies evidence instead of updating
+a claim.
 
 ### THE DOMAIN — gatetest.io (moved 2026-07-30)
 

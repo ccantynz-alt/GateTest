@@ -4,9 +4,9 @@
  *
  * Section order:
  *   1. Navbar
- *   2. Hero  — live URL scan, "One gate. 120 modules. Self-healing CI."
+ *   2. Hero  — live URL scan, "One gate. 121 modules. Self-healing CI."
  *   3. HomeKills  — what we replace (flip tiles) + head-to-head capability matrix
- *   4. HomeModuleBreakdown — "what the 120 modules actually check" (#modules)
+ *   4. HomeModuleBreakdown — "what the 121 modules actually check" (#modules)
  *   5. HomeFlywheel — 4-layer fix flow (AST -> Rule -> Recipe -> Claude) + prove-it
  *   6. HomeModelChoice — BYOK vs supplied metered; Sonnet 5 / Opus 4.8 / Fable 5
  *   7. HomeEyesEarsHands — MCP tools: eyes/ears/hands hook + plain explanations

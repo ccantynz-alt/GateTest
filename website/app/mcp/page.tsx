@@ -5,7 +5,7 @@ import { ALL_TOOLS, TOOL_COUNT } from "./tools-data";
 export const metadata: Metadata = {
   title: "GateTest MCP — Free Local Server, $29/mo Hosted Endpoint",
   description:
-    "The full 120-module GateTest engine inside Claude Code, Cursor, and any MCP-compatible AI — 100% free on your own machine. $29/mo adds the hosted endpoint for claude.ai web/mobile plus hosted scan history.",
+    "The full 121-module GateTest engine inside Claude Code, Cursor, and any MCP-compatible AI — 100% free on your own machine. $29/mo adds the hosted endpoint for claude.ai web/mobile plus hosted scan history.",
   openGraph: {
     title: "GateTest MCP — The 120-Module Engine in Your Editor",
     description:
@@ -57,7 +57,7 @@ export default function McpPage() {
           <span className="text-violet-400">hands</span>
         </h1>
         <p className="text-neutral-400 text-lg max-w-2xl mx-auto mb-8">
-          The full <span className="text-white font-semibold">120-module scanner</span> inside your AI
+          The full <span className="text-white font-semibold">121-module scanner</span> inside your AI
           assistant — plus {TOOL_COUNT} tools that let it{" "}
           <span className="text-blue-400">see</span> the rendered page,{" "}
           <span className="text-emerald-400">hear</span> what&apos;s breaking in production, and{" "}

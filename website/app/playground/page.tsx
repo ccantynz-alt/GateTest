@@ -184,11 +184,11 @@ function ModuleCard({ mod }: { mod: ModuleResult }) {
   );
 }
 
-// One chip per module in the full 120-module catalog that ISN'T part of
+// One chip per module in the full 121-module catalog that ISN'T part of
 // the free tier — the "X/120 complete" progress bar needs something to
 // count up to, and this is the shadow-preview mechanic (same pattern the
 // $29 tier's upsell already uses) rather than either lying about running
-// 120 modules for free or showing a misleadingly small "4/4" bar.
+// 121 modules for free or showing a misleadingly small "4/4" bar.
 function LockedModuleChip({ mod, delay }: { mod: LockedModule; delay: number }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -705,7 +705,7 @@ export default function PlaygroundPage() {
               {
                 icon: "🎯",
                 title: "Real checks, real findings",
-                body: "This isn't a canned demo — it runs the same four checks a paid Quick Scan does against your actual code. Paid Full and Forensic scans run the full 120-module CLI engine on top.",
+                body: "This isn't a canned demo — it runs the same four checks a paid Quick Scan does against your actual code. Paid Full and Forensic scans run the full 121-module CLI engine on top.",
               },
               {
                 icon: "🔒",

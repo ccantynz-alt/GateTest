@@ -2,7 +2,7 @@
 
 **Original run:** 2026-07-18 (GateTest v1.59.x @ f9cb3a0, Semgrep 1.170.0, ESLint 10.7.0)
 **Reproducibility fix:** 2026-07-19 — the corpus and raw tool outputs were previously "preserved on the bench workstation" and never committed, so nobody outside that machine could verify the numbers. Both are now committed to this repo under `benchmarks/`, and GateTest + ESLint were re-run live against them as part of this fix (see `benchmarks/gatetest-raw-output.txt` and `benchmarks/eslint-raw-output.json`).
-**GateTest version at re-verification:** main @ post-`e92634d` (120 modules; module list bumped since the original 88-module run tag, see `docs/HISTORY.md`).
+**GateTest version at re-verification:** main @ post-`e92634d` (121 modules; module list bumped since the original 88-module run tag, see `docs/HISTORY.md`).
 **Semgrep column:** carried over from the 2026-07-18 run — Semgrep isn't installable in the environment that did this reproducibility fix (no Python/pip available). The corpus is now committed specifically so anyone with Semgrep installed can re-run that leg themselves and check our number.
 **SonarQube:** still deferred (Known Issue #46).
 
@@ -74,7 +74,7 @@ corpus because it's a real (if small) app, not a hand-curated list of only the 1
 
 | Metric | GateTest | ESLint |
 |---|---|---|
-| Scan wall-clock | ~2.3-2.8s (88 applicable modules — the other 32 of 120 are language-specific for non-JS languages, live-pentest modules requiring a URL target, or otherwise inapplicable to a static local JS corpus) | ~1.5s |
+| Scan wall-clock | ~2.3-2.8s (88 applicable modules — the other 32 of 121 are language-specific for non-JS languages, live-pentest modules requiring a URL target, or otherwise inapplicable to a static local JS corpus) | ~1.5s |
 
 ## Raw artifacts (now actually committed, not "on the bench workstation")
 

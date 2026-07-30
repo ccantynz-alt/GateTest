@@ -59,7 +59,7 @@ export default function HomeProof() {
         <div className="rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface-solid)] p-7 shadow-lg shadow-[var(--accent)]/10">
           <h3 className="font-bold text-[var(--accent)] mb-1">GateTest</h3>
           <p className="text-sm text-[var(--muted)] mb-5">
-            One engine, 120 modules, one decision.
+            One engine, 121 modules, one decision.
           </p>
           <ul className="text-sm text-[var(--foreground-secondary)] space-y-2.5 mb-6">
             <li className="flex gap-2"><span className="text-[var(--accent)]">✓</span> One config file, one gate — pass or the build stops</li>

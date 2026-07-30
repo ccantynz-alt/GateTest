@@ -33,7 +33,7 @@ function fileExists(rel) {
 }
 
 // ---------------------------------------------------------------------------
-// Claim: 120 modules (v1.57 — per CLAUDE.md "## VERSION" section)
+// Claim: 121 modules (v1.57 — per CLAUDE.md "## VERSION" section)
 // ---------------------------------------------------------------------------
 
 describe('marketing claim — module count', () => {
@@ -46,11 +46,11 @@ describe('marketing claim — module count', () => {
     assert.ok(moduleLines.length >= 120, `expected ≥ 120 module lines, got ${moduleLines.length}`);
   });
 
-  it('CLAUDE.md mentions 120 modules in current version', () => {
+  it('CLAUDE.md mentions 121 modules in current version', () => {
     const md = readFile('CLAUDE.md');
-    // Either explicit "120 modules" wording or the v1.57.x section header.
+    // Either explicit "121 modules" wording or the v1.57.x section header.
     const hasCount = /\b120\s+modules\b/i.test(md) || /\bGateTest v1\.57/.test(md);
-    assert.ok(hasCount, 'Bible should reference 120 modules or v1.57.x');
+    assert.ok(hasCount, 'Bible should reference 121 modules or v1.57.x');
   });
 });
 

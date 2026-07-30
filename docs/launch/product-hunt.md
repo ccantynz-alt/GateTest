@@ -65,7 +65,7 @@ perf, axe for a11y — each with its own config, its own dashboard,
 and its own bill. The setup tax was killing momentum on every new
 project.
 
-GateTest is one composite GitHub Action that runs 120 modules in
+GateTest is one composite GitHub Action that runs 121 modules in
 parallel. The interesting bit is the cost curve: deterministic
 AST + rule-based layers run first (free, milliseconds). Claude
 only runs on patterns nothing else has seen (paid, one shot).
@@ -107,7 +107,7 @@ the Claude pipeline, or how we handle false positives. Roast me.
 
 | # | What it shows | Caption |
 |---|---|---|
-| 1 | **Hero shot** — gatetest.io landing page with the hero text and the four pricing tiers visible. Dark theme. | "One gate. 120 modules. Pay per scan." |
+| 1 | **Hero shot** — gatetest.io landing page with the hero text and the four pricing tiers visible. Dark theme. | "One gate. 121 modules. Pay per scan." |
 | 2 | **Live scan in progress** — `/scan/status` page mid-run with the module ticker animating. | "Watch the scan in real time — every module, every finding." |
 | 3 | **The auto-fix PR** — screenshot of a real GitHub PR opened by GateTest, with the fix diff and the regression-test diff side-by-side. | "Findings come back as a PR — fix + regression test, ready to merge." |
 | 4 | **Forensic report** — the executive summary section of a Forensic-tier PR comment (headline, posture, top-3 actions). | "CTO-readable executive summary. Board-ready CISO report on $399 tier." |
@@ -146,7 +146,7 @@ Avoid: marketing collage, logo wall, "before/after" stock imagery. PH gallery co
 **Twitter/X (post when PH listing goes live, link in bio):**
 > Live on Product Hunt today.
 >
-> GateTest: one CI gate that replaces SonarQube + Snyk + Lighthouse + 9 others. 120 modules. Claude opens the fix PR. Pay per scan, no subscription.
+> GateTest: one CI gate that replaces SonarQube + Snyk + Lighthouse + 9 others. 121 modules. Claude opens the fix PR. Pay per scan, no subscription.
 >
 > Free CLI: `npx -p @gatetest/cli gatetest --suite quick`
 >

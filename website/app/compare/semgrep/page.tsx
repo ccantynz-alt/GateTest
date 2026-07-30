@@ -2,9 +2,9 @@
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "GateTest vs Semgrep — 120 modules vs pattern matching in 2026",
+  title: "GateTest vs Semgrep — 121 modules vs pattern matching in 2026",
   description:
-    "Semgrep matches known patterns. GateTest reasons about your code — 120 modules covering security, quality, accessibility, AI safety, and infra in a single scan. Auto-fix PRs included.",
+    "Semgrep matches known patterns. GateTest reasons about your code — 121 modules covering security, quality, accessibility, AI safety, and infra in a single scan. Auto-fix PRs included.",
   keywords: [
     "Semgrep alternative",
     "Semgrep vs GateTest",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     canonical: "/compare/semgrep",
   },
   openGraph: {
-    title: "GateTest vs Semgrep — 120 modules vs pattern matching in 2026",
+    title: "GateTest vs Semgrep — 121 modules vs pattern matching in 2026",
     description:
       "Semgrep is excellent at finding patterns you wrote rules for. GateTest uses Claude to find what nobody wrote a rule for — plus 109 other checks — and opens a fix PR.",
     url: "/compare/semgrep",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 const faqItems = [
   {
     q: "How does GateTest differ from Semgrep?",
-    a: "Semgrep is a pattern-matching engine: it finds code that matches rules written in YAML. It's fast and configurable, and the community has written thousands of rules. The gap is anything nobody wrote a rule for. GateTest uses Claude to read your actual code and reason about what it does — it finds SSRF in an API handler it has never seen before, because Claude understands intent, not just structure. GateTest also runs 120 checks across categories Semgrep doesn't cover: accessibility, performance, N+1 queries, datetime bugs, money-float errors, import cycles, and infra (Dockerfile, K8s, Terraform, CI pipelines).",
+    a: "Semgrep is a pattern-matching engine: it finds code that matches rules written in YAML. It's fast and configurable, and the community has written thousands of rules. The gap is anything nobody wrote a rule for. GateTest uses Claude to read your actual code and reason about what it does — it finds SSRF in an API handler it has never seen before, because Claude understands intent, not just structure. GateTest also runs 121 checks across categories Semgrep doesn't cover: accessibility, performance, N+1 queries, datetime bugs, money-float errors, import cycles, and infra (Dockerfile, K8s, Terraform, CI pipelines).",
   },
   {
     q: "Does Semgrep have auto-fix?",
@@ -38,7 +38,7 @@ const faqItems = [
   },
   {
     q: "What does Semgrep's free tier include vs. paid?",
-    a: "Semgrep OSS (open-source core) is free and powerful for security engineers who want to write or import custom rules. Semgrep Code (SAST), Supply Chain (SCA), and Secrets are commercial products with seat-based pricing. GateTest charges per scan: $99 for all 120 modules. No rules to write, no per-developer licensing, no annual contracts.",
+    a: "Semgrep OSS (open-source core) is free and powerful for security engineers who want to write or import custom rules. Semgrep Code (SAST), Supply Chain (SCA), and Secrets are commercial products with seat-based pricing. GateTest charges per scan: $99 for all 121 modules. No rules to write, no per-developer licensing, no annual contracts.",
   },
   {
     q: "Does GateTest replace Semgrep rules I've already written?",
@@ -127,7 +127,7 @@ export default function SemgrepPage() {
           <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight mb-6">
             GateTest vs Semgrep
             <br />
-            <span className="text-teal-400">120 modules vs Writing Rules in 2026</span>
+            <span className="text-teal-400">121 modules vs Writing Rules in 2026</span>
           </h1>
           <p className="text-lg text-white/60 max-w-2xl leading-relaxed">
             Semgrep is great at finding code that matches patterns you&rsquo;ve written rules for.
@@ -147,7 +147,7 @@ export default function SemgrepPage() {
               href="/#modules"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 120 modules
+              See All 121 modules
             </Link>
           </div>
         </div>
@@ -239,7 +239,7 @@ export default function SemgrepPage() {
               },
               {
                 title: "No rules to maintain",
-                body: "Semgrep's value scales with your rule library. You either write custom rules (takes time) or use community rules (may be stale). GateTest's 120 modules are maintained for you — and Claude-driven reasoning improves with every scan through the recipe-distillation flywheel. Per-scan pricing means no maintenance overhead.",
+                body: "Semgrep's value scales with your rule library. You either write custom rules (takes time) or use community rules (may be stale). GateTest's 121 modules are maintained for you — and Claude-driven reasoning improves with every scan through the recipe-distillation flywheel. Per-scan pricing means no maintenance overhead.",
               },
             ].map((card) => (
               <div
@@ -274,7 +274,7 @@ export default function SemgrepPage() {
         {/* CTA */}
         <section className="rounded-2xl border border-teal-500/20 p-10 text-center" style={{ background: "rgba(20,184,166,0.05)" }}>
           <h2 className="text-3xl font-bold text-white mb-4">
-            120 checks. No rules to write.
+            121 checks. No rules to write.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
             Security, quality, accessibility, performance, IaC, AI safety — in one scan. Claude

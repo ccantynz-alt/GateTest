@@ -115,7 +115,7 @@ curl -s https://gatetest.io/api/status | jq '{ready, missing_required, stripe}'
 ```
 
 Then eyeball the live site:
-- Hero says **120 modules** and **Sonnet 5** (not 118 / Sonnet 4.6).
+- Hero says **121 modules** and **Sonnet 5** (not 118 / Sonnet 4.6).
 - `/mcp` says **24 tools** (not 18 / 22).
 - Nav has no "Stack" / "Hall of Scans".
 - Run one free URL scan from the hero — it returns a result.

@@ -155,7 +155,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Where GateTest sits",
         paragraphs: [
-          "GateTest is primarily a SAST engine — most of its 120 modules read code at rest — with SCA built in (the dependencies and CVE-feed modules) and a DAST slice (the live browser-driven probes that run where a runner and target URL exist). The point isn't that one tool is all three perfectly; it's that one gate covering all three slices beats three disconnected tools with three dashboards and three bills.",
+          "GateTest is primarily a SAST engine — most of its 121 modules read code at rest — with SCA built in (the dependencies and CVE-feed modules) and a DAST slice (the live browser-driven probes that run where a runner and target URL exist). The point isn't that one tool is all three perfectly; it's that one gate covering all three slices beats three disconnected tools with three dashboards and three bills.",
         ],
       },
     ],

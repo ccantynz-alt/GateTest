@@ -8,7 +8,7 @@
 > typically outperforms a flopped HN post by 10-50x on qualified clicks,
 > and inclusions are persistent (archives rank on Google).
 >
-> **Verified facts (re-verified 2026-07-19, do not drift):** 120 modules ·
+> **Verified facts (re-verified 2026-07-19, do not drift):** 121 modules ·
 > free no-signup scan at gatetest.io · CLI via
 > `npx -p @gatetest/cli gatetest` (npm package published, but note the
 > package has two bins so plain `npx @gatetest/cli` fails — use the `-p`
@@ -39,7 +39,7 @@ Subject: **GateTest — QA gate that opens the PR that fixes what it finds**
 
 Hi [name],
 
-GateTest is a CI quality gate that runs 120 checks (security, reliability,
+GateTest is a CI quality gate that runs 121 checks (security, reliability,
 a11y, AI-safety) and then — the part that's different — opens a pull
 request that *fixes* what it found: each fix is re-validated against the
 scanner, gets an auto-written regression test, and is pair-reviewed by a
@@ -67,7 +67,7 @@ Suggested blurb (their voice, feel free to edit):
 
 > **GateTest** — a QA gate with a party trick: it doesn't just fail your
 > CI, it opens the PR that fixes the failure, with a regression test and
-> a second-AI pair review attached. 120 checks, pay-per-scan pricing,
+> a second-AI pair review attached. 121 checks, pay-per-scan pricing,
 > free no-signup website scan to try it.
 
 ---

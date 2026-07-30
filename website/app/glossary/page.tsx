@@ -42,7 +42,7 @@ export default function GlossaryIndexPage() {
             </span>
           </Link>
           <Link href="/modules" className="text-sm text-white/50 hover:text-white transition-colors">
-            120 modules &rarr;
+            121 modules &rarr;
           </Link>
         </div>
       </nav>

@@ -69,7 +69,7 @@
                 <span className="font-[var(--font-mono)] text-sm text-success">gatetest --suite full</span>
               </div>
               <div className="space-y-2 font-[var(--font-mono)] text-sm">
-                <p className="text-muted">120 modules. 800+ checks. One gate.</p>
+                <p className="text-muted">121 modules. 800+ checks. One gate.</p>
                 <p className="text-success font-bold text-lg mt-3">GATE: PASSED</p>
               </div>
             </div>

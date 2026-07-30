@@ -1,7 +1,7 @@
 // =============================================================================
 // CLI-ENGINE-RUNNER TEST — website/app/lib/cli-engine-runner.js
 // =============================================================================
-// Bridges the website's in-memory fileContents to the full 120-module CLI
+// Bridges the website's in-memory fileContents to the full 121-module CLI
 // engine. Closes the "91 vs 22 modules" honesty gap.
 //
 // Tests are real-engine — we mkdtemp a workspace, write a tiny fixture,

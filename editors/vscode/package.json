@@ -1,7 +1,7 @@
 {
   "name": "gatetest-vscode",
   "displayName": "GateTest",
-  "description": "Free quick quality gate (syntax, lint, secrets, code quality) inline in the editor. Deeper 120-module AI scans and auto-fix PRs at gatetest.io.",
+  "description": "Free quick quality gate (syntax, lint, secrets, code quality) inline in the editor. Deeper 121-module AI scans and auto-fix PRs at gatetest.io.",
   "version": "0.1.0",
   "publisher": "gatetest",
   "engines": {

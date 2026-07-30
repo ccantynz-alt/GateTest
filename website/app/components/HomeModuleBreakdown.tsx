@@ -1,7 +1,7 @@
 /**
- * <HomeModuleBreakdown> — "What the 120 modules actually check."
+ * <HomeModuleBreakdown> — "What the 121 modules actually check."
  *
- * "All 120 modules" means nothing to a buyer. This groups them into human
+ * "All 121 modules" means nothing to a buyer. This groups them into human
  * categories with real counts, pulled straight from the module registry
  * (MODULE_CATEGORIES) so the numbers can NEVER drift from the engine. The
  * coming-soon Live-Security category is flagged, consistent with the pentest

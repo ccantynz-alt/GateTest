@@ -11,7 +11,7 @@
 
 **Body:**
 ```
-I've been building GateTest (gatetest.io) — a 120-module code quality gate
+I've been building GateTest (gatetest.io) — a 121-module code quality gate
 that runs as an MCP server inside Claude Code, Cursor, Windsurf, etc.
 
 The problem I kept running into: AI agents write UI blind, never hear the app

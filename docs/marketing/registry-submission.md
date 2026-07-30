@@ -61,7 +61,7 @@ claude.ai has a browsable Connectors/Integrations directory where users one-clic
 - **Category:** Developer Tools / Code Quality
 - **Remote MCP URL:** `https://gatetest.io/api/mcp`
 - **Description:**
-  > GateTest is a 120-module code-quality and security engine delivered over MCP. It gives Claude capabilities it can't get alone: scan any live website or public GitHub repo for security, reliability, and quality issues (free, no key), explain any finding in plain English, and open a fix PR — all from the chat. A $29/mo key unlocks the full deep scan and AI auto-fix. Free tools: scan_url, scan_repo, list_modules, get_badge.
+  > GateTest is a 121-module code-quality and security engine delivered over MCP. It gives Claude capabilities it can't get alone: scan any live website or public GitHub repo for security, reliability, and quality issues (free, no key), explain any finding in plain English, and open a fix PR — all from the chat. A $29/mo key unlocks the full deep scan and AI auto-fix. Free tools: scan_url, scan_repo, list_modules, get_badge.
 - **Auth model:** Bearer token (`Authorization: Bearer gtmcp_...`). Free tools require no auth.
 
 **Honesty note to include / be ready for:** Anthropic's directory generally prefers **OAuth** for authenticated connectors. GateTest currently uses a static Bearer subscription key (same model as many API-key MCPs). If the directory requires OAuth, that's a follow-up build (an OAuth authorization-code flow in front of the subscription store) — flag it as a fast-follow rather than a blocker. The **free** tools need no auth and satisfy a directory listing on their own.

@@ -206,7 +206,7 @@ git add -A && git commit -m "test: trigger gate" && git push`}</CodeBlock>
             <Trouble q="I&apos;m on GitLab/Jenkins/CircleCI, not GitHub.">
               The CLI works in any CI &mdash;{" "}
               <code className="text-foreground">npx @gatetest/cli --suite full</code>{" "}
-              from your pipeline runs the same 120 modules. Auto-fix PRs
+              from your pipeline runs the same 121 modules. Auto-fix PRs
               are also available from the CLI via `gatetest fix --apply` and `--auto-pr`.
             </Trouble>
           </div>

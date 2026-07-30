@@ -40,7 +40,7 @@
 ## Short description (≤160 chars — Marketplace search card)
 
 ```
-120-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.io.
+121-module code quality gate for GitHub. Free continuous scanning on every push. Deeper AI-powered scans and auto-fix PRs available on gatetest.io.
 ```
 
 ---
@@ -48,13 +48,13 @@
 ## Full description (Markdown — Marketplace listing page)
 
 ```markdown
-## One gate, 120 modules, installed in 30 seconds
+## One gate, 121 modules, installed in 30 seconds
 
 GateTest scans every push to your repo and posts a pass/fail commit status —
 free, forever, no card required. It checks syntax, lint rules, and hardcoded
 secrets on every single push automatically once installed.
 
-For teams that want the full 120-module pass — security, reliability,
+For teams that want the full 121-module pass — security, reliability,
 infrastructure, accessibility, performance, and Claude-powered code review
 with automatic fix pull requests — deeper scans are available as a separate
 purchase on [gatetest.io](https://gatetest.io). This app install is not where
@@ -66,7 +66,7 @@ that payment happens; it's free the moment you add it to a repo.
 - Hardcoded secrets (API keys, tokens, credentials)
 - Core code-quality issues
 
-### What the full 120-module scan adds (gatetest.io, separate purchase)
+### What the full 121-module scan adds (gatetest.io, separate purchase)
 - Security: SSRF, ReDoS, TLS bypass, cookie misconfig, SQL migration safety
 - Reliability: N+1 queries, race conditions, resource leaks, async footguns
 - Infrastructure: Dockerfile, Kubernetes, Terraform/IaC, CI-workflow hardening
@@ -80,7 +80,7 @@ that payment happens; it's free the moment you add it to a repo.
 1. **Install** — add GateTest to the repos you want covered.
 2. **Push** — every push triggers the free quick gate automatically.
 3. **See results** — a commit status and PR comment show what was found.
-4. **Go deeper (optional)** — run a full 120-module scan, or subscribe to
+4. **Go deeper (optional)** — run a full 121-module scan, or subscribe to
    continuous full-depth scanning, at [gatetest.io](https://gatetest.io).
 
 ### Privacy

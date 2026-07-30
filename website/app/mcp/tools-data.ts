@@ -7,7 +7,7 @@
 export const ALL_TOOLS = [
   // Free
   { name: "check_health", paid: false, desc: "Verify GateTest engine is operational" },
-  { name: "list_modules", paid: false, desc: "List all 120 modules with descriptions" },
+  { name: "list_modules", paid: false, desc: "List all 121 modules with descriptions" },
   { name: "get_badge", paid: false, desc: "Get embeddable README badge for any repo" },
   { name: "scan_url", paid: false, desc: "Quick scan any live URL via hosted API" },
   { name: "scan_local (quick)", paid: false, desc: "41-module quick scan — syntax, lint, secrets, codeQuality, and more" },

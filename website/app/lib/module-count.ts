@@ -16,7 +16,7 @@
 //   2. `totalModuleCount()` from website/app/components/howitworks/modules-data.ts
 //   3. TOTAL_MODULES constant below.
 //
-// Last verified: 2026-05-27 (120 modules).
+// Last verified: 2026-05-27 (121 modules).
 
 import { totalModuleCount } from "@/app/components/howitworks/modules-data";
 
@@ -28,12 +28,12 @@ import { totalModuleCount } from "@/app/components/howitworks/modules-data";
  */
 export const TOTAL_MODULES: number = totalModuleCount();
 
-/** Plain helper: "120 modules". */
+/** Plain helper: "121 modules". */
 export function modulesLabel(): string {
   return `${TOTAL_MODULES} modules`;
 }
 
-/** Plain helper: "All 120 modules". */
+/** Plain helper: "All 121 modules". */
 export function allModulesLabel(): string {
   return `All ${TOTAL_MODULES} modules`;
 }

@@ -3,7 +3,7 @@
  *
  * The single biggest differentiator no competitor has: the customer chooses
  * the AI model AND who pays for it. Grounded in engine-models.js:
- *   - Deterministic 120-module scan uses ZERO Claude tokens.
+ *   - Deterministic 121-module scan uses ZERO Claude tokens.
  *   - BYOK: user's ANTHROPIC_API_KEY, their model, their spend, no cap.
  *   - Supplied (metered): we provide a budget-capped key; Sonnet 5 / Opus 4.8 /
  *     Fable 5, priced per the model that actually ran (budget-tracker.js).
@@ -51,7 +51,7 @@ export default function HomeModelChoice() {
             <span className="gradient-text">Your model, or our pick.</span>
           </h2>
           <p className="text-muted text-lg max-w-3xl mx-auto">
-            The 120-module scan runs on{" "}
+            The 121-module scan runs on{" "}
             <span className="text-foreground font-semibold">zero AI tokens</span>{" "}
             — pure deterministic speed. When a fix needs real intelligence,{" "}
             <span className="text-foreground font-semibold">you</span>{" "}

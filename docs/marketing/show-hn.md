@@ -9,7 +9,7 @@
 ## Title options (pick one)
 1. **Show HN: GateTest – Give Claude verified eyes, ears, and hands on your codebase**
 2. Show HN: An MCP server that lets Claude screenshot your app, read prod errors, and prove its fix worked
-3. Show HN: GateTest – 120-module code scanner as an MCP server (free to scan any URL or repo)
+3. Show HN: GateTest – 121-module code scanner as an MCP server (free to scan any URL or repo)
 
 Recommend #1 — "eyes, ears, hands" is concrete and the phrase travels.
 
@@ -25,7 +25,7 @@ Recommend #1 — "eyes, ears, hands" is concrete and the phrase travels.
 > - **Ears** — pull the top production errors from Sentry / Datadog / Rollbar with exact file:line.
 > - **Hands** — after a fix, re-scan the exact finding and run your test suite, so "fixed" means verified, not asserted.
 >
-> Under it is a 120-module deterministic scan engine (security, reliability, race conditions, N+1 queries, PII-in-logs, TLS bypasses, cron typos, money-in-float, ~100 more classes) — fast, repeatable, zero tokens. The MCP tools are the delivery vehicle; the engine is the moat.
+> Under it is a 121-module deterministic scan engine (security, reliability, race conditions, N+1 queries, PII-in-logs, TLS bypasses, cron typos, money-in-float, ~100 more classes) — fast, repeatable, zero tokens. The MCP tools are the delivery vehicle; the engine is the moat.
 >
 > **Free with no key, right now:** point it at any live URL or any public GitHub repo and it'll scan it. If you use Claude Desktop or claude.ai, you can add the remote endpoint (`https://gatetest.io/api/mcp`) in ~30 seconds, no install. Claude Code / Cursor: `npx -y @gatetest/mcp-server`.
 >
@@ -37,7 +37,7 @@ Recommend #1 — "eyes, ears, hands" is concrete and the phrase travels.
 
 > A few honest notes since "AI finds your bugs" is a crowded, over-promised space:
 >
-> **What's actually different:** most AI code tools are a prompt around a diff. GateTest is a real 120-module engine that runs the same checks every time and burns no tokens doing it — so it's deterministic (a gate can block a merge on it) and cheap to run exhaustively. The LLM only comes in for the parts that genuinely need judgment: explaining a finding, writing the fix, and reviewing it.
+> **What's actually different:** most AI code tools are a prompt around a diff. GateTest is a real 121-module engine that runs the same checks every time and burns no tokens doing it — so it's deterministic (a gate can block a merge on it) and cheap to run exhaustively. The LLM only comes in for the parts that genuinely need judgment: explaining a finding, writing the fix, and reviewing it.
 >
 > **What it does NOT do:** it won't fix an architecture with no save path or a stubbed auth layer — those are design decisions, not bugs a scanner finds. It's a generation-quality and reliability tool, not an architect.
 >

@@ -15,7 +15,7 @@
 - **One-liner:** Give Claude verified eyes, ears, and hands on your codebase.
 
 **Standard 2-3 sentence description (reuse):**
-> GateTest is a 120-module code-quality and security engine delivered over MCP. It gives your AI assistant capabilities it can't get alone: scan any live website or public GitHub repo (free, no key), screenshot rendered pages, pull real production errors from Sentry/Datadog/Rollbar, auto-fix findings, and prove the fix worked by re-running your tests. Free tools work with no key; a $29/mo subscription unlocks the full deep scan and AI auto-fix.
+> GateTest is a 121-module code-quality and security engine delivered over MCP. It gives your AI assistant capabilities it can't get alone: scan any live website or public GitHub repo (free, no key), screenshot rendered pages, pull real production errors from Sentry/Datadog/Rollbar, auto-fix findings, and prove the fix worked by re-running your tests. Free tools work with no key; a $29/mo subscription unlocks the full deep scan and AI auto-fix.
 
 ---
 
@@ -30,7 +30,7 @@
 
 ## Glama (glama.ai/mcp/servers)
 - Submit: glama.ai has an automated GitHub crawler + a manual submit. Ensure repo topics include `mcp`, `model-context-protocol`.
-- Glama scores servers on security/quality — the fact that GateTest IS a code-quality tool is on-brand; mention the 120-module engine.
+- Glama scores servers on security/quality — the fact that GateTest IS a code-quality tool is on-brand; mention the 121-module engine.
 
 ## mcp.so
 - Submit: mcp.so/submit

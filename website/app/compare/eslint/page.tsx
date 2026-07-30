@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 const faqItems = [
   {
     q: "Does GateTest replace ESLint, or do I use both?",
-    a: "GateTest includes an ESLint-equivalent lint module as one of 120. You get linting plus security scanning, performance analysis, accessibility checks, AI code review, mutation testing, and 60+ more dimensions — all in a single scan. Most teams use GateTest at the CI gate and optionally keep ESLint running in their editor for instant feedback while coding.",
+    a: "GateTest includes an ESLint-equivalent lint module as one of 121. You get linting plus security scanning, performance analysis, accessibility checks, AI code review, mutation testing, and 60+ more dimensions — all in a single scan. Most teams use GateTest at the CI gate and optionally keep ESLint running in their editor for instant feedback while coding.",
   },
   {
     q: "ESLint is free. Why would I pay for GateTest?",
@@ -279,7 +279,7 @@ export default function EsLintPage() {
         {/* CTA */}
         <section className="rounded-2xl border border-teal-500/20 p-10 text-center" style={{ background: "rgba(20,184,166,0.05)" }}>
           <h2 className="text-3xl font-bold text-white mb-4">
-            One gate. 120 modules. Zero config.
+            One gate. 121 modules. Zero config.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
             Keep ESLint in your editor. Add GateTest to your CI gate for everything ESLint can&rsquo;t see.

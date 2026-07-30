@@ -17,7 +17,7 @@ available through the US morning for comments.
 
 ## Description
 
-> GateTest is a 120-module code-quality and security engine your AI assistant can
+> GateTest is a 121-module code-quality and security engine your AI assistant can
 > actually use. Free, with no key: scan any live URL or public GitHub repo from
 > Claude, Cursor, or the CLI. Paid tiers add the part no scanner does — Claude
 > fixes the findings and opens the pull request, pair-reviews its own work, and

@@ -37,7 +37,7 @@ const CAP_ROWS: CapRow[] = [
   { label: "You pick the AI model", gt: "yes", sonar: "no", snyk: "no", deep: "no" },
   { label: "Bring your own API key", gt: "yes", sonar: "no", snyk: "no", deep: "no" },
   { label: "Pay per scan — no per-seat tax", gt: "yes", sonar: "no", snyk: "no", deep: "no" },
-  { label: "One gate across the whole stack", gt: "yes", sonar: "no", snyk: "no", deep: "no", note: "120 modules, one verdict" },
+  { label: "One gate across the whole stack", gt: "yes", sonar: "no", snyk: "no", deep: "no", note: "121 modules, one verdict" },
 ];
 
 function CapCell({ v }: { v: Cap }) {

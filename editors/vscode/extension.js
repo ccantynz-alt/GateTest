@@ -8,7 +8,7 @@
  * Problems panel). No account, no payment — this is the always-free local
  * engine, same as `gatetest --suite quick` on the CLI.
  *
- * Deeper scans (all 120 modules, AI code review, auto-fix PRs) are a
+ * Deeper scans (all 121 modules, AI code review, auto-fix PRs) are a
  * separate purchase at gatetest.io — this extension does not attempt to
  * replicate that; it's the free tier's IDE-native surface, matching what's
  * already true of the GitHub App.

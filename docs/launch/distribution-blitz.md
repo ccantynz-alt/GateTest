@@ -11,7 +11,7 @@
 > 2. **Lead with the free, no-signup scan — never the price.** Give first.
 >
 > **Honest facts to keep straight (re-verified 2026-07-19, don't drift):**
-> 120 modules · gatetest.io · free no-signup scan · MIT CLI via
+> 121 modules · gatetest.io · free no-signup scan · MIT CLI via
 > `npx -p @gatetest/cli gatetest` (npm published; note the `-p` form is
 > required — plain `npx @gatetest/cli` fails, the package has two bins) ·
 > pay-per-scan $29 / $99 / $199 / $399 + $49/mo Continuous (LIVE) ·
@@ -23,10 +23,10 @@
 ## 0. Master assets (reuse these everywhere)
 
 **One-liner (short):**
-> GateTest — one scan, 120 checks, opens an AI-written PR that fixes what it finds. Free to try, no signup. https://gatetest.io
+> GateTest — one scan, 121 checks, opens an AI-written PR that fixes what it finds. Free to try, no signup. https://gatetest.io
 
 **One-liner (directory / 160 chars):**
-> One scan runs 120 modules (security, quality, perf, a11y, SEO, infra) and opens an AI PR that fixes findings. Free MIT CLI, pay-per-scan hosted.
+> One scan runs 121 modules (security, quality, perf, a11y, SEO, infra) and opens an AI PR that fixes findings. Free MIT CLI, pay-per-scan hosted.
 
 **The honest hook:** "Most tools tell you what's broken. GateTest opens the PR that fixes it."
 
@@ -41,7 +41,7 @@ Hey IH 👋 I'm Craig.
 
 I got tired of wiring SonarQube + Snyk + ESLint + Lighthouse + axe into
 every project — each with its own config, dashboard and bill. So I built
-GateTest: point it at a repo or a live URL, it runs 120 checks in one
+GateTest: point it at a repo or a live URL, it runs 121 checks in one
 pass, then on the paid tiers it uses Claude to open a PR that fixes what
 it found. Never auto-merges — you review.
 
@@ -93,7 +93,7 @@ What would you actually want a tool like this to do?
 
 **r/SideProject** — Title: `I built a tool that runs 120 code checks and opens a PR that fixes them`
 ```
-Solo-built this over the last while. Paste a repo or URL → 120-module
+Solo-built this over the last while. Paste a repo or URL → 121-module
 scan (security, quality, perf, a11y, SEO, infra) → on paid tiers it
 opens an AI PR that fixes findings. Free, no signup: https://gatetest.io
 Quiet HN launch overnight so I'm regrouping — would love honest feedback
@@ -102,7 +102,7 @@ on where it's noisy or useful.
 
 **r/SaaS** — Title: `Pay-per-scan instead of seat licenses — does this pricing make sense to you?`
 ```
-Built a code-QA tool (120 checks + AI auto-fix PR). Went pay-per-scan
+Built a code-QA tool (121 checks + AI auto-fix PR). Went pay-per-scan
 ($29/$99/$199/$399) instead of per-seat, plus one $49/mo "scan every
 push" plan. Curious what this sub thinks of per-scan vs subscription for
 a dev tool. Free demo, no signup: https://gatetest.io
@@ -118,7 +118,7 @@ https://gatetest.io — keen to hear where it's wrong or noisy.
 
 **r/selfhosted / r/opensource** — Title: `MIT-licensed CLI that runs 120 code-quality + security checks locally`
 ```
-The engine is MIT — run the full 120-module scan on your machine, no
+The engine is MIT — run the full 121-module scan on your machine, no
 account, nothing leaves your box: npx -p @gatetest/cli gatetest --suite
 quick ./  Repo: https://github.com/crclabs-hq/GateTest  The hosted
 service adds the AI auto-fix PR, but the scanner itself is free + local.
@@ -161,7 +161,7 @@ in public and looking for real users. Run it on your repo and roast it 👇
 ---
 
 ## 5. Product Hunt  (schedule a proper launch — don't rush)
-- **Tagline:** One scan, 120 checks, an AI PR that fixes what it finds
+- **Tagline:** One scan, 121 checks, an AI PR that fixes what it finds
 - **Assets to prep:** logo, 3–4 screenshots (the scan running, a real fix PR, the report), 60-sec demo gif
 - **First comment:** the Indie Hackers body works well
 - Pick a Tue–Thu, 12:01am PT launch. Lines up another backlink for SEO.

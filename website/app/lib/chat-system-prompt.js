@@ -17,7 +17,7 @@ const PRODUCT_FACTS = `
 ## What GateTest is
 
 GateTest is an automated quality-assurance platform for software
-projects and websites. It runs 120 modules across security, reliability,
+projects and websites. It runs 121 modules across security, reliability,
 performance, accessibility, SEO, and code quality. When run against a
 code repository, it can also open a pull request that fixes the issues
 it found using Claude AI.
@@ -29,7 +29,7 @@ it found using Claude AI.
   Fast feedback. Best for first-time scans.
 
 - Full Scan: $99 one-shot
-  All 120 modules — security, supply chain, auth, CI hardening,
+  All 121 modules — security, supply chain, auth, CI hardening,
   AI review. Scan-only (auto-fix PRs start at the Scan + Fix tier).
 
 - Scan + Fix: $199 one-shot

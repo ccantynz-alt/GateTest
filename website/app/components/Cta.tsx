@@ -8,7 +8,7 @@
           Stop shipping <span className="text-danger">broken code</span>.
         </h2>
         <p className="text-lg text-muted mb-4 max-w-xl mx-auto">
-          Point us at your repo. We scan 120 modules and deliver a detailed report.
+          Point us at your repo. We scan 121 modules and deliver a detailed report.
           On Scan + Fix ($199) and Forensic Scan ($399) we also open a fix PR.
           One-time payment per scan.
         </p>
@@ -29,7 +29,7 @@
             <div className="p-5 text-left">
               <p className="text-sm font-bold text-foreground mb-2">Full Scan &mdash; $99</p>
               <p className="text-xs text-muted mb-3">
-                120 modules. Full report. Scan-only — upgrade to Scan + Fix ($199) for the auto-fix PR.
+                121 modules. Full report. Scan-only — upgrade to Scan + Fix ($199) for the auto-fix PR.
               </p>
               <a
                 href="#pricing"
