@@ -80,6 +80,13 @@ const { aiFix } = require('../src/core/ai-fix-engine.js');
 const { MemoryStore } = require('../src/core/memory.js');
 const { computeSmartSuite } = require('../src/core/smart-suite-selector.js');
 const { apiBaseUrl, siteUrl } = require('../src/core/site-url.js');
+
+// Derived, never typed. Two hardcoded '1.59.0' literals had drifted two
+// releases behind package.json, and this string is what an MCP client shows
+// the user — so the stale number was customer-visible. Same principle as the
+// site-stats generation in the website: wire the claim to the source of truth
+// rather than remembering to update it.
+const PKG_VERSION = require('../package.json').version;
 const { captureUrlScreenshot, slugifyRoute } = require('../src/core/screenshot-capture.js');
 const {
   buildSideBySideComposite,
@@ -992,7 +999,7 @@ async function handleCheckHealth() {
       content: [{
         type: 'text',
         text:
-          `## GateTest MCP — v1.59.0 ✅ Operational\n\n` +
+          `## GateTest MCP — v${PKG_VERSION} ✅ Operational\n\n` +
           `- Modules loaded: ${moduleNames.length}\n` +
           `- Transport: stdio\n` +
           `- Anthropic API key: ${hasAnthropic ? '✅ present (fix_issue, explain_finding available — BYOK, your key funds the calls)' : '⚠️ missing (fix_issue, explain_finding will return an error)'}\n` +
@@ -2335,7 +2342,7 @@ async function handleHttpRequest(args) {
 // ---------------------------------------------------------------------------
 
 const server = new Server(
-  { name: 'gatetest', version: '1.59.0' },
+  { name: 'gatetest', version: PKG_VERSION },
   { capabilities: { tools: {}, prompts: {} } }
 );
 
