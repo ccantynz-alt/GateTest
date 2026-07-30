@@ -157,11 +157,27 @@ class IntegrationTestsModule extends BaseModule {
         /(?:app|router)\.(use)\s*\(\s*['"]([^'"]+)['"]/g,
       ];
 
+      const lines = content.split(/\r?\n/);
+
       for (const pattern of routePatterns) {
+        pattern.lastIndex = 0;
         let match;
         while ((match = pattern.exec(content)) !== null) {
+          // A route quoted inside a string literal or a comment is not a route,
+          // so it cannot be an untested endpoint. Same root cause as the
+          // auth-bypass false positive found by the inert sweep: route regexes
+          // run against whole-file content, so a documentation example like
+          //     example: "app.get('/r', handler)",
+          // was discovered as a real endpoint and then reported as untested.
+          const lineNo = content.slice(0, match.index).split(/\r?\n/).length;
+          const lineText = lines[lineNo - 1] || '';
+          if (this._isCommentLine(lineText)) continue;
+          const lineStart = content.lastIndexOf('\n', match.index - 1) + 1;
+          if (this._isInsideStringLiteral(lineText, match.index - lineStart)) continue;
+
           endpoints.push({ method: match[1].toUpperCase(), path: match[2], file: relPath });
         }
+        pattern.lastIndex = 0;
       }
 
       // Next.js API routes

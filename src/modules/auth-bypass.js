@@ -276,6 +276,21 @@ class AuthBypassDetector extends BaseModule {
 
         if (lineText.includes('// auth-public') || lineText.includes('// no-auth')) continue;
 
+        // A route quoted inside a string literal or a comment is not a route.
+        //
+        // This module had NO string guard at all — KI #77 listed it as the
+        // highest-severity class with no guards — and its route regexes run
+        // against whole-file content, so
+        //     example: "app.get('/r', (req, res) => handler(req))",
+        // in a documentation object read as a real unauthenticated endpoint and
+        // reported at ERROR severity. Blocking a build over a quoted example is
+        // Forbidden #25, and auth-bypass is the worst place for it: the finding
+        // says "you shipped an endpoint with no auth", which nobody ignores.
+        // Caught by tests/heavy/inert-fixture-sweep.test.js.
+        if (this._isCommentLine(lineText)) continue;
+        const lineStart = content.lastIndexOf('\n', matchIdx - 1) + 1;
+        if (this._isInsideStringLiteral(lineText, matchIdx - lineStart)) continue;
+
         const body = extractHandlerBody(content, matchIdx);
         if (AUTH_SIGNAL_RE.test(body)) continue;
 
