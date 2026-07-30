@@ -316,9 +316,17 @@ class MoneyFloatModule extends BaseModule {
       if (this._suppressed(lines, i)) continue;
 
       // Rule 1: money-named var assigned from parseFloat / Number
+      //
+      // Both branches check _isInsideStringLiteral, matching the compound-assignment
+      // rule further down. They previously did NOT, so a line of documentation like
+      //   moneyFloat: "const total = parseFloat(priceString)",
+      // was reported at ERROR severity — blocking a build over a code sample that
+      // never executes (Bible Forbidden #25). Caught by
+      // tests/heavy/inert-fixture-sweep.test.js, which is the only reason a rule
+      // guarded in one place and unguarded two lines earlier came to light.
       if (!hasLibrary) {
         const m1 = JS_ASSIGN_FLOAT_RE.exec(line);
-        if (m1 && MONEY_NAME_RE.test(m1[1])) {
+        if (m1 && MONEY_NAME_RE.test(m1[1]) && !this._isInsideStringLiteral(line, m1.index)) {
           result.addCheck(`money-float:js-parse-float:${rel}:${i + 1}`, false, {
             severity: errSev,
             message: `Money-named variable "${m1[1]}" assigned from ${m1[2]}(...) — IEEE-754 precision loss. Use Decimal.js / big.js / dinero.js.`,
@@ -329,7 +337,7 @@ class MoneyFloatModule extends BaseModule {
           issues += 1;
         }
         const m2 = JS_PROP_FLOAT_RE.exec(line);
-        if (m2 && MONEY_NAME_RE.test(m2[1])) {
+        if (m2 && MONEY_NAME_RE.test(m2[1]) && !this._isInsideStringLiteral(line, m2.index)) {
           result.addCheck(`money-float:js-parse-float-prop:${rel}:${i + 1}`, false, {
             severity: errSev,
             message: `Money-named property ".${m2[1]}" assigned from ${m2[2]}(...) — IEEE-754 precision loss.`,
