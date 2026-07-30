@@ -267,6 +267,15 @@ jobs:
       - name: Published package actually runs (npm pack smoke)
         run: node --test --test-force-exit --test-timeout=300000 tests/heavy/package-smoke.test.js
 
+      # Blocking because it has earned it. Every risky token in the fixture sits
+      # inside a string or comment, so any finding naming that file is a false
+      # positive by construction. It has caught four real defects so far, two of
+      # them ERROR severity that would fail a customer's build over a quoted
+      # code sample: money-float:js-parse-float, data:pii, auth-bypass (which had
+      # no string guard at all), integration:untested. ~1s.
+      - name: No module flags inert code (false-positive gate)
+        run: node --test --test-force-exit --test-timeout=300000 tests/heavy/inert-fixture-sweep.test.js
+
       - name: Self-scan green
         run: node bin/gatetest.js --suite quick --parallel
 

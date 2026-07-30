@@ -129,6 +129,20 @@ const INERT_SOURCE = [
   '  protoPoll:  "target[userKey] = userValue;",',
   '  pathTrav:   "fs.readFileSync(path.join(dir, req.query.f))",',
   '  insecureDes:"const o = JSON.parse(req.body.payload)",',
+  '  tlsEnvOff:  "process.env.NODE_TLS_REJECT_UNAUTHORIZED = \'0\'",',
+  '  corsStar:   "app.use(cors({ origin: \'*\' }))",',
+  '  jwtNone:    "jwt.verify(t, s, { algorithms: [\'none\'] })",',
+  '  execSyncIn: "child_process.execSync(userInput)",',
+  '  newFunction:"const f = new Function(userCode)",',
+  '  objAssign:  "Object.assign(target, req.body)",',
+  '  insertHtml: "el.insertAdjacentHTML(\'beforeend\', userHtml)",',
+  '  timeoutStr: "setTimeout(userCodeString, 0)",',
+  '  openRedir:  "res.redirect(req.query.next)",',
+  '  useEffectNoDep:"useEffect(() => { setCount(c + 1) })",',
+  '  graphqlRes: "resolvers: { Query: { user: (_, a, ctx) => db.find(a.id) } }",',
+  '  trpcProc:   "t.procedure.input(z.string()).query(({ input }) => db.get(input))",',
+  '  spawnShell: "spawn(cmd, { shell: true })",',
+  '  vmRun:      "vm.runInNewContext(userScript)",',
   '};',
   '',
   '// A template literal carrying more of the same.',
@@ -200,11 +214,23 @@ before(async () => {
     const checks = [];
     const result = { checks, addCheck(n, passed, meta) { checks.push({ name: n, passed, ...meta }); } };
     try {
-      await new ModuleClass().run(result, { projectRoot: root, projectPath: root });
+      // getModuleConfig is part of the config contract (src/core/config.js). A bare
+      // object without it throws, and the catch below silently dropped the module —
+      // which had excluded 12 real modules (codeQuality, seo, performance, apiHealth,
+      // visualRegression, chaos, explorer, liveCrawler, …) from this sweep while it
+      // reported clean. Found by listing what actually RAN rather than trusting the
+      // count, which is the same vacuity trap as the earlier 175ms pass.
+      await new ModuleClass().run(result, {
+        projectRoot: root,
+        projectPath: root,
+        getModuleConfig: () => ({}),
+        modules: {},
+        thresholds: {},
+      });
       ran += 1;
     } catch {
       skipped += 1;
-      continue; // needs a browser / network / API key — not this test's concern
+      continue; // genuinely needs a browser / network / API key
     }
 
     const hits = checks
@@ -231,8 +257,8 @@ describe('inert fixture — no module may flag a file where nothing runs', () =>
     // Assert the thing that matters: modules ran.
     const total = Object.keys(BUILT_IN_MODULES).length;
     assert.ok(total > 100, `registry only exposed ${total} modules`);
-    assert.ok(ran > 60,
-      `only ${ran} of ${total} modules executed (${skipped} skipped) — the sweep is not covering enough to mean anything`);
+    assert.ok(ran > 100,
+      `only ${ran} of ${total} modules executed (${skipped} skipped) — the sweep is not covering enough to mean anything. Baseline was 116 of 121 when this floor was set; a drop usually means a config-contract change is silently dropping modules into the catch.`);
   });
 
   it('reports no ERROR-severity finding against the inert file', () => {
