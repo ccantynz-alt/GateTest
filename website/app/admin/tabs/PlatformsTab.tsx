@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import PlatformSiblings from "../PlatformSiblings";
+import PlatformSiblings from "./PlatformSiblings";
 
 // The "Platforms" tab — orgs registered here get full admin access: the
 // GateTest gate runs in strict mode with no advisory-mode messaging.

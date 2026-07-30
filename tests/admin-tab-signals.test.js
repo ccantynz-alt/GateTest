@@ -79,7 +79,12 @@ describe('admin tabs — signals are wired to real endpoints', () => {
 
 describe('admin — the sibling health widget is no longer dead code', () => {
   it('PlatformsTab imports and renders PlatformSiblings', () => {
-    assert.match(platformsTabSrc, /import PlatformSiblings from "\.\.\/PlatformSiblings"/);
+    // Path-agnostic on purpose. This asserted `"../PlatformSiblings"` exactly,
+    // which pinned the component's DIRECTORY rather than the thing the test is
+    // named for — so co-locating it with its only consumer (spineHealth flagged
+    // the up-directory import as a layering violation) failed a test about
+    // whether the widget is wired up at all.
+    assert.match(platformsTabSrc, /import PlatformSiblings from "\.{1,2}\/(?:\w+\/)*PlatformSiblings"/);
     assert.match(platformsTabSrc, /<PlatformSiblings \/>/);
   });
 
