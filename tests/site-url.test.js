@@ -240,3 +240,40 @@ describe('site-url — no new hardcoded domains', () => {
     });
   }
 });
+
+// ─── composed artifacts: what a customer's repo actually receives ────────────
+//
+// The checks above guard the helpers and ban hardcoded literals in guarded
+// files. This one guards the OUTPUT. A PR body is written into the customer's
+// repository and a badge URL is pasted into their README — neither can be
+// edited afterwards, so a stale domain there is permanent. Verified by running
+// the composer, not by grepping it.
+
+describe('composed customer-facing artifacts carry the live domain', () => {
+  const { composePrBody } = require(path.resolve(
+    __dirname, '..', 'website', 'app', 'lib', 'pr-composer.js'
+  ));
+
+  const prBody = composePrBody({
+    fixes: [{ file: 'src/a.js', original: 'a', fixed: 'b', issues: ['secrets: hardcoded key'] }],
+    errors: [],
+    syntaxGate: { summary: 'ok' },
+    scannerGate: { summary: 'ok' },
+    testGen: { summary: 'none' },
+  });
+
+  it('the PR body a customer receives contains no gatetest.ai URL', () => {
+    // E-mails are deliberately still @gatetest.ai, so match URLs only.
+    const aiUrls = prBody.match(/https?:\/\/[^\s"'`)>\]]*gatetest\.ai[^\s"'`)>\]]*/g) || [];
+    assert.deepStrictEqual(
+      [...new Set(aiUrls)],
+      [],
+      'the PR body is committed into the customer repo and cannot be edited later',
+    );
+  });
+
+  it('and does reference the live site (anti-vacuity: it emits a URL at all)', () => {
+    // Without this, the assertion above would pass on an empty body.
+    assert.match(prBody, /https:\/\/gatetest\.io/);
+  });
+});
