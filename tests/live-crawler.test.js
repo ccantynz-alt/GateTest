@@ -217,3 +217,56 @@ describe('live-crawler — authenticated crawl end-to-end (HTTP engine)', () => 
     assert.strictEqual(cfg.passed, false);
   });
 });
+
+// ============================================================================
+// "Site is clean" requires evidence — at least one page actually fetched
+// ============================================================================
+// Same shape as the aiReview false-clean fixed in d04bd39: a verdict asserted
+// off zero observations. Both crawl engines record a fetch-error when a page
+// fails, so an unreachable site cannot reach the clean branch — but a crawl
+// that visited nothing would previously still have reported
+// "Site is clean — 0 pages".
+
+describe('crawl:clean is not asserted off zero pages', () => {
+  const emit = (collectors) => {
+    const checks = [];
+    const result = { checks, addCheck: (id, passed, opts) => checks.push({ id, passed, ...opts }) };
+    const base = {
+      pages: [], errors: [], brokenLinks: [], redirects: [], brokenImages: [],
+      brokenScripts: [], brokenStylesheets: [], missingMetaDescription: [],
+      missingCanonical: [], slowPages: [], anchorMissingId: [],
+      titlesByUrl: new Map(),
+    };
+    new LiveCrawlerModule()._emitChecks(result, 'https://example.com', { ...base, ...collectors });
+    return checks;
+  };
+
+  it('reports no-pages, not clean, when nothing was fetched', () => {
+    const checks = emit({ pages: [] });
+    const ids = checks.map((c) => c.id);
+    assert.ok(!ids.includes('crawl:clean'), 'must not claim clean with 0 pages');
+    assert.ok(ids.includes('crawl:no-pages'), 'must say nothing was verified');
+    const note = checks.find((c) => c.id === 'crawl:no-pages');
+    assert.equal(note.severity, 'warning');
+    assert.match(note.message, /NOT a clean result/);
+  });
+
+  it('POSITIVE CONTROL — a real clean crawl still reports clean', () => {
+    const checks = emit({ pages: [{ url: 'https://example.com', status: 200 }] });
+    const clean = checks.find((c) => c.id === 'crawl:clean');
+    assert.ok(clean, 'a crawl that fetched a page with no problems is still clean');
+    assert.equal(clean.passed, true);
+    assert.match(clean.message, /1 pages/);
+    assert.ok(!checks.map((c) => c.id).includes('crawl:no-pages'));
+  });
+
+  it('does not emit either check when real problems were found', () => {
+    const checks = emit({
+      pages: [{ url: 'https://example.com', status: 200 }],
+      errors: [{ url: 'https://example.com', type: 'fetch-error', message: 'boom' }],
+    });
+    const ids = checks.map((c) => c.id);
+    assert.ok(!ids.includes('crawl:clean'));
+    assert.ok(!ids.includes('crawl:no-pages'));
+  });
+});

@@ -201,9 +201,26 @@ class LiveCrawlerModule extends BaseModule {
       });
     }
 
-    if (c.errors.length === 0 && c.brokenLinks.length === 0 && c.brokenImages.length === 0) {
+    const nothingWrong = c.errors.length === 0
+      && c.brokenLinks.length === 0
+      && c.brokenImages.length === 0;
+
+    // "Site is clean" is a claim, and it needs evidence: at least one page must
+    // actually have been fetched. Both engines record a fetch-error when a page
+    // fails, so an unreachable site cannot reach this branch — but a crawl that
+    // simply visited nothing (an exhausted budget, a config that permits no
+    // pages) would otherwise have reported "Site is clean — 0 pages", which
+    // asserts a verdict off zero observations. Same shape as the aiReview
+    // false-clean fixed in d04bd39.
+    if (nothingWrong && c.pages.length > 0) {
       result.addCheck('crawl:clean', true, {
         message: `Site is clean — ${c.pages.length} pages, 0 errors, 0 broken links, 0 broken images`,
+      });
+    } else if (nothingWrong) {
+      result.addCheck('crawl:no-pages', false, {
+        severity: 'warning',
+        message: 'Crawl finished without fetching any pages — nothing was verified, so this is NOT a clean result',
+        suggestion: 'Check the start URL is reachable and that the page budget is above zero.',
       });
     }
   }
