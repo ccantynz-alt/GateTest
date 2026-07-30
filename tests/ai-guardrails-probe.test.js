@@ -91,8 +91,31 @@ test('pluckByPath: top-level direct key', () => {
 // probe() against a local HTTP test server
 // ============================================================
 
+/**
+ * DIAGNOSABILITY HARDENING (KI #94) — not a confirmed fix.
+ *
+ * This file failed ONCE under full-suite load, reported at file level
+ * (`test at …:1:1`, message `test failed`) with no individual subtest failing.
+ * Two hypotheses were tested and BOTH DISPROVED, recorded so nobody repeats them:
+ *
+ *   1. "the timeout case leaks the server handle, because server.close() does
+ *      not destroy an open connection." Measured: awaited close +
+ *      closeAllConnections() left exactly the same live handles as the bare
+ *      close, and after 500ms both drained to zero. No leak.
+ *   2. "aborting the request leaves an unhandled 'error' on the server socket,
+ *      and an unhandled 'error' event throws." Measured: 60 iterations of the
+ *      exact scenario produced 0 server-side socket errors, 0 uncaughtExceptions,
+ *      0 unhandledRejections.
+ *
+ * So the cause is still unknown and the code below is deliberately NOT presented
+ * as a fix. What it changes is what happens IF something does go wrong out of
+ * frame: an error event on the server or a socket becomes a named, attributable
+ * failure instead of a bare file-level `test failed`, and teardown is awaited so
+ * a test cannot finish while its server is still closing. The whole reason this
+ * was hard to chase is that the one failure carried no diagnostic.
+ */
 function startTestServer(handler) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       let body = '';
       req.on('data', (chunk) => {
@@ -106,12 +129,30 @@ function startTestServer(handler) {
           res.end(String(err && err.message));
         }
       });
+      // A client that aborts mid-request (the timeout case does exactly that)
+      // makes the server side emit ECONNRESET. Swallowed on purpose: it is
+      // expected here, and an unhandled 'error' event would throw.
+      req.on('error', () => {});
+      res.on('error', () => {});
     });
+    server.on('error', reject);
+    server.on('connection', (sock) => { sock.on('error', () => {}); });
     server.listen(0, '127.0.0.1', () => { // hardcoded-url-ok
       const port = server.address().port;
       resolve({ server, url: `http://127.0.0.1:${port}` }); // hardcoded-url-ok
     });
   });
+}
+
+/**
+ * Await teardown, and destroy any connection the handler never answered.
+ * `server.close()` alone stops accepting NEW connections and then waits, so a
+ * test whose handler deliberately never responds could return while its server
+ * was still open.
+ */
+async function closeTestServer(server) {
+  if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+  await new Promise((resolve) => server.close(() => resolve()));
 }
 
 test('probe: end-to-end against local server returns ok + response text', async () => {
@@ -134,7 +175,7 @@ test('probe: end-to-end against local server returns ok + response text', async 
     assert.equal(r.errorCode, null);
     assert.ok(typeof r.durationMs === 'number');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -156,7 +197,7 @@ test('probe: HTTP 500 from server → ok:false + http-error, raw preserved', asy
     assert.equal(r.errorCode, 'http-error');
     assert.equal(r.responseRaw, 'upstream broke');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -173,7 +214,7 @@ test('probe: response-path miss → ok:false + response-path-miss', async () => 
     assert.equal(r.ok, false);
     assert.equal(r.errorCode, 'response-path-miss');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -187,7 +228,7 @@ test('probe: non-JSON body → treated as plain-text response', async () => {
     assert.equal(r.ok, true);
     assert.equal(r.responseText, 'I refuse to answer.');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -204,7 +245,7 @@ test('probe: custom responsePath drills into nested structure', async () => {
     assert.equal(r.ok, true);
     assert.equal(r.responseText, 'hi');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -222,7 +263,7 @@ test('probe: timeout → ok:false + timeout error code', async () => {
     assert.equal(r.ok, false);
     assert.equal(r.errorCode, 'timeout');
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
 
@@ -244,7 +285,7 @@ test('probe: env-expanded Authorization header is delivered to server', async ()
     );
     assert.equal(sentAuth, 'Bearer placeholder-bearer-value');
   } finally {
-    server.close();
+    await closeTestServer(server);
     delete process.env.GATETEST_PROBE_TEST_BEARER;
   }
 });
@@ -267,6 +308,6 @@ test('probe: custom requestTemplate is sent verbatim with ${prompt} substituted'
     );
     assert.deepEqual(received, { model: 'gpt-x', input: 'PROMPT-HERE', tail: 'extra' });
   } finally {
-    server.close();
+    await closeTestServer(server);
   }
 });
