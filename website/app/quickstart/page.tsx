@@ -213,6 +213,48 @@ git add -A && git commit -m "test: trigger gate" && git push`}</CodeBlock>
         </div>
       </section>
 
+      {/* Onboarding an existing repo — baseline mode */}
+      <section className="px-6 py-14 border-t border-border/30">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold mb-3">
+            Turning it on over an existing codebase
+          </h2>
+          <p className="text-muted mb-6 leading-relaxed">
+            Point any scanner at a mature repo and the first run is a backlog you
+            didn&apos;t write. Baseline mode grandfathers everything that exists
+            today, so the gate only ever fails on <strong>new</strong> findings
+            &mdash; you adopt it without stopping to fix years of history first.
+          </p>
+          <pre className="rounded-xl border border-border/40 bg-surface/60 p-4 text-sm overflow-x-auto mb-6">
+            <code className="text-foreground">{`# Snapshot every current finding, then commit the file
+gatetest --baseline
+git add .gatetest/baseline.json && git commit -m "chore: baseline GateTest"
+
+# From now on the gate blocks only on findings that aren't in it
+gatetest --suite full`}</code>
+          </pre>
+          <ul className="text-muted space-y-2 text-sm leading-relaxed list-disc pl-5">
+            <li>
+              Baselined findings stay <strong>visible</strong> in every report.
+              They are silenced for the gate decision, not hidden from you.
+            </li>
+            <li>
+              The count is tracked per file, so you can&apos;t sneak a new
+              problem in behind an old one &mdash; add a second empty catch to a
+              file that already had one baselined and the gate blocks again.
+            </li>
+            <li>
+              Fix a baselined finding and it&apos;s gone for good. Refresh the
+              snapshot after paying down debt with{" "}
+              <code className="text-foreground">gatetest --baseline</code>, or
+              delete{" "}
+              <code className="text-foreground">.gatetest/baseline.json</code>{" "}
+              to see everything again.
+            </li>
+          </ul>
+        </div>
+      </section>
+
       {/* Next steps */}
       <section className="px-6 py-16 max-w-4xl mx-auto text-center">
         <h2 className="text-2xl font-bold mb-4">You&apos;re live. What&apos;s next?</h2>

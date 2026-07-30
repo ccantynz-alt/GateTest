@@ -117,11 +117,41 @@ function capture(results, projectRoot) {
 /**
  * Load the baseline into a matcher. Absent/corrupt file → inert matcher.
  *
- * `has` is count-aware: a check only stays suppressed while its current
- * instance count is <= the baselined count for that fingerprint. A file
- * with 1 grandfathered secret that grows a SECOND secret resurfaces the
- * whole check — the gate blocks, the developer sees both, and either
- * fixes the new one or re-runs --baseline deliberately.
+ * `has` is count-aware, and it is aware across the WHOLE RUN — not per call.
+ * That distinction is the entire feature.
+ *
+ * A fingerprint is `module::rule::file` with numeric segments stripped, so line
+ * numbers do not un-grandfather a finding when code moves. The consequence is
+ * that every finding of the same rule in the same file shares ONE fingerprint.
+ *
+ * So there are two shapes a module can report in, and a correct baseline has to
+ * handle both:
+ *
+ *   - aggregating modules (secrets, broken links) emit ONE check carrying N
+ *     instances in `details`, so `currentCount` is N.
+ *   - most modules (errorSwallow, ...) emit ONE CHECK PER FINDING, so
+ *     `currentCount` is 1 every time and N checks share the fingerprint.
+ *
+ * The first version compared `currentCount <= allowed` per call, which only ever
+ * caught the first shape. In the second, two empty catches in a baselined file
+ * each asked `1 <= 1` independently and both were grandfathered — so a baselined
+ * file became a permanent dumping ground for new findings of an already-baselined
+ * rule, which is the exact failure "clean as you code" exists to prevent, in the
+ * files most likely to be edited. Measured before the fix: adding a second empty
+ * catch to a baselined file kept the gate green and the run reported "7
+ * pre-existing finding(s) baselined" against a baseline recording 6.
+ *
+ * Now the matcher tallies what each fingerprint has already claimed and stops
+ * grandfathering once the baselined allowance is spent. With 1 baselined and 2
+ * present, exactly one blocks.
+ *
+ * WHICH one blocks is arbitrary — it is whichever the runner happens to offer
+ * second. That is acceptable and worth stating plainly: the count is what
+ * carries meaning ("you added one"), not the identity, and the developer's next
+ * step is the same either way — fix it or re-run `--baseline` deliberately.
+ *
+ * STATEFUL: one matcher instance expects at most one `has()` call per finding
+ * per run. `load()` again for a fresh tally.
  *
  * @returns {{ has: (module, checkName, filePath, currentCount?) => boolean,
  *             isEmpty: boolean, count: number, capturedAt: string|null }}
@@ -135,12 +165,27 @@ function load(projectRoot) {
   }
   const fingerprints = (data && typeof data.fingerprints === 'object' && data.fingerprints) || {};
   const keys = Object.keys(fingerprints);
+
+  // fingerprint -> instances already grandfathered in this run.
+  const claimed = new Map();
+
   return {
     has: (moduleName, checkName, filePath, currentCount = 1) => {
-      const entry = fingerprints[fingerprint(moduleName, checkName, filePath, projectRoot)];
+      const key = fingerprint(moduleName, checkName, filePath, projectRoot);
+      const entry = fingerprints[key];
       if (!entry) return false;
+
       const allowed = typeof entry.count === 'number' && entry.count > 0 ? entry.count : 1;
-      return currentCount <= allowed;
+      const already = claimed.get(key) || 0;
+      const wanted = Number.isFinite(currentCount) && currentCount > 0 ? currentCount : 1;
+
+      // Does not fit in what remains of the allowance → this one is NEW.
+      // Deliberately does not consume on refusal: a later, smaller check for the
+      // same fingerprint can still legitimately fit.
+      if (already + wanted > allowed) return false;
+
+      claimed.set(key, already + wanted);
+      return true;
     },
     isEmpty: keys.length === 0,
     count: keys.length,

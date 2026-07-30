@@ -197,3 +197,88 @@ describe('baseline — runner integration', () => {
     assert.strictEqual(summary2.baseline.captured, 1);
   });
 });
+
+// ── The allowance must be spent ACROSS the run, not re-offered per check ──────
+//
+// A fingerprint is `module::rule::file` with numeric segments stripped, so every
+// finding of one rule in one file shares it. Modules report in two shapes:
+// aggregating ones (secrets) send ONE check carrying N instances; most
+// (errorSwallow) send ONE CHECK PER FINDING with currentCount 1 each.
+//
+// The original matcher compared `currentCount <= allowed` per call, so the second
+// shape slipped through entirely: two empty catches in a baselined file each asked
+// `1 <= 1` and both were grandfathered. A baselined file became a permanent
+// dumping ground for new findings of an already-baselined rule — in exactly the
+// files most likely to be edited.
+//
+// Verified end-to-end before the fix on a scratch repo: adding a second empty
+// catch to a baselined file left the gate GREEN and the run reported "7
+// pre-existing finding(s) baselined" against a baseline recording 6.
+
+describe('baseline — allowance is consumed across the run', () => {
+  /** Write a baseline with one fingerprint at a chosen allowance. */
+  function rootWithAllowance(count) {
+    const root = tmpRoot();
+    const dir = path.join(root, '.gatetest');
+    fs.mkdirSync(dir, { recursive: true });
+    const key = baseline.fingerprint('errorSwallow', 'error-swallow:empty-catch', 'src/legacy.js', root);
+    fs.writeFileSync(path.join(dir, 'baseline.json'), JSON.stringify({
+      version: 1, capturedAt: new Date(0).toISOString(), count,
+      fingerprints: { [key]: { severity: 'error', count } },
+    }));
+    return root;
+  }
+
+  const ask = (m, root, n = 1) =>
+    m.has('errorSwallow', 'error-swallow:empty-catch:12', path.join(root, 'src/legacy.js'), n);
+
+  it('grandfathers the baselined finding but NOT a second one (the regression)', () => {
+    const root = rootWithAllowance(1);
+    const m = baseline.load(root);
+    assert.strictEqual(ask(m, root), true, 'the one baselined finding stays grandfathered');
+    assert.strictEqual(ask(m, root), false, 'a SECOND finding of the same rule in the same file is NEW');
+  });
+
+  it('honours an allowance above one, then blocks past it', () => {
+    const root = rootWithAllowance(3);
+    const m = baseline.load(root);
+    assert.strictEqual(ask(m, root), true);
+    assert.strictEqual(ask(m, root), true);
+    assert.strictEqual(ask(m, root), true);
+    assert.strictEqual(ask(m, root), false, 'the fourth exceeds the baselined three');
+  });
+
+  it('still handles the aggregating shape — one check carrying N instances', () => {
+    const root = rootWithAllowance(1);
+    const m = baseline.load(root);
+    assert.strictEqual(ask(m, root, 2), false, '2 instances against an allowance of 1 is a regression');
+  });
+
+  it('a refused check does not consume the allowance', () => {
+    // An oversized check must not eat the budget a legitimate one still needs.
+    const root = rootWithAllowance(2);
+    const m = baseline.load(root);
+    assert.strictEqual(ask(m, root, 5), false, 'too big to fit');
+    assert.strictEqual(ask(m, root, 2), true, 'the allowance was left intact for a check that fits');
+  });
+
+  it('a fresh load() starts a fresh tally', () => {
+    const root = rootWithAllowance(1);
+    const first = baseline.load(root);
+    assert.strictEqual(ask(first, root), true);
+    assert.strictEqual(ask(first, root), false);
+
+    const second = baseline.load(root);
+    assert.strictEqual(ask(second, root), true, 'state is per-matcher, not global — the next run starts clean');
+  });
+
+  it('an unbaselined fingerprint is never grandfathered, whatever the tally', () => {
+    const root = rootWithAllowance(1);
+    const m = baseline.load(root);
+    assert.strictEqual(
+      m.has('errorSwallow', 'error-swallow:empty-catch', path.join(root, 'src/other.js')),
+      false,
+      'a different file is a different fingerprint',
+    );
+  });
+});
