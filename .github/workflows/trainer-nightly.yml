@@ -53,7 +53,7 @@ jobs:
       - name: Ingest last 30d of git history into session-fix corpus
         run: |
           node -e "
-            const ST = require('./website/app/lib/session-telemetry.js');
+            const ST = require('./src/core/session-telemetry.js');
             const stats = ST.ingestGitHistory({ since: '30 days ago' });
             console.log('ingest:', JSON.stringify(stats));
           "
