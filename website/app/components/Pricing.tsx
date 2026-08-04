@@ -4,6 +4,11 @@
 // Source of truth for prices: that TIERS map. Keep these in sync (Bible Forbidden #17).
 //   quick $29 · full $99 · scan_fix $199 · nuclear/Forensic $399 (one-time) · continuous $49/mo · mcp $29/mo
 import { useState } from "react";
+// Wire the count to the catalogue rather than typing it — these cards said
+// "88 modules" for the $99 tier while the engine shipped 121, understating
+// what the customer gets. module-count-sync.test.js only guards three-digit
+// claims, so a two-digit stale number slipped through it (2026-08-04).
+import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const pricingScans = [
   {
@@ -27,9 +32,9 @@ export const pricingScans = [
     name: "Full Scan",
     price: "$99",
     period: "per run",
-    description: "The full engine suite — 88 modules: security, supply chain, auth hardening, CI security, AI safety, and more. (Mutation + chaos ship via the GitHub Action.)",
+    description: `The full engine suite — ${TOTAL_MODULES} modules: security, supply chain, auth hardening, CI security, AI safety, and more. (Mutation + chaos ship via the GitHub Action.)`,
     features: [
-      "Full 88-Module Engine Suite",
+      `Full ${TOTAL_MODULES}-Module Engine Suite`,
       "Security & Auth Hardening",
       "Supply Chain & Dependency Audit",
       "CI/CD & Container Security",
@@ -46,7 +51,7 @@ export const pricingScans = [
     period: "per run",
     description: "Full-suite deep scan with iterative auto-fix PR, pair-review agent, and architecture annotations.",
     features: [
-      "Full 88-Module Engine Suite",
+      `Full ${TOTAL_MODULES}-Module Engine Suite`,
       "Iterative Fix Loop (up to 3 retries per finding)",
       "Cross-Fix Syntax + Scanner Gate",
       "Regression Test Generated per Fix",
