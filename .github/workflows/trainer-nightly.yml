@@ -163,10 +163,31 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          BRANCH="flywheel/trainer-report-$(date -u +%Y%m%d)"
+          # ROLLING BRANCH, NOT A DATED ONE (2026-08-04). This used to cut
+          # `flywheel/trainer-report-YYYYMMDD` and open a *draft* PR nightly.
+          # Nothing ever merged them — `main` requires 1 approving review and
+          # github-actions[bot] has no bypass allowance, so the bot could
+          # neither push to main nor self-merge, and a draft PR cannot be
+          # merged at all. Nine had piled up by 2026-08-03.
+          #
+          # Unlike site-stats, these reports must ACCUMULATE: each night adds
+          # its own dated files, so an unmerged day's evidence lives only on
+          # its branch. So rather than reset onto main (which would discard
+          # it), rebuild from main and carry the previous rolling branch's
+          # docs/trainer/ forward. Result: one PR, always based on current
+          # main, holding every not-yet-merged night. No conflicts to resolve
+          # because dated filenames never collide.
+          BRANCH="flywheel/trainer-report"
           git config user.name  "gatetest-trainer[bot]"
           git config user.email "gatetest-trainer@users.noreply.github.com"
-          git checkout -b "$BRANCH" || git checkout "$BRANCH"
+
+          git fetch origin main
+          git checkout -B "$BRANCH" origin/main
+          if git fetch origin "$BRANCH" 2>/dev/null; then
+            # Carry forward reports from nights that have not been merged yet.
+            git checkout FETCH_HEAD -- docs/trainer/ 2>/dev/null || true
+            echo "carried forward $(git diff --cached --name-only -- docs/trainer/ | wc -l) unmerged report file(s)"
+          fi
 
           mkdir -p docs/trainer
           DATE=$(date -u +%Y-%m-%d)
@@ -203,14 +224,20 @@ jobs:
             exit 0
           fi
           git -c commit.gpgsign=false commit -m "chore(trainer): all-8-trainers report $(date -u +%Y-%m-%d)"
-          git push -u origin "$BRANCH" --force-with-lease
+          git push -u origin "$BRANCH" --force
 
           # Create PR (idempotent — gh fails harmlessly if PR exists)
-          PR_BODY=$(printf '## Nightly flywheel trainer report (%s)\n\nAll 8 trainers ran. Review each section and merge to land reports in docs/trainer/.\n\n**Pending rule files** (if any) are under `website/app/lib/rule-based-fixer-pending/` — verify the source SHAs in the header comment, then move the rule into `rule-based-fixer.js` RULES array.\n\n**Pending test stubs** (if any) are under `tests/auto-generated/*.pending.test.js` — fill in assertions and rename to `.test.js` to activate.' "$(date -u +%Y-%m-%d)")
+          PR_BODY=$(printf '## Nightly flywheel trainer report (through %s)\n\nAll 8 trainers ran. Review each section and merge to land reports in docs/trainer/.\n\n**Pending rule files** (if any) are under `website/app/lib/rule-based-fixer-pending/` — verify the source SHAs in the header comment, then move the rule into `rule-based-fixer.js` RULES array.\n\n**Pending test stubs** (if any) are under `tests/auto-generated/*.pending.test.js` — fill in assertions and rename to `.test.js` to activate.\n\nThis is a ROLLING PR — rebuilt on current `main` every night, carrying every night not yet merged. Approve it and auto-merge lands the lot.' "$(date -u +%Y-%m-%d)")
           gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "Flywheel trainer report — $(date -u +%Y-%m-%d)" \
             --body "$PR_BODY" \
-            --draft \
-          || gh pr edit "$BRANCH" --body "Updated $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          || gh pr edit "$BRANCH" \
+               --title "Flywheel trainer report — $(date -u +%Y-%m-%d)" \
+               --body "$PR_BODY"
+
+          # Not a draft, and auto-merge armed: the moment the required review
+          # lands, so does the PR. A draft can never merge — that was the bug.
+          gh pr ready "$BRANCH" || true
+          gh pr merge "$BRANCH" --auto --squash || echo "auto-merge unavailable — PR left open for review"
