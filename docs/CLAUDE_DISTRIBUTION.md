@@ -13,7 +13,7 @@ Inside any Claude conversation, Claude can:
 | Tool | What it does | Cost |
 | --- | --- | --- |
 | **`scan_remote_preview`** | Free preview of any public GitHub or Gluecron repo. Returns the top 5 findings + a total count. | **Free** (rate-limited: 1 per 10s per IP) |
-| **`scan_local`** | Full 90-module scan of a local directory Claude has file access to. | **Free** (runs locally on your machine) |
+| **`scan_local`** | Full 121-module scan of a local directory Claude has file access to. | **Free** (runs locally on your machine) |
 | **`run_module`** | Run one specific module against a local directory. | Free |
 | **`list_modules`** | List all 121 modules with descriptions. | Free |
 | **`check_health`** | Verify the GateTest engine is operational. | Free |
