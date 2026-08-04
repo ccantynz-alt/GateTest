@@ -5,8 +5,29 @@
 > This runbook + the `/api/platform-status` commit stamp make that impossible
 > to miss. Follow it top to bottom for every deploy.
 
-Deploy target as of 2026-07-14: **Vapron** (Craig's platform). This replaces
-the retired Coolify/Server-161 path — do not use `scripts/deploy/deploy-on-box.sh`.
+Deploy target as of 2026-07-14: **Vapron** (Craig's platform).
+
+> ### ⚠️ Resolved 2026-08-05 — this page's "retired path" line was wrong
+>
+> It previously read *"This replaces the retired Coolify/Server-161 path — do
+> not use `scripts/deploy/deploy-on-box.sh`."* That instruction contradicted
+> `.github/workflows/deploy-box.yml`, which runs exactly that script, and the
+> Marketplace pre-submit checklist recorded the contradiction as something only
+> Craig could settle.
+>
+> **DNS settles it.** `gatetest.io` resolves to **66.42.121.161** — the box
+> `deploy-on-box.sh` is written for and the host `deploy-box.yml` SSHes into.
+> That box is serving production right now (`/api/platform-status` answered
+> from it on 2026-08-05).
+>
+> So: **`scripts/deploy/deploy-on-box.sh` is the live deploy path**, and
+> `deploy-box.yml` automates the correct thing once `BOX_SSH_KEY` /
+> `BOX_SSH_HOST` are set. The environment-variable and cron sections below are
+> still authoritative — they describe what the app needs wherever it runs.
+>
+> Moving to Vapron proper is still the intent, but it has not happened, and a
+> runbook that describes the intent as though it were the state is how
+> production sat 60 commits stale without anyone noticing which host to push to.
 
 ---
 

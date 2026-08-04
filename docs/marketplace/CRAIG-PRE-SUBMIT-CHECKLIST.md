@@ -73,21 +73,21 @@ a deliberate infra change, not something to do mid-review — but leaving SSH
 open to the whole internet on the box that serves production is worth a
 decision either way.
 
-### ⚠️ Unresolved contradiction — read before enabling auto-deploy
+### ✅ Contradiction resolved 2026-08-05 — no longer a Craig decision
 
-`docs/deploy/VAPRON-DEPLOY.md` says the deploy target is **Vapron** and
-explicitly *"do not use `scripts/deploy/deploy-on-box.sh`"* — but that script
-is exactly what `deploy-box.yml` runs, and it is written for
-`66.42.121.161`, which is the box actually serving production today.
+The previous version of this checklist asked Craig to rule on whether
+production was Vapron or the box, because `docs/deploy/VAPRON-DEPLOY.md` said
+*"do not use `scripts/deploy/deploy-on-box.sh`"* while `deploy-box.yml` runs
+exactly that script.
 
-So one of these is stale and **I could not tell which from the repo**:
+**DNS answers it without needing Craig:** `gatetest.io` resolves to
+**66.42.121.161** — the box that script targets — and `/api/platform-status`
+answered from it on 2026-08-05. Production is the box; `deploy-box.yml`
+automates the correct path. The runbook line was the stale half and has been
+corrected.
 
-- if production really is the box → `deploy-box.yml` is correct, and the
-  runbook's "retired Coolify/Server-161 path" line needs deleting;
-- if production really is Vapron → enabling `BOX_SSH_*` automates a **retired**
-  path, and CI should be driving a Vapron deploy instead.
-
-- [ ] Craig: confirm which is authoritative before adding the secrets
+- [x] ~~Craig: confirm which is authoritative~~ — settled by DNS + a live probe.
+      Adding `BOX_SSH_*` automates the real path, not a retired one.
 
 (Fixed regardless, in the same pass: the script built with `npx next build`,
 skipping the `prebuild` SHA stamp — so it would ship new code while
@@ -154,9 +154,35 @@ A reviewer finding two listings for one product is its own risk.
 | VS Code ext | `editors/vscode`, publisher `gatetest` | `vscode-extension` v1.0.1, publisher `GateTestHQ` |
 
 - [ ] Decide which is canonical for each and retire the other
-- [ ] Add `issues:write` to the live app — `postPrComment` calls the
-      Issues-comments endpoint, so PR comments fail without it. Tests mock the
-      HTTP layer, so CI cannot catch this.
+
+---
+
+## 5b. 🔴 Grant the App the scopes the code actually calls
+
+Settled in code 2026-08-05 — `src/core/github-app-permissions.js` is now the
+single declaration, and `tests/marketplace-sync.test.js` proves it covers every
+endpoint the bridge calls. **The live App still has to be granted them by hand**
+(nothing in this repo can edit github.com):
+
+| Permission | Level | Forced by |
+|---|---|---|
+| Contents | **Read & write** | `POST .../git/refs` + `POST .../git/commits` — the auto-fix branch |
+| Pull requests | Read & write | `POST .../pulls` |
+| Commit statuses | Read & write | `POST .../statuses/{sha}` |
+| **Issues** | **Read & write** | `POST .../issues/{n}/comments` — the PR comment the listing promises |
+| Metadata | Read | `GET /repos/{o}/{r}` |
+
+Webhook events: `push`, `pull_request`, `workflow_run` (all three are branched
+on in `website/app/lib/github-events.js`).
+
+- [ ] Set all five scopes + all three events on app **3322634**
+- [ ] Note: `Contents` was disclosed to customers as **Read** on both the
+      install page and the listing until 2026-08-05. Both now say Read & write,
+      matching what GitHub's install prompt actually asks for. Tests mock the
+      HTTP layer, so CI cannot catch a missing grant — only the live App can.
+- [ ] Run `node scripts/marketplace-preflight.js` once `gh` is authenticated;
+      it verifies the live grants automatically (it was querying the wrong org
+      until 2026-08-05, so any previous "pass" from it meant nothing).
 
 ---
 

@@ -218,6 +218,11 @@ describe('site-url — no new hardcoded domains', () => {
     'website/app/api/score/route.ts',
     'website/app/badge/[owner]/[repo]/route.ts',
     'website/app/layout.tsx',
+    // The cross-product discovery map. A wrong domain here doesn't break a
+    // page a human would notice — it hands every sibling service a dead URL
+    // to poll. Production was serving `https://gatetest.ai` in this field on
+    // 2026-08-05, long after that domain started returning NXDOMAIN.
+    'website/app/api/platform-status/route.ts',
   ];
 
   for (const rel of GUARDED) {
