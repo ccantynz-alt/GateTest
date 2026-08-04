@@ -117,17 +117,26 @@ patterns AI gets wrong before they touch production.
 
 ## Revenue model
 
-### THE MODEL: Pay on completion. Zero customer risk.
+### THE MODEL: Per scan, not per seat.
 
-We don't charge until the job is done. We hold the card, run the scan,
-deliver the report. If we can't complete it, the hold is released.
-No other QA tool on earth offers this. It's our killer advantage.
+You buy a scan, not a licence. No per-developer seats, no annual contract,
+no server to maintain. Competitors charge per active user per month whether
+or not anyone scans anything; we charge for the work you actually ask for.
 
-**Payment flow (Stripe Payment Intents, manual capture):**
-1. Customer selects scan tier → card hold placed
+**Payment flow (Stripe Checkout, charged at checkout):**
+1. Customer selects scan tier → charged at checkout
 2. GateTest clones repo, runs scan, generates report
-3. Scan completes → hold captured → customer charged
-4. Scan fails (503, access denied, outage) → hold released → customer pays nothing
+3. Report delivered
+4. Scan fails (503, access denied, outage) → handled as a support
+   touchpoint, not an automatic refund
+
+> **DO NOT reintroduce "pay-on-completion" / "card hold" copy.** It was the
+> model until 2026-05-18, when Craig moved to charging upfront — there is no
+> `capture_method: manual` anywhere in the checkout path (see
+> `buildStripeCheckoutParams` in `website/app/lib/stripe-checkout.js`). The
+> old wording survived on nine public surfaces for months and was a false
+> statement about when a customer's card is charged. `tests/pricing-consistency.test.js`
+> now fails if it comes back.
 
 ### Pricing tiers — per scan
 
@@ -204,8 +213,8 @@ People don't pay for code. They pay for:
 
 ### Hero section
 **Headline**: "AI writes fast. GateTest keeps it honest."
-**Subhead**: 20 test modules scan your entire codebase. We find the bugs AND fix them.
-You only pay when the scan completes.
+**Subhead**: 121 test modules scan your entire codebase. We find the bugs AND fix them.
+One price per scan — no seats, no annual contract.
 **CTA**: "Scan My Repo — $29" / "See All Plans"
 
 ### How it works section
@@ -213,7 +222,7 @@ You only pay when the scan completes.
 2. **We scan everything** — 121 modules, 800+ checks, security to accessibility
 3. **Get your report** — PASS or BLOCKED, with every issue detailed
 4. **We fix it** — Auto-fix PR lands in your repo (Scan+Fix tier)
-5. **Pay only if we deliver** — Card hold released if scan can't complete
+5. **Pay per scan, not per seat** — one charge at checkout, no subscription
 
 ### The problem section
 "Your team uses 8-10 separate tools for testing. Different configs. Different
@@ -234,7 +243,7 @@ accessibility. GateTest catches every one of these AND fixes them automatically.
 - **Scan + Fix** ($199): Full scan + auto-fix PR — MOST POPULAR
 - **Nuclear** ($399): Everything plus per-finding Claude diagnosis, cross-finding correlation, board-ready CISO report, executive summary. Mutation testing and chaos / fuzz pass also available via the GitHub Action (`mutation: true` / `chaos: true`) — runs wherever your CI runs.
 - **Continuous** ($49/mo): Scan every push, dashboard, alerts
-- All tiers: pay on completion only. Card hold released if scan fails.
+- One-time tiers: charged once at checkout. No seats, no annual contract.
 
 ---
 
@@ -255,5 +264,5 @@ accessibility. GateTest catches every one of these AND fixes them automatically.
 
 ## Version
 
-Marketing doc v2.0.0 — Pay-on-completion model
+Marketing doc v2.1.0 — Per-scan model, charged at checkout (corrected 2026-08-04)
 Last updated: 2026-04-08

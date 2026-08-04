@@ -156,3 +156,78 @@ describe('stripe-checkout.js test helper matches checkout cents', () => {
     });
   }
 });
+
+/**
+ * Billing-honesty tripwire (added 2026-08-04).
+ *
+ * GateTest charged upfront at checkout from 2026-05-18 (Craig) — there is no
+ * `capture_method: manual` in the checkout path. But "pay-on-completion" /
+ * "card hold" copy from the PREVIOUS model survived on nine public surfaces
+ * for months, including the homepage pricing headline and a ✅ differentiator
+ * row on /compare/sonarqube. That is a false statement about when a
+ * customer's card is charged — worse than a stale module count, and exactly
+ * the kind of claim a GitHub Marketplace reviewer or Stripe checks.
+ *
+ * Nothing caught it: every price matched, so pricing-consistency passed.
+ * These two tests tie the WORDS to the MECHANISM, in both directions.
+ */
+describe('billing copy matches what Stripe actually does', () => {
+  const CHECKOUT_PATHS = [
+    'website/app/lib/stripe-checkout.js',
+    'website/app/api/checkout/route.ts',
+  ];
+
+  // Surfaces a customer or a Marketplace reviewer actually reads.
+  const PUBLIC_COPY = [
+    'website/app/components/Pricing.tsx',
+    'website/app/components/Install.tsx',
+    'website/app/compare/sonarqube/page.tsx',
+    'website/app/compare/github-code-scanning/page.tsx',
+    'website/app/for/nextjs/page.tsx',
+    'website/app/for/typescript/page.tsx',
+    'website/app/for/[country]/page.tsx',
+    'vscode-extension/package.json',
+    'docs/marketplace/install-guide.md',
+    'MARKETING.md',
+  ];
+
+  // "pay-on-completion" is legitimate INSIDE the guard comment that forbids
+  // it, and in the anti-abuse clause of the Terms; match only the claim forms.
+  const DEFERRED_PAYMENT_CLAIM =
+    /(pay|charged|charge)\s+(only\s+)?(when|after|if|on)\s+(we\s+|the\s+scan\s+|it\s+|results?\s+|work\s+)?(deliver|delivers|delivered|completes?|completed|land|lands|runs|fixes)|card hold/i;
+
+  test('the checkout path does NOT use manual capture', () => {
+    for (const rel of CHECKOUT_PATHS) {
+      const src = read(rel);
+      const uncommented = src
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*(\/\/|\*).*$/gm, '');
+      assert.ok(
+        !/capture_method['"\s:]+.*manual/i.test(uncommented),
+        `${rel} sets capture_method: manual. If the billing model genuinely ` +
+          'moved back to authorize-then-capture, update the public copy in ' +
+          'PUBLIC_COPY and this test together — do not leave them disagreeing.'
+      );
+    }
+  });
+
+  for (const rel of PUBLIC_COPY) {
+    test(`${rel} does not promise deferred payment`, () => {
+      const src = read(rel);
+      const offending = src
+        .split('\n')
+        .map((line, i) => [i + 1, line])
+        .filter(([, line]) => DEFERRED_PAYMENT_CLAIM.test(line))
+        // The MARKETING.md guard note quotes the banned phrasing on purpose.
+        .filter(([, line]) => !/DO NOT reintroduce|banned|guard/i.test(line));
+
+      assert.deepStrictEqual(
+        offending.map(([n, l]) => `${n}: ${l.trim()}`),
+        [],
+        `${rel} tells the customer they are charged on delivery, but the ` +
+          'card is captured at checkout (no capture_method: manual). Say ' +
+          '"charged at checkout" / "per scan, not per seat" instead.'
+      );
+    });
+  }
+});

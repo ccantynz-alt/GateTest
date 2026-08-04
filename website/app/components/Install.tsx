@@ -135,7 +135,7 @@ export default function Install() {
               </a>
             </p>
             <p className="text-sm text-muted">
-              Pay-on-completion pricing. Nothing to install, results in minutes.
+              Per-scan pricing, charged at checkout. Nothing to install, results in minutes.
             </p>
           </div>
         </div>

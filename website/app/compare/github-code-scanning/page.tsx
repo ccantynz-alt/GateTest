@@ -286,7 +286,7 @@ export default function GitHubCodeScanningPage() {
             Scan My Repo — From $29
           </Link>
           <p className="text-white/30 text-xs mt-6">
-            Card hold only. Charged after successful scan delivery.
+            One-time charge at checkout. No subscription, no per-seat licensing.
           </p>
         </section>
       </main>

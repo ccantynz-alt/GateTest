@@ -310,7 +310,7 @@ export default function NextJsPage() {
             Ship Next.js apps with confidence.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            121 modules, App Router awareness, AI-powered review on every paid tier, and AI auto-fix PRs at the Scan + Fix tier ($199) and Forensic Scan ($399). Pay only when results are delivered.
+            121 modules, App Router awareness, AI-powered review on every paid tier, and AI auto-fix PRs at the Scan + Fix tier ($199) and Forensic Scan ($399). One price per scan, no seats.
           </p>
           <Link
             href="/"
@@ -320,7 +320,7 @@ export default function NextJsPage() {
             Scan My Next.js App — From $29
           </Link>
           <p className="text-white/30 text-xs mt-6">
-            Card hold only. Charged after successful scan delivery.
+            One-time charge at checkout. No subscription, no per-seat licensing.
           </p>
         </section>
       </main>

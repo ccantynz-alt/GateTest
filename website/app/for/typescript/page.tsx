@@ -275,7 +275,7 @@ export default function TypeScriptPage() {
             Keep TypeScript strict. Ship with confidence.
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            Gate every PR against strictness regressions, circular imports, async anti-patterns, and 60+ more failure modes. Pay only when results are delivered.
+            Gate every PR against strictness regressions, circular imports, async anti-patterns, and 60+ more failure modes. One price per scan, no seats.
           </p>
           <Link
             href="/"
@@ -285,7 +285,7 @@ export default function TypeScriptPage() {
             Scan My TypeScript Repo — From $29
           </Link>
           <p className="text-white/30 text-xs mt-6">
-            Card hold only. Charged after successful scan delivery.
+            One-time charge at checkout. No subscription, no per-seat licensing.
           </p>
         </section>
       </main>

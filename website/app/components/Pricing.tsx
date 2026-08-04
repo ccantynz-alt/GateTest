@@ -244,7 +244,7 @@ export default function Pricing() {
   return (
     <section id="pricing" className="max-w-7xl mx-auto my-16 px-4">
       <h2 className="text-3xl md:text-4xl font-black mb-2 text-center text-[var(--foreground)] tracking-tight">
-        Pay only when it fixes something
+        Pay per scan, not per seat
       </h2>
       <p className="text-[var(--muted)] text-center mb-10 max-w-2xl mx-auto text-sm leading-relaxed">
         The engine is free and open-source if you run it yourself —{" "}

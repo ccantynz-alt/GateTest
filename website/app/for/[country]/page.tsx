@@ -438,7 +438,7 @@ export default async function CountryPage({ params }: PageParams) {
             Try it on your own repo
           </h2>
           <p className="text-white/60 mb-8 max-w-xl mx-auto">
-            $29 Quick scan, no signup. Pay only when results land.
+            $29 Quick scan, no signup. One-time charge, no subscription.
           </p>
           <Link
             href="/scan"
