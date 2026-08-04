@@ -6,9 +6,16 @@
  * Three providers: GitHub (existing), GitLab (new), Google (new).
  * Design: solid zinc-900 card, thin 1px border, no animations beyond
  * the backdrop fade. ESC and backdrop-click to close.
+ *
+ * Buttons are rendered only for providers whose credentials are actually
+ * configured (`/api/auth/providers`). This modal previously offered all three
+ * unconditionally, while the initiate routes answer HTTP 503 when their
+ * secrets are unset — on 2026-08-05 production had no GOOGLE_CLIENT_SECRET, so
+ * "Continue with Google" returned a raw JSON error blob to anyone who clicked
+ * it, a Marketplace reviewer included.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export interface AuthModalProps {
   open: boolean;
@@ -80,7 +87,38 @@ function ProviderButton({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+type ProviderId = "github" | "gitlab" | "google";
+
+const PROVIDERS: Array<{ id: ProviderId; label: string; icon: React.ReactNode }> = [
+  { id: "github", label: "Continue with GitHub", icon: <GitHubIcon /> },
+  { id: "gitlab", label: "Continue with GitLab", icon: <GitLabIcon /> },
+  { id: "google", label: "Continue with Google", icon: <GoogleIcon /> },
+];
+
 export default function AuthModal({ open, onClose }: AuthModalProps) {
+  // null = not yet known. Until it resolves we show nothing rather than
+  // flashing buttons that may be about to disappear.
+  const [available, setAvailable] = useState<Record<ProviderId, boolean> | null>(null);
+
+  useEffect(() => {
+    if (!open || available) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/providers", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setAvailable(data);
+      } catch {
+        // Fail OPEN, deliberately. If this probe breaks we must not lock
+        // everyone out of a working sign-in — a dead button is a worse
+        // experience than a missing one, but no button at all is worse still.
+        if (!cancelled) setAvailable({ github: true, gitlab: true, google: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, available]);
+
   // ESC to close
   useEffect(() => {
     if (!open) return;
@@ -153,23 +191,29 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
           repairs, bidirectional test verification, and secure cloud sandboxes.
         </p>
 
-        {/* Provider buttons */}
-        <div className="space-y-3">
-          <ProviderButton
-            href="/api/auth/github"
-            icon={<GitHubIcon />}
-            label="Continue with GitHub"
-          />
-          <ProviderButton
-            href="/api/auth/gitlab"
-            icon={<GitLabIcon />}
-            label="Continue with GitLab"
-          />
-          <ProviderButton
-            href="/api/auth/google"
-            icon={<GoogleIcon />}
-            label="Continue with Google"
-          />
+        {/* Provider buttons — only those actually configured */}
+        <div className="space-y-3 min-h-[3.25rem]">
+          {available === null ? (
+            <div className="h-[3.25rem] rounded-lg border border-zinc-800 bg-zinc-800/40 animate-pulse" />
+          ) : (
+            PROVIDERS.filter((p) => available[p.id]).map((p) => (
+              <ProviderButton
+                key={p.id}
+                href={`/api/auth/${p.id}`}
+                icon={p.icon}
+                label={p.label}
+              />
+            ))
+          )}
+          {available !== null && !PROVIDERS.some((p) => available[p.id]) && (
+            <p className="text-center text-sm text-zinc-500 py-3">
+              Sign-in is temporarily unavailable. Email{" "}
+              <a href="mailto:hello@gatetest.ai" className="text-zinc-400 underline underline-offset-2">
+                hello@gatetest.ai
+              </a>{" "}
+              and we&apos;ll sort you out.
+            </p>
+          )}
         </div>
 
         {/* Footer note */}

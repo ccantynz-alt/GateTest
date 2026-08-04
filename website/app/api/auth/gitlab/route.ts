@@ -8,14 +8,14 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getGitLabOAuthConfig, generateState } from "../../../lib/customer-session";
+import { authUnavailable } from "../../../lib/auth-unavailable";
 
 export async function GET() {
   const status = getGitLabOAuthConfig();
   if (!status.ok || !status.config) {
-    return NextResponse.json(
-      { error: "GitLab login not configured", missing: status.missing },
-      { status: 503 }
-    );
+    // Was a JSON body that also listed our unset env var names to an
+    // anonymous visitor. See lib/auth-unavailable.ts.
+    return authUnavailable("GitLab");
   }
 
   const { clientId, redirectUri } = status.config;

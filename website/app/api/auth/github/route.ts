@@ -8,14 +8,14 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getOAuthConfig, generateState } from "../../../lib/customer-session";
+import { authUnavailable } from "../../../lib/auth-unavailable";
 
 export async function GET() {
   const status = getOAuthConfig();
   if (!status.ok || !status.config) {
-    return NextResponse.json(
-      { error: "GitHub login not configured" },
-      { status: 503 }
-    );
+    // See lib/auth-unavailable.ts — a human clicked a button, so answer with
+    // a page, not a JSON error body.
+    return authUnavailable("GitHub");
   }
 
   const { clientId, redirectUri } = status.config;
