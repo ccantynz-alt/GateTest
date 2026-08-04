@@ -25,15 +25,23 @@
 > what they are — available on gatetest.io, not something bought through this
 > install.
 >
-> **Module count:** verify with `node bin/gatetest.js --list | grep -cE '^  [a-zA-Z]'`
-> before every submission — this repo has a documented history of the module
-> count drifting stale in exactly this kind of static, manually-pasted copy
-> (see `docs/legal/public-copy-redline.md`). Verified 120 as of 2026-07-19.
+> **Module count:** no longer verified by hand. `tests/module-count-sync.test.js`
+> fails the suite if any three-digit "N modules" claim in this file disagrees
+> with the live registry, and `scripts/marketplace-preflight.js` re-checks the
+> fenced copy against a real `node bin/gatetest.js --list` before submission.
+> This repo has a documented history of the count going stale in exactly this
+> kind of static, manually-pasted copy (see `docs/legal/public-copy-redline.md`),
+> which is why it is now a failing test rather than a reminder.
 >
-> **Craig action:** go to `github.com/apps/gatetesthq` (or `.../edit`) →
-> Marketplace tab → replace the existing content with everything below →
-> confirm pricing plan is **Free only** (delete any other draft plan if one
-> exists from the rejected submission) → Submit for review.
+> **Craig action:** the app is owned by the **`Gate-Test`** org, not `crclabs-hq`
+> — manage it at
+> `github.com/organizations/Gate-Test/settings/apps/gatetesthq` (app_id
+> `3322634`). `crclabs-hq` owns an orphaned duplicate (`gatetest-hq`, app_id
+> `3766251`) that must not be edited. Marketplace tab → replace the existing
+> content with everything below → confirm pricing plan is **Free only** (delete
+> any other draft plan left from the rejected submission) → Submit for review.
+> Run `node scripts/marketplace-preflight.js` first; it exits non-zero on
+> anything a reviewer would see.
 
 ---
 
@@ -159,16 +167,42 @@ resubmitting rather than starting over.
 | **Webhook URL** | `https://gatetest.io/api/webhook` |
 | **Callback URL** | `https://gatetest.io/api/github/callback` |
 | **Webhook events** | `push`, `pull_request`, `workflow_run` |
-| **Contents permission** | Read |
+| **Contents permission** | Read & write |
 | **Pull requests permission** | Read & write |
 | **Commit statuses permission** | Read & write |
 | **Issues permission** | Read & write |
 | **Metadata permission** | Read |
 
-> **Verify these three against the LIVE App settings before submitting (reviewers audit permission scope):**
-> 1. **`workflow_run` event** — the webhook handler (`website/app/lib/github-events.js`) processes `workflow_run` (completed+failure → CI-fix kick), so the live App must subscribe to it. It was previously omitted from this table; added now. If the live App does NOT subscribe to it, CI-fix silently never fires on the App path.
-> 2. **`Issues` permission** — the only App-path use is posting PR comments via `POST /repos/{o}/{r}/issues/{n}/comments`. On pull requests this may be covered by `Pull requests: write` alone. Confirm in a live test (install → open PR → check a comment posts) whether `Issues: write` is actually required; if PR comments post without it, drop it to avoid an over-broad-scope flag from the reviewer. Do NOT drop it blind — verify first.
-> 3. **The setup page (`website/app/github/setup/page.tsx`) lists 4 permissions and this table lists 5 (adds Issues).** Whichever way #2 resolves, make the setup page, this table, AND the live App config all state the SAME permission set — a mismatch between the install prompt and the disclosed list is a reviewer red flag.
+> **These rows are generated, not typed.** The source of truth is
+> `src/core/github-app-permissions.js`, and `tests/marketplace-sync.test.js`
+> fails the suite if this table, the install page, or the preflight script
+> drifts from it — or if the bridge starts calling an endpoint needing a scope
+> none of them declare. Edit the source file, not this table.
+>
+> **Corrected 2026-08-05 — `Contents` was wrong on every customer-facing surface.**
+> It read `Read` here and on the install page. The App-installed path in
+> `/api/scan/fix` resolves an installation token and then calls
+> `POST /repos/{o}/{r}/git/refs` and `POST .../git/commits` to push the auto-fix
+> branch, so GitHub asks the installing user for **write** access to code. Our
+> copy promised less than the install prompt requests — a disclosure mismatch,
+> which is precisely what a reviewer auditing permission scope looks for.
+>
+> **`Issues: write` is required — settled, do not drop it.** An earlier note here
+> speculated that `Pull requests: write` might cover it. It does not:
+> `postPrComment` posts to `POST /repos/{o}/{r}/issues/{n}/comments` and
+> `updatePrComment` patches `/issues/comments/{id}`. Without `issues: write`
+> the PR comment this listing promises fails silently. It is not over-broad
+> scope; it is the scope the shipped code calls.
+>
+> **`workflow_run` is required** — `website/app/lib/github-events.js` branches on
+> it (completed + failure → CI-fix kick). If the live App does not subscribe,
+> CI-fix silently never fires on the App path.
+>
+> **Still needs a human:** the LIVE App config at
+> `github.com/organizations/Gate-Test/settings/apps/gatetesthq` cannot be read
+> from this repo. Confirm all five scopes and all three events match the table
+> above before submitting. `node scripts/marketplace-preflight.js` checks this
+> automatically when `gh` is authenticated.
 
 ---
 

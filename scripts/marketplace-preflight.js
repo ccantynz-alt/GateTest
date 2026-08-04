@@ -40,13 +40,27 @@ const BASE = (() => {
 })();
 
 const APP_SLUG = 'gatetesthq';
-const ORG = 'crclabs-hq';
-// Permissions the shipped webhook code actually calls:
-//   statuses:write     → commit status (Statuses API)
-//   issues:write       → PR comment (Issues comments API — NOT pull_requests)
-//   pull_requests:write→ auto-fix PR
-//   contents:write     → auto-fix branch
-const REQUIRED_APP_PERMS = ['statuses', 'issues', 'pull_requests', 'contents'];
+
+// Where the live app actually lives. This was hardcoded to 'crclabs-hq' until
+// 2026-08-05, which is the org owning the ORPHANED duplicate (`gatetest-hq`,
+// app_id 3766251) — not the live app (`gatetesthq`, app_id 3322634, owned by
+// the `Gate-Test` org). So the one check whose job is to prevent a third
+// rejection was querying the wrong account and reporting SKIP or a false
+// "not installed" blocker every time it ran.
+//
+// The app can be installed on any of Craig's accounts, so probe the known
+// candidates rather than betting on one, and let --org override.
+const ORG_CANDIDATES = (() => {
+  const i = process.argv.indexOf('--org');
+  if (i > -1 && process.argv[i + 1]) return [process.argv[i + 1]];
+  return ['Gate-Test', 'ccantynz-alt', 'crclabs-hq'];
+})();
+
+// Permissions the shipped code actually calls, declared once in
+// src/core/github-app-permissions.js and asserted against the real bridge call
+// sites by tests/marketplace-sync.test.js. Never re-type the list here.
+const { APP_PERMISSIONS, writeScopes } = require('../src/core/github-app-permissions.js');
+const REQUIRED_APP_PERMS = writeScopes();
 
 // Strings that must never appear in customer-facing legal copy.
 const LEGAL_URLS = ['/legal/privacy', '/legal/terms', '/legal/refunds', '/legal/acceptable-use'];
@@ -206,33 +220,54 @@ function checkListingAccuracy() {
 }
 
 function checkAppPermissions() {
-  console.log('\nGitHub App permissions (vs. what the webhook code calls)');
-  let installs;
-  try {
-    installs = JSON.parse(gh(['api', `orgs/${ORG}/installations`, '--jq', '{installations:[.installations[]|{app_slug,app_id,permissions}]}']));
-  } catch (err) {
+  console.log('\nGitHub App permissions (vs. what the shipped code calls)');
+
+  // Probe each candidate account until one actually lists the app. A 404 on
+  // one org is not evidence of anything — the app only has to be installed
+  // somewhere Craig owns.
+  let app = null;
+  let foundOn = null;
+  let reachedAny = false;
+  const dupes = [];
+  for (const org of ORG_CANDIDATES) {
+    let installs;
+    try {
+      installs = JSON.parse(gh(['api', `orgs/${org}/installations`, '--jq', '{installations:[.installations[]|{app_slug,app_id,permissions}]}']));
+    } catch { continue; } // error-ok — org may not exist / not be readable by this token
+    reachedAny = true;
+    for (const a of installs.installations) {
+      if (a.app_slug === APP_SLUG && !app) { app = a; foundOn = org; }
+      else if (/^gatetest/i.test(a.app_slug) && a.app_slug !== APP_SLUG) dupes.push({ ...a, org });
+    }
+    if (app) break;
+  }
+
+  if (!reachedAny) {
     record('SKIP', 'app permissions not checked', 'gh unavailable/unauthenticated — verify manually in the App settings');
     return;
   }
-  const app = installs.installations.find((a) => a.app_slug === APP_SLUG);
   if (!app) {
-    record('BLOCKER', `${APP_SLUG} is not installed on ${ORG}`);
+    record('BLOCKER', `${APP_SLUG} is not installed on any of ${ORG_CANDIDATES.join(', ')}`,
+      'the listing claims scans run on every push; with no installation that claim cannot be demonstrated to a reviewer');
     return;
   }
+  record('OK', `${APP_SLUG} found on ${foundOn} (app_id ${app.app_id})`);
   for (const perm of REQUIRED_APP_PERMS) {
     if (app.permissions[perm] === 'write') {
       record('OK', `${perm}:write granted`);
     } else {
-      const why = perm === 'issues'
-        ? 'PR comments post via POST /repos/:o/:r/issues/:n/comments — without issues:write the PR comment the listing promises silently fails'
-        : `webhook code requires ${perm}:write`;
+      // Quote the endpoints that force the scope — a reviewer-facing blocker
+      // is only actionable if it says which call breaks without it.
+      const declared = APP_PERMISSIONS.find((p) => p.key === perm);
+      const why = declared
+        ? `required by: ${declared.endpoints.join(', ')}`
+        : `shipped code requires ${perm}:write`;
       record('BLOCKER', `${APP_SLUG} missing ${perm}:write`, why);
     }
   }
   // An orphaned duplicate app confuses reviewers and can receive stray events.
-  const dupes = installs.installations.filter((a) => /^gatetest/i.test(a.app_slug) && a.app_slug !== APP_SLUG);
   for (const d of dupes) {
-    record('WARN', `duplicate app installed: ${d.app_slug} (app_id ${d.app_id})`, 'looks orphaned — delete before submitting so the reviewer sees one app');
+    record('WARN', `duplicate app installed: ${d.app_slug} (app_id ${d.app_id}) on ${d.org}`, 'looks orphaned — delete before submitting so the reviewer sees one app');
   }
 }
 

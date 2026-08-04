@@ -40,13 +40,34 @@ The Bible holds **rules + current truth only**. Deep reference material lives in
 
 ---
 
-## THE WEBSITE-SYNC RULE (Craig 2026-07-30, STRICT)
+## THE SYNC RULE (Craig 2026-07-30, extended 2026-08-05, STRICT)
 
-**"All changes must reflect on the website at the same time."**
+**"All changes must reflect on the website at the same time."** (2026-07-30)
+**"Whatever we do we have to be in sync with the website and our GitHub
+Marketplace listing and Marketplace app."** (2026-08-05)
 
-When the engine, module set, tiers, or capabilities change, **the website changes
-in the SAME commit.** Never ship a product change and leave the site describing
-the old product; never defer site copy to "a later pass."
+There are **four** surfaces that describe this product, and they move together
+in the SAME commit:
+
+| # | Surface | Lives in | Enforced by |
+|---|---|---|---|
+| 1 | **The engine** | `src/`, `bin/` | it *is* the truth |
+| 2 | **The website** | `website/app/` | `tests/module-count-sync.test.js` |
+| 3 | **The Marketplace listing** | `integrations/marketplace/listing.md` | `tests/marketplace-sync.test.js` |
+| 4 | **The Marketplace App config** | GitHub, not this repo | `tests/marketplace-sync.test.js` + `scripts/marketplace-preflight.js` |
+
+Surface 4 is the dangerous one: **it lives on github.com and cannot be edited
+from this repo.** A commit can therefore leave it stale without any local
+signal. So the rule for surface 4 is: when a change alters what the App needs
+(a new API call, a new webhook event, a changed URL), **declare it in
+`src/core/github-app-permissions.js` in that same commit** — the test then
+fails until the listing and install page agree, and the preflight script checks
+the live App the next time it runs with `gh` authenticated. Anything still
+needing Craig's hands goes in `docs/marketplace/CRAIG-PRE-SUBMIT-CHECKLIST.md`,
+not a code comment.
+
+Never ship a product change and leave a surface describing the old product;
+never defer copy to "a later pass."
 
 **Why:** the site is the product's only public description. A gap between what
 ships and what the site claims is a correctness bug in the customer's view of the
@@ -68,9 +89,22 @@ is a fact, not a brand decision.
    `gatetest --list` via `scripts/generate-site-stats.js`. Wire new claims to
    that rather than typing a number.
 
-**Enforced by `tests/module-count-sync.test.js`** — any three-digit "N modules"
-claim in shipped copy must equal the live module count. Remembering a rule is
-weaker than a test that fails.
+**Enforced by two tests** — remembering a rule is weaker than a test that fails:
+- `tests/module-count-sync.test.js` — any three-digit "N modules" claim in
+  shipped copy must equal the live module count.
+- `tests/marketplace-sync.test.js` — the listing, the install page, and the
+  preflight script must all agree with `src/core/github-app-permissions.js`,
+  **and that file must cover every GitHub endpoint the bridge actually calls.**
+  That last assertion is the one that matters: copy going stale is the symptom,
+  code quietly gaining an API call nobody disclosed is the cause. It found two
+  such gaps the first time it ran.
+
+**Never hand-write a permission list, a webhook-event list, or a module count.**
+Import it. The 2026-08-05 audit found `Contents` disclosed as `Read` on both the
+install page and the listing while the App-installed fix path pushes a branch
+(`contents: write`) — we were promising customers *less* access than GitHub's
+install prompt actually requests, which is the exact disclosure mismatch a
+Marketplace reviewer audits.
 
 ---
 

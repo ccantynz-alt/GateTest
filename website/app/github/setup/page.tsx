@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { APP_PERMISSIONS } from "@/app/lib/github-app-permissions";
 
 export const metadata: Metadata = {
   title: "Install GateTest — GitHub App · Private repo scanning",
@@ -30,12 +31,20 @@ const T: Record<string, string> = {
   sep:  "block",
 };
 
-const PERMS = [
-  { perm: "Contents",       level: "Read",  why: "Read your code to scan it — never stored" },
-  { perm: "Pull requests",  level: "Write", why: "Post scan results as PR comments" },
-  { perm: "Commit statuses",level: "Write", why: "Green ✅ or red ❌ on each commit" },
-  { perm: "Metadata",       level: "Read",  why: "Know which repos to watch" },
-];
+// The permission list is NOT written here. GitHub shows the real scopes on the
+// install screen, so this page and the App config must agree exactly — a page
+// promising less than the install prompt asks for is the disclosure mismatch a
+// Marketplace reviewer checks for. Until 2026-08-05 this page said Contents:
+// Read while the App path pushes an auto-fix branch (contents: write) and
+// omitted Issues entirely (PR comments post via the Issues comments API).
+// Source of truth: src/core/github-app-permissions.js, guarded by
+// tests/marketplace-sync.test.js.
+type AppPermission = { key: string; display: string; label: string; why: string };
+const PERMS = (APP_PERMISSIONS as AppPermission[]).map((p) => ({
+  perm: p.display,
+  level: p.label,
+  why: p.why,
+}));
 
 export default function GitHubSetup() {
   return (
