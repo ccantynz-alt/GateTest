@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-08-02T06:02:36.074Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 9,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 4,
+      "SonarQube": 0,
+      "Semgrep": 1,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 4
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49140456",
+        "author": "noduerme",
+        "type": "comment",
+        "title": null,
+        "text": "I went to Art Center for film. Loved it. But ended up writing software instead of shooting movies (while still also handling a lot of visual art direction, graphics work, UI, 3D animation, etc). Now I feel like we're starting to be roughly in the same boat as far as using prompts.What bothers me is that every piece of content generated this way helps flood an already saturated market for content, while slowly degrading the expectations of what people see, to the point that no one will bother with shooting or animating anything anymore. Even if it's 50% worse, it's 90% cheaper, so the economics argur against producing any new physically made content. Simultaneously, it's cannibalizing all existing content. This points toward a feedback loop, like a snake eating its own tail. And even though Hollywood blockbusters have followed that pattern for a couple decades, it's demoralizing to me to see it enshrined as the future of film (or to hear from someone who makes films that it would be a preferred mode of creation).",
+        "url": "https://news.ycombinator.com/item?id=49140456",
+        "points": null,
+        "numComments": null,
+        "storyId": 49138302,
+        "createdAt": "2026-08-02T02:18:42Z",
+        "createdAtUnix": 1785637122,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49134148",
+        "author": "nyku",
+        "type": "story",
+        "title": "NPM bypass-2FA tokens can no longer manage accounts or packages",
+        "text": "NPM bypass-2FA tokens can no longer manage accounts or packages",
+        "url": "https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens/",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49134148,
+        "createdAt": "2026-08-01T13:13:13Z",
+        "createdAtUnix": 1785589993,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49132472",
+        "author": "mdp2021",
+        "type": "comment",
+        "title": null,
+        "text": "The point was that the \"disagreement from most countries\" must be contextualized in its weight recalibrated in their (in general) authoritativeness, which has reached abysmal lows recently.If you do not agree, show that these times would not be represented by Cummings' judgement \"stupid like a box of snakes\". My denunciations are around, and I do not wish to be suspected as inflammatory by the moderation by reiterating here.",
+        "url": "https://news.ycombinator.com/item?id=49132472",
+        "points": null,
+        "numComments": null,
+        "storyId": 49063853,
+        "createdAt": "2026-08-01T08:50:45Z",
+        "createdAtUnix": 1785574245,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49131577",
+        "author": "rustfreeforme",
+        "type": "comment",
+        "title": null,
+        "text": "Rust proponents rely on a lot of vague handwaving and confident-yet-wrong assertions that experienced C programmers know are a load of shit.It reminds me of hearing city folks discuss with wide eyed apprehension what they believe it's like living out in the country: \"omg there's ticks, and bugs, and snakes, and chiggers, and murderous rapist hillbillies, and racists, and KKK members, and ...\" and it's all mostly just fevered imaginings of their ignorant mind.Lots of that same energy here with the Rust crowd as they discuss the horrors of C&#x2F;C++ -- which incidentally the entire UNIX world is built on, including Rust itself via LLVM and a thousand and one other dependencies.",
+        "url": "https://news.ycombinator.com/item?id=49131577",
+        "points": null,
+        "numComments": null,
+        "storyId": 49120097,
+        "createdAt": "2026-08-01T06:12:08Z",
+        "createdAtUnix": 1785564728,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49136338",
+        "author": "hubbahubbahubba",
+        "type": "comment",
+        "title": null,
+        "text": "Does anyone recall the Colonial Pipeline outage? They had their IT and OT networks segregated but without billing capacity nothing else mattered. You didn’t expect them to let the petrol flow for free, didja? All that it takes is for a “jump box” that spans or bridges supposedly segregated networks to be p0wned to permit compromise of the soft and chewy center.",
+        "url": "https://news.ycombinator.com/item?id=49136338",
+        "points": null,
+        "numComments": null,
+        "storyId": 49135507,
+        "createdAt": "2026-08-01T17:16:40Z",
+        "createdAtUnix": 1785604600,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49135250",
+        "author": "LoganDark",
+        "type": "comment",
+        "title": null,
+        "text": "> On a Mac, the facility you’re given to pick emoji (which is also the same palette you’d need to pick a fancy checkmark Unicode) is horrifyingly bad - it’s slow and hard to use, and has been getting worse.Ugh, I hate this too.- Slow animation to open -- search field is not focused until the animation finishes.- Keyboard navigation is horrible. I never know if it can be trusted, because sometimes it can't? I'll press Enter to select the symbol I want, and it'll defocus the text field. If I don't catch it and click back in the text field fast enough, I'll have to re-open the menu and try again, but by clicking this time. So why try the keyboard in the first place?- Slow animation to close -- when I open the menu accidentally (I have it set to Fn press) it feels like nearly a second of wait before my application is interactive again.",
+        "url": "https://news.ycombinator.com/item?id=49135250",
+        "points": null,
+        "numComments": null,
+        "storyId": 49105013,
+        "createdAt": "2026-08-01T15:24:09Z",
+        "createdAtUnix": 1785597849,
+        "intent": "criticism"
+      },
+      {
+        "objectId": "49134895",
+        "author": "xp84",
+        "type": "comment",
+        "title": null,
+        "text": "I’ll own up to being someone who does this when I’m on a Mac. The reason is simple: they don’t give you a way to type a “real” check. And though Emoji contain suitable ones, those aren’t always appropriate (or allowed, such as here).On a Mac, the facility you’re given to pick emoji (which is also the same palette you’d need to pick a fancy checkmark Unicode) is horrifyingly bad - it’s slow and hard to use, and has been getting worse.Of course, iOS, whose emoji picker is pretty nice by comparison, completely lacks a first-party character palette and doesn’t support the “option key” method, so on iOS, it’s emoji or nothing.",
+        "url": "https://news.ycombinator.com/item?id=49134895",
+        "points": null,
+        "numComments": null,
+        "storyId": 49105013,
+        "createdAt": "2026-08-01T14:44:17Z",
+        "createdAtUnix": 1785595457,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49134788",
+        "author": "quuxplusone",
+        "type": "comment",
+        "title": null,
+        "text": "> to use the square root character (√) as a checkmark ([filtered out])IMHO that's an old-school-ism: I've never seen that in the post-Unicode world, but I recall its being common in the days of PC-compatibles, when square root was one of the ~256 characters you got, and checkmark wasn't, so you made do. In the same bucket with \"using eszett (ß) as a lowercase beta (β)\" or \"using upper-half-of-integral (⌠) as a long S (ſ).\" In fact Wikipedia's footnotes mention all three of these substitutions. (Or \"using hyphen-minus (-) as a minus sign (−).\" ;))[1] - https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Code_page_437[2] - https:&#x2F;&#x2F;knowware.dk&#x2F;dos56&#x2F;norton-commander-1.shtml — see the last two screenshots on this page, from Norton Commander",
+        "url": "https://news.ycombinator.com/item?id=49134788",
+        "points": null,
+        "numComments": null,
+        "storyId": 49105013,
+        "createdAt": "2026-08-01T14:31:46Z",
+        "createdAtUnix": 1785594706,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49134648",
+        "author": "jonhohle",
+        "type": "comment",
+        "title": null,
+        "text": "I’m not a typographic nut (though I care about it more than the average American), but one of the worst trends I’ve seen is to use the square root character (√) as a checkmark (). I’ve even seen Apple do it. It doesn’t help that the checkmark glyph is generally terrible, and at least on a Mac, the shortcut (⌥+V) exists for square root, and happens to be something a Windows user might accidentally find when transitioning to Mac key bindings while the checkmark requires either knowing true code point and how to enter that in or going to the Emoji & Symbols panel.For 99.9% of people, as long as the meaning is clear, they’ll never even register that the wrong code point, wrong symbol, or even wrong formatting was used. While I prefer correctness when possible, I’ve come to terms that others only care about communicating their intent.",
+        "url": "https://news.ycombinator.com/item?id=49134648",
+        "points": null,
+        "numComments": null,
+        "storyId": 49105013,
+        "createdAt": "2026-08-01T14:13:33Z",
+        "createdAtUnix": 1785593613,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

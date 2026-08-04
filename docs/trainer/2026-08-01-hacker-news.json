@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-08-01T05:56:11.215Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 9,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 5,
+      "SonarQube": 0,
+      "Semgrep": 3,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49127731",
+        "author": "munk-a",
+        "type": "comment",
+        "title": null,
+        "text": "Yes - the obvious state of dysfunction in food regulation and lack of enforcement in that area has led to an abundance of scam supplement hawkers[1] but I don't think the right conclusion to draw from that is that all criticisms of food regulation are in bad faith - I think it's very fair to say \"We should have a serious discussion about our food quality and also we need to crack down on these BS supplements\". I think we're all[2] pretty well aligned on the fact that the BS supplements need the crack down but we also should introspect on why so many people are motivated to seek things like that out.1. I personally enjoy a can of hogwater every day and am happy to give you a referral code.2. Except those who financially benefit from hawking snake oil, of course.",
+        "url": "https://news.ycombinator.com/item?id=49127731",
+        "points": null,
+        "numComments": null,
+        "storyId": 49124858,
+        "createdAt": "2026-07-31T19:42:57Z",
+        "createdAtUnix": 1785526977,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49127334",
+        "author": "SirMaster",
+        "type": "comment",
+        "title": null,
+        "text": "Pretty much no movies are released in that aspect except like justice league Snyder cut.",
+        "url": "https://news.ycombinator.com/item?id=49127334",
+        "points": null,
+        "numComments": null,
+        "storyId": 49048452,
+        "createdAt": "2026-07-31T19:06:28Z",
+        "createdAtUnix": 1785524788,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49125994",
+        "author": "camel_Snake",
+        "type": "comment",
+        "title": null,
+        "text": "Ironically, I finally caught up on an online web series (though it's been adapted to a published book as well as audiobooks) and discovered the author does live stream their writing of unreleased chapters.They're a bit too prolific to actually dig into their overall process, but you can watch them type for hours straight. It's awfully boring tbh since there's no interaction and they're understandably focused on their work.If your curious - https:&#x2F;&#x2F;youtube.com&#x2F;@pirateaba&#x2F;streams",
+        "url": "https://news.ycombinator.com/item?id=49125994",
+        "points": null,
+        "numComments": null,
+        "storyId": 49121980,
+        "createdAt": "2026-07-31T17:16:57Z",
+        "createdAtUnix": 1785518217,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49123547",
+        "author": "reloty",
+        "type": "comment",
+        "title": null,
+        "text": "> Unlike many community non-profits (including the Python Software Foundation), Ruby Central does not hold elections for their board of directors.The PSF is a hellhole where everyone tries to cancel each other. People like David Mertz and Steve Holden [1] who supported other cancellations were cancelled themselves. And of course Tim Peters for opposing other cancellations.You are only secure in the corporate inner circle, just like in Ruby. Even there Google got tired of the antics and fired Python core developers.You use the PSF to gain influence and get a high salary with minimal work, inside and outside Python.[1] The one-eyed snake (stuffed animal) \"incident\" PSF director.",
+        "url": "https://news.ycombinator.com/item?id=49123547",
+        "points": null,
+        "numComments": null,
+        "storyId": 49122105,
+        "createdAt": "2026-07-31T14:23:43Z",
+        "createdAtUnix": 1785507823,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49120881",
+        "author": "nyku",
+        "type": "story",
+        "title": "Gemini Spark now integrates with Chrome",
+        "text": "Gemini Spark now integrates with Chrome",
+        "url": "https://blog.google/innovation-and-ai/products/gemini-app/gemini-spark-updates-july-2026/",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49120881,
+        "createdAt": "2026-07-31T09:26:51Z",
+        "createdAtUnix": 1785490011,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49129828",
+        "author": "amazingamazing",
+        "type": "comment",
+        "title": null,
+        "text": "Zoning only exists because of racism and classism, remember this. After Buchanan v. Warley in 1917, municipalities turned to race-neutral tools like single-family zoning, minimum lot sizes, and setback requirements to indirectly enforce economic and racial segregation. These land-use controls acted as proxies, allowing communities to maintain exclusionary barriers under the guise of local police powers and neighborhood character.There’s a reason all the people at these things are in the same socioeconomic demographic",
+        "url": "https://news.ycombinator.com/item?id=49129828",
+        "points": null,
+        "numComments": null,
+        "storyId": 49129699,
+        "createdAt": "2026-07-31T23:56:56Z",
+        "createdAtUnix": 1785542216,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49128611",
+        "author": "AtNightWeCode",
+        "type": "comment",
+        "title": null,
+        "text": "Same bs as always. Just segregate the networks ffs.",
+        "url": "https://news.ycombinator.com/item?id=49128611",
+        "points": null,
+        "numComments": null,
+        "storyId": 49127306,
+        "createdAt": "2026-07-31T21:15:56Z",
+        "createdAtUnix": 1785532556,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49122405",
+        "author": "inigyou",
+        "type": "comment",
+        "title": null,
+        "text": "I thought it meant your database was singly responsible, open for extension but closed for modification, Liskov substitutable, interface segregated, and dependency inverted.",
+        "url": "https://news.ycombinator.com/item?id=49122405",
+        "points": null,
+        "numComments": null,
+        "storyId": 49109193,
+        "createdAt": "2026-07-31T12:44:26Z",
+        "createdAtUnix": 1785501866,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49124899",
+        "author": "CamperBob2",
+        "type": "comment",
+        "title": null,
+        "text": "The best kind of correct!Another way to put it is that while chess originated in India, it was the Persians who gave us the term \"checkmate.\" Which doesn't exactly invalidate my point.",
+        "url": "https://news.ycombinator.com/item?id=49124899",
+        "points": null,
+        "numComments": null,
+        "storyId": 49114045,
+        "createdAt": "2026-07-31T16:07:05Z",
+        "createdAtUnix": 1785514025,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

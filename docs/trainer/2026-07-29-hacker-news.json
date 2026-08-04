@@ -1,0 +1,203 @@
+{
+  "generatedAt": "2026-07-29T06:00:57.628Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 12,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 9,
+      "SonarQube": 0,
+      "Semgrep": 2,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49091473",
+        "author": "shykes",
+        "type": "comment",
+        "title": null,
+        "text": "Thank you!",
+        "url": "https://news.ycombinator.com/item?id=49091473",
+        "points": null,
+        "numComments": null,
+        "storyId": 48919363,
+        "createdAt": "2026-07-28T23:36:22Z",
+        "createdAtUnix": 1785281782,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49090982",
+        "author": "krater23",
+        "type": "comment",
+        "title": null,
+        "text": "I don't understand why Snyk is IN business in any way. Who really wants to upload his own code to a company that is specialized at searching security issues?How can I trust that they show me all findings they have instead of selling the best ones to some three letter organisations?",
+        "url": "https://news.ycombinator.com/item?id=49090982",
+        "points": null,
+        "numComments": null,
+        "storyId": 49089755,
+        "createdAt": "2026-07-28T22:43:37Z",
+        "createdAtUnix": 1785278617,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49090299",
+        "author": "bakigul",
+        "type": "comment",
+        "title": null,
+        "text": "Why would a few code snippets put Snyk out of business?",
+        "url": "https://news.ycombinator.com/item?id=49090299",
+        "points": null,
+        "numComments": null,
+        "storyId": 49089755,
+        "createdAt": "2026-07-28T21:41:10Z",
+        "createdAtUnix": 1785274870,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49090088",
+        "author": "game_the0ry",
+        "type": "comment",
+        "title": null,
+        "text": "I wonder if tools like this will put companies like snyk out of business. We use snyk at work and I have not been satisfied.",
+        "url": "https://news.ycombinator.com/item?id=49090088",
+        "points": null,
+        "numComments": null,
+        "storyId": 49089755,
+        "createdAt": "2026-07-28T21:23:06Z",
+        "createdAtUnix": 1785273786,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49087962",
+        "author": "FerretFred",
+        "type": "comment",
+        "title": null,
+        "text": "Agreed, and chances are that due to the nature of the event bring reported, we as readers are unable to influence it in sny way. Therefore a couple of weeks delay will make mo difference.",
+        "url": "https://news.ycombinator.com/item?id=49087962",
+        "points": null,
+        "numComments": null,
+        "storyId": 49085731,
+        "createdAt": "2026-07-28T18:28:41Z",
+        "createdAtUnix": 1785263321,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49087067",
+        "author": "skippyfish",
+        "type": "comment",
+        "title": null,
+        "text": "ACM has been leaning heavily into AI-generated content for their journals in the past year, and this article is no exception: it appears to be 100% AI generated and full of LLM verbiage.There's something hilarious about that, but also, snake eating its own tail.",
+        "url": "https://news.ycombinator.com/item?id=49087067",
+        "points": null,
+        "numComments": null,
+        "storyId": 49084987,
+        "createdAt": "2026-07-28T17:20:21Z",
+        "createdAtUnix": 1785259221,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49085424",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Is Manticore harder to self-host than Meilisearch? We tested both",
+        "text": "Is Manticore harder to self-host than Meilisearch? We tested both",
+        "url": "https://old.reddit.com/r/selfhosted/comments/1v6dfb0/is_manticore_really_harder_to_selfhost_than/",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49085424,
+        "createdAt": "2026-07-28T15:31:00Z",
+        "createdAtUnix": 1785252660,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49084838",
+        "author": "verdverm",
+        "type": "comment",
+        "title": null,
+        "text": "thank you for sharing your lived experienceTimothy Snyder, in On Tyranny, has a chapter about staying in touch with friends from other countries, and while we are not friends, this thread is in that spirit and I have learned things from you, so thank you!",
+        "url": "https://news.ycombinator.com/item?id=49084838",
+        "points": null,
+        "numComments": null,
+        "storyId": 49076057,
+        "createdAt": "2026-07-28T14:50:47Z",
+        "createdAtUnix": 1785250247,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49081490",
+        "author": "hollow-moe",
+        "type": "comment",
+        "title": null,
+        "text": "Title should be \"Snake oil seller says their snake oil is way better than the others.\"",
+        "url": "https://news.ycombinator.com/item?id=49081490",
+        "points": null,
+        "numComments": null,
+        "storyId": 49080345,
+        "createdAt": "2026-07-28T09:35:58Z",
+        "createdAtUnix": 1785231358,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49090973",
+        "author": "pstuart",
+        "type": "comment",
+        "title": null,
+        "text": "I'm arguing in good faith and welcome valid criticism.Please note that I'm not trying to troll (the bit about God doing abortions may seem like it but that point stands on its own: if an abortion is the cessation of the development of a fetus or proto-human, then a miscarriage is effectively an \"abortion\"). The question becomes \"why did that happen\". This is an important question to ask because women are being imprisoned for miscarriages and the \"passionate pursuit of the matter\" does not always lead to justice.As for any strawmen from me, my conflation of Catholic teaching and the Quiverfull movement -- I'll own that outright as being lazy on my part.Politics can be construed in different ways. Yes, there have been laws and movements, but not under the banner of any US political party. I'm talking about as a partisan platform issue. I remember, I was there. It's very well documented and there's an even less palatable facet to that movement as it has been documented that it was intended to succeed segregation as a politically activating issue.Now back to your points:Conflating infanticide with \"abortion\" is an Equivocation — using a single term or concept across two things that differ in a morally or legally. Also known as a false equivalence. It also begs the question, since the equivalence between fetus and infant is precisely what's in dispute.I'm engaging here in self-defense, because there are parties actively trying to make this country a theocracy and I think thats a very bad idea.",
+        "url": "https://news.ycombinator.com/item?id=49090973",
+        "points": null,
+        "numComments": null,
+        "storyId": 49084091,
+        "createdAt": "2026-07-28T22:42:53Z",
+        "createdAtUnix": 1785278573,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49081320",
+        "author": "robtherobber",
+        "type": "story",
+        "title": "Segregation by Design – An atlas of spatial injustice",
+        "text": "Segregation by Design – An atlas of spatial injustice",
+        "url": "https://www.segregationbydesign.com",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49081320,
+        "createdAt": "2026-07-28T09:12:10Z",
+        "createdAtUnix": 1785229930,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49081194",
+        "author": "andai",
+        "type": "comment",
+        "title": null,
+        "text": "I had Sonnet volunteer some tests last year, which really impressed me at the time. It was just a couple console.log statements that printed green checkmarks and \"tests passed!\"",
+        "url": "https://news.ycombinator.com/item?id=49081194",
+        "points": null,
+        "numComments": null,
+        "storyId": 49074693,
+        "createdAt": "2026-07-28T08:56:50Z",
+        "createdAtUnix": 1785229010,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}
