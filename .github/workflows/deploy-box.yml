@@ -32,7 +32,21 @@ jobs:
         run: |
           if [ -z "$BOX_SSH_KEY" ] || [ -z "$BOX_SSH_HOST" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "BOX_SSH_KEY / BOX_SSH_HOST not configured — skipping deploy (workflow is inert until Craig adds them)."
+            # Be LOUD about not deploying. This step used to print one plain
+            # line and exit 0, so every push to main showed a green "Deploy to
+            # production box / success" that had deployed nothing. Production
+            # sat 60 commits behind for six days and nothing surfaced it
+            # (found 2026-08-04). A silent skip that reports success is
+            # exactly Forbidden #16.
+            echo "::warning title=Deploy skipped — production NOT updated::BOX_SSH_KEY / BOX_SSH_HOST are not set, so this push did not reach production. Add them in Settings → Secrets and variables → Actions to enable auto-deploy."
+            {
+              echo "### ⚠️ Deploy skipped — production was NOT updated"
+              echo
+              echo "This run went green without deploying anything."
+              echo
+              echo "\`BOX_SSH_KEY\` / \`BOX_SSH_HOST\` are not configured, so the deploy step is inert."
+              echo "Until Craig adds them (Settings → Secrets and variables → Actions), **every push to \`main\` leaves production on whatever commit was last deployed by hand.**"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
@@ -56,3 +70,47 @@ jobs:
           status=$(curl -s --max-time 20 https://gatetest.io/api/status || true)
           echo "$status" | head -c 400
           echo "$status" | grep -q '"ready"' || { echo "::error::/api/status did not return JSON — deploy may not have taken"; exit 1; }
+
+      # Needed only so the drift step below can count commits between the
+      # deployed SHA and this one.
+      - name: Checkout (for drift count)
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Report production drift
+        # Runs LAST and regardless of whether the deploy was enabled — after a
+        # real deploy it confirms the new build actually took; when the deploy
+        # is inert it puts a number on how far behind production has fallen.
+        #
+        # Never fails the build: this is a visibility mechanism, not a gate.
+        # It exists because the skip path above reported green for six days
+        # while production sat 60 commits stale, serving copy we had already
+        # fixed (found 2026-08-04).
+        if: always()
+        continue-on-error: true
+        run: |
+          deployed=$(curl -s --max-time 20 https://gatetest.io/api/platform-status \
+            | sed -n 's/.*"commit":"\([0-9a-f]\{7,40\}\)".*/\1/p')
+          if [ -z "$deployed" ]; then
+            echo "::warning title=Could not read deployed commit::/api/platform-status returned no commit field."
+            exit 0
+          fi
+          echo "deployed=$deployed  head=$GITHUB_SHA"
+          if [ "$deployed" = "$GITHUB_SHA" ]; then
+            echo "✅ Production is current (\`$deployed\`)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          behind=$(git rev-list --count "$deployed..$GITHUB_SHA" 2>/dev/null || echo "unknown")
+          echo "::warning title=Production is behind main::Deployed ${deployed} is ${behind} commit(s) behind ${GITHUB_SHA}. Customers — and any GitHub Marketplace reviewer — are seeing the older build."
+          {
+            echo "### 🚨 Production is ${behind} commit(s) behind \`main\`"
+            echo
+            echo "| | commit |"
+            echo "|---|---|"
+            echo "| deployed | \`${deployed}\` |"
+            echo "| \`main\` | \`${GITHUB_SHA}\` |"
+            echo
+            echo "Public copy fixes do not reach customers until this is redeployed."
+          } >> "$GITHUB_STEP_SUMMARY"
