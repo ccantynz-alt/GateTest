@@ -5,6 +5,23 @@
 #   BOX_SSH_KEY   — private key with access to the deploy user on the box
 #   BOX_SSH_HOST  — user@host, e.g. deploy@66.42.121.161
 #
+# "We have Tailscale, so why do we need these?" (Craig, 2026-08-04 — this
+# keeps getting re-asked because Tailscale was documented NOWHERE in this repo
+# until now). Tailscale solves REACHABILITY, not CI identity:
+#
+#   * Craig deploying from his own machine  → on the tailnet, no secrets needed.
+#   * THIS workflow                          → a GitHub-hosted runner is an
+#     ephemeral Azure VM with no tailnet membership. Tailscale alone cannot get
+#     it to the box. It needs either public SSH creds (these secrets), or to
+#     join the tailnet itself via tailscale/github-action + TS_OAUTH_CLIENT_ID
+#     / TS_OAUTH_SECRET.
+#
+# Verified 2026-08-04: port 22 on 66.42.121.161 is open to the public internet
+# (banner SSH-2.0-OpenSSH_8.9p1), so BOX_SSH_* works today with no Tailscale
+# involvement. If public 22 is ever closed in favour of tailnet-only — which
+# would be the better security posture given Tailscale already exists — this
+# workflow breaks until the runner is joined to the tailnet.
+#
 # The box side just needs scripts/deploy/deploy-on-box.sh in the checkout
 # (ships with the repo). Activation = Craig's call (Boss Rule: production
 # deployment); the workflow skips cleanly while the secrets are absent.

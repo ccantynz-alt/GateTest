@@ -36,7 +36,13 @@ fi
 
 echo "[deploy] $BEFORE -> $AFTER"
 npm install --no-audit --no-fund
-(cd website && npm install --no-audit --no-fund && npx next build)
+# `npm run build`, NOT `npx next build` — the `prebuild` script stamps the real
+# git SHA into build-info.json, which is what /api/platform-status reports. A
+# bare `next build` skips prebuild, so the site would serve NEW code while
+# still reporting the OLD commit: the deploy looks like it never happened, and
+# the production-drift check in deploy-box.yml is reading that same field.
+# (CLAUDE.md quality bar #12; docs/deploy/VAPRON-DEPLOY.md §1.)
+(cd website && npm install --no-audit --no-fund && npm run build)
 
 # Restart the service.
 if [ -n "${GATETEST_RESTART_CMD:-}" ]; then

@@ -53,6 +53,47 @@ Until those are set, every push shows a green "Deploy … success" that deployed
 nothing. As of `5b8e5be3` it now says so loudly and reports how far behind
 production is, but it still cannot deploy without the secrets.
 
+### "We have Tailscale — do we still need those secrets?"
+
+Yes, for CI. Tailscale solves **reachability**, not **CI identity**:
+
+| Who is deploying | Needs the secrets? |
+|---|---|
+| Craig, from his own machine | **No** — he's on the tailnet, just SSH in and run the script |
+| GitHub Actions | **Yes** — the runner is an ephemeral Azure VM with no tailnet membership |
+
+Verified 2026-08-04: **port 22 on `66.42.121.161` is open to the public
+internet** (`SSH-2.0-OpenSSH_8.9p1`), so `BOX_SSH_*` works today with no
+Tailscale involvement at all.
+
+The better long-term posture, since Tailscale already exists, is to **close
+public 22** and have CI join the tailnet instead
+(`tailscale/github-action` + `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET`). That's
+a deliberate infra change, not something to do mid-review — but leaving SSH
+open to the whole internet on the box that serves production is worth a
+decision either way.
+
+### ⚠️ Unresolved contradiction — read before enabling auto-deploy
+
+`docs/deploy/VAPRON-DEPLOY.md` says the deploy target is **Vapron** and
+explicitly *"do not use `scripts/deploy/deploy-on-box.sh`"* — but that script
+is exactly what `deploy-box.yml` runs, and it is written for
+`66.42.121.161`, which is the box actually serving production today.
+
+So one of these is stale and **I could not tell which from the repo**:
+
+- if production really is the box → `deploy-box.yml` is correct, and the
+  runbook's "retired Coolify/Server-161 path" line needs deleting;
+- if production really is Vapron → enabling `BOX_SSH_*` automates a **retired**
+  path, and CI should be driving a Vapron deploy instead.
+
+- [ ] Craig: confirm which is authoritative before adding the secrets
+
+(Fixed regardless, in the same pass: the script built with `npx next build`,
+skipping the `prebuild` SHA stamp — so it would ship new code while
+`/api/platform-status` still reported the old commit, hiding the very drift
+this checklist is about. Now `npm run build`.)
+
 ---
 
 ## 2. 🔴 Point the App at the live domain
