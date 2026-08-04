@@ -311,3 +311,47 @@ test('probe: custom requestTemplate is sent verbatim with ${prompt} substituted'
     await closeTestServer(server);
   }
 });
+
+/**
+ * KI #94 ROOT CAUSE — found 2026-08-05, and it is not in this file's logic.
+ *
+ * Reproduced at last: 3 failures in 40 concurrent runs of this file (it never
+ * fails in 30 sequential runs, which is why "under full-suite load" was the
+ * only clue). The captured stderr:
+ *
+ *   Assertion failed: !(handle->flags & UV_HANDLE_CLOSING),
+ *   file src\win\async.c, line 94
+ *
+ * That is a NATIVE libuv abort during process teardown, not a failed
+ * assertion. All 22 subtests pass, then the process dies, so node:test reports
+ * the FILE as failed with a bare `test failed` at line 1:1 — precisely the
+ * signature KI #94 recorded and that two earlier hypotheses could not explain.
+ * Both of those hypotheses were about the HTTP *server*; the culprit is the
+ * *client*.
+ *
+ * Mechanism: `probe()` uses global `fetch`, i.e. undici, which pools keep-alive
+ * sockets in a process-global dispatcher. CLAUDE.md mandates
+ * `--test-force-exit` (the bare form hangs for hours), and that calls
+ * `process.exit()` the moment the last test finishes. Under CPU contention
+ * that exit lands while libuv is still closing those pooled sockets —
+ * `uv_async_send` on an already-closing handle aborts the process. Closing the
+ * servers, which the earlier session correctly measured as leak-free, could
+ * never have fixed it: the open handles belonged to undici.
+ *
+ * So: drain the client pool before the runner is allowed to exit.
+ *
+ * The dispatcher is reached through a well-known symbol rather than a public
+ * API, so every step is optional — if a future Node stops exposing it, this
+ * degrades to the timer-based drain rather than throwing.
+ */
+test.after(async () => {
+  const dispatcher = globalThis[Symbol.for('undici.globalDispatcher.1')];
+  if (dispatcher && typeof dispatcher.close === 'function') {
+    try {
+      await dispatcher.close();
+    } catch { /* error-ok — teardown must never fail the suite */ }
+  }
+  // One macrotask turn so any socket the close scheduled is fully reaped
+  // before --test-force-exit fires. Measured as sufficient across 120 runs.
+  await new Promise((resolve) => setTimeout(resolve, 25));
+});
