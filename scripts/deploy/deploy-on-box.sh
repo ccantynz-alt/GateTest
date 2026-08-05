@@ -51,11 +51,27 @@ if [ -n "${GATETEST_RESTART_CMD:-}" ]; then
 elif command -v pm2 >/dev/null 2>&1 && pm2 describe gatetest >/dev/null 2>&1; then
   echo "[deploy] restarting pm2 process 'gatetest'"
   pm2 restart gatetest --update-env
-elif systemctl list-unit-files 2>/dev/null | grep -q '^gatetest\.service'; then
-  echo "[deploy] restarting systemd unit 'gatetest'"
-  sudo systemctl restart gatetest
 else
-  echo "[deploy] WARNING: no restart mechanism found (set GATETEST_RESTART_CMD) — build is in place but the old process is still serving." >&2
+  # The unit on the production box is `gatetest-web.service`, not
+  # `gatetest.service`. This block matched only the exact name `gatetest.service`
+  # until 2026-08-05, so on the box that actually serves gatetest.io it fell
+  # through to the warning below: the deploy would fetch, build, print
+  # "done", exit 0 — and leave the OLD process serving. A deploy that reports
+  # success without restarting is the same class of bug as the CI workflow that
+  # reported success without deploying (5b8e5be3).
+  RESTART_UNIT=""
+  for unit in gatetest-web gatetest; do
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\.service"; then
+      RESTART_UNIT="$unit"
+      break
+    fi
+  done
+  if [ -n "$RESTART_UNIT" ]; then
+    echo "[deploy] restarting systemd unit '$RESTART_UNIT'"
+    systemctl restart "$RESTART_UNIT"
+  else
+    echo "[deploy] WARNING: no restart mechanism found (set GATETEST_RESTART_CMD) — build is in place but the old process is still serving." >&2
+  fi
 fi
 
 # Post-deploy smoke: the endpoints that burned us when the box served a stale build.
