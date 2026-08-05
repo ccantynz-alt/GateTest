@@ -59,12 +59,20 @@ else
   # "done", exit 0 — and leave the OLD process serving. A deploy that reports
   # success without restarting is the same class of bug as the CI workflow that
   # reported success without deploying (5b8e5be3).
+  # Read the unit list ONCE into a variable and glob-match it. Do NOT pipe into
+  # `grep -q` here: this script runs under `set -o pipefail`, and `grep -q`
+  # exits the instant it matches, which closes the pipe and kills `systemctl`
+  # with SIGPIPE (141). pipefail then reports 141 for the whole pipeline, so the
+  # `if` is FALSE precisely when the unit DOES exist. That is why the original
+  # `grep -q '^gatetest\.service'` never fired either — the bug was never really
+  # the unit name, it was the pipeline. Verified on the box 2026-08-05:
+  # the same grep prints MATCH interactively and fails inside this script.
+  UNIT_FILES="$(systemctl list-unit-files --no-legend 2>/dev/null || true)"
   RESTART_UNIT=""
   for unit in gatetest-web gatetest; do
-    if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\.service"; then
-      RESTART_UNIT="$unit"
-      break
-    fi
+    case "$UNIT_FILES" in
+      *"${unit}.service"*) RESTART_UNIT="$unit"; break ;;
+    esac
   done
   if [ -n "$RESTART_UNIT" ]; then
     echo "[deploy] restarting systemd unit '$RESTART_UNIT'"
