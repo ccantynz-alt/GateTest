@@ -1,18 +1,15 @@
 /**
  * SSH Auto-Heal Agent — connects to servers and fixes issues autonomously.
  *
- * POST /api/heal/ssh
+ * POST /api/heal/ssh — admin-only (gt_admin cookie or X-Admin-Token header).
  * Body: {
- *   host: string,
- *   port?: number,
- *   username?: string,
- *   // Auth: either password OR private key (from env vars)
- *   password?: string,
  *   // Issues from nuclear scan to fix
  *   issues: Array<{ category: string, title: string, detail: string }>
  * }
  *
- * Server credentials can also come from env vars:
+ * The SSH target and credentials come from env vars ONLY — never the request
+ * body. A body-chosen host would let a caller redirect GATETEST_SSH_PASSWORD
+ * to a server they control:
  *   GATETEST_SSH_HOST, GATETEST_SSH_PORT, GATETEST_SSH_USER,
  *   GATETEST_SSH_PASSWORD, GATETEST_SSH_KEY
  *
@@ -25,6 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/app/lib/admin-auth";
 // ssh2 has native crypto bindings that Turbopack can't statically analyze.
 // We require() it at runtime in the handler. The type is simplified here.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -156,11 +154,13 @@ function execSSH(conn: any, cmd: string, timeout = 15000): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  // This route runs sudo playbooks on the production server and holds its SSH
+  // credentials — it must never be reachable anonymously.
+  if (!isAdminRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let body: {
-    host?: string;
-    port?: number;
-    username?: string;
-    password?: string;
     issues?: IssueInput[];
     hostname?: string;
   };
@@ -168,16 +168,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const host = body.host || process.env.GATETEST_SSH_HOST || "";
-  const port = body.port || Number(process.env.GATETEST_SSH_PORT) || 22;
-  const username = body.username || process.env.GATETEST_SSH_USER || "root";
-  const password = body.password || process.env.GATETEST_SSH_PASSWORD || "";
+  const host = process.env.GATETEST_SSH_HOST || "";
+  const port = Number(process.env.GATETEST_SSH_PORT) || 22;
+  const username = process.env.GATETEST_SSH_USER || "root";
+  const password = process.env.GATETEST_SSH_PASSWORD || "";
   const privateKey = process.env.GATETEST_SSH_KEY || "";
   const issues = body.issues || [];
 
   if (!host) {
     return NextResponse.json({
-      error: "No SSH host provided. Set GATETEST_SSH_HOST in Vercel env vars or pass { host } in the request.",
+      error: "No SSH host configured. Set GATETEST_SSH_HOST in the server environment.",
     }, { status: 400 });
   }
 
