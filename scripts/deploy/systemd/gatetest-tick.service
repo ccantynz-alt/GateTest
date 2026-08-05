@@ -4,4 +4,10 @@ After=network.target gatetest-web.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/gatetest/scripts/deploy/tick.sh /api/scan/worker/tick
+# Invoked through bash rather than exec'd directly, so the timer does not
+# depend on the file's executable bit surviving a deploy. `git reset --hard`
+# restores the mode recorded in the index, and this repo is authored on
+# Windows where core.filemode is off — tick.sh was committed 100644 and every
+# deploy would have silently stripped +x, leaving the unit failing with
+# EACCES. The index is now 100755 as well; this is the belt to that braces.
+ExecStart=/bin/bash /opt/gatetest/scripts/deploy/tick.sh /api/scan/worker/tick

@@ -4,4 +4,6 @@ After=network.target gatetest-web.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/gatetest/scripts/deploy/tick.sh /api/watches/tick
+# See gatetest-tick.service — invoked via bash so the unit does not depend on
+# the executable bit surviving `git reset --hard` during a deploy.
+ExecStart=/bin/bash /opt/gatetest/scripts/deploy/tick.sh /api/watches/tick
