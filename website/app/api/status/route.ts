@@ -19,6 +19,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { findPlaceholders } = require("@/app/lib/env-placeholder");
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -89,6 +91,27 @@ export async function GET(req: NextRequest) {
   const importantMissing = IMPORTANT.filter((v) => !isSet(v.name));
   const optionalMissing = OPTIONAL.filter((n) => !isSet(n));
 
+  // PRESENT-BUT-FAKE. `isSet` only asks "length > 0", which is how
+  // GATETEST_PRIVATE_KEY sat in production holding the literal documentation
+  // example ("-----BEGIN RSA PRIVATE KEY-----\n...(all the base64 lines)...")
+  // while every dashboard reported green and GitHub App auth was dead.
+  // A variable that is set to filler is worse than one that is unset, because
+  // every other guard here is looking for absence.
+  const placeholders = findPlaceholders(
+    [
+      ...REQUIRED.map((v) => v.name),
+      ...IMPORTANT.map((v) => v.name),
+      ...OPTIONAL,
+      // Not in the lists above, but the credential whose fake value caused the
+      // incident — the App auth path fails silently without it.
+      "GATETEST_PRIVATE_KEY",
+      "GATETEST_APP_ID",
+      "GITHUB_TOKEN",
+      "GITHUB_WEBHOOK_SECRET",
+    ],
+    process.env as Record<string, string | undefined>,
+  );
+
   // Stripe mode — a live site running test keys means payments silently fail on
   // real cards (ROADMAP #3). This is a common "not going" cause.
   const stripeKey = process.env.STRIPE_SECRET_KEY || "";
@@ -114,6 +137,9 @@ export async function GET(req: NextRequest) {
       // The headline: what to fix, by name, no values.
       missing_required: missing.map((v) => ({ name: v.name, why: v.why })),
       missing_important: importantMissing.map((v) => ({ name: v.name, why: v.why })),
+      // Set, but not real. Never echoes the value — only the name and why it
+      // cannot be genuine.
+      invalid_placeholders: placeholders,
       missing_optional: optionalMissing,
       stripe: { mode: stripeMode, warning: stripeWarning },
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
