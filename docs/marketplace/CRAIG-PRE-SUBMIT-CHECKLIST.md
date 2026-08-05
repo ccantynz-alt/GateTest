@@ -1,22 +1,51 @@
 # Marketplace pre-submit checklist — Craig only
 
-**Written 2026-08-04. Updated 2026-08-05 after deploying and re-verifying live.**
+**Written 2026-08-04. Updated 2026-08-06 after deploying, then firing a real
+signed webhook through the production pipeline end-to-end.**
 
 Context: the listing was rejected once (2026-05-14) and has been under review
 since 2026-07-25. Craig's constraint — *"I may not get the third opportunity."*
 So this is ordered by **what a reviewer hits first**, not by effort.
 
-## The current answer: DO NOT SUBMIT — 4 blockers
+## The current answer: DO NOT SUBMIT — and Craig's 15-minute list
 
-Run `node scripts/marketplace-preflight.js` for this live, any time. As of
-2026-08-05, after the deploy, it reports:
+Run `node scripts/marketplace-preflight.js` for the live verdict, any time.
+Everything fixable from the repo is fixed and deployed. What remains needs
+Craig's accounts, in one sitting:
 
-| # | Blocker | Who |
-|---|---|---|
-| 1 | `/legal/terms` + `/legal/privacy` render **"DRAFT … not final legal terms"** | Craig (attorney) |
-| 2 | live app **missing `issues:write`** — the PR comment the listing promises fails silently | Craig (App settings) |
-| 3 | `RESEND_API_KEY` unset — MCP-tier key delivery takes money and never sends | Craig (box env) |
-| 4 | `CRON_SECRET` **repo secret** unset → the `cron-ticks` workflow is disarmed | Craig (optional, see below) |
+| # | Blocker | Where | Time |
+|---|---|---|---|
+| 0 | **Webhook URL still `gatetest.ai` (dead)** — no push has ever been delivered; `scan_queue` had zero rows in its life until the synthetic test | App 3322634 settings | 2 min |
+| 0b | **No working GitHub credential on the box — every stored token is 401.** Scans can't fetch repos; commit statuses / PR comments can't post. Durable: paste `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY` (code support already shipped: `github-app.ts`). Quick: fresh PAT as `GITHUB_TOKEN`. Then `systemctl restart gatetest-web` | box `website/.env.local` | 5 min |
+| 1 | `/legal/terms` + `/legal/privacy` render **"DRAFT … not final legal terms"** | attorney | external |
+| 2 | live app **missing `issues:write`** — the PR comment the listing promises fails silently | App 3322634 settings | 1 min |
+| 3 | `RESEND_API_KEY` unset — MCP-tier key delivery takes money and never sends | box `website/.env.local` | 2 min |
+| 4 | `CRON_SECRET` **repo secret** unset → the `cron-ticks` workflow is disarmed | repo secrets (optional) | 2 min |
+
+### What the end-to-end test proved (2026-08-06)
+
+A realistic HMAC-signed push event was fired at the **public**
+`https://gatetest.io/api/webhook` from the box — identical to a GitHub
+delivery except for who sent it. Verified working, in production, in sequence:
+
+1. TLS edge + routing → 200
+2. HMAC signature verification (fail-closed) → accepted
+3. Enqueue → `scan_queue` row 1, `host='github'` — the first row ever
+4. Immediate worker kick claimed it within the same second
+5. Failure handling → correct backoff + retry, correct `last_error` recorded
+6. The systemd timers drove subsequent attempts on schedule
+
+It failed exactly where the credential audit predicted: `fetchTree` → 401,
+because every GitHub token on the box is dead (item 0b). So the pipeline is
+proven from the public edge to the GitHub API call, and blocked there by a
+missing credential only Craig can place. **After 0 + 0b, a real push should
+flow through with no further code changes.** Verify with:
+`journalctl -u gatetest-tick.service -f` and
+`SELECT status, last_error FROM scan_queue ORDER BY id DESC LIMIT 3;`
+
+Note: real webhooks will carry the canonical `crclabs-hq/GateTest` name — the
+`ccantynz-alt/gatetest` alias 301s at the API level (followed automatically
+once a valid token exists).
 
 Plus one warning: the orphaned duplicate app `gatetest-hq` (3766251) is still
 installed on `crclabs-hq`.
