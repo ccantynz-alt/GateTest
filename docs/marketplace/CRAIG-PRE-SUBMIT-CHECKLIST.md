@@ -1,11 +1,47 @@
 # Marketplace pre-submit checklist — Craig only
 
-**Written 2026-08-04.** Everything on this page needs Craig; none of it can be
-done from the repo. The engineering side is finished and pushed.
+**Written 2026-08-04. Updated 2026-08-05 after deploying and re-verifying live.**
 
 Context: the listing was rejected once (2026-05-14) and has been under review
 since 2026-07-25. Craig's constraint — *"I may not get the third opportunity."*
 So this is ordered by **what a reviewer hits first**, not by effort.
+
+## The current answer: DO NOT SUBMIT — 4 blockers
+
+Run `node scripts/marketplace-preflight.js` for this live, any time. As of
+2026-08-05, after the deploy, it reports:
+
+| # | Blocker | Who |
+|---|---|---|
+| 1 | `/legal/terms` + `/legal/privacy` render **"DRAFT … not final legal terms"** | Craig (attorney) |
+| 2 | live app **missing `issues:write`** — the PR comment the listing promises fails silently | Craig (App settings) |
+| 3 | `RESEND_API_KEY` unset — MCP-tier key delivery takes money and never sends | Craig (box env) |
+| 4 | `CRON_SECRET` **repo secret** unset → the `cron-ticks` workflow is disarmed | Craig (optional, see below) |
+
+Plus one warning: the orphaned duplicate app `gatetest-hq` (3766251) is still
+installed on `crclabs-hq`.
+
+**#4 is no longer functionally fatal.** The queue is now drained by systemd
+timers on the box itself (`scripts/deploy/systemd/`), so scans run without
+GitHub Actions. Setting the repo secret would add a redundant second driver;
+both ticks are idempotent. Left on the list because the preflight still flags it.
+
+**#3 is NOT the KI #82 typo.** That KI theorised the key was stored as
+`RESENDER_API_KEY`. Checked the box directly on 2026-08-05: there is **no
+Resend key under any spelling** in `website/.env.local`. It has to be added.
+
+⚠️ **Two things a reviewer would have hit that were NOT on the 2026-08-04 list,
+because nobody had probed the running system:**
+
+- **No queued scan had ever executed.** `/api/scan/worker/tick` was returning
+  `{"ok":false,"error":"column q.host does not exist"}` under **HTTP 200** —
+  production's `scan_queue` predated the dual-host column, and the worker never
+  ran the migration the enqueue path runs. Fixed in `d3fe3738`.
+- **Nothing ever called the ticks.** Quality bar #12 requires a scheduler;
+  there was no cron entry and no timer on the box. Fixed in `39f4e3e1`.
+
+Together those made the listing's central claim — *"scans run on every push"* —
+false. A reviewer would have installed, pushed, and seen nothing at all.
 
 ---
 
@@ -23,25 +59,42 @@ The app is **not** under `crclabs-hq`. There are three GateTest identities:
 
 ---
 
-## 1. 🔴 Redeploy production — do this before anything else
+## 1. ✅ Redeploy production — DONE 2026-08-05
 
-**Nothing below matters until this is done.** Production is serving a build
-from **2026-07-29, 60 commits behind `main`**.
+Production was 66 commits behind, serving a 2026-07-29 build. **Deployed and
+verified live:**
 
-Right now a reviewer opening gatetest.io reads:
+- [x] `/api/platform-status` → commit `96df6c52`+, version **1.61.0**
+- [x] `/docs/configuration` → **200** (was 404)
+- [x] `/pricing` → **121 modules** (was 120 / 88)
+- [x] `/github/setup` → Contents and Issues both **Read & write**
+- [x] the sibling discovery map no longer advertises the dead `gatetest.ai`
 
-| They see | Truth |
-|---|---|
-| "120 modules" | 121 |
-| "88 modules" on the $99 card | 121 |
-| "Pay only when it fixes something" | charged at checkout — the claim is false |
+Three deploy-path bugs were found and fixed in the process. Each independently
+guaranteed the deploy silently did nothing, which is why this drift persisted:
 
-All three are already fixed in the repo. They reach the public only on redeploy.
+1. **`grep -q` under `set -o pipefail`** — `systemctl list-unit-files | grep -q`
+   is false *exactly when it matches*, because `grep -q` exits early, `systemctl`
+   dies with SIGPIPE (141), and pipefail reports 141. The restart step had
+   therefore never fired on any host, under any unit name. Proven on the box.
+2. **The clean-tree guard made the script single-use** — `npm install` and the
+   website prebuild dirty tracked files (`package-lock.json`,
+   `build-info.json`) *after* the guard, so run 2+ always aborted with
+   "uncommitted changes — resolve manually first."
+3. **Wrong unit name** — the box runs `gatetest-web.service`, not
+   `gatetest.service`.
 
-- [ ] Redeploy to current `main` per `docs/deploy/VAPRON-DEPLOY.md`
-- [ ] Confirm `/api/platform-status` shows the new commit and `1.61.0`
-- [ ] Confirm `/docs/configuration` stops 404ing (it exists in source; the
-      deployed build predates it)
+**Deploy command that works** (Craig is on the tailnet; `jarvis` = the box):
+
+```bash
+ssh root@jarvis 'cd /opt/gatetest && git fetch origin main -q \
+  && git show origin/main:scripts/deploy/deploy-on-box.sh > /tmp/gt-deploy.sh \
+  && GATETEST_APP_DIR=/opt/gatetest bash /tmp/gt-deploy.sh'
+```
+
+Running the script from `/tmp` avoids `git reset --hard` rewriting it
+mid-execution; `GATETEST_APP_DIR` is then required, because the script otherwise
+infers the repo from its own location.
 
 **Then make it automatic** so this never recurs — the deploy workflow exists
 but is inert:
@@ -96,18 +149,40 @@ this checklist is about. Now `npm run build`.)
 
 ---
 
-## 2. 🔴 Point the App at the live domain
+## 2. 🔴🔴 Point the App at the live domain — THE most important item
 
-Both apps still advertise **`external_url = https://gatetest.ai`**, which
-returns **HTTP 000** — the domain is in redemption. `gatetest.io` serves 200.
+**This is now blocker #1, above the legal pages.** It is not just a dead link
+in the listing; it severs the product.
 
-A reviewer clicking through from the listing lands on a dead site.
+Evidence chain, all measured 2026-08-05:
+
+| Step | Measured |
+|---|---|
+| `scan_queue` row count in production | **0 — nothing has ever been enqueued** |
+| `https://gatetest.ai/api/webhook` | **HTTP 000** (NXDOMAIN, registry redemption) |
+| `https://gatetest.io/api/webhook` | **HTTP 200** |
+| App `external_url` | still `https://gatetest.ai` |
+
+So every push webhook GitHub has ever sent us has failed to deliver. That is
+why the queue is empty — and it means the two fixes shipped today (the
+`q.host` migration and the systemd timers) make the drain *work*, but there is
+still **nothing arriving to drain** until the App is repointed.
+
+Be precise about this: after today's work the pipeline is correct from
+`/api/webhook` onward, and severed before it. Only Craig can reconnect it.
 
 - [ ] Set `external_url` → `https://gatetest.io` on app **3322634**
-- [ ] Verify the App's other URLs (need app auth, so unverifiable from here):
-  - Setup URL → `https://gatetest.io/github/setup`
-  - Webhook URL → `https://gatetest.io/api/webhook`
-  - Callback URL → `https://gatetest.io/api/github/callback`
+- [ ] **Set Webhook URL → `https://gatetest.io/api/webhook`** ← the one that
+      actually breaks the product
+- [ ] Setup URL → `https://gatetest.io/github/setup`
+- [ ] Callback URL → `https://gatetest.io/api/github/callback`
+- [ ] Then confirm delivery: push to any installed repo and check
+      `SELECT count(*) FROM scan_queue;` is non-zero, or watch
+      `journalctl -u gatetest-tick.service -f` show a non-idle tick.
+
+GitHub's App settings page has a **Recent Deliveries** tab — every entry there
+should currently show a delivery failure against `gatetest.ai`. That is the
+fastest confirmation of the above.
 
 ---
 
