@@ -1,0 +1,7 @@
+[Unit]
+Description=GateTest watches tick
+After=network.target gatetest-web.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gatetest/scripts/deploy/tick.sh /api/watches/tick
