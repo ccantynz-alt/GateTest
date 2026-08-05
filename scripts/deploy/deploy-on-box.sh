@@ -17,10 +17,25 @@ cd "$APP_DIR"
 
 echo "[deploy] $(date -u +%FT%TZ) — deploying $(git rev-parse --abbrev-ref HEAD) in $APP_DIR"
 
-# Refuse to clobber uncommitted changes on the box — a box should never have any.
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "[deploy] ERROR: uncommitted changes on the box — resolve manually first." >&2
-  git status --short >&2
+# Refuse to clobber uncommitted changes on the box — a box should never have
+# any a HUMAN made. But THIS SCRIPT makes some every time it runs: `npm install`
+# rewrites package-lock.json, and the website `prebuild` regenerates the tracked
+# build-info.json to stamp the git SHA. Both happen AFTER the check below, so
+# the second deploy on any box hit "uncommitted changes — resolve manually
+# first" and refused to run. The guard made the script single-use, which is a
+# large part of why /opt/gatetest sat at a July 31 checkout serving a July 29
+# build: the automated path had locked itself out and every later deploy was a
+# manual one that nobody did.
+#
+# So: ignore the files this script is known to dirty. `git reset --hard` below
+# discards them anyway — they were never at risk. Anything else still blocks.
+SELF_DIRTIED='package-lock.json website/app/data/build-info.json website/package-lock.json'
+UNEXPECTED="$(git status --porcelain --untracked-files=no | awk '{print $2}' | while read -r f; do
+  case " $SELF_DIRTIED " in *" $f "*) ;; *) echo "$f" ;; esac
+done)"
+if [ -n "$UNEXPECTED" ]; then
+  echo "[deploy] ERROR: unexpected uncommitted changes on the box — resolve manually first." >&2
+  echo "$UNEXPECTED" >&2
   exit 1
 fi
 
