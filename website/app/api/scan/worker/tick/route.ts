@@ -121,6 +121,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 503 });
     }
 
+    // Self-heal the queue schema before touching it. `ensureScanQueueTable` is
+    // idempotent (CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS), but
+    // until 2026-08-05 it was only called from /api/db/init and the GitHub
+    // callback — never from the worker. Production's scan_queue predated the
+    // dual-host `host` column, so every tick died with
+    // `column q.host does not exist` and returned {"ok":false} with HTTP 200.
+    // Nothing drained the queue, which made the Marketplace listing's core
+    // promise — "scans run on every push" — false in production: a reviewer
+    // would install, push, and see nothing happen. The enqueue path migrates
+    // itself; the consume path must too, or a schema change silently breaks
+    // exactly the half nobody watches.
+    try {
+      await queueStore.ensureScanQueueTable(sql);
+    } catch (err) { // error-ok — a migration failure must not stop a tick that might still drain older rows
+      console.error("[scan-worker/tick] schema ensure failed (continuing):", err);
+    }
+
     const result = await scanWorker.runWorkerTick({
       sql,
       queueStore,
