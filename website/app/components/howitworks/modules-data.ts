@@ -38,6 +38,7 @@ export const MODULE_CATEGORIES: ModuleCategory[] = [
       { name: "documentation", description: "README, CHANGELOG, LICENSE, JSDoc coverage, env documentation.", example: "Missing README section: Installation" },
       { name: "duplicateCode", description: "Copy-pasted blocks that should be extracted into utilities.", example: "16-line block duplicated 4x across src/handlers/" },
       { name: "importCycle", description: "Circular dependencies that cause runtime TDZ / undefined-import bugs.", example: "Cycle: src/user.ts → src/post.ts → src/user.ts" },
+      { name: "spineHealth", description: "Structural analysis of the dependency graph — what the codebase costs to change. Load-bearing files that are untested, god files, layering violations, and the direction coupling is trending.", example: "fragile-spine: src/core/registry.js — 230 files depend on it, no direct test" },
       { name: "asyncIteration", description: "Async callbacks handed to .reduce/.filter/.some/.every/.forEach/.map where Promise semantics silently break.", example: ".filter(async x => await isValid(x)) — predicate is a Promise, always truthy" },
       { name: "datetimeBug", description: "Naive datetimes, JS 0-vs-1 month, moment-legacy.", example: "datetime.now() without tz= at jobs/scheduler.py:31" },
       { name: "moneyFloat", description: "IEEE-754 precision loss on currency-named variables.", example: "parseFloat(amount) on trust-account money in TrustActions.tsx" },

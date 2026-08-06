@@ -56,6 +56,28 @@ export default function Navbar() {
               {item}
             </a>
           ))}
+          {/*
+            Website + WordPress were reachable only by scrolling the homepage,
+            despite being the only entry points that need no repo, no git and
+            no developer — the audiences the rest of the nav excludes.
+            (Craig 2026-08-06.)
+          */}
+          <Link
+            href="/web"
+            className={`text-sm whitespace-nowrap transition-colors ${
+              scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Website
+          </Link>
+          <Link
+            href="/wp"
+            className={`text-sm whitespace-nowrap transition-colors ${
+              scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            WordPress
+          </Link>
           <Link
             href="/mcp"
             className={`text-sm whitespace-nowrap transition-colors ${
@@ -144,6 +166,20 @@ export default function Navbar() {
               {item}
             </a>
           ))}
+          <Link
+            href="/web"
+            className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"}`}
+            onClick={() => setMobileOpen(false)}
+          >
+            Website
+          </Link>
+          <Link
+            href="/wp"
+            className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"}`}
+            onClick={() => setMobileOpen(false)}
+          >
+            WordPress
+          </Link>
           <Link
             href="/mcp"
             className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"}`}

@@ -146,6 +146,50 @@ describe('module count — the website must match the engine', () => {
     );
   });
 
+  it('the website module catalogue lists every registry module', () => {
+    // THE GAP THIS FILE HAD (found 2026-08-06). Every check above policed
+    // literal "N modules" strings. But the website's canonical count is
+    // COMPUTED — `TOTAL_MODULES` in module-count.ts calls `totalModuleCount()`
+    // over the catalogue in modules-data.ts. spineHealth shipped as module 121
+    // on 2026-07-30 and was never added to that catalogue, so the computed
+    // count stayed 120 while the hardcoded strings were all updated to 121.
+    //
+    // Result: the live homepage rendered "All 120 modules in a single gate"
+    // and "121 modules in the gate" on the SAME PAGE, and every literal-string
+    // check passed. A number the site derives is exactly as capable of going
+    // stale as one it hardcodes.
+    const { BUILT_IN_MODULES } = require('../src/core/registry');
+    const catalogue = fs.readFileSync(
+      path.join(REPO, 'website/app/components/howitworks/modules-data.ts'), 'utf8',
+    );
+    const missing = Object.keys(BUILT_IN_MODULES)
+      .filter((name) => !new RegExp(`name:\\s*["']${name}["']`).test(catalogue));
+
+    assert.deepStrictEqual(
+      missing, [],
+      'Modules in the engine but absent from website/app/components/howitworks/modules-data.ts.\n'
+      + 'That catalogue is what TOTAL_MODULES counts, so a missing entry makes the whole site\n'
+      + 'advertise a number lower than the engine ships — while every hardcoded string looks correct.',
+    );
+  });
+
+  it('the computed website total equals the registry total', () => {
+    // Belt to the braces above: catches a duplicate or malformed entry that
+    // leaves the names present but the count wrong.
+    const { BUILT_IN_MODULES } = require('../src/core/registry');
+    const catalogue = fs.readFileSync(
+      path.join(REPO, 'website/app/components/howitworks/modules-data.ts'), 'utf8',
+    );
+    const entries = [...catalogue.matchAll(/name:\s*["']([a-zA-Z][a-zA-Z0-9]*)["']/g)].map((m) => m[1]);
+    const unique = new Set(entries);
+    assert.strictEqual(entries.length, unique.size,
+      `duplicate module entries in the catalogue: ${entries.filter((e, i) => entries.indexOf(e) !== i).join(', ')}`);
+    assert.strictEqual(
+      unique.size, Object.keys(BUILT_IN_MODULES).length,
+      'the catalogue TOTAL_MODULES counts disagrees with the registry',
+    );
+  });
+
   it('finds claims at all — the guard is not vacuous', () => {
     // Without this, deleting every mention of the count from the site would make
     // the test above pass trivially, which is the unfalsifiable-assertion trap.

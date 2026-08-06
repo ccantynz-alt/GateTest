@@ -5,6 +5,11 @@
  * Section order:
  *   1. Navbar
  *   2. Hero  — live URL scan, "One gate. 121 modules. Self-healing CI."
+ *   2b. HomeThreeDoors — repo / website / AI-agent entry points (Craig
+ *       2026-08-06: the page sold one story that needed a repo, a CI, a
+ *       GitHub install and a developer, while live web auditing, the
+ *       WordPress suite and the free local MCP server were reachable only
+ *       by scrolling)
  *   3. HomeKills  — what we replace (flip tiles) + head-to-head capability matrix
  *   4. HomeModuleBreakdown — "what the 121 modules actually check" (#modules)
  *   5. HomeFlywheel — 4-layer fix flow (AST -> Rule -> Recipe -> Claude) + prove-it
@@ -34,6 +39,7 @@
 
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
+import HomeThreeDoors from "./components/HomeThreeDoors";
 import BeforeAfterDemo from "./components/BeforeAfterDemo";
 import HomeKills from "./components/HomeKills";
 import HomeModuleBreakdown from "./components/HomeModuleBreakdown";
@@ -56,6 +62,7 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <HomeThreeDoors />
         <BeforeAfterDemo />
         <HomeKills />
         <HomeModuleBreakdown />
