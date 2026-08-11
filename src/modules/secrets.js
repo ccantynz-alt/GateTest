@@ -49,6 +49,50 @@ class SecretsModule extends BaseModule {
    * @param {string} match - full regex match, e.g. `SECRET: 'some words'`
    * @returns {boolean}
    */
+  /**
+   * True when the quoted value REFERENCES a secret instead of containing one:
+   * a shell expansion, a command substitution, or an interpolation.
+   *
+   * Why this exists: this exact false positive blocked GateTest's OWN CI for
+   * days. `scripts/deploy/tick.sh:34` reads the secret out of a file —
+   *
+   *   SECRET="$(sed -n 's/^CRON_SECRET=//p' "$ENV_FILE" | head -n1)"
+   *
+   * — and the `secret\s*[:=]\s*['"]...` rule matched `SECRET="` followed by
+   * eight-plus characters. That line is the OPPOSITE of a hardcoded secret:
+   * it is the safe pattern we tell customers to use. GATE: BLOCKED on it,
+   * which is both a false positive and a Forbidden #25 violation (we must
+   * never block our own operators).
+   *
+   * Deliberately narrow — the value must START with the expansion, so a real
+   * credential that merely contains a `$` later is still reported. A secrets
+   * module must fail toward detection, never toward silence.
+   *
+   * @param {string} match - full regex match, e.g. `SECRET="$(cmd)"`
+   * @returns {boolean}
+   */
+  _looksLikeReference(match) {
+    // Anchor on the FIRST quote — the one that opens the assignment's value.
+    // (_looksLikeProse anchors on the last quote, which is right for its own
+    // test but wrong here: on `SECRET="$(sed -n 1p "$ENV_FILE")` the last
+    // quote yields `")` and the expansion is missed entirely.)
+    // `match` is the secrets regex hit, which always begins at the identifier,
+    // so the first quote in it is always the value's opening quote.
+    const q = match.match(/['"]([\s\S]*)$/);
+    if (!q) return false;
+    const value = q[1].trim();
+    return (
+      value.startsWith('$(')    // POSIX command substitution
+      || value.startsWith('${')  // shell / template-literal expansion
+      || value.startsWith('`')   // backtick command substitution
+      || /^\$[A-Za-z_]/.test(value)      // bare $VAR
+      || /^%[A-Za-z_][A-Za-z0-9_]*%/.test(value)  // Windows %VAR%
+      || /^process\.env\b/.test(value)   // Node
+      || /^os\.environ\b/.test(value)    // Python
+      || /^ENV\[/.test(value)            // Ruby
+    );
+  }
+
   _looksLikeProse(match) {
     const q = match.match(/['"]([^'"]*)$/);
     if (!q) return false;
@@ -140,6 +184,9 @@ class SecretsModule extends BaseModule {
               // Credentials are contiguous high-entropy strings; sentences
               // are not. See _looksLikeProse for the exact test.
               if (this._looksLikeProse(m[0])) continue;
+              // Skip values that READ a secret rather than contain one.
+              // See _looksLikeReference for the exact test.
+              if (this._looksLikeReference(m[0])) continue;
             }
             found.push({
               type: pattern.type,
