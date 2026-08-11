@@ -196,6 +196,51 @@ class SecretsModule extends BaseModule {
     }
   }
 
+  /**
+   * Does a file the given .gitignore pattern would have covered actually
+   * exist in the tree? Decides whether a missing pattern is a live exposure
+   * (error) or a hygiene advisory (warning).
+   *
+   * Deliberately narrow: handles the three patterns this module requires
+   * (`.env`, `*.pem`, `*.key`) rather than implementing gitignore globbing.
+   * `.env` matches `.env` and any `.env.*`, mirroring how the pattern behaves
+   * in practice. Bounded walk — skips vendor/build dirs and stops at depth 6
+   * so a huge monorepo cannot make the secrets module the slow one.
+   *
+   * @param {string} projectRoot
+   * @param {string} pattern - one of `.env`, `*.pem`, `*.key`
+   * @returns {boolean}
+   */
+  _matchingFileExists(projectRoot, pattern) {
+    const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'vendor', '.gatetest']);
+    const matches = (name) => (
+      pattern === '.env'
+        ? (name === '.env' || name.startsWith('.env.'))
+        : name.endsWith(pattern.slice(1))
+    );
+
+    const walk = (dir, depth) => {
+      if (depth > 6) return false;
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return false; // unreadable dir is not evidence of a secret
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          if (SKIP.has(entry.name)) continue;
+          if (walk(path.join(dir, entry.name), depth + 1)) return true;
+        } else if (matches(entry.name)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    return walk(projectRoot, 0);
+  }
+
   _checkGitignore(projectRoot, result) {
     const gitignorePath = path.join(projectRoot, '.gitignore');
     if (!fs.existsSync(gitignorePath)) {
@@ -227,8 +272,26 @@ class SecretsModule extends BaseModule {
       if (!content.includes(pat)) {
         const gitignore = gitignorePath;
         const patToAdd = pat;
+        // Only an ERROR when the risk is live — i.e. a file this pattern
+        // would have covered actually exists in the tree. Otherwise it is a
+        // hygiene advisory about a file the repo does not have.
+        //
+        // Why (neutral-repo audit 2026-08-12): scanning expressjs/express —
+        // which contains no .env, .pem or .key file anywhere — produced three
+        // of these at full confidence and they were 3 of the 5 findings that
+        // BLOCKED the gate. Every blocking line on a healthy repo was noise,
+        // which is precisely how a gate teaches its customer to bypass it.
+        //
+        // Same rationale as the missing-.gitignore branch above, which was
+        // already downgraded on 2026-07-23: it is incoherent for "no
+        // .gitignore at all" to warn while "an existing .gitignore missing
+        // one line" blocks.
+        const atRisk = this._matchingFileExists(projectRoot, pat);
         result.addCheck(`secrets:gitignore-${pat}`, false, {
-          message: `.gitignore missing pattern: ${pat}`,
+          severity: atRisk ? 'error' : 'warning',
+          message: atRisk
+            ? `.gitignore missing pattern: ${pat} — and a matching file exists in the tree`
+            : `.gitignore missing pattern: ${pat}`,
           suggestion: `Add "${pat}" to .gitignore`,
           autoFix: () => {
             try {

@@ -174,9 +174,20 @@ class LintModule extends BaseModule {
       // ever showed stderr — which is exactly why this was silently blank.
       if (exitCode !== 0) {
         const diagnostic = (stderr || stdout || '').slice(0, 300).trim() || '(no output captured)';
+        // Warning, not error — same reasoning as the timeout branch above.
+        // A crash means we could not lint, which is not the same as finding a
+        // defect, and we must never block a customer's build on our own
+        // inability to run a tool.
+        //
+        // Why (neutral-repo audit 2026-08-12): scanning expressjs/express, the
+        // fallback `npx eslint` (v9) could not read that repo's legacy
+        // .eslintrc.yml, so it exited 2 — and GateTest reported the customer's
+        // code as failing. Express's own pinned ESLint passes cleanly. Our
+        // tool-version mismatch is our problem to report, not theirs to fix.
         result.addCheck('lint:eslint', false, {
-          message: `ESLint crashed (exit ${exitCode}): ${diagnostic}`,
-          suggestion: 'Run "npx eslint ." manually to diagnose',
+          severity: 'warning',
+          message: `ESLint could not run (exit ${exitCode}): ${diagnostic}`,
+          suggestion: 'Run "npx eslint ." manually to diagnose. If this project pins its own ESLint, install dependencies before scanning so GateTest uses it instead of the fallback.',
         });
         return;
       }

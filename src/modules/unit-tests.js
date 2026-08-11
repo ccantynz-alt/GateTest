@@ -28,6 +28,24 @@ class UnitTestsModule extends BaseModule {
 
     result.addCheck('unit-tests:framework', true, { message: `Detected: ${testCommand.name}` });
 
+    // Dependencies not installed? Then a non-zero exit says nothing about the
+    // customer's tests — the runner itself is missing. Reporting that as
+    // "Unit tests failed" blames the customer for our scan environment.
+    //
+    // Why (neutral-repo audit 2026-08-12): a fresh clone of expressjs/express
+    // failed here in 523ms because mocha wasn't installed, and it was one of
+    // the 5 findings that BLOCKED the gate on a repo whose suite is green
+    // upstream. Skip honestly instead of failing dishonestly.
+    if (this._dependenciesMissing(projectRoot)) {
+      result.addCheck('unit-tests:run', true, {
+        severity: 'info',
+        message: 'Skipped — dependencies are not installed, so the test runner cannot start',
+        suggestion: 'Run "npm ci" (or your package manager\'s install) before scanning to include test results',
+      });
+      this._checkCoverage(projectRoot, config, result);
+      return;
+    }
+
     const { exitCode, stdout, stderr } = this._exec(testCommand.command, {
       cwd: projectRoot,
       timeout: 300000, // 5 minutes
@@ -45,6 +63,29 @@ class UnitTestsModule extends BaseModule {
 
     // Check for test coverage
     this._checkCoverage(projectRoot, config, result);
+  }
+
+  /**
+   * True when the project declares dependencies but has no installed tree to
+   * run them from. Only meaningful for the Node ecosystem — a Python or Go
+   * project has no node_modules and must not be treated as uninstalled.
+   *
+   * @param {string} projectRoot
+   * @returns {boolean}
+   */
+  _dependenciesMissing(projectRoot) {
+    const pkgPath = path.join(projectRoot, 'package.json');
+    if (!fs.existsSync(pkgPath)) return false;
+    let pkg;
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    } catch {
+      return false; // unparseable package.json is a different module's finding
+    }
+    const declares = Object.keys(pkg.dependencies || {}).length > 0
+      || Object.keys(pkg.devDependencies || {}).length > 0;
+    if (!declares) return false;
+    return !fs.existsSync(path.join(projectRoot, 'node_modules'));
   }
 
   _detectTestCommand(projectRoot) {
