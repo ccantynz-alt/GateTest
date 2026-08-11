@@ -23,6 +23,7 @@ Every tool here was chosen because it is the **best in its class right now.** If
 |---|---|---|
 | **Framework** | Next.js 16 (App Router) | Latest, fastest, Vercel-native |
 | **Styling** | Tailwind CSS 4 | Utility-first, dark theme, zero unused CSS |
+| **UI components** | shadcn/ui + Radix UI (Craig-authorized 2026-08-12 — "should be available to us for any coding session to help with output/polish") | Pre-approved under Boss Rule #2. Base wired up: `cn()` in `website/app/lib/cn.ts`, `website/components.json`, and the four base deps. **`shadcn init` was deliberately NOT run** — its default tokens redefine `--muted` and `--accent`, which mean different things here (482 + 486 call sites). Read **`docs/UI-COMPONENTS.md`** before running `shadcn add`. |
 | **Hosting** | **Vapron** (Craig 2026-07-14 cutover; re-confirmed "zero old services" 2026-07-23) | Craig's platform; deploy per `docs/deploy/VAPRON-DEPLOY.md`. Vercel is RETIRED for production — its GitHub integration may still build PR previews until Craig disconnects it. |
 | **Domain** | gatetest.io | Secured |
 
