@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "name": "modern-node-idioms",
+  "category": "known-good",
+  "tier": "full",
+  "target": "code",
+  "url": null,
+  "capturedAt": "2026-08-11T23:10:54.322Z",
+  "capturedBy": "gatetest-reliability@win32",
+  "capturedFrom": null,
+  "findingsByModule": {
+    "unitTests": {
+      "errors": 1,
+      "warnings": 0,
+      "info": 0
+    },
+    "security": {
+      "errors": 1,
+      "warnings": 0,
+      "info": 0
+    },
+    "seo": {
+      "errors": 2,
+      "warnings": 0,
+      "info": 0
+    },
+    "compatibility": {
+      "errors": 0,
+      "warnings": 0,
+      "info": 1
+    },
+    "documentation": {
+      "errors": 1,
+      "warnings": 4,
+      "info": 1
+    },
+    "deadCode": {
+      "errors": 0,
+      "warnings": 1,
+      "info": 0
+    },
+    "envVars": {
+      "errors": 0,
+      "warnings": 3,
+      "info": 0
+    },
+    "mutation": {
+      "errors": 1,
+      "warnings": 0,
+      "info": 0
+    },
+    "deployReadiness": {
+      "errors": 0,
+      "warnings": 2,
+      "info": 0
+    }
+  },
+  "totals": {
+    "errors": 6,
+    "warnings": 10,
+    "info": 2
+  },
+  "passed": true,
+  "note": null
+}

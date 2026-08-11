@@ -7,11 +7,11 @@
   "expected": {
     "errors": {
       "lint": {
-        "atMost": 1
+        "atMost": 0
       }
     },
-    "totalErrorsAtMost": 1,
-    "totalWarningsAtMost": 1
+    "totalErrorsAtMost": 0,
+    "totalWarningsAtMost": 2
   },
   "budgets": {
     "maxDurationMs": 15000,
@@ -24,5 +24,5 @@
   ],
   "source": "hand-crafted",
   "createdAt": "2026-05-29T00:00:00Z",
-  "knownNoise": "Allows up to 1 lint error because the corpus case doesn't install ESLint deps; the scanner correctly reports the missing tool. Real customer projects have the dep installed so this is acceptable framework noise. Also allows 1 warning (lint:eslint-config \"No ESLint configuration found\") for the same reason — the corpus case intentionally ships without dev dependencies, so the scanner correctly reports the missing tool. Ceiling is exact so any ADDITIONAL warning fails the case."
+  "knownNoise": "Two warnings, zero errors. (1) lint:eslint — the corpus case intentionally ships without dev dependencies, so ESLint cannot run; as of 2026-08-12 that is reported as a WARNING rather than an error, because being unable to lint is not the same as finding a defect and must never block a build. (2) deadCode — the trivial module's export has no importer inside the fixture. Ceilings are exact so any ADDITIONAL finding fails the case. Note the error ceiling was TIGHTENED from 1 to 0 in the same change: a known-good case must now produce zero errors, which is what this case's description asked for all along."
 }
