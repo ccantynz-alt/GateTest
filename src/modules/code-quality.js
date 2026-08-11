@@ -41,7 +41,7 @@ class CodeQualityModule extends BaseModule {
       const neutralisedLines = this._neutraliseContent(content).split('\n');
 
       // Check forbidden patterns
-      this._checkForbiddenPatterns(file, relPath, content, lines, neutralisedLines, moduleConfig, result);
+      this._checkForbiddenPatterns(file, relPath, content, lines, neutralisedLines, moduleConfig, result, projectRoot);
 
       // Check function length — collect violations for grouped summary
       this._collectFunctionLengthViolations(relPath, lines, thresholds.maxFunctionLength, funcLengthViolations);
@@ -257,8 +257,93 @@ class CodeQualityModule extends BaseModule {
     return out;
   }
 
-  _checkForbiddenPatterns(absPath, relPath, content, lines, neutralisedLines, moduleConfig, result) {
+  /**
+   * Directory names that are, by near-universal convention, NOT library code.
+   * A `console.log` here is the file doing its job: a demo printing its own
+   * banner, a CLI talking to the user, a test emitting a diagnostic.
+   */
+  static NON_LIBRARY_DIRS = new Set([
+    'example', 'examples', 'demo', 'demos', 'sample', 'samples',
+    'bin', 'script', 'scripts', 'cli', 'tool', 'tools',
+    'test', 'tests', '__tests__', 'spec', 'specs', 'e2e', 'fixture', 'fixtures',
+    'doc', 'docs', 'benchmark', 'benchmarks', 'playground', 'sandbox',
+  ]);
+
+  /**
+   * Is this path library code — the thing a consumer imports — as opposed to a
+   * demo, CLI, test or script?
+   *
+   * @param {string} relFwd - repo-relative path, forward slashes
+   * @returns {boolean}
+   */
+  _isLibraryPath(relFwd) {
+    return !relFwd.split('/').some(seg => CodeQualityModule.NON_LIBRARY_DIRS.has(seg.toLowerCase()));
+  }
+
+  /**
+   * Does this repo publish a package others import? Only then is "no
+   * console.log in library code" a rule about someone else's console.
+   *
+   * Cached per project — this is called once per forbidden-pattern hit.
+   *
+   * @param {string} projectRoot
+   * @returns {boolean}
+   */
+  _publishesPackage(projectRoot) {
+    if (this._publishesCache && this._publishesCache.root === projectRoot) {
+      return this._publishesCache.value;
+    }
+    let value = false;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+      value = pkg.private !== true && Boolean(pkg.main || pkg.exports || pkg.module || pkg.bin);
+    } catch { /* no/unreadable package.json — treat as an application */ }
+    this._publishesCache = { root: projectRoot, value };
+    return value;
+  }
+
+  /**
+   * Logging that is obviously deliberate — guarded by a verbose/debug flag, so
+   * it is off by default and the author clearly meant it.
+   *
+   * @param {string} rawLine
+   * @returns {boolean}
+   */
+  _isDeliberateLogging(rawLine) {
+    return /\bverbose\b/i.test(rawLine) || /process\.env\.DEBUG\b/.test(rawLine);
+  }
+
+  /**
+   * Severity for one forbidden-pattern hit, or `undefined` to keep the
+   * module default (error).
+   *
+   * Only the `console.*` rule is context-sensitive. `debugger`, `eval`, the
+   * Function constructor and `innerHTML =` are defects wherever they appear
+   * and stay unconditional errors.
+   *
+   * Why (neutral-repo audit 2026-08-12): scanning expressjs/express, this rule
+   * alone produced 37 of 50 error-severity findings — every one of them a demo
+   * in `examples/` printing its own startup banner ('Express started on port
+   * 3000'), or a verbose-guarded log, or a test diagnostic. The Bible's rule is
+   * "no console.log IN LIBRARY CODE"; the module was dropping that qualifier.
+   *
+   * The old `excludePaths` default could not have helped a customer: it lists
+   * GateTest's own directory names (`src/reporters`, `src/hooks`), so it only
+   * ever protected this repo from its own scan.
+   *
+   * @returns {string|undefined}
+   */
+  _severityForForbidden(patternSource, relFwd, rawLine, projectRoot) {
+    if (!patternSource.includes('console')) return undefined;
+    if (!this._isLibraryPath(relFwd)) return 'warning';
+    if (this._isDeliberateLogging(rawLine)) return 'warning';
+    if (!this._publishesPackage(projectRoot)) return 'warning';
+    return undefined;
+  }
+
+  _checkForbiddenPatterns(absPath, relPath, content, lines, neutralisedLines, moduleConfig, result, projectRoot) {
     const patterns = moduleConfig.forbiddenPatterns || [];
+    const relFwd = relPath.replace(/\\/g, '/');
     for (const { pattern, message } of patterns) {
       const regex = new RegExp(pattern.source, pattern.flags);
       for (let i = 0; i < lines.length; i++) {
@@ -277,9 +362,11 @@ class CodeQualityModule extends BaseModule {
         regex.lastIndex = 0;
         if (regex.test(neutralised)) {
           const lineNum = i;
+          const severity = this._severityForForbidden(pattern.source, relFwd, line, projectRoot);
           result.addCheck(`quality:${message}:${relPath}:${i + 1}`, false, {
             file: relPath,
             line: i + 1,
+            ...(severity ? { severity } : {}),
             message: `${message} at line ${i + 1}`,
             suggestion: 'Remove or replace this pattern before committing',
             autoFix: () => this._removeLineFromFile(absPath, lineNum, relPath, message),
