@@ -49,21 +49,38 @@ jobs:
         run: |
           if [ -z "$BOX_SSH_KEY" ] || [ -z "$BOX_SSH_HOST" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            # Be LOUD about not deploying. This step used to print one plain
-            # line and exit 0, so every push to main showed a green "Deploy to
-            # production box / success" that had deployed nothing. Production
-            # sat 60 commits behind for six days and nothing surfaced it
-            # (found 2026-08-04). A silent skip that reports success is
-            # exactly Forbidden #16.
-            echo "::warning title=Deploy skipped — production NOT updated::BOX_SSH_KEY / BOX_SSH_HOST are not set, so this push did not reach production. Add them in Settings → Secrets and variables → Actions to enable auto-deploy."
+            # FAIL, do not warn. History of this exact step:
+            #
+            #   2026-08-04  It printed one plain line and exited 0. Production
+            #               sat 60 commits behind for six days; nothing
+            #               surfaced it.
+            #   then        Mitigation: make it LOUD — ::warning:: plus a step
+            #               summary — but still exit 0, to keep main green.
+            #   2026-08-12  It happened AGAIN. Production sat 6 commits behind
+            #               for six days on ff0fe9b3 while every push showed
+            #               "Deploy to production box / success".
+            #
+            # The mitigation was tested by reality and lost. A warning on a
+            # green run is invisible: nobody opens a passing workflow. The only
+            # signal anyone actually sees is a red X, so this now fails.
+            #
+            # A red deploy job here is not a broken build — it is an ACCURATE
+            # report that this push did not reach production. Deploy is not a
+            # required status check, so it blocks no merge; it just stops the
+            # dashboard from lying. That is Forbidden #16: never silently fail.
+            echo "::error title=Deploy skipped — production NOT updated::BOX_SSH_KEY / BOX_SSH_HOST are not set, so this push did not reach production. Add them in Settings → Secrets and variables → Actions to enable auto-deploy."
             {
-              echo "### ⚠️ Deploy skipped — production was NOT updated"
-              echo
-              echo "This run went green without deploying anything."
+              echo "### 🚨 Deploy did NOT run — production is unchanged"
               echo
               echo "\`BOX_SSH_KEY\` / \`BOX_SSH_HOST\` are not configured, so the deploy step is inert."
-              echo "Until Craig adds them (Settings → Secrets and variables → Actions), **every push to \`main\` leaves production on whatever commit was last deployed by hand.**"
+              echo "**Every push to \`main\` leaves production on whatever commit was last deployed by hand.**"
+              echo
+              echo "This job fails deliberately. It went green while deploying nothing twice"
+              echo "(2026-08-04 and 2026-08-12); a warning nobody reads is not a signal."
+              echo
+              echo "Fix: add both secrets in Settings → Secrets and variables → Actions."
             } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
