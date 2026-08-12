@@ -147,8 +147,27 @@ async function checkEnv() {
   const missing = new Set(
     [...(status.missing_required || []), ...(status.missing_important || [])].map(nameOf).filter(Boolean),
   );
+
+  // A variable that is SET TO FILLER is strictly worse than one that is unset,
+  // because every absence check reports it green. /api/status already detects
+  // this (src/core/env-placeholder.js) and returns `invalid_placeholders` — but
+  // this script used to read only the two "missing" lists, so it reproduced the
+  // very trap that detector exists to close.
+  //
+  // Found 2026-08-12: production's GATETEST_PRIVATE_KEY was the pasted setup-doc
+  // example, so GitHub App JWT auth could not work at all — no commit statuses,
+  // no PR comments, nothing the listing promises. The preflight said DO NOT
+  // SUBMIT for four other reasons and never mentioned the fatal one.
+  const placeholders = Array.isArray(status.invalid_placeholders) ? status.invalid_placeholders : [];
+  const fake = new Set(placeholders.map(nameOf).filter(Boolean));
+  for (const p of placeholders) {
+    const name = nameOf(p);
+    record('BLOCKER', `${name} is set to a placeholder, not a real value`, `${p.reason || 'fails validation'} — "set" is not "valid"; every absence check reports this green while the feature is dead`);
+  }
+
   for (const [key, why] of Object.entries(REQUIRED_ENV)) {
     if (missing.has(key)) record('BLOCKER', `${key} is not set in production`, why);
+    else if (fake.has(key)) { /* already reported above as a placeholder — do not also claim it is present */ }
     else record('OK', `${key} present`);
   }
   if ((status.missing_required || []).length) {
@@ -271,25 +290,46 @@ function checkAppPermissions() {
   }
 }
 
+/**
+ * Queue drain.
+ *
+ * The PRIMARY driver is the pair of systemd timers on the production box
+ * (`scripts/deploy/systemd/`), which read CRON_SECRET from the box's own
+ * website/.env.local. The `cron-ticks` GitHub Actions workflow is an explicitly
+ * OPTIONAL second driver — see scripts/deploy/systemd/README.md: "The Actions
+ * workflow can stay as a second driver if its secret is ever set — both ticks
+ * are idempotent." Keeping the drain on the box is also what Forbidden #3 wants:
+ * a critical user flow should not hang off an external system.
+ *
+ * So a disarmed Actions workflow is NOT a submission blocker, and calling it one
+ * was this script's own crying-wolf bug (2026-08-12 audit): it sent the operator
+ * chasing a redundant driver while implying the queue was dead. The timers
+ * cannot be observed from off-box, so the honest output is a WARN naming the one
+ * command that answers it.
+ */
 function checkCronArmed() {
   console.log('\nQueue drain (the listing claims scans run on every push)');
+  const VERIFY = 'the box timers are the primary drain and cannot be checked from here — on the box run: systemctl list-timers gatetest-tick.timer gatetest-watches.timer';
   try {
     const out = gh(['run', 'list', '--workflow=cron-ticks.yml', '--limit', '1', '--json', 'conclusion,databaseId']);
     const runs = JSON.parse(out);
     if (!runs.length) {
-      record('WARN', 'cron-ticks has never run');
+      record('WARN', 'optional Actions cron has never run', VERIFY);
       return;
     }
     const log = gh(['run', 'view', String(runs[0].databaseId), '--log']);
     if (/disarmed|CRON_SECRET repo secret is NOT SET/i.test(log)) {
-      record('BLOCKER', 'cron stopgap is disarmed', 'CRON_SECRET repo secret unset — queued push-scans are never executed, so the reviewer will install, push, and see nothing happen');
+      record('WARN', 'optional Actions cron is disarmed (CRON_SECRET repo secret unset)', VERIFY);
     } else if (/401/.test(log)) {
+      // A 401 IS worth blocking on: the secret exists but disagrees with the
+      // host, which usually means the box value was rotated without updating
+      // everything that points at it.
       record('BLOCKER', 'cron tick returned 401', 'the repo CRON_SECRET does not match the one on the production host');
     } else {
-      record('OK', 'cron stopgap armed and ticking');
+      record('OK', 'Actions cron armed and ticking (second driver)');
     }
-  } catch (err) {
-    record('SKIP', 'cron status not checked', 'gh unavailable — confirm the queue drains before submitting');
+  } catch {
+    record('SKIP', 'cron status not checked', `gh unavailable — ${VERIFY}`);
   }
 }
 

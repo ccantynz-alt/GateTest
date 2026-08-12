@@ -214,6 +214,20 @@ describe('marketplace sync — code, listing, install page, and App agree', () =
       );
     });
 
+    it('preflight blocks on placeholder env values, not just missing ones', () => {
+      // 2026-08-12: production's GATETEST_PRIVATE_KEY held the pasted setup-doc
+      // example, so GitHub App JWT auth was dead — no commit statuses, no PR
+      // comments. /api/status detects this and returns `invalid_placeholders`,
+      // but the preflight read only the two "missing" lists, so it printed DO
+      // NOT SUBMIT for four lesser reasons and never named the fatal one.
+      // "Set" is not "valid"; a var set to filler defeats every absence check.
+      const preflight = read(PREFLIGHT);
+      assert.ok(
+        /invalid_placeholders/.test(preflight),
+        `${PREFLIGHT} must consume /api/status's invalid_placeholders — a var set to filler passes every "is it missing?" check while the feature it powers is dead.`,
+      );
+    });
+
     it('preflight targets the org that owns the live app', () => {
       // It queried crclabs-hq until 2026-08-05 — the org owning the ORPHANED
       // duplicate. The one check meant to prevent a third rejection was
