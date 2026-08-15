@@ -22,10 +22,9 @@ export default function Privacy() {
 
         <div className="border border-amber-500/30 bg-amber-500/5 rounded p-3 mb-6 text-xs text-amber-200/80">
           <strong>Draft notice.</strong> This Privacy Policy is an operator-authored draft intended
-          to describe GateTest&apos;s data-handling posture prior to attorney review. Several
-          sections (in particular the GDPR, CCPA, sub-processor, and data-transfer sections) are
-          marked &quot;DRAFT — requires attorney review&quot; and should not be treated as final
-          until that review is complete.
+          to describe GateTest&apos;s data-handling posture prior to attorney review. The GDPR,
+          CCPA, sub-processor, and data-transfer sections in particular have not yet been reviewed
+          by counsel and should not be treated as final until that review is complete.
         </div>
 
         <div className="space-y-6 text-sm text-muted leading-relaxed">
@@ -51,13 +50,11 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">1A. Controller vs Processor Roles</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. Controller / processor characterisation must be
-              confirmed for each data category and each customer context. Where a business customer
-              uploads repositories that contain personal data of its own end users, GateTest is
-              typically a processor and the customer is the controller; a Data Processing Addendum
-              (DPA) should govern.]
-            </p>
+            {/* DRAFT — requires attorney review. Controller / processor characterisation must be
+                confirmed for each data category and each customer context. Where a business
+                customer uploads repositories that contain personal data of its own end users,
+                GateTest is typically a processor and the customer is the controller; a Data
+                Processing Addendum (DPA) should govern. */}
             <p>
               For the purposes of the EU / UK GDPR and analogous laws, GateTest acts as:
             </p>
@@ -193,14 +190,12 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">6. Data Retention Schedule</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. Retention windows should be confirmed against NZ
-              tax law, the Financial Reporting Act 2013, the Privacy Act 2020 storage-limitation
-              principle, and counterpart retention-limitation rules under GDPR (Art. 5(1)(e)) and
-              CCPA / CPRA. Where scan results are retained &quot;indefinitely while paid account
-              active&quot;, counsel should confirm the documented lawful basis and storage-
-              limitation justification.]
-            </p>
+            {/* DRAFT — requires attorney review. Retention windows should be confirmed against NZ
+                tax law, the Financial Reporting Act 2013, the Privacy Act 2020 storage-limitation
+                principle, and counterpart retention-limitation rules under GDPR (Art. 5(1)(e)) and
+                CCPA / CPRA. Where scan results are retained "indefinitely while paid account
+                active", counsel should confirm the documented lawful basis and storage- limitation
+                justification. */}
             <ul className="list-disc pl-5 space-y-2">
               <li>
                 <strong>Source code:</strong> NOT stored. Accessed in memory during the scan
@@ -266,11 +261,9 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">7A. Cookies and Local Storage</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. The strictly-necessary-by-default posture, and the
-              opt-in model for any non-essential analytics, should be confirmed against EU/UK
-              ePrivacy rules and the Privacy and Electronic Communications Regulations.]
-            </p>
+            {/* DRAFT — requires attorney review. The strictly-necessary-by-default posture, and the
+                opt-in model for any non-essential analytics, should be confirmed against EU/UK
+                ePrivacy rules and the Privacy and Electronic Communications Regulations. */}
             <p>
               We use the minimum set of cookies and local-storage items necessary to operate the
               Service. By default, only <strong>strictly necessary</strong> cookies are set:
@@ -300,11 +293,9 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">8. Your Rights</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. The timeline commitments and verification process
-              should be confirmed against the Privacy Act 2020 (NZ), GDPR Articles 12-23, UK GDPR,
-              and CCPA/CPRA response windows.]
-            </p>
+            {/* DRAFT — requires attorney review. The timeline commitments and verification process
+                should be confirmed against the Privacy Act 2020 (NZ), GDPR Articles 12-23, UK GDPR,
+                and CCPA/CPRA response windows. */}
             <p>
               Regardless of your location, you have the following rights regarding your personal
               data. Some of these rights are absolute; others are subject to conditions and
@@ -375,12 +366,10 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">9. International Data Transfers and Safeguards</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. Counsel should confirm that the listed transfer
-              mechanisms (SCCs, adequacy decisions) are each in effect with the relevant
-              sub-processor at launch, and should assess whether supplementary measures under
-              <em> Schrems II</em> are required for any US-bound transfer.]
-            </p>
+            {/* DRAFT — requires attorney review. Counsel should confirm that the listed transfer
+                mechanisms (SCCs, adequacy decisions) are each in effect with the relevant
+                sub-processor at launch, and should assess whether supplementary measures under <em>
+                Schrems II</em> are required for any US-bound transfer. */}
             <p>
               Because our infrastructure providers and sub-processors operate in the United States
               (and, in some cases, the European Union, United Kingdom, and other jurisdictions),
@@ -424,10 +413,8 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">10. Children&apos;s Privacy (COPPA and GDPR Article 8)</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. The COPPA threshold (13) and GDPR Article 8 Member
-              State age (13-16) must be confirmed for each applicable jurisdiction.]
-            </p>
+            {/* DRAFT — requires attorney review. The COPPA threshold (13) and GDPR Article 8 Member
+                State age (13-16) must be confirmed for each applicable jurisdiction. */}
             <p>
               The Service is not directed at children and is intended for users aged eighteen (18)
               or older (see Terms of Service, Section 24). We do not knowingly collect personal
@@ -459,13 +446,11 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">11. Sub-Processors and Third-Party Services</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. The sub-processor list and the DPA references
-              below must be confirmed current at launch. For each sub-processor, counsel should
-              confirm (i) the DPA or equivalent in force, (ii) the lawful transfer mechanism for EU
-              / UK data (typically SCCs plus supplementary measures or a valid adequacy decision),
-              and (iii) the minimum data actually shared.]
-            </p>
+            {/* DRAFT — requires attorney review. The sub-processor list and the DPA references
+                below must be confirmed current at launch. For each sub-processor, counsel should
+                confirm (i) the DPA or equivalent in force, (ii) the lawful transfer mechanism for
+                EU / UK data (typically SCCs plus supplementary measures or a valid adequacy
+                decision), and (iii) the minimum data actually shared. */}
             <p>
               We rely on the following sub-processors to operate the Service. For each, we list
               what they see, why, and the data-protection framework we rely on. This list is
@@ -579,13 +564,11 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">12. Data Breach Notification</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. The 72-hour commitment aligns with GDPR Article
-              33 and the NZ Privacy Act 2020 &quot;as soon as practicable&quot; standard; counsel
-              should confirm the shorter windows required by specific US state breach-notification
-              laws (e.g. Florida &lt;30 days, Texas &lt;60 days) and whether a commitment should be
-              framed as &quot;statutory timeframe or sooner&quot; to avoid inconsistency.]
-            </p>
+            {/* DRAFT — requires attorney review. The 72-hour commitment aligns with GDPR Article 33
+                and the NZ Privacy Act 2020 "as soon as practicable" standard; counsel should
+                confirm the shorter windows required by specific US state breach-notification laws
+                (e.g. Florida &lt;30 days, Texas &lt;60 days) and whether a commitment should be
+                framed as "statutory timeframe or sooner" to avoid inconsistency. */}
             <p>
               We maintain an incident-response plan aimed at detecting, containing, and notifying
               affected parties of security incidents involving personal data. In the event of a
@@ -622,13 +605,11 @@ export default function Privacy() {
 
           <section>
             <h2 className="text-lg font-semibold text-foreground mb-2">13. Jurisdiction-Specific Disclosures</h2>
-            <p className="text-xs italic text-muted mb-2">
-              [DRAFT — requires attorney review. PRIORITY FLAG. Each sub-section (GDPR Art. 13
-              disclosures, UK-GDPR specifics, CCPA / CPRA consumer-rights language, Virginia CDPA,
-              Colorado CPA, Connecticut CTDPA, Utah UCPA, NZ Privacy Act 2020) should be reviewed
-              by counsel for completeness. The current draft covers GDPR and California but is not
-              a full multi-state US compliance pack.]
-            </p>
+            {/* DRAFT — requires attorney review. PRIORITY FLAG. Each sub-section (GDPR Art. 13
+                disclosures, UK-GDPR specifics, CCPA / CPRA consumer-rights language, Virginia CDPA,
+                Colorado CPA, Connecticut CTDPA, Utah UCPA, NZ Privacy Act 2020) should be reviewed
+                by counsel for completeness. The current draft covers GDPR and California but is not
+                a full multi-state US compliance pack. */}
             <p>
               <strong>13.1 European Economic Area, United Kingdom, and Switzerland (GDPR / UK GDPR
               / Swiss FADP).</strong> If you are located in the EEA, UK, or Switzerland, we

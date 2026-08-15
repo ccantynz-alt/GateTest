@@ -94,8 +94,22 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$BOX_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # App-dir resolution, in order: an explicit GATETEST_APP_DIR on the
+          # box, then /opt/gatetest, then $HOME/gatetest.
+          #
+          # The order matters and used to be wrong. This defaulted straight to
+          # $HOME/gatetest, which for the root user is /root/gatetest — the
+          # path docs/deploy/JARVIS-WEB-DEPLOY.md explicitly calls "the stale
+          # /root/gatetest registry path". The live checkout is /opt/gatetest.
+          # Nobody had noticed because the secrets were never set, so this
+          # step had never actually run: the first deploy after wiring them up
+          # would have either failed on a missing path or, worse, succeeded
+          # against a stale checkout and reported green.
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$BOX_SSH_HOST" \
-            'bash "$(git -C "${GATETEST_APP_DIR:-$HOME/gatetest}" rev-parse --show-toplevel 2>/dev/null || echo "${GATETEST_APP_DIR:-$HOME/gatetest}")/scripts/deploy/deploy-on-box.sh"'
+            'for d in "$GATETEST_APP_DIR" /opt/gatetest "$HOME/gatetest"; do
+               [ -n "$d" ] && [ -f "$d/scripts/deploy/deploy-on-box.sh" ] && exec bash "$d/scripts/deploy/deploy-on-box.sh";
+             done;
+             echo "no GateTest checkout found (tried GATETEST_APP_DIR, /opt/gatetest, \$HOME/gatetest)" >&2; exit 1'
 
       - name: Verify live endpoints
         if: steps.gate.outputs.enabled == 'true'
