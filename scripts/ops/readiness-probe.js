@@ -81,12 +81,24 @@ function localHead() {
     }
   }
 
-  const { passed, total, critical } = report.summary;
+  const { passed, total, critical, productBroken, brokenAreas } = report.summary;
   console.log('');
   if (report.ready) {
     console.log(`  ${C.green}${C.bold}READY${C.reset}  ${passed}/${total} steps passed\n`);
   } else {
-    console.log(`  ${C.red}${C.bold}NOT READY${C.reset}  ${passed}/${total} passed, ${critical} critical failure(s)`);
+    // "10/11 passed" is technically true and practically useless — it reads
+    // as "almost fine" whether the one failure is an unset optional key or a
+    // dead product. Lead with WHICH areas are broken, and say plainly when
+    // the product itself does not work, because this probe has run red for
+    // 100 consecutive scheduled runs and a reader needs to spot a new
+    // failure inside a familiar red.
+    if (productBroken) {
+      console.log(`  ${C.red}${C.bold}PRODUCT BROKEN${C.reset}  the free scan does not work for visitors right now`);
+      console.log(`  ${C.dim}This is not a configuration nit — a stranger arriving today gets nothing.${C.reset}`);
+    } else {
+      console.log(`  ${C.red}${C.bold}NOT READY${C.reset}  ${passed}/${total} passed, ${critical} critical failure(s)`);
+    }
+    console.log(`  ${C.dim}broken: ${brokenAreas.join(', ')}${C.reset}`);
     console.log(`  ${C.dim}Fix the critical steps above before treating this deployment as live.${C.reset}\n`);
   }
   process.exit(report.ready ? 0 : 1);

@@ -11,12 +11,25 @@ name: Readiness Probe (production)
 # question. That stale deploy went unnoticed for ELEVEN DAYS; this job
 # would have gone red on the first run after it.
 #
-# Safe to run unattended: every step is a GET, or a POST we expect to be
-# REJECTED. It never completes a payment and never writes customer data, so
-# it needs no secrets — which is the point. A monitor that requires
-# credentials tends not to get set up.
+# Safe to run unattended: every step is a GET, a POST we expect to be
+# REJECTED, or the free public scan of our OWN public repo. It never
+# completes a payment and never writes customer data, so it needs no secrets
+# — which is the point. A monitor that requires credentials tends not to get
+# set up.
 #
 # A red X here is a real customer-facing problem, not flakiness.
+#
+# 2026-08-16 — this job ran red 100 times in a row over five days without
+# catching the outage that mattered. It reported production 10/11 healthy
+# while the free scan told every visitor their repository was empty. Three
+# blind spots, all now closed and regression-tested:
+#   * it never ran the product, so it could not see the product was dead
+#   * "deploy/fresh" only asserted a commit stamp EXISTED — a 10-day-old
+#     build passed a check named "fresh"
+#   * it read /api/status's missing_* lists but not invalid_placeholders,
+#     which had been naming the dead GATETEST_PRIVATE_KEY the whole time
+# The summary now says PRODUCT BROKEN when the funnel is down, so a new
+# failure is legible inside a red that has become familiar.
 
 on:
   schedule:

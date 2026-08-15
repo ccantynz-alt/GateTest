@@ -23,8 +23,11 @@
  * DESIGN RULES
  *   1. SIDE-EFFECT FREE. This runs on a schedule against production. It
  *      never completes a payment, never writes customer data, never mutates
- *      anything. Every step is a GET, or a POST that we expect to be
- *      REJECTED (auth probes).
+ *      anything. Every step is a GET, a POST that we expect to be REJECTED
+ *      (auth probes), or the free public scan of our OWN public repo —
+ *      read-only, no third party's resources, no customer data. That last
+ *      one was added 2026-08-16: see checkProductWorks() for why a probe
+ *      that never runs the product cannot tell you the product works.
  *   2. NO SECRETS REQUIRED. Every check is unauthenticated, so it can run
  *      from CI or a laptop without handing credentials to a cron job.
  *   3. A step reports WHY, not just red. A failure that does not tell you
@@ -40,6 +43,25 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const CRITICAL = 'critical';
 const WARNING = 'warning';
 
+/**
+ * How old a production build may get before it is a defect rather than a
+ * quiet week. Two days warns; a week is the point at which "we shipped that
+ * fix" has become false without anyone noticing.
+ */
+const STALE_BUILD_WARN_DAYS = 2;
+const STALE_BUILD_CRITICAL_DAYS = 7;
+
+/** Our own public repo — the canary target. No third party is involved. */
+const DEFAULT_CANARY_REPO = 'https://github.com/ccantynz-alt/GateTest';
+
+/** Build age in days from an ISO timestamp, or null if unusable. */
+function buildAgeDays(builtAt, now = Date.now()) {
+  if (!builtAt) return null;
+  const t = Date.parse(builtAt);
+  if (Number.isNaN(t)) return null;
+  return (now - t) / 86_400_000;
+}
+
 function ok(name, detail, extra = {}) {
   return { name, ok: true, detail, ...extra };
 }
@@ -51,13 +73,16 @@ function fail(name, detail, severity, fix, extra = {}) {
  * One HTTP call with a timeout that never throws — a network blip must be a
  * reported step failure, not a crashed probe.
  */
-async function request(fetchFn, url, { method = 'GET', timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+async function request(fetchFn, url, { method = 'GET', timeoutMs = DEFAULT_TIMEOUT_MS, json = null } = {}) {
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
+    const headers = { accept: 'application/json,text/html' };
+    if (json) headers['content-type'] = 'application/json';
     const res = await fetchFn(url, {
       method,
-      headers: { accept: 'application/json,text/html' },
+      headers,
+      body: json ? JSON.stringify(json) : undefined,
       signal: controller ? controller.signal : undefined,
     });
     let body = '';
@@ -109,7 +134,35 @@ async function checkDeployFreshness(fetchFn, base, expectedCommit) {
       { commit, expectedCommit },
     );
   }
-  return ok('deploy/fresh', `commit ${commit.slice(0, 12)}${data.version ? ` (v${data.version})` : ''}`, { commit });
+  // A commit stamp only proves we can TELL fresh from stale — it does not
+  // prove fresh. On 2026-08-16 this step printed a green "deploy/fresh" for a
+  // build that was ten days old, because it only asserted the stamp existed.
+  // A check named "fresh" that passes a stale deploy is worse than no check:
+  // it answers the question the reader actually asked, wrongly.
+  //
+  // Scheduled runs still must not demand an exact HEAD match (main moves
+  // ahead of production between deploys, and a job that is red by design
+  // trains everyone to ignore it) — but age is not a matter of opinion. A
+  // build older than the ceiling means deploys have stopped reaching
+  // production, which is exactly the failure that hid for eleven days once
+  // and ten days again.
+  const age = buildAgeDays(data.builtAt);
+  if (age !== null && age >= STALE_BUILD_CRITICAL_DAYS) {
+    return fail(
+      'deploy/fresh', `live build is ${age.toFixed(1)} days old (commit ${commit.slice(0, 12)}, built ${data.builtAt})`, CRITICAL,
+      'Deploys have stopped reaching production. Check that BOX_SSH_KEY / BOX_SSH_HOST are set on the repo so .github/workflows/deploy-box.yml can actually ship, then compare /api/platform-status `commit` against `git rev-parse HEAD`.',
+      { commit, ageDays: age },
+    );
+  }
+  if (age !== null && age >= STALE_BUILD_WARN_DAYS) {
+    return fail(
+      'deploy/fresh', `live build is ${age.toFixed(1)} days old (commit ${commit.slice(0, 12)})`, WARNING,
+      'Not yet critical, but nothing has shipped in a while — confirm that is deliberate and not a broken deploy path.',
+      { commit, ageDays: age },
+    );
+  }
+  const agePart = age === null ? '' : `, ${age.toFixed(1)}d old`;
+  return ok('deploy/fresh', `commit ${commit.slice(0, 12)}${data.version ? ` (v${data.version})` : ''}${agePart}`, { commit, ageDays: age });
 }
 
 /** Is the deployment actually configured, by its own account? */
@@ -136,6 +189,21 @@ async function checkConfig(fetchFn, base) {
     ? ok('config/important', 'all important env vars set')
     : fail('config/important', `missing: ${missingImportant.map((m) => m.name || m).join(', ')}`, CRITICAL,
       'These do not break the site, they break a feature a customer has PAID for, silently. Treat as critical.'));
+
+  // A SET-BUT-WRONG secret is invisible to every "missing" list — the var is
+  // present, so `missing_required` is empty and `config/required` goes green.
+  // /api/status has reported GATETEST_PRIVATE_KEY under `invalid_placeholders`
+  // (the pasted documentation example, not the real .pem) since 2026-08-06,
+  // and this probe read straight past it for ten days while printing "all
+  // required env vars set". scripts/marketplace-preflight.js already read this
+  // field; the two disagreed about whether production was configured, and the
+  // one running every 30 minutes was the one that was wrong.
+  const placeholders = Array.isArray(data.invalid_placeholders) ? data.invalid_placeholders : [];
+  steps.push(placeholders.length === 0
+    ? ok('config/placeholders', 'no documentation filler in live secrets')
+    : fail('config/placeholders',
+      `documentation filler: ${placeholders.map((p) => p.name || p).join(', ')}`, CRITICAL,
+      'The variable is SET but holds the example value from the docs, so every call it authenticates fails. Replace it with the real secret on the host and restart. GATETEST_PRIVATE_KEY in this state means GitHub App auth is dead: no commit statuses, no PR comments, and no repo reads.'));
 
   return steps;
 }
@@ -212,6 +280,68 @@ async function checkSchedulerEndpoints(fetchFn, base, paths) {
   return steps;
 }
 
+/**
+ * Does the product actually DO ITS JOB?
+ *
+ * Every other check here asks whether a page loads or a variable is set. None
+ * of them run the product. On 2026-08-16 all of them were green while the free
+ * scan — the top of the entire funnel — returned "appears to be empty or
+ * unreachable" for expressjs/express, vercel/next.js and every other repo on
+ * earth, because production's GitHub credential was a placeholder returning
+ * 401. A visitor was told THEIR repo was broken. That had been true for ten
+ * days, through roughly 480 runs of this probe, and this probe reported the
+ * site 10/11 healthy the whole time.
+ *
+ * A monitor that never exercises the product cannot tell you the product
+ * works. This step is the difference between "the site is up" and "the site
+ * is useful", and they are not the same claim.
+ *
+ * Read-only and free: it scans our own public repo through the same public
+ * endpoint a stranger uses. No third party's resources, no payment, no
+ * customer data, no credentials.
+ */
+async function checkProductWorks(fetchFn, base, repoUrl) {
+  const name = 'product/scan';
+  const r = await request(fetchFn, `${base}/api/scan/preview`, {
+    method: 'POST',
+    json: { repoUrl },
+    // A real scan does real work — the 10s default would report our own
+    // impatience as an outage.
+    timeoutMs: 45_000,
+  });
+
+  if (!r.ok) return fail(name, `free scan unreachable: ${r.error}`, CRITICAL, 'The free preview is the top of the funnel. If it does not answer, no visitor can ever become a customer.');
+
+  const data = parseJson(r.body);
+  if (r.status === 429 || (data && typeof data.error === 'string' && /rate limit/i.test(data.error))) {
+    // Self-inflicted and not a product defect — say so rather than crying wolf.
+    return ok(name, 'rate-limited (probe ran too soon after the last one) — not a product failure');
+  }
+  if (r.status !== 200 || !data) {
+    const why = data && data.error ? data.error : `HTTP ${r.status}`;
+    return fail(name, `free scan failed: ${why}`, CRITICAL,
+      'Run it yourself: POST /api/scan/preview {"repoUrl":"' + repoUrl + '"}. If it reports the repo is empty or unreachable, check config/placeholders above — a dead GitHub credential surfaces here as a lie about the customer\'s repository.',
+      { status: r.status, body: String(r.body || '').slice(0, 300) });
+  }
+  if (data.ok === false) {
+    return fail(name, `free scan returned an error: ${data.error || 'unspecified'}`, CRITICAL,
+      'The endpoint answered but refused to scan a known-good public repo. This is the exact shape of the 2026-08-16 outage.',
+      { body: String(r.body || '').slice(0, 300) });
+  }
+
+  // Answered 200 but found nothing in a repo we know has findings — that is
+  // an empty scan dressed as a successful one, which is the failure mode a
+  // naive "did it return 200" check would wave through.
+  const moduleCount = Array.isArray(data.modules) ? data.modules.length : 0;
+  const fileCount = Number(data.filesScanned || data.files || 0);
+  if (moduleCount === 0 && fileCount === 0) {
+    return fail(name, 'free scan returned 200 but scanned nothing (no modules, no files)', CRITICAL,
+      'A scan that reads zero files is a failure wearing a success status code. Check that the git host credential can read the tree.',
+      { body: String(r.body || '').slice(0, 300) });
+  }
+  return ok(name, `free scan works (${moduleCount} module result(s)${fileCount ? `, ${fileCount} files` : ''})`);
+}
+
 // ---------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------
@@ -259,6 +389,9 @@ async function runReadinessProbe(opts = {}) {
   steps.push(...await checkConfig(fetchFn, base));
   steps.push(...await checkCustomerSurfaces(fetchFn, base, opts.surfaces || DEFAULT_SURFACES));
   steps.push(...await checkSchedulerEndpoints(fetchFn, base, opts.cronPaths || DEFAULT_CRON_PATHS));
+  if (opts.skipProductCheck !== true) {
+    steps.push(await checkProductWorks(fetchFn, base, opts.canaryRepo || DEFAULT_CANARY_REPO));
+  }
 
   const failures = steps.filter((s) => !s.ok);
   const critical = failures.filter((s) => s.severity === CRITICAL);
@@ -272,6 +405,14 @@ async function runReadinessProbe(opts = {}) {
       failed: failures.length,
       critical: critical.length,
       warnings: failures.length - critical.length,
+      // The headline. This probe has sat red for 100 consecutive runs over
+      // missing env vars, and a permanently-red alarm is one nobody can read
+      // a NEW failure out of. Splitting "the product does not work" from
+      // "something is misconfigured" keeps the first legible while the
+      // second is still outstanding — they need different people and
+      // different urgency.
+      productBroken: failures.some((s) => s.name.startsWith('product/') && s.severity === CRITICAL),
+      brokenAreas: [...new Set(critical.map((s) => s.name.split('/')[0]))].sort(),
     },
   };
 }
@@ -280,6 +421,10 @@ module.exports = {
   runReadinessProbe,
   DEFAULT_SURFACES,
   DEFAULT_CRON_PATHS,
+  DEFAULT_CANARY_REPO,
+  STALE_BUILD_WARN_DAYS,
+  STALE_BUILD_CRITICAL_DAYS,
+  buildAgeDays,
   CRITICAL,
   WARNING,
   // exposed for tests
@@ -287,4 +432,5 @@ module.exports = {
   _checkConfig: checkConfig,
   _checkCustomerSurfaces: checkCustomerSurfaces,
   _checkSchedulerEndpoints: checkSchedulerEndpoints,
+  _checkProductWorks: checkProductWorks,
 };
