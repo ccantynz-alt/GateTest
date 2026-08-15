@@ -74,6 +74,52 @@ describe('fetchTreeWithMetadata — source-text contract', () => {
     assert.match(src, /payload\.truncated\s*===\s*true/);
   });
 
+  // -------------------------------------------------------------------------
+  // An unreadable tree is NOT an empty repo.
+  // -------------------------------------------------------------------------
+  // Found 2026-08-16 by probing live production: expressjs/express,
+  // vercel/next.js and every other public repo came back as
+  // "appears to be empty or unreachable". The repos were fine; our GitHub
+  // credential was returning 401. `if (ghRes.ok)` skipped the failure without
+  // recording it, then the Gluecron fallback's `return { paths: [] }` turned
+  // our outage into a message blaming the customer's repository. The lie is
+  // what made it survive 10 days in production — the error pointed every
+  // reader at the wrong system. These tests pin the honest contract.
+  it('records WHY the GitHub tree read failed instead of skipping past it', () => {
+    assert.match(src, /githubFailure/);
+    assert.match(src, /if\s*\(!ghRes\.ok\)/);
+    assert.match(src, /export\s+function\s+describeGithubTreeFailure/);
+  });
+
+  it('names our own credential as the cause of a 401 — never the customer repo', () => {
+    const desc = src.slice(src.indexOf('describeGithubTreeFailure'));
+    assert.match(desc, /status\s*===\s*401/);
+    // The 401 branch must say it is OUR configuration at fault.
+    assert.match(desc, /not your repository/);
+  });
+
+  it('throws when the tree is unreadable rather than returning an empty path list', () => {
+    // Both failure exits of the Gluecron fallback must throw, so callers
+    // report the real cause instead of rendering "this repo is empty".
+    assert.match(src, /throw\s+new\s+Error\(\s*treeUnreadable\(/);
+    assert.doesNotMatch(
+      src,
+      /if\s*\(res\.status\s*!==\s*200\)\s*return\s*\{\s*paths:\s*\[\]/,
+      'unreadable tree must not be reported as an empty repo',
+    );
+    assert.doesNotMatch(
+      src,
+      /if\s*\(!payload\.tree\)\s*return\s*\{\s*paths:\s*\[\]/,
+      'missing tree must not be reported as an empty repo',
+    );
+  });
+
+  it('surfaces both the GitHub and fallback causes in the thrown message', () => {
+    assert.match(src, /function\s+treeUnreadable/);
+    assert.match(src, /Could not read the file tree for/);
+    assert.match(src, /fallback \$\{fallbackFailure\}/);
+  });
+
   it('falls back to the per-directory walker when GitHub truncates the tree (Known Issue #24 residual)', () => {
     assert.match(src, /require\(["']\.\/github-tree-walker["']\)/);
     assert.match(src, /walkGithubTree\s*\(/);

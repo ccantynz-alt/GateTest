@@ -291,6 +291,34 @@ export interface FetchTreeResult {
 const TREE_SIZE_WARN_THRESHOLD = 50_000;
 
 /**
+ * Name the cause of a failed GitHub tree read in terms the reader can act on,
+ * and — critically — say WHOSE fault it is. A 401 is our credential, not the
+ * customer's repo; sending them to check their URL wastes their time and hides
+ * an outage from us.
+ */
+export function describeGithubTreeFailure(status: number): string {
+  if (status === 401)
+    return "GateTest's git-host credential was rejected (401 Bad credentials) — this is our configuration, not your repository";
+  if (status === 403)
+    return "GitHub refused the request (403) — GateTest's credential lacks access or the API rate limit is exhausted";
+  if (status === 404)
+    return "GitHub returned 404 — the repository does not exist, is private, or GateTest's credential cannot see it";
+  if (status >= 500) return `GitHub is returning ${status} — upstream outage, not a problem with your repository`;
+  return `GitHub returned ${status}`;
+}
+
+/** Compose the final "we could not read the tree" message from both attempts. */
+function treeUnreadable(
+  owner: string,
+  repo: string,
+  githubFailure: string | null,
+  fallbackFailure: string,
+): string {
+  const cause = githubFailure ? `${githubFailure}; fallback ${fallbackFailure}` : fallbackFailure;
+  return `Could not read the file tree for ${owner}/${repo}: ${cause}`;
+}
+
+/**
  * Detailed tree fetch — returns paths PLUS truncation metadata so
  * callers can surface a "we may have missed files" warning to the
  * customer instead of silently losing coverage.
@@ -319,6 +347,13 @@ export async function fetchTreeWithMetadata(
     token === (process.env.GITHUB_TOKEN || "") ||
     token === (process.env.GATETEST_GITHUB_TOKEN || "");
 
+  // Why the tree fetch failed, if it did. An unreadable tree and a genuinely
+  // empty repo are DIFFERENT states, and conflating them told customers
+  // "your repo appears to be empty" when the real cause was our own dead
+  // credential — a lie that survived 10 days in production because the
+  // message pointed the reader at the wrong system (Bible Forbidden #16).
+  let githubFailure: string | null = null;
+
   if (isGitHub && token) {
     try {
       const ghRes = await fetch(
@@ -331,6 +366,13 @@ export async function fetchTreeWithMetadata(
           },
         },
       );
+      if (!ghRes.ok) {
+        githubFailure = describeGithubTreeFailure(ghRes.status);
+        // eslint-disable-next-line no-console
+        console.error(
+          `[fetchTree] ${owner}/${repo}@${ref}: GitHub ${ghRes.status} — ${githubFailure}`,
+        );
+      }
       if (ghRes.ok) {
         const ghData = (await ghRes.json()) as {
           tree?: Array<{ path: string; type: string }>;
@@ -358,7 +400,10 @@ export async function fetchTreeWithMetadata(
         }
         return { paths, truncated, warning };
       }
-    } catch {
+    } catch (err) {
+      githubFailure = `GitHub API unreachable (${err instanceof Error ? err.message : "network error"})`;
+      // eslint-disable-next-line no-console
+      console.error(`[fetchTree] ${owner}/${repo}@${ref}: ${githubFailure}`);
       /* fall through to gluecron */
     }
   }
@@ -367,9 +412,17 @@ export async function fetchTreeWithMetadata(
     "GET",
     `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(ref)}?recursive=1`,
   );
-  if (res.status !== 200) return { paths: [], truncated: false, warning: null };
+  // Both hosts failed. Throwing is the honest outcome: callers already wrap
+  // this in try/catch and surface the reason, whereas returning [] silently
+  // becomes "this repo is empty" downstream. A genuinely empty repo still
+  // returns 200 with an empty tree above and is unaffected.
+  if (res.status !== 200) {
+    throw new Error(treeUnreadable(owner, repo, githubFailure, `git host returned ${res.status}`));
+  }
   const payload = res.data as unknown as GluecronTreeResponse & { truncated?: boolean };
-  if (!payload.tree) return { paths: [], truncated: false, warning: null };
+  if (!payload.tree) {
+    throw new Error(treeUnreadable(owner, repo, githubFailure, "git host returned no tree"));
+  }
   const paths = payload.tree.filter((f) => f.type === "blob").map((f) => f.path);
   const truncated = payload.truncated === true;
   let warning: string | null = null;
