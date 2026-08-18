@@ -14,14 +14,29 @@
 
 import https from "https";
 import { getDb } from "./db";
-import { fetchBlob, fetchTree, resolveRepoAuth } from "./gluecron-client";
-import { runTier, type RepoFile, TIERS } from "./scan-modules";
+import { loadRepoFiles, resolveRepoAuth } from "./gluecron-client";
+import { type RepoFile, TIERS } from "./scan-modules";
+import { runEngineForTier, CLI_ENGINE_TIERS } from "./scan-engine-dispatch";
 
 /** Safe set of tier names — anything outside this set falls back to "quick". */
 const KNOWN_TIERS = new Set(Object.keys(TIERS));
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
-const MAX_FILES_TO_READ = 50;
+/** In-memory quick tier: a small, fast sample is the point (free funnel). */
+const QUICK_MAX_FILES = 60;
+/** CLI-engine tiers: the whole repo, bounded by the engine's own budget. */
+const ENGINE_MAX_FILES = 4000;
+/** Wall-clock budget for one hosted engine run (worker tick / Stripe job). */
+const ENGINE_TIME_BUDGET_MS = 240_000;
+
+/** Files that must be present for monorepo/workspace discovery and the
+ *  modules that read conventions — loaded first when any cap applies. */
+const PRIORITY_FILES = new Set([
+  "package.json", "pnpm-workspace.yaml", "pnpm-workspace.yml", "lerna.json",
+  "tsconfig.json", ".gatetest.json", ".gatetestignore", "pyproject.toml",
+  "go.mod", "Cargo.toml", "Gemfile", "composer.json", "pom.xml", "build.gradle",
+]);
+const prioritizeManifest = (p: string): boolean => PRIORITY_FILES.has(p.split("/").pop() ?? "");
 
 export interface ScanModuleResult {
   name: string;
@@ -45,6 +60,11 @@ export interface ScanResult {
   duration: number;
   authSource?: string | null;
   error?: string;
+  /** honesty fields — how much of the repo the engine actually saw */
+  filesAnalysed?: number;
+  filesInRepo?: number;
+  coverageTruncated?: boolean;
+  engine?: "cli" | "runTier";
 }
 
 function stripeApi(
@@ -119,15 +139,17 @@ export async function runScanDirect(
     return emptyResult(startTime, "No files provided");
   }
 
-  const capped = files.slice(0, MAX_FILES_TO_READ);
-  const filePaths = capped.map((f) => f.path);
   const normalisedTier = KNOWN_TIERS.has(tier) ? tier : "quick";
+  const capped = files.slice(0, CLI_ENGINE_TIERS.has(normalisedTier) ? ENGINE_MAX_FILES : QUICK_MAX_FILES);
+  const filePaths = capped.map((f) => f.path);
 
-  const { modules, totalIssues } = await runTier(normalisedTier, {
+  const { modules, totalIssues } = await runEngineForTier({
+    tier: normalisedTier,
     owner: projectName || "direct",
     repo: projectName || "upload",
     files: filePaths,
     fileContents: capped,
+    deadlineMs: startTime + ENGINE_TIME_BUDGET_MS,
   });
 
   return {
@@ -147,9 +169,13 @@ export async function runScanDirect(
  */
 export async function runScan(
   repoUrl: string,
-  tier: string
+  tier: string,
+  opts: { ref?: string } = {}
 ): Promise<ScanResult> {
   const startTime = Date.now();
+  // Scan the commit that was pushed, not whatever HEAD is by the time the
+  // worker gets to the job — a status posted on SHA X must describe SHA X.
+  const ref = opts.ref && /^[A-Za-z0-9._\/-]+$/.test(opts.ref) ? opts.ref : "HEAD";
 
   // Accept Gluecron URLs first; fall back to GitHub URLs so customer-supplied
   // links work in either form during the migration window.
@@ -164,19 +190,31 @@ export async function runScan(
   const repo = repoMatch[2].replace(/\.git$/, "");
 
   const auth = await resolveRepoAuth(owner, repo);
-  const token = auth.token || undefined;
+  // A missing token is not fatal for a PUBLIC repo — loadRepoFiles reads the
+  // anonymous archive. Private repos surface the real read failure below.
+  const token = auth.token || "";
+  const normalisedTier = KNOWN_TIERS.has(tier) ? tier : "quick";
+  const engineTier = CLI_ENGINE_TIERS.has(normalisedTier);
+  const deadlineMs = startTime + ENGINE_TIME_BUDGET_MS;
 
-  if (!token) {
+  // Whole repo in one archive read (credentialed → anonymous → per-blob API).
+  // The 50-file sample this used to take meant a paid Full scan of a
+  // 2,000-file repo analysed ~2.5% of it; the engine now sees the repo.
+  let loaded;
+  try {
+    loaded = await loadRepoFiles(owner, repo, ref, token, {
+      maxFiles: engineTier ? ENGINE_MAX_FILES : QUICK_MAX_FILES,
+      prioritize: prioritizeManifest,
+      deadlineMs,
+    });
+  } catch (err) {
     return emptyResult(
       startTime,
-      `Cannot access repository ${owner}/${repo}${auth.error ? ` (${auth.error})` : ""}`,
+      `Cannot access repository ${owner}/${repo} (${err instanceof Error ? err.message : "tree read failed"})${auth.error ? ` — ${auth.error}` : ""}`,
       auth.source
     );
   }
-
-  // Gluecron uses a defaultBranch by convention — we fetch the tree at HEAD
-  // and let Gluecron resolve the ref server-side.
-  const files = await fetchTree(owner, repo, "HEAD", token);
+  const { paths: files, fileContents } = loaded;
   if (files.length === 0) {
     return emptyResult(
       startTime,
@@ -184,40 +222,24 @@ export async function runScan(
       auth.source
     );
   }
+  if (loaded.warning) {
+    // eslint-disable-next-line no-console
+    console.warn(`[scan-executor] ${owner}/${repo}: ${loaded.warning}`);
+  }
 
-  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
-  const sourceFiles = files.filter(
-    (f) =>
-      sourceExts.some((ext) => f.endsWith(ext)) &&
-      !f.includes("node_modules") &&
-      !f.includes(".next") &&
-      !f.includes("dist/")
-  );
-
-  // Read file contents in parallel via the Gluecron contents endpoint.
-  const readPromises = sourceFiles
-    .slice(0, MAX_FILES_TO_READ)
-    .map(async (filePath): Promise<RepoFile | null> => {
-      try {
-        const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
-        if (content) {
-          return { path: filePath, content };
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    });
-  const fileContents: RepoFile[] = (await Promise.all(readPromises)).filter((f): f is RepoFile => f !== null);
-
-  const normalisedTier = KNOWN_TIERS.has(tier) ? tier : "quick";
-  const { modules, totalIssues } = await runTier(normalisedTier, {
+  const { modules, totalIssues, engineUsed } = await runEngineForTier({
+    tier: normalisedTier,
     owner,
     repo,
     files,
     fileContents,
     token,
+    deadlineMs,
   });
+  if (engineTier && engineUsed !== "cli") {
+    // eslint-disable-next-line no-console
+    console.warn(`[scan-executor] ${owner}/${repo} (${normalisedTier}): CLI engine unavailable — served in-memory ${modules.length}-module fallback`);
+  }
 
   return {
     status: "complete",
@@ -228,6 +250,10 @@ export async function runScan(
     totalFixed: 0,
     duration: Date.now() - startTime,
     authSource: auth.source,
+    filesAnalysed: fileContents.length,
+    filesInRepo: files.length,
+    coverageTruncated: loaded.truncated,
+    engine: engineUsed,
   };
 }
 

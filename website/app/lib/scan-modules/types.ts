@@ -93,4 +93,9 @@ export const TIERS: Record<string, string[]> = {
    *  scan minus AI-cost modules. Not customer-facing; selected by
    *  computeShadowTier() in lib/scan-redaction.js when paidTier === "quick". */
   quick_shadow: QUICK_SHADOW_MODULES,
+  /** Every-push tier for the GitHub App / Gluecron webhook and Continuous
+   *  subscribers without AI allowance: the FULL deterministic engine with the
+   *  Anthropic-calling modules skipped (see scan-engine-dispatch.ts). This TS
+   *  list is only the in-memory fallback if the CLI engine cannot run. */
+  deterministic: QUICK_SHADOW_MODULES,
 };

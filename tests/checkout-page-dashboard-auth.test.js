@@ -43,20 +43,22 @@ test('playground upsell links still point at /checkout (the route the page now s
   assert.match(src, /\/checkout\?tier=/, 'playground must link to /checkout?tier=...');
 });
 
-test('scan/run maps the scan_fix tier to the full engine suite (no silent standard fallback)', () => {
+test('scan_fix maps to the full engine suite in the shared dispatcher (no silent standard fallback)', () => {
   // "scan_fix" is a pricing tier, not an engine suite — getSuite() falls back
   // to the 45-module standard suite for unknown names, which quietly gave
-  // $199 Scan+Fix customers a SHALLOWER scan than $99 Full customers.
+  // $199 Scan+Fix customers a SHALLOWER scan than $99 Full customers. The
+  // mapping moved from the route into scan-engine-dispatch.ts on 2026-08-18
+  // so every hosted path (route, worker tick, Stripe job) shares it.
   const src = fs.readFileSync(
-    path.resolve(__dirname, '..', 'website', 'app', 'api', 'scan', 'run', 'route.ts'),
+    path.resolve(__dirname, '..', 'website', 'app', 'lib', 'scan-engine-dispatch.ts'),
     'utf8'
   );
   assert.match(
     src,
-    /shadowTier\s*===\s*"scan_fix"\s*\?\s*"full"\s*:\s*shadowTier/,
-    'scan/run must map the scan_fix tier to the "full" suite before calling runFullEngine'
+    /export function engineSuiteForTier[\s\S]*?if \(tier === "nuclear"\) return "nuclear";\s*return "full";/,
+    'engineSuiteForTier must map every non-nuclear CLI tier (full, scan_fix, deterministic) to the "full" suite'
   );
-  assert.match(src, /suite:\s*engineSuite/, 'runFullEngine must receive the mapped suite, not the raw tier');
+  assert.match(src, /suite:\s*engineSuiteForTier\(tier\)/, 'runFullEngine must receive the mapped suite, not the raw tier');
 });
 
 test('/api/dashboard requires a verified customer session (no body-email lookup)', () => {

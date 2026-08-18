@@ -398,10 +398,10 @@ describe('runWorkerTick — continuous AI budget gate', () => {
       return makeScanResult();
     };
     await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({}) });
-    assert.strictEqual(tierUsed, 'quick');
+    assert.strictEqual(tierUsed, 'deterministic', 'every-push scans run the full deterministic engine, not the 4-module quick sample');
   });
 
-  it('stays on quick when the repo has no active continuous subscription', async () => {
+  it('stays on deterministic when the repo has no active continuous subscription', async () => {
     const qs = makeQueueStore({ nextJob: makeJob() });
     const cs = makeContinuousStore({ subscription: null });
     let tierUsed = null;
@@ -410,7 +410,7 @@ describe('runWorkerTick — continuous AI budget gate', () => {
       return makeScanResult();
     };
     await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({}), continuousStore: cs });
-    assert.strictEqual(tierUsed, 'quick');
+    assert.strictEqual(tierUsed, 'deterministic');
     assert.strictEqual(cs.calls.checkAiAllowance.length, 0, 'never checks allowance without a subscription');
   });
 
@@ -442,7 +442,7 @@ describe('runWorkerTick — continuous AI budget gate', () => {
       return makeScanResult();
     };
     await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({}), continuousStore: cs });
-    assert.strictEqual(tierUsed, 'quick', 'exhausted budget must not grant AI-inclusive tier');
+    assert.strictEqual(tierUsed, 'deterministic', 'exhausted budget must not grant AI-inclusive tier');
   });
 
   it('fails CLOSED to quick when checkAiAllowance throws', async () => {
@@ -457,11 +457,11 @@ describe('runWorkerTick — continuous AI budget gate', () => {
       return makeScanResult();
     };
     const result = await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({}), continuousStore: cs });
-    assert.strictEqual(tierUsed, 'quick', 'a budget-check error must never grant unmetered AI spend');
+    assert.strictEqual(tierUsed, 'deterministic', 'a budget-check error must never grant unmetered AI spend');
     assert.strictEqual(result.ok, true, 'the tick itself still completes');
   });
 
-  it('fails CLOSED to quick when findActiveByRepo throws', async () => {
+  it('fails CLOSED to the deterministic tier when findActiveByRepo throws', async () => {
     const qs = makeQueueStore({ nextJob: makeJob() });
     const cs = makeContinuousStore({ findThrows: new Error('db down') });
     let tierUsed = null;
@@ -470,7 +470,7 @@ describe('runWorkerTick — continuous AI budget gate', () => {
       return makeScanResult();
     };
     await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({}), continuousStore: cs });
-    assert.strictEqual(tierUsed, 'quick');
+    assert.strictEqual(tierUsed, 'deterministic');
   });
 
   it('records AI spend against the subscription ledger after a scan that incurred cost', async () => {

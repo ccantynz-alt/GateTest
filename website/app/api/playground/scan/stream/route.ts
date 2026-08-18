@@ -30,7 +30,7 @@
 
 import { NextRequest } from "next/server";
 import { runTier, type ModuleResultEnvelope } from "@/app/lib/scan-modules";
-import { resolveRepoAuth, fetchTree, fetchBlob } from "@/app/lib/gluecron-client";
+import { resolveRepoAuth, loadRepoFiles } from "@/app/lib/gluecron-client";
 import { MODULE_CATEGORIES, totalModuleCount } from "@/app/components/howitworks/modules-data";
 
 export const runtime = "nodejs";
@@ -128,9 +128,17 @@ export async function POST(req: NextRequest) {
         // the anonymous public archive (repo-snapshot.js, KI #100/#101).
         const token = auth.token || "";
 
+        const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json"];
+        const isPlaygroundSource = (f: string) =>
+          sourceExts.some((ext) => f.endsWith(ext)) && !f.includes("node_modules") && !f.includes(".next") && !f.includes("dist/");
+        // One archive read for tree + contents (credentialed → anonymous →
+        // per-blob API) instead of `git/trees` + N blob calls.
         let files: string[];
+        let fileContents: Array<{ path: string; content: string }>;
         try {
-          files = await fetchTree(owner, repo, "HEAD", token);
+          const loaded = await loadRepoFiles(owner, repo, "HEAD", token, { maxFiles: MAX_FILES_TO_READ, filter: isPlaygroundSource });
+          files = loaded.paths;
+          fileContents = loaded.fileContents;
         } catch (err) {
           send("error", { error: `Cannot access ${owner}/${repo} (${err instanceof Error ? err.message : "tree read failed"})` });
           clearInterval(keepAlive);
@@ -145,21 +153,7 @@ export async function POST(req: NextRequest) {
           controller.close();
           return;
         }
-
-        const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json"];
-        const notExcluded = (f: string) => !f.includes("node_modules") && !f.includes(".next") && !f.includes("dist/");
-        const filesToFetch = files.filter((f) => sourceExts.some((ext) => f.endsWith(ext)) && notExcluded(f)).slice(0, MAX_FILES_TO_READ);
-
-        const fileContents = (
-          await Promise.all(
-            filesToFetch.map(async (p) => {
-              try {
-                const content = await fetchBlob(owner, repo, p, "HEAD", token);
-                return content ? { path: p, content } : null;
-              } catch { return null; }
-            })
-          )
-        ).filter((f): f is { path: string; content: string } => f !== null);
+        const filesToFetch = fileContents.map((f) => f.path);
 
         const { modules, totalIssues } = await runTier(
           "quick",

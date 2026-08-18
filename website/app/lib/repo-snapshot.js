@@ -37,8 +37,17 @@ const DEFAULT_MAX_FILES = 20_000;
 const DEFAULT_DEADLINE_MS = 20_000;
 const BLOCK = 512;
 
-function tarballUrl(owner, repo, ref) {
-  return `https://codeload.github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tar.gz/${encodeURIComponent(ref || "HEAD")}`;
+function tarballUrl(owner, repo, ref, token) {
+  const o = encodeURIComponent(owner);
+  const r = encodeURIComponent(repo);
+  const f = encodeURIComponent(ref || "HEAD");
+  // With a credential, use the API archive endpoint — it serves PRIVATE repos
+  // too and 302s to a signed codeload URL (fetch drops the Authorization
+  // header on that cross-origin hop, which is exactly right). Without one,
+  // go straight to codeload: anonymous, unmetered, public repos only.
+  return token
+    ? `https://api.github.com/repos/${o}/${r}/tarball/${f}`
+    : `https://codeload.github.com/${o}/${r}/tar.gz/${f}`;
 }
 
 /** Read a NUL-terminated ASCII field from a tar header. */
@@ -125,6 +134,7 @@ function parseTar(buf, { maxFileBytes, maxFiles }) {
 async function fetchPublicRepoSnapshot(owner, repo, ref = "HEAD", opts = {}) {
   const {
     fetchImpl = globalThis.fetch,
+    token = "",
     maxBytes = DEFAULT_MAX_BYTES,
     maxFileBytes = DEFAULT_MAX_FILE_BYTES,
     maxFiles = DEFAULT_MAX_FILES,
@@ -137,14 +147,21 @@ async function fetchPublicRepoSnapshot(owner, repo, ref = "HEAD", opts = {}) {
   const timer = setTimeout(() => ac.abort(), deadlineMs);
   let res;
   try {
-    res = await fetchImpl(tarballUrl(owner, repo, ref), {
-      headers: { "User-Agent": "GateTest", Accept: "application/octet-stream" },
+    const headers = { "User-Agent": "GateTest", Accept: "application/octet-stream" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    res = await fetchImpl(tarballUrl(owner, repo, ref, token), {
+      headers,
       redirect: "follow",
       signal: ac.signal,
     });
     if (!res.ok) {
       if (res.status === 404) {
-        throw new Error(`public archive for ${owner}/${repo}@${ref} not found (404) — the repository is private, does not exist, or the ref is wrong`);
+        throw new Error(token
+          ? `archive for ${owner}/${repo}@${ref} not found (404) — the repository does not exist, the ref is wrong, or the credential cannot see it`
+          : `public archive for ${owner}/${repo}@${ref} not found (404) — the repository is private, does not exist, or the ref is wrong`);
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`archive for ${owner}/${repo}@${ref} refused (HTTP ${res.status}) — GateTest's git-host credential was rejected or rate-limited; this is our configuration, not your repository`);
       }
       throw new Error(`public archive for ${owner}/${repo}@${ref} unavailable (HTTP ${res.status})`);
     }
@@ -186,7 +203,7 @@ async function fetchPublicRepoSnapshot(owner, repo, ref = "HEAD", opts = {}) {
     const warning = truncated
       ? `Repository has more than ${maxFiles} text files — snapshot kept the first ${maxFiles}; scans may miss findings in the remainder.`
       : null;
-    return { paths: allPaths, contents, truncated, warning, source: "tarball" };
+    return { paths: allPaths, contents, truncated, warning, source: token ? "tarball-auth" : "tarball" };
   } finally {
     clearTimeout(timer);
   }

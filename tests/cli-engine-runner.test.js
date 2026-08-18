@@ -232,12 +232,31 @@ describe('runFullEngine — mutation/chaos exclusion', () => {
     'utf8'
   );
 
-  it('passes skipModules: [mutation, chaos] to runSuite()', () => {
+  it('always passes mutation + chaos in skipModules to runSuite(), merged with any caller-supplied extras', () => {
     assert.match(
       src,
-      /runSuite\(suite,\s*\{\s*\n?\s*skipModules:\s*\[\s*['"]mutation['"]\s*,\s*['"]chaos['"]\s*\]/,
-      'runFullEngine must call runSuite(suite, { skipModules: ["mutation", "chaos"] }) — without this, paying Full/Forensic customers can get a confusing false "mutation testing" failure since the /tmp workspace never gets npm install run'
+      /runSuite\(suite,\s*\{\s*\n?\s*skipModules:\s*\[\.\.\.new Set\(\[\s*['"]mutation['"]\s*,\s*['"]chaos['"]\s*,\s*\.\.\./,
+      'runFullEngine must call runSuite(suite, { skipModules: [...new Set(["mutation", "chaos", ...skipModules])] }) — mutation/chaos can never run in the /tmp workspace (no npm install, no browser), and callers must be able to ADD skips (the deterministic tier) but never REMOVE those two'
     );
+  });
+
+  it('honours caller-supplied skipModules (the deterministic tier skips every Anthropic-calling module)', async () => {
+    const { AI_MODULE_NAMES } = require('./helpers/ai-module-names.js');
+    const out = await runFullEngine({
+      suite: 'full',
+      skipModules: AI_MODULE_NAMES,
+      fileContents: [
+        { path: 'README.md', content: '# project\n' },
+        { path: 'src/index.js', content: 'module.exports = function add(a, b) { return a + b; };\n' },
+      ],
+      deadlineMs: Date.now() + 120_000,
+    });
+    assert.equal(out.engine, 'cli');
+    assert.ok(out.modules.length >= 40, `expected the full suite (dozens of modules), got ${out.modules.length}`);
+    for (const name of AI_MODULE_NAMES) {
+      const m = out.modules.find((x) => x.name === name);
+      assert.ok(!m || m.status === 'skipped', `${name} must not RUN on a deterministic scan (status: ${m && m.status})`);
+    }
   });
 });
 

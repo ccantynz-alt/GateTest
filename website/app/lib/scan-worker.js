@@ -74,15 +74,18 @@ function isAuthorisedTick({ cronHeader, isAdmin, env }) {
  * @param {object} args
  * @param {Function} args.sql                             Neon tagged template
  * @param {Object}   args.queueStore                      scan-queue-store module (or test double)
- * @param {Function} args.runScan                         (repoUrl, tier) → Promise<ScanResult>
+ * @param {Function} args.runScan                         (repoUrl, tier, { ref }) → Promise<ScanResult>
  * @param {Function} args.sendCallback                    ({ repository, sha, ref, scanResult }) → Promise<any>
  * @param {Object}   [args.continuousStore]                continuous-subscription-store module (or test double).
  *                                                          When provided, a job whose repo has an active Continuous
  *                                                          ($49/mo) subscription with AI budget remaining runs the
- *                                                          'full' (AI-inclusive) tier instead of 'quick', and any
+ *                                                          'full' (AI-inclusive) tier instead of 'deterministic', and any
  *                                                          AI spend incurred is recorded against that month's ledger.
  *                                                          Omitted entirely → identical to pre-KI-34 behaviour.
- * @param {string}   [args.tier]                          defaults to 'quick'
+ * @param {string}   [args.tier]                          defaults to 'deterministic' — the FULL engine with the
+ *                                                          Anthropic-calling modules skipped. Until 2026-08-18 this
+ *                                                          defaulted to 'quick' (4 in-memory modules on ≤50 files),
+ *                                                          which made "121 modules on every push" false in production.
  */
 async function runWorkerTick({
   sql,
@@ -90,7 +93,7 @@ async function runWorkerTick({
   runScan,
   sendCallback,
   continuousStore,
-  tier = 'quick',
+  tier = 'deterministic',
 }) {
   if (!sql || typeof sql !== 'function') {
     return { ok: false, error: 'sql tagged-template is required' };
@@ -133,8 +136,8 @@ async function runWorkerTick({
   // Continuous ($49/mo) budget gate (Known Issue #34). Deterministic scans
   // are always unlimited — only the AI-inclusive 'full' tier is gated, and
   // only for repos with an active subscription and remaining budget. Any
-  // lookup/check failure fails CLOSED to 'quick' — an error here must never
-  // grant unmetered AI spend.
+  // lookup/check failure fails CLOSED to the deterministic tier — an error
+  // here must never grant unmetered AI spend.
   let scanTier = tier;
   let continuousSubscription = null;
   if (continuousStore) {
@@ -152,13 +155,13 @@ async function runWorkerTick({
           sql,
           continuousSubscription.stripe_subscription_id
         );
-        scanTier = allowance.allowed ? 'full' : 'quick';
+        scanTier = allowance.allowed ? 'full' : tier;
       } catch (err) {
         console.error(
           '[scan-worker] checkAiAllowance failed:',
           err && err.message ? err.message : err
         );
-        scanTier = 'quick';
+        scanTier = tier;
       }
     }
   }
@@ -167,7 +170,9 @@ async function runWorkerTick({
   // treat it as a failed attempt.
   let scanResult;
   try {
-    scanResult = await runScan(repoUrl, scanTier);
+    // Pass the pushed SHA so the scan describes the commit the status is
+    // posted on, not whatever HEAD has moved to since the push.
+    scanResult = await runScan(repoUrl, scanTier, { ref: job.sha || undefined });
   } catch (err) {
     scanResult = {
       status: 'failed',

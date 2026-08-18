@@ -306,7 +306,8 @@ const repoSnapshot = require("./repo-snapshot") as {
     owner: string,
     repo: string,
     ref?: string,
-  ) => Promise<{ paths: string[]; contents: Map<string, string>; truncated: boolean; warning: string | null }>;
+    opts?: { token?: string; maxFiles?: number },
+  ) => Promise<{ paths: string[]; contents: Map<string, string>; truncated: boolean; warning: string | null; source: string }>;
 };
 type Snapshot = Awaited<ReturnType<typeof repoSnapshot.fetchPublicRepoSnapshot>>;
 const SNAPSHOT_TTL_MS = 120_000;
@@ -572,6 +573,151 @@ export async function fetchBlob(
   } catch {
     return "";
   }
+}
+
+// ── Whole-repo loader ─────────────────────────────────────────────────────
+// Every scan path used to read a 50–60 file SAMPLE of a repo through N
+// per-blob API calls, so a $399 Forensic scan of a 2,000-file repo analysed
+// ~2.5% of it and could report "clean". One archive download hands back the
+// entire tree with contents; the per-blob API is now the fallback, not the
+// default. Order: credentialed archive (private repos too) → anonymous
+// archive (public repos, dead credential) → tree + capped blob reads.
+
+export interface RepoFilesResult {
+  /** every path in the tree (including binaries and files not loaded) */
+  paths: string[];
+  /** text files actually loaded, after `filter`, up to `maxFiles` */
+  fileContents: Array<{ path: string; content: string }>;
+  source: "archive" | "archive-anonymous" | "api";
+  truncated: boolean;
+  warning: string | null;
+}
+
+export interface LoadRepoFilesOptions {
+  /** cap on loaded text files (default 4000 — the engine, not the wire, is the limit now) */
+  maxFiles?: number;
+  /** cap on per-blob API reads when the archive path is unavailable (default 200) */
+  maxBlobReads?: number;
+  /** keep only these paths (default: everything except node_modules/.next/dist/vendor/lockfiles) */
+  filter?: (path: string) => boolean;
+  /** paths to load first when a cap applies (workspace manifests, files being fixed…) */
+  prioritize?: (path: string) => boolean;
+  /** wall-clock deadline (Date.now()-relative) — API blob reads stop when reached */
+  deadlineMs?: number;
+}
+
+const DEFAULT_EXCLUDED_SEGMENTS = ["node_modules/", ".next/", "dist/", "vendor/", ".git/"];
+const DEFAULT_EXCLUDED_FILES = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|Cargo\.lock|poetry\.lock|composer\.lock|Gemfile\.lock|go\.sum)$|\.min\.(js|css)$|\.map$/;
+
+export function defaultRepoFileFilter(p: string): boolean {
+  if (DEFAULT_EXCLUDED_SEGMENTS.some((seg) => p === seg.slice(0, -1) || p.startsWith(seg) || p.includes(`/${seg}`))) return false;
+  if (DEFAULT_EXCLUDED_FILES.test(p)) return false;
+  return true;
+}
+
+const archiveMemo = new Map<string, { expires: number; promise: Promise<Snapshot> }>();
+function archiveSnapshot(owner: string, repo: string, ref: string, token: string, maxFiles: number): Promise<Snapshot> {
+  const key = `${owner}/${repo}@${ref}#${token ? "auth" : "anon"}#${maxFiles}`;
+  const now = Date.now();
+  const hit = archiveMemo.get(key);
+  if (hit && hit.expires > now) return hit.promise;
+  if (archiveMemo.size >= SNAPSHOT_MEMO_MAX) {
+    const oldest = [...archiveMemo.entries()].sort((a, b) => a[1].expires - b[1].expires)[0];
+    if (oldest) archiveMemo.delete(oldest[0]);
+  }
+  const promise = repoSnapshot.fetchPublicRepoSnapshot(owner, repo, ref, { token, maxFiles });
+  archiveMemo.set(key, { expires: now + SNAPSHOT_TTL_MS, promise });
+  promise.catch(() => archiveMemo.delete(key));
+  return promise;
+}
+
+function orderForLoad(paths: string[], filter: (p: string) => boolean, prioritize?: (p: string) => boolean): string[] {
+  const kept = paths.filter(filter);
+  if (!prioritize) return kept;
+  const first: string[] = [];
+  const rest: string[] = [];
+  for (const p of kept) (prioritize(p) ? first : rest).push(p);
+  return [...first, ...rest];
+}
+
+/**
+ * Load a repository's file tree AND text contents in as few requests as
+ * possible. Never throws for "we could read the tree but a blob failed";
+ * throws only when the tree itself is unreadable (same contract as
+ * fetchTree, so callers keep their existing error handling).
+ */
+export async function loadRepoFiles(
+  owner: string,
+  repo: string,
+  ref: string,
+  token: string,
+  opts: LoadRepoFilesOptions = {},
+): Promise<RepoFilesResult> {
+  const {
+    maxFiles = 4000,
+    maxBlobReads = 200,
+    filter = defaultRepoFileFilter,
+    prioritize,
+    deadlineMs,
+  } = opts;
+  const failures: string[] = [];
+
+  // 1 + 2: archive (credentialed, then anonymous). GitHub-hosted only —
+  // Gluecron repos have no codeload equivalent yet (TODO(host-parity)).
+  const attempts: Array<{ tok: string; source: RepoFilesResult["source"] }> = token
+    ? [{ tok: token, source: "archive" }, { tok: "", source: "archive-anonymous" }]
+    : [{ tok: "", source: "archive-anonymous" }];
+  for (const attempt of attempts) {
+    try {
+      // maxFiles caps TEXT files kept by the archive reader; ask for headroom
+      // so a filter that drops vendor dirs still leaves `maxFiles` to load.
+      const snap = await archiveSnapshot(owner, repo, ref || "HEAD", attempt.tok, Math.max(maxFiles * 3, maxFiles + 2000));
+      const ordered = orderForLoad(snap.paths, filter, prioritize);
+      const fileContents: Array<{ path: string; content: string }> = [];
+      let loadable = 0;
+      for (const p of ordered) {
+        const c = snap.contents.get(p);
+        if (!c) continue;
+        loadable++;
+        if (fileContents.length < maxFiles) fileContents.push({ path: p, content: c });
+      }
+      const truncated = snap.truncated || loadable > fileContents.length;
+      const warning = truncated
+        ? `Repository has more text files than the ${maxFiles}-file scan cap — analysed the first ${fileContents.length}; findings in the remainder are not reported.`
+        : snap.warning;
+      return { paths: snap.paths, fileContents, source: attempt.source, truncated, warning };
+    } catch (err) {
+      failures.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // 3: tree + capped blob reads (the historical path).
+  const tree = await fetchTreeWithMetadata(owner, repo, ref || "HEAD", token);
+  const ordered = orderForLoad(tree.paths, filter, prioritize);
+  const toRead = ordered.slice(0, Math.min(maxBlobReads, maxFiles));
+  const fileContents: Array<{ path: string; content: string }> = [];
+  const CONCURRENCY = 8;
+  let cursor = 0;
+  const workers = Array.from({ length: CONCURRENCY }, async () => {
+    for (;;) {
+      if (deadlineMs && Date.now() > deadlineMs) return;
+      const i = cursor++;
+      if (i >= toRead.length) return;
+      const p = toRead[i];
+      try {
+        const content = await fetchBlob(owner, repo, p, ref || "HEAD", token);
+        if (content) fileContents.push({ path: p, content });
+      } catch {
+        /* a single unreadable blob is not fatal */
+      }
+    }
+  });
+  await Promise.all(workers);
+  const truncated = tree.truncated || ordered.length > toRead.length;
+  const warning = truncated
+    ? `Archive read unavailable (${failures.join("; ") || "no archive attempt"}) — fell back to per-file reads capped at ${toRead.length} of ${ordered.length} files; findings in the remainder are not reported.`
+    : tree.warning;
+  return { paths: tree.paths, fileContents, source: "api", truncated, warning };
 }
 
 /**

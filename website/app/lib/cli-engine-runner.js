@@ -182,9 +182,12 @@ function translateSummary(summary) {
  * @param {string} [opts.suite='full']             quick | full | nuclear etc.
  * @param {number} [opts.deadlineMs]               wall-clock deadline (Date.now()-relative)
  * @param {string} [opts.workspaceParent]          override for /tmp (tests)
+ * @param {string[]} [opts.skipModules]            extra registry names to skip (e.g. the
+ *   Anthropic-calling modules for a "deterministic" run) — merged with the
+ *   always-skipped mutation/chaos pair, never replacing it
  * @returns {Promise<{ modules: ModuleResultEnvelope[], totalIssues: number, duration: number, engine: 'cli' }>}
  */
-async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, workspaceParent }) {
+async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, workspaceParent, skipModules = [] }) {
   if (!Array.isArray(fileContents)) {
     throw new TypeError('fileContents must be an array of { path, content }');
   }
@@ -263,7 +266,7 @@ async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, 
       // mutation) to keep the main gate fast; reused here to keep the
       // website's paid scans honest about what actually ran.
       summary = await new GateTest(workspaceRoot, opts).init().runSuite(suite, {
-        skipModules: ['mutation', 'chaos'],
+        skipModules: [...new Set(['mutation', 'chaos', ...(Array.isArray(skipModules) ? skipModules : [])])],
       });
     } catch (err) {
       process.exitCode = previousExitCode;

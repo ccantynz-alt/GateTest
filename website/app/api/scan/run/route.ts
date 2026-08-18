@@ -26,8 +26,9 @@ const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
 };
 
 const _scanRunLimiter = createLimiter(PRESETS.scanRun);
-import { fetchBlob, fetchTree, resolveRepoAuth } from "@/app/lib/gluecron-client";
-import { runTier, type RepoFile, TIERS } from "@/app/lib/scan-modules";
+import { loadRepoFiles, resolveRepoAuth } from "@/app/lib/gluecron-client";
+import { runEngineForTier, CLI_ENGINE_TIERS } from "@/app/lib/scan-engine-dispatch";
+import { TIERS } from "@/app/lib/scan-modules";
 // Wire contract reference: Gluecron.com/GATETEST_HOOK.md — each repo keeps its
 // own copy per the HTTP-only coupling rule.
 import { sendGluecronCallback } from "@/app/lib/gluecron-callback";
@@ -74,7 +75,16 @@ const KNOWN_TIERS = new Set(
 export const maxDuration = 300;
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
-const MAX_FILES_TO_READ = 50;
+/** In-memory quick tier: a small, fast sample is the point (free funnel). */
+const QUICK_MAX_FILES = 60;
+/** CLI-engine tiers: the whole repo, bounded by the engine's own time budget. */
+const ENGINE_MAX_FILES = 4000;
+const PRIORITY_FILES = new Set([
+  "package.json", "pnpm-workspace.yaml", "pnpm-workspace.yml", "lerna.json",
+  "tsconfig.json", ".gatetest.json", ".gatetestignore", "pyproject.toml",
+  "go.mod", "Cargo.toml", "Gemfile", "composer.json", "pom.xml", "build.gradle",
+]);
+const prioritizeManifest = (p: string): boolean => PRIORITY_FILES.has(p.split("/").pop() ?? "");
 // Leave 30s headroom for Stripe metadata writes and response serialisation.
 const SCAN_TIME_BUDGET_MS = 260_000;
 
@@ -130,6 +140,11 @@ interface ScanRepoResult {
   duration: number;
   authSource?: string | null;
   error?: string;
+  /** honesty fields — how much of the repo the engine actually saw */
+  filesAnalysed?: number;
+  filesInRepo?: number;
+  coverageTruncated?: boolean;
+  engine?: "cli" | "runTier";
 }
 
 async function scanRepo(owner: string, repo: string, tier: string): Promise<ScanRepoResult> {
@@ -154,9 +169,20 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
   // still surface the tree-read failure below with the real cause.
   const token = auth.token || "";
 
-  let files: string[];
+  // Whole repo in one archive read (credentialed → anonymous → per-blob API).
+  // Until 2026-08-18 this read a 50-file, 12-extension SAMPLE through N
+  // Contents-API calls, so a paid Full/Forensic scan of a 2,000-file repo
+  // analysed ~2.5% of it and could report "clean". Workspace manifests are
+  // loaded first so monorepo discovery (dead-code-index.js) still works when
+  // the cap applies. A missing token is not fatal for a public repo.
+  const engineTier = CLI_ENGINE_TIERS.has(shadowTier);
+  let loaded;
   try {
-    files = await fetchTree(owner, repo, "HEAD", token);
+    loaded = await loadRepoFiles(owner, repo, "HEAD", token, {
+      maxFiles: engineTier ? ENGINE_MAX_FILES : QUICK_MAX_FILES,
+      prioritize: prioritizeManifest,
+      deadlineMs: deadline,
+    });
   } catch (err) {
     return {
       modules: [],
@@ -166,6 +192,7 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
       error: `Cannot access ${owner}/${repo} (${err instanceof Error ? err.message : "tree read failed"})${auth.error ? ` — ${auth.error}` : ""}`,
     };
   }
+  const { paths: files, fileContents } = loaded;
   if (files.length === 0) {
     return {
       modules: [],
@@ -175,137 +202,35 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
       error: `Cannot access ${owner}/${repo} — empty tree`,
     };
   }
-
-  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
-  const notExcluded = (f: string) =>
-    !f.includes("node_modules") && !f.includes(".next") && !f.includes("dist/");
-  const sourceFiles = files.filter(
-    (f) => sourceExts.some((ext) => f.endsWith(ext)) && notExcluded(f)
-  );
-
-  // Phase 1C — Configuration-free monorepo discovery.
-  // Workspace config files (root + sub-package package.json, pnpm-workspace.yaml,
-  // lerna.json) are promoted to the front of the fetch list so buildWorkspaceMap()
-  // in dead-code-index.js can discover all workspace packages even in large repos
-  // where the 50-file cap would otherwise exclude them.
-  const MONOREPO_CONFIGS = new Set(['package.json', 'pnpm-workspace.yaml', 'pnpm-workspace.yml', 'lerna.json']);
-  const workspaceConfigFiles = files.filter(
-    (f) => MONOREPO_CONFIGS.has(f.split('/').pop() ?? '') && notExcluded(f)
-  ).slice(0, 30);
-  const workspaceConfigSet = new Set(workspaceConfigFiles);
-  const remainingSourceFiles = sourceFiles.filter((f) => !workspaceConfigSet.has(f));
-  const filesToFetch = [...workspaceConfigFiles, ...remainingSourceFiles].slice(0, MAX_FILES_TO_READ);
-
-  // Read source files (up to MAX_FILES_TO_READ) in parallel for speed.
-  // Bail early if we are already close to the time budget — better to return
-  // whatever we have than to let Vercel kill the function mid-response.
+  if (loaded.warning) console.warn(`[scan/run] ${owner}/${repo}: ${loaded.warning}`);
   if (Date.now() > deadline) {
-    return { modules: [], totalIssues: 0, duration: Date.now() - startTime, authSource: auth.source, error: "scan timed out fetching file tree" };
-  }
-  const fileContents: RepoFile[] = (await Promise.all(
-    filesToFetch.map(async (filePath): Promise<RepoFile | null> => {
-      try {
-        const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
-        return content ? { path: filePath, content } : null;
-      } catch { return null; }
-    })
-  )).filter((f): f is RepoFile => f !== null);
-
-  // Engine selection — closes the historical 102-vs-22 module honesty gap
-  // (module count has since moved to 120; the gap this closed was between
-  // the in-memory quick-tier engine and the full CLI engine, not a specific
-  // number — kept for context, not a live count claim).
-  //
-  // Full / Scan+Fix / Forensic tiers run the full CLI engine (121 modules)
-  // via cli-engine-runner.js — materialises fileContents to /tmp, runs
-  // the same engine the CLI binary runs, translates the summary back.
-  //
-  // Quick tier and quick_shadow stay on the in-memory runTier path because
-  // (a) Quick is the free funnel where we want 4-module sub-second response,
-  // and (b) quick_shadow's whole point is the redacted upsell preview which
-  // is wired against runTier's MODULES map.
-  //
-  // Env override `GATETEST_DISABLE_CLI_ENGINE=1` falls back to runTier for
-  // every tier — emergency lever if the CLI engine misbehaves on a specific
-  // customer's repo. Per-scan fallback also lives inside the function: if
-  // the CLI run errors, we re-run with runTier as a safety net.
-  const cliEngineEnabled =
-    process.env.GATETEST_DISABLE_CLI_ENGINE !== "1" &&
-    ["full", "scan_fix", "nuclear"].includes(shadowTier);
-
-  let modules: ScanRepoResult["modules"];
-  let totalIssues: number;
-  let engineUsed: "cli" | "runTier" = "runTier";
-
-  if (cliEngineEnabled) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { runFullEngine } = require("@/app/lib/cli-engine-runner") as {
-        runFullEngine: (opts: {
-          fileContents: Array<{ path: string; content: string }>;
-          suite: string;
-          deadlineMs?: number;
-        }) => Promise<{
-          modules: ScanRepoResult["modules"];
-          totalIssues: number;
-          duration: number;
-          engine: string;
-          engineMeta?: Record<string, unknown>;
-        }>;
-      };
-      // Tier names are NOT all engine suite names: "scan_fix" is a pricing
-      // tier with no matching suite in src/core/config.js, and getSuite()
-      // silently falls back to the 45-module "standard" suite for unknown
-      // names — which meant a $199 Scan+Fix customer got a SHALLOWER scan
-      // than a $99 Full customer (45 vs 88 modules) until 2026-07-23.
-      // Scan+Fix is "everything in Full Scan, plus fixes", so it runs the
-      // full suite; the fix deliverables live in /api/scan/fix.
-      const engineSuite = shadowTier === "scan_fix" ? "full" : shadowTier;
-      const cliResult = await runFullEngine({
-        fileContents,
-        suite: engineSuite,
-        deadlineMs: deadline,
-      });
-      // Empty result from the CLI engine = workspace materialisation failed.
-      // Fall back to runTier so the customer at least gets the 22-module
-      // result rather than an empty scan.
-      if (cliResult.modules.length === 0) {
-        console.warn(
-          "[scan/run] CLI engine returned 0 modules — falling back to runTier",
-          cliResult.engineMeta || {}
-        );
-      } else {
-        modules = cliResult.modules;
-        totalIssues = cliResult.totalIssues;
-        engineUsed = "cli";
-      }
-    } catch (err) {
-      // CLI engine crashed — fall through to runTier rather than fail the
-      // whole scan. The customer gets honest partial coverage; we log the
-      // crash so engineering can chase the root cause.
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[scan/run] CLI engine crashed, falling back to runTier:", msg);
-    }
+    return { modules: [], totalIssues: 0, duration: Date.now() - startTime, authSource: auth.source, error: "scan timed out fetching repository" };
   }
 
-  if (engineUsed === "runTier") {
-    const fallback = await runTier(shadowTier, {
-      owner,
-      repo,
-      files,
-      fileContents,
-      token,
-      deadlineMs: deadline,
-    });
-    modules = fallback.modules;
-    totalIssues = fallback.totalIssues;
+  // Engine selection lives in ONE place (scan-engine-dispatch.ts) so the
+  // worker tick, the Stripe job and this route cannot drift apart again.
+  const { modules, totalIssues, engineUsed } = await runEngineForTier({
+    tier: shadowTier,
+    owner,
+    repo,
+    files,
+    fileContents,
+    token,
+    deadlineMs: deadline,
+  });
+  if (engineTier && engineUsed !== "cli") {
+    console.warn(`[scan/run] ${owner}/${repo} (${shadowTier}): CLI engine unavailable — served in-memory ${modules.length}-module fallback`);
   }
 
   return {
-    modules: modules!,
-    totalIssues: totalIssues!,
+    modules,
+    totalIssues,
     duration: Date.now() - startTime,
     authSource: auth.source,
+    filesAnalysed: fileContents.length,
+    filesInRepo: files.length,
+    coverageTruncated: loaded.truncated,
+    engine: engineUsed,
   };
 }
 
@@ -646,5 +571,12 @@ async function _postImpl(req: NextRequest): Promise<ReturnType<typeof NextRespon
     error: result.error,
     fixableIssues,
     shadowSummary: redacted.shadowSummary,
+    // Honesty: how much of the repository the engine actually analysed.
+    coverage: {
+      filesAnalysed: result.filesAnalysed ?? null,
+      filesInRepo: result.filesInRepo ?? null,
+      truncated: result.coverageTruncated ?? false,
+      engine: result.engine ?? null,
+    },
   });
 }

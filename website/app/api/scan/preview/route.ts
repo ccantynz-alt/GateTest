@@ -25,11 +25,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
-import {
-  fetchTree,
-  fetchBlob,
-  resolveRepoAuth,
-} from "@/app/lib/gluecron-client";
+import { loadRepoFiles, resolveRepoAuth } from "@/app/lib/gluecron-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,9 +164,24 @@ export async function POST(req: NextRequest) {
   // funnel no longer depends on any credential being alive (KI #100/#101).
   const token = auth.token || "";
 
+  // One archive read for tree + contents (credentialed → anonymous → per-blob
+  // API), capped to the quick-tier sample. Replaces `git/trees` + 60 blob calls.
+  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
+  const isPreviewSource = (f: string) =>
+    sourceExts.some((ext) => f.endsWith(ext)) &&
+    !f.includes("node_modules") &&
+    !f.includes(".next") &&
+    !f.includes("dist/");
   let files: string[] = [];
+  let fileContents: RepoFile[] = [];
   try {
-    files = await fetchTree(owner, repo, "HEAD", token);
+    const loaded = await loadRepoFiles(owner, repo, "HEAD", token, {
+      maxFiles: MAX_FILES_TO_READ,
+      filter: isPreviewSource,
+      deadlineMs: deadline,
+    });
+    files = loaded.paths;
+    fileContents = loaded.fileContents;
   } catch (err) {
     return NextResponse.json(
       {
@@ -191,35 +202,6 @@ export async function POST(req: NextRequest) {
       { status: 404 }
     );
   }
-
-  const sourceExts = [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".java", ".rb", ".md", ".json", ".yml", ".yaml"];
-  const sourceFiles = files.filter(
-    (f) =>
-      sourceExts.some((ext) => f.endsWith(ext)) &&
-      !f.includes("node_modules") &&
-      !f.includes(".next") &&
-      !f.includes("dist/")
-  );
-
-  if (Date.now() > deadline) {
-    return NextResponse.json({
-      ok: false,
-      error: "preview timed out fetching file tree",
-      hint: "Try again — large repos sometimes need a warm cache. Or upgrade to Quick ($29) which has a longer budget.",
-    });
-  }
-
-  const fileContents: RepoFile[] = [];
-  const readPromises = sourceFiles.slice(0, MAX_FILES_TO_READ).map(async (filePath): Promise<RepoFile | null> => {
-    try {
-      const content = await fetchBlob(owner, repo, filePath, "HEAD", token);
-      return content ? { path: filePath, content } : null;
-    } catch {
-      return null;
-    }
-  });
-  const readResults = await Promise.all(readPromises);
-  for (const r of readResults) if (r) fileContents.push(r);
 
   if (Date.now() > deadline) {
     return NextResponse.json({
