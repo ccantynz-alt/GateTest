@@ -1,0 +1,256 @@
+{
+  "generatedAt": "2026-08-11T04:20:29.933Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 15,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 14,
+      "SonarQube": 0,
+      "Semgrep": 0,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 1,
+      "Veracode": 0,
+      "Checkmarx": 0
+    },
+    "painPointsFound": 1
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49253014",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Meilisearch vs. Manticore: Setting the Record Straight",
+        "text": "Meilisearch vs. Manticore: Setting the Record Straight",
+        "url": "https://medium.com/@s_nikolaev/meilisearch-vs-manticore-setting-the-record-straight-e7d51aa08db2",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49253014,
+        "createdAt": "2026-08-11T03:26:09Z",
+        "createdAtUnix": 1786418769,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49252845",
+        "author": "snyp",
+        "type": "comment",
+        "title": null,
+        "text": "This is so cool! Congrats to the team!",
+        "url": "https://news.ycombinator.com/item?id=49252845",
+        "points": null,
+        "numComments": null,
+        "storyId": 49246804,
+        "createdAt": "2026-08-11T02:57:34Z",
+        "createdAtUnix": 1786417054,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49252348",
+        "author": "sandworm101",
+        "type": "comment",
+        "title": null,
+        "text": "A few years ago I was part of a national-level rescue chain, the chain that starts with a phonecall and snakes it way up through different first responders. The group I worked with were at pretty much the far end of the chain. I am all for people doing great things, but for every great-thing-doing long distance sailor there are a hundred rich idiots. 50ish, got rich, bought a boat and is out on the open ocean ... and something goes wrong.Fall off your motorcycle and you need a ride to the hospital, maybe an ambulance. Fall off your horse or a cliff and you need some burly volunteers with good knees and strong backs to haul you to the nearest road. A little more extreme, say you are stuck up a big cliff, and you might get a 90-second ride in a small helicopter to the nearest road.But when anything goes wrong out at sea, from a broken mast to a broken arm, you are in for the deluxe package. It starts with ships in the area diverting towards your position. Then a fixed-wing airplane the size of a small airliner launches to put eyes on you and coordinate the next bit: the granddaddy helicopter, the all-weather one with a winch, night vision, two pilots, two SAR techs, maybe three turbines and four or more blades the length of a bus. Think you are low-carbon because you are using a sail? Don't ask how many tons of fuel are spent keeping that helo in the air. (They often have to make multiple fuel stops during ocean rescues).https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Sikorsky_MH-60_Jayhawk https:&#x2F;&#x2F;www.airbus.com&#x2F;en&#x2F;products-services&#x2F;helicopters&#x2F;mili... https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;EADS_HC-144_Ocean_Sentry https:&#x2F;&#x2F;www.canada.ca&#x2F;en&#x2F;air-force&#x2F;services&#x2F;aircraft&#x2F;cc-295....My point: Don't romanticize the sea to the point that rich idiots start playing around out there. Always take it seriously and do not ever expect help. Always have backup plans for your backup plans.Buy the EPIRB BEFORE you buy the boat. Buy the expensive one.At least when Harrison Ford got rich he started buying and crashing light aircraft. He knew to crash on a golf course so the doctors didn't need to walk very far. (Not a joke. That happened.)https:&#x2F;&#x2F;golf.com&#x2F;travel&#x2F;penmar-golf-course-venice-california...",
+        "url": "https://news.ycombinator.com/item?id=49252348",
+        "points": null,
+        "numComments": null,
+        "storyId": 49249555,
+        "createdAt": "2026-08-11T01:43:41Z",
+        "createdAtUnix": 1786412621,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49252094",
+        "author": "swrrt",
+        "type": "comment",
+        "title": null,
+        "text": "Seems visulization is still too expensive and sluggish. I tried to build things like tetris and snake eater with fable5 and got-5.6 sol, 90% of build successful in one shot and remaining needs 1~2 rounds debug. The whole experience is much better than months earlier, where a snake eater takes me 3~4 manually compile&#x2F;run and input the error message and abnormal manually again and again.But I am curious about building a larger scale game with&#x2F;without professional engines like Godot. I highly doubt the model&#x2F;agent is intelligent enough to setup the entire development environment correctly, thus may be struggle to test and debug themselves. Maybe something like GUI-agent a future?",
+        "url": "https://news.ycombinator.com/item?id=49252094",
+        "points": null,
+        "numComments": null,
+        "storyId": 49245437,
+        "createdAt": "2026-08-11T01:12:30Z",
+        "createdAtUnix": 1786410750,
+        "intent": "criticism"
+      },
+      {
+        "objectId": "49251655",
+        "author": "SpyCoder77",
+        "type": "story",
+        "title": "Locating a livestreamers geolocation via background noise [video]",
+        "text": "Locating a livestreamers geolocation via background noise [video]",
+        "url": "https://www.youtube.com/watch?v=SnbkIm56TfI",
+        "points": 3,
+        "numComments": 0,
+        "storyId": 49251655,
+        "createdAt": "2026-08-11T00:17:53Z",
+        "createdAtUnix": 1786407473,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49251196",
+        "author": "K0balt",
+        "type": "comment",
+        "title": null,
+        "text": "I’ve had gpt 5.6 make snyde remarks about Claude output… like iirc “that’s a lot of load bearing prose without making a point” and things like that, not so subtle digs.",
+        "url": "https://news.ycombinator.com/item?id=49251196",
+        "points": null,
+        "numComments": null,
+        "storyId": 49243474,
+        "createdAt": "2026-08-10T23:18:16Z",
+        "createdAtUnix": 1786403896,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49249538",
+        "author": "dpark",
+        "type": "comment",
+        "title": null,
+        "text": "Security incompetence doesn’t turn basic meeting recording and transcribing into snake oil.",
+        "url": "https://news.ycombinator.com/item?id=49249538",
+        "points": null,
+        "numComments": null,
+        "storyId": 49242739,
+        "createdAt": "2026-08-10T20:51:36Z",
+        "createdAtUnix": 1786395096,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49249039",
+        "author": "snypher",
+        "type": "comment",
+        "title": null,
+        "text": "Well, the Cubans ain't being bombed by their neighbors.",
+        "url": "https://news.ycombinator.com/item?id=49249039",
+        "points": null,
+        "numComments": null,
+        "storyId": 49244308,
+        "createdAt": "2026-08-10T20:11:24Z",
+        "createdAtUnix": 1786392684,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49248082",
+        "author": "stonedivot",
+        "type": "comment",
+        "title": null,
+        "text": "I totally trusted this vendor selling me this snake oil, and he promised me it would work. I can't believe he let me down. This is all his fault.",
+        "url": "https://news.ycombinator.com/item?id=49248082",
+        "points": null,
+        "numComments": null,
+        "storyId": 49242739,
+        "createdAt": "2026-08-10T18:57:55Z",
+        "createdAtUnix": 1786388275,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49246931",
+        "author": "lostnfound8778",
+        "type": "comment",
+        "title": null,
+        "text": "Currently, the snake is happily devouring its tail... question is how many vertebrae left until the head?",
+        "url": "https://news.ycombinator.com/item?id=49246931",
+        "points": null,
+        "numComments": null,
+        "storyId": 49246592,
+        "createdAt": "2026-08-10T17:31:22Z",
+        "createdAtUnix": 1786383082,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49244294",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Err, that wasn't meant as literal example because real conversations obviously have more than 1 turn. The only thing you could prove by getting a different result is that they don't _always_ do that, even if I shared the full conversation log.You \"don't understand the need for such hyperboles\" because they're not hyperboles, I don't know how you can not pick up on these errors in your own conversations.> and pretending that models are still gpt3I explicitly said that the new ones are better. How's that for hyperbole?",
+        "url": "https://news.ycombinator.com/item?id=49244294",
+        "points": null,
+        "numComments": null,
+        "storyId": 49234675,
+        "createdAt": "2026-08-10T14:37:12Z",
+        "createdAtUnix": 1786372632,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49243944",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "> Corporations are the ones who make money for the government.No they don't, people do, always have and always will. The owners of these corporations simply have an undue level of control over the collective wealth created by the people.",
+        "url": "https://news.ycombinator.com/item?id=49243944",
+        "points": null,
+        "numComments": null,
+        "storyId": 49230477,
+        "createdAt": "2026-08-10T14:10:48Z",
+        "createdAtUnix": 1786371048,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49243802",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Can you come up with a plausible argument for how that applies in this scenario? What they said doesn't hinge on some sort of \"clever\" technicality.",
+        "url": "https://news.ycombinator.com/item?id=49243802",
+        "points": null,
+        "numComments": null,
+        "storyId": 49230477,
+        "createdAt": "2026-08-10T14:00:43Z",
+        "createdAtUnix": 1786370443,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49243011",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Your comment is phrased as if it somehow refutes their point but it doesn't.> Cause if you went back and forth with ChatGPT for an hour it definitely hallucinated and lied to you at some point.If you're asserting that this is not the case today then that's going to be require pretty extraordinary evidence. \"Chatbots use Google now\" is not evidence that the information they provide is in fact correct.They don't hallucinate all the time like they used to, no, but I'd be very surprised if the majority of these sorts of conversations were free of major factual errors.I frequently notice degradation in the model model's ability to remain coherent when it searches for information online. For example I might ask Sonnet 5 \"how do I build a shed\" and during its search it presumably comes across an article which talks about building a shed out of paper mache, then the model responds with something like \"I caution you against your plan to build a shed out of paper mache\" -- Wait, what? Who said anything about building it out of paper mache?",
+        "url": "https://news.ycombinator.com/item?id=49243011",
+        "points": null,
+        "numComments": null,
+        "storyId": 49234675,
+        "createdAt": "2026-08-10T12:56:11Z",
+        "createdAtUnix": 1786366571,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [
+      {
+        "objectId": "49243304",
+        "author": "jottinger",
+        "type": "comment",
+        "title": null,
+        "text": "Hah! SO MANY LANGUAGES got skipped, even from my own CV. I wanted to address Louis&#x2F;II, for goodness' sake, but it's a CODASYL tool, and not a lot of people remember CODASYL from experience. (Nor should they: I liked it, but... nah, RDMS won for good reasons.)Lisp is certainly fun, and it lives today and is influential today in multiple environments; I have a Clojure app I work on for my own amusement. And it does have commercial appeal, but it's limited; the three axis thing applies.",
+        "url": "https://news.ycombinator.com/item?id=49243304",
+        "points": null,
+        "numComments": null,
+        "storyId": 49242245,
+        "createdAt": "2026-08-10T13:23:16Z",
+        "createdAtUnix": 1786368196,
+        "intent": "neutral"
+      }
+    ],
+    "Veracode": [],
+    "Checkmarx": []
+  },
+  "painPoints": [
+    {
+      "phrase": "too expensive",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49252094",
+          "url": "https://news.ycombinator.com/item?id=49252094",
+          "snippet": "Seems visulization is still too expensive and sluggish. I tried to build things like tetris and snake eater with fable5 and got-5.6 sol, 90% of build successful in one shot and remaining needs 1~2 rou"
+        }
+      ]
+    }
+  ],
+  "actionItems": []
+}
