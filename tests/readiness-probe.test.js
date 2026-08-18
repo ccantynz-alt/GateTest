@@ -191,6 +191,18 @@ describe('readiness probe — does the product actually work?', () => {
     assert.match(step.fix, /dead GitHub credential/i);
   });
 
+  it('passes the REAL /api/scan/preview shape — moduleSummary + findings, no "modules"/"filesScanned" keys', async () => {
+    // The live endpoint answers { moduleSummary, findings, total }. Reading
+    // only { modules, filesScanned } made a healthy funnel read as "scanned
+    // nothing" the moment it came back (2026-08-18).
+    const report = await run({
+      ...HEALTHY,
+      'POST /api/scan/preview': { status: 200, body: JSON.stringify({ ok: true, repo: 'ccantynz-alt/GateTest', moduleSummary: [{ module: 'syntax', status: 'passed', issues: 0 }, { module: 'codeQuality', status: 'failed', issues: 2 }], findings: [{ module: 'codeQuality', severity: 'warning', message: 'x' }], total: 2 }) },
+    });
+    const step = stepNamed(report, 'product/scan');
+    assert.strictEqual(step.ok, true, JSON.stringify(step));
+  });
+
   it('fails a 200 that scanned nothing — success status, empty result', async () => {
     const report = await run({
       ...HEALTHY,

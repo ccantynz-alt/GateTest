@@ -332,8 +332,16 @@ async function checkProductWorks(fetchFn, base, repoUrl) {
   // Answered 200 but found nothing in a repo we know has findings — that is
   // an empty scan dressed as a successful one, which is the failure mode a
   // naive "did it return 200" check would wave through.
-  const moduleCount = Array.isArray(data.modules) ? data.modules.length : 0;
+  // /api/scan/preview answers { moduleSummary: [...], findings: [...], total }
+  // — not { modules, filesScanned }. Reading only the latter made a HEALTHY
+  // funnel read as "scanned nothing" the moment it came back (2026-08-18).
+  const moduleCount = Array.isArray(data.modules) ? data.modules.length
+    : Array.isArray(data.moduleSummary) ? data.moduleSummary.length : 0;
   const fileCount = Number(data.filesScanned || data.files || 0);
+  const findingCount = Array.isArray(data.findings) ? data.findings.length : Number(data.total || 0);
+  if (moduleCount === 0 && fileCount === 0 && findingCount > 0) {
+    return ok(name, `free scan works (${findingCount} finding(s))`);
+  }
   if (moduleCount === 0 && fileCount === 0) {
     return fail(name, 'free scan returned 200 but scanned nothing (no modules, no files)', CRITICAL,
       'A scan that reads zero files is a failure wearing a success status code. Check that the git host credential can read the tree.',
