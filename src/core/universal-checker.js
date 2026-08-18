@@ -40,10 +40,12 @@ const LANGUAGE_SPECS = {
     extensions: ['.py'],
     testFilePattern: /(^|\/)(test_|.*_test)\.py$|(^|\/)tests?\//i,
     patterns: [
-      { name: 'eval', pattern: /\beval\s*\(/, severity: 'error',
+      { name: 'eval', pattern: /(?<![.\w])eval\s*\(/, severity: 'error',
         message: 'eval() — arbitrary code execution risk',
         suggestion: 'Use ast.literal_eval for literals, or refactor to avoid eval entirely.' },
-      { name: 'exec', pattern: /\bexec\s*\(/, severity: 'error',
+      // `(?<![.\w])` — a METHOD named exec (`session.exec(select(...))` in
+      // SQLModel, `cursor.exec`, `re.compile(...).exec`) is not the builtin.
+      { name: 'exec', pattern: /(?<![.\w])exec\s*\(/, severity: 'error',
         message: 'exec() — arbitrary code execution risk',
         suggestion: 'Refactor to call the target function directly. Exec is rarely needed.' },
       { name: 'bare-except', pattern: /^\s*except\s*:/, severity: 'warning',
@@ -133,9 +135,13 @@ const LANGUAGE_SPECS = {
     extensions: ['.rb'],
     testFilePattern: /(^|\/)(spec|test)\/|_(spec|test)\.rb$/,
     patterns: [
-      { name: 'eval', pattern: /\beval\s*\(?\s*['"]/, severity: 'error',
-        message: 'eval() of string literal — arbitrary code execution risk',
-        suggestion: 'Refactor to call the target method directly.' },
+      // eval of a STRING LITERAL is the one safe form (nothing external
+      // reaches it); the risk is eval of an expression/variable. The old
+      // pattern flagged exactly the safe case (`binding.eval('@_out_buf')`
+      // in sinatra) and missed the dangerous one.
+      { name: 'eval', pattern: /(?<![.\w])(?:instance_|class_|module_)?eval(?:\s*\(\s*|\s+)(?!['"])[A-Za-z_(\[@$:]/, severity: 'error',
+        message: 'eval() of a non-literal expression — arbitrary code execution risk',
+        suggestion: 'Refactor to call the target method directly; never eval user-controlled strings.' },
       { name: 'system-interp', pattern: /(system|`|exec)\s*\(?\s*["'][^"']*#\{/, severity: 'error',
         message: 'Shell command with string interpolation — command injection risk',
         suggestion: 'Use the array form: system("cmd", arg1, arg2) to avoid shell parsing.' },

@@ -73,13 +73,19 @@ class LinksModule extends BaseModule {
         { regex: /href\s*=\s*["']\s*["']/g, type: 'empty href' },
       ];
 
-      for (const { regex, type } of deadPatterns) {
-        const matches = content.match(regex);
-        if (matches) {
-          for (const m of matches) {
-            // Find approximate line number
-            const idx = content.indexOf(m);
-            const line = content.substring(0, idx).split(/\r?\n/).length;
+      // Docs/examples that SHOW a placeholder href are not shipping one:
+      // an MDX docs page demonstrating `<a href="#">` is documentation.
+      const isDocsExample = /(^|\/)(docs?|examples?|content|blog|stories|__stories__|fixtures?)\//i.test(relPath.replace(/\\/g, '/')) || ext === '.mdx' || ext === '.md';
+      if (!isDocsExample) {
+        const seenDead = new Set();
+        for (const { regex, type } of deadPatterns) {
+          regex.lastIndex = 0;
+          let dm;
+          while ((dm = regex.exec(content)) !== null) {
+            const line = content.substring(0, dm.index).split(/\r?\n/).length;
+            const key = `${relPath}:${line}:${type}`;
+            if (seenDead.has(key)) continue; // one report per line, not one per repeat of the same href on that line
+            seenDead.add(key);
             deadLinks.push({ href: type, source: relPath, line });
           }
         }
@@ -161,15 +167,20 @@ class LinksModule extends BaseModule {
 
   _categorizeLink(link, source, internalLinks, externalLinks) {
     if (!link || link.length === 0) return;
-    if (link.startsWith('http://') || link.startsWith('https://') || link.startsWith('//')) {
-      externalLinks.add(link);
-    } else if (link.startsWith('mailto:') || link.startsWith('tel:') || link.startsWith('data:')) {
-      // Skip non-resource links
-    } else if (link === '#' || link === '#!' || /^javascript:/i.test(link)) {
-      // Dead/placeholder links — tracked separately
-    } else {
-      internalLinks.push({ href: link, source });
+    // ANY scheme is external / non-file (irc:, ftp:, sms:, geo:, ws:, vscode:,
+    // slack:, …). The old test only knew http(s)/mailto/tel/data, so
+    // `irc://` and friends were "broken internal links" (2026-08-18 audit).
+    if (link.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(link)) {
+      if (/^https?:|^\/\//i.test(link)) externalLinks.add(link);
+      return;
     }
+    if (link === '#' || link === '#!') return; // dead/placeholder — tracked separately
+    // Template expressions are resolved at render time, not on disk:
+    // Thymeleaf `@{...}`, `th:href`, Jinja/Handlebars `{{ }}`/`{% %}`, EJS
+    // `<%`, JSX `${}`, Angular/Vue bindings, mkdocs `!!`, `<https://…>`
+    // autolinks that were mis-captured, and bare markdown reference labels.
+    if (/^[@{$<%!]|\{\{|\{%|<%|^\[|\]$|^\(|\)$/.test(link)) return;
+    internalLinks.push({ href: link, source });
   }
 }
 

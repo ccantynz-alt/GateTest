@@ -19,14 +19,32 @@ class UnitTestsModule extends BaseModule {
     const testCommand = this._detectTestCommand(projectRoot);
 
     if (!testCommand) {
+      // Not having a runner GateTest recognises is not a defect in the
+      // customer's code — it is a limit of our detection. Warn, never block
+      // (2026-08-18 audit: this was a blocking error on 6/6 non-Node repos).
       result.addCheck('unit-tests:detect', false, {
+        severity: 'warning',
         message: 'No test framework detected',
-        suggestion: 'Add a test script to package.json or install a test framework (jest, vitest, mocha)',
+        suggestion: 'Add a test script to package.json or install a test framework (jest, vitest, mocha, pytest, go test, cargo test, mvn/gradle, rspec)',
       });
       return;
     }
 
     result.addCheck('unit-tests:framework', true, { message: `Detected: ${testCommand.name}` });
+
+    // The runner binary itself must exist before its exit code means
+    // anything about the customer's tests: `python -m pytest` on a box with
+    // no deps, `go`/`cargo`/`mvn` missing from PATH — every one of those is
+    // "GateTest could not run your suite here", reported honestly as such.
+    if (testCommand.needsBinary && !this._binaryAvailable(testCommand.needsBinary)) {
+      result.addCheck('unit-tests:run', true, {
+        severity: 'info',
+        message: `Skipped — ${testCommand.name} runner (${testCommand.needsBinary}) is not available in this scan environment`,
+        suggestion: 'Run the scan where the toolchain is installed (CI) to include test results',
+      });
+      this._checkCoverage(projectRoot, config, result);
+      return;
+    }
 
     // Dependencies not installed? Then a non-zero exit says nothing about the
     // customer's tests — the runner itself is missing. Reporting that as
@@ -46,17 +64,32 @@ class UnitTestsModule extends BaseModule {
       return;
     }
 
+    // Run with a SCRUBBED environment: the scanner's own GATETEST_* variables
+    // must not leak into the customer's suite (measured: GATETEST_NO_TELEMETRY
+    // from the scanner flipped one of this repo's own tests red).
+    const env = { ...process.env };
+    for (const k of Object.keys(env)) if (/^GATETEST_/.test(k)) delete env[k];
     const { exitCode, stdout, stderr } = this._exec(testCommand.command, {
       cwd: projectRoot,
       timeout: 300000, // 5 minutes
+      env,
     });
 
+    const out = stdout + stderr;
     if (exitCode === 0) {
       result.addCheck('unit-tests:run', true, { message: 'All unit tests passed' });
+    } else if (this._looksLikeMissingToolchain(out)) {
+      // ModuleNotFoundError / "command not found" / "no such file" — the
+      // environment, not the tests, failed.
+      result.addCheck('unit-tests:run', true, {
+        severity: 'info',
+        message: `Skipped — the test runner could not start in this environment (${this._firstLine(out)})`,
+        suggestion: 'Install the project dependencies before scanning to include test results',
+      });
     } else {
       result.addCheck('unit-tests:run', false, {
         message: 'Unit tests failed',
-        details: (stdout + stderr).split(/\r?\n/).slice(-20),
+        details: out.split(/\r?\n/).slice(-20),
         suggestion: 'Fix failing tests before committing',
       });
     }
@@ -99,17 +132,25 @@ class UnitTestsModule extends BaseModule {
       } catch { /* invalid package.json */ }
     }
 
-    // Check for common test configs
+    // Check for common test configs — Node first, then the other toolchains
+    // (2026-08-18 audit: gin has 21 _test.go files and petclinic has JUnit,
+    // both were told "No test framework detected" and blocked).
     const frameworks = [
-      { files: ['jest.config.js', 'jest.config.ts', 'jest.config.cjs'], name: 'Jest', command: 'npx jest 2>&1' },
-      { files: ['vitest.config.js', 'vitest.config.ts'], name: 'Vitest', command: 'npx vitest run 2>&1' },
-      { files: ['.mocharc.yml', '.mocharc.json', '.mocharc.js'], name: 'Mocha', command: 'npx mocha 2>&1' },
-      { files: ['pytest.ini', 'pyproject.toml', 'setup.cfg'], name: 'pytest', command: 'python -m pytest 2>&1' },
+      { files: ['jest.config.js', 'jest.config.ts', 'jest.config.cjs'], name: 'Jest', command: 'npx --no-install jest 2>&1' },
+      { files: ['vitest.config.js', 'vitest.config.ts'], name: 'Vitest', command: 'npx --no-install vitest run 2>&1' },
+      { files: ['.mocharc.yml', '.mocharc.json', '.mocharc.js'], name: 'Mocha', command: 'npx --no-install mocha 2>&1' },
+      { files: ['pytest.ini', 'pyproject.toml', 'setup.cfg', 'tox.ini'], name: 'pytest', command: 'python -m pytest -x -q 2>&1', needsBinary: 'python' },
+      { files: ['go.mod'], name: 'go test', command: 'go test ./... 2>&1', needsBinary: 'go' },
+      { files: ['Cargo.toml'], name: 'cargo test', command: 'cargo test 2>&1', needsBinary: 'cargo' },
+      { files: ['pom.xml'], name: 'Maven', command: 'mvn -q test 2>&1', needsBinary: 'mvn' },
+      { files: ['build.gradle', 'build.gradle.kts'], name: 'Gradle', command: 'gradle test 2>&1', needsBinary: 'gradle' },
+      { files: ['Gemfile'], name: 'RSpec', command: 'bundle exec rspec 2>&1', needsBinary: 'bundle' },
+      { files: ['composer.json'], name: 'PHPUnit', command: 'vendor/bin/phpunit 2>&1', needsBinary: 'php' },
     ];
 
     for (const fw of frameworks) {
       if (fw.files.some(f => fs.existsSync(path.join(projectRoot, f)))) {
-        return { name: fw.name, command: fw.command };
+        return { name: fw.name, command: fw.command, needsBinary: fw.needsBinary };
       }
     }
 
@@ -122,6 +163,26 @@ class UnitTestsModule extends BaseModule {
     }
 
     return null;
+  }
+
+  _binaryAvailable(bin) {
+    try {
+      const { execSync } = require('child_process');
+      const probe = process.platform === 'win32' ? `where ${bin}` : `command -v ${bin}`;
+      execSync(probe, { stdio: 'ignore', timeout: 5000, shell: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  _looksLikeMissingToolchain(out) {
+    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies/i.test(out);
+  }
+
+  _firstLine(out) {
+    const line = (out || '').split(/\r?\n/).map((l) => l.trim()).find((l) => /ModuleNotFoundError|No module named|command not found|not recognized|ENOENT|Cannot find module|not found/i.test(l));
+    return (line || 'runner unavailable').slice(0, 160);
   }
 
   _checkCoverage(projectRoot, config, result) {

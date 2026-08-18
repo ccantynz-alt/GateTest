@@ -22,11 +22,26 @@ class SeoModule extends BaseModule {
     // customer-facing SEO metadata.
     const INTERNAL_PATH_RE = /(?:^|\/)(?:website\/public\/)/;
 
+    // Only FULL DOCUMENTS are pages. Measured 2026-08-18 across 9 real
+    // repos: 59 of 69 flagged .html files were server-template fragments
+    // (Thymeleaf/Jinja/swig partials, layouts, includes, email bodies) or
+    // test fixtures with no <html>+<head> of their own — the metadata this
+    // module looks for lives in the layout that wraps them, and 12 error
+    // checks per fragment produced 446 blocking errors on repos that were
+    // not even websites. A fragment is skipped, counted, and reported once
+    // as info; it is never a finding.
+    let fragmentsSkipped = 0;
+    let pagesChecked = 0;
     for (const file of htmlFiles) {
       const relPath = path.relative(projectRoot, file);
       const normalised = relPath.replace(/\\/g, '/');
       if (INTERNAL_PATH_RE.test('/' + normalised)) continue;
       const content = fs.readFileSync(file, 'utf-8');
+      if (!SeoModule.isFullDocument(normalised, content)) {
+        fragmentsSkipped++;
+        continue;
+      }
+      pagesChecked++;
 
       this._checkTitle(relPath, content, seoConfig, result);
       this._checkMetaDescription(relPath, content, seoConfig, result);
@@ -37,15 +52,55 @@ class SeoModule extends BaseModule {
       this._checkHeadingSeo(relPath, content, result);
     }
 
-    // Check for sitemap
-    this._checkSitemap(projectRoot, result);
+    // Sitemap / robots only make sense for something that IS a deployed
+    // site: a full-document page at a public root, or a framework app dir.
+    // A library, CLI or API repo has neither and must not be told it is
+    // missing a sitemap (this fired on express, flask, gin and sinatra).
+    if (pagesChecked > 0 || SeoModule.looksLikeWebsite(projectRoot)) {
+      this._checkSitemap(projectRoot, result);
+      this._checkRobotsTxt(projectRoot, result);
+    } else {
+      result.addCheck('seo:site-files', true, {
+        message: 'Not a deployable website (no full HTML documents or app router) — sitemap/robots checks not applicable',
+      });
+    }
 
-    // Check for robots.txt
-    this._checkRobotsTxt(projectRoot, result);
-
+    if (fragmentsSkipped > 0) {
+      result.addCheck('seo:fragments', true, {
+        message: `${fragmentsSkipped} HTML fragment/template file(s) skipped — metadata is checked on full documents only`,
+      });
+    }
     if (htmlFiles.length === 0) {
       result.addCheck('seo:files', true, { message: 'No HTML files to check' });
     }
+  }
+
+  /**
+   * A file is a page (worth SEO checks) only when it is a complete document
+   * that carries its own <html> and <head>. Template fragments, partials,
+   * layouts-with-inheritance and fixtures are not pages.
+   */
+  static isFullDocument(normalisedPath, content) {
+    const p = normalisedPath.toLowerCase();
+    if (/(^|\/)(templates?|views?|partials?|fragments?|includes?|_includes|_layouts|layouts?|emails?|mail|components?|snippets?|__tests__|tests?|spec|fixtures?|test_apps?|testdata|__snapshots__|examples?|docs?_src|node_modules)\//.test(p)) {
+      return false;
+    }
+    if (!/<html[\s>]/i.test(content) || !/<head[\s>]/i.test(content)) return false;
+    // Template inheritance: the child declares extends/replace and inherits its head.
+    if (/\{%\s*extends\b|th:replace=|th:insert=|<%-?\s*(layout|extends)\b|\{\{>\s*layout/i.test(content)) return false;
+    return true;
+  }
+
+  /** Signals that this repository is (or contains) a deployable website. */
+  static looksLikeWebsite(projectRoot) {
+    const markers = [
+      'index.html', 'public/index.html', 'static/index.html', 'dist/index.html',
+      'app/layout.tsx', 'app/layout.jsx', 'app/layout.js', 'src/app/layout.tsx', 'website/app/layout.tsx',
+      'pages/index.tsx', 'pages/index.jsx', 'pages/index.js', 'src/pages/index.tsx',
+      'nuxt.config.ts', 'nuxt.config.js', 'svelte.config.js', 'astro.config.mjs', 'gatsby-config.js',
+      '_config.yml', 'mkdocs.yml', 'docusaurus.config.js', 'docusaurus.config.ts', 'hugo.toml',
+    ];
+    return markers.some((m) => fs.existsSync(path.join(projectRoot, m)));
   }
 
   _checkTitle(relPath, content, config, result) {
@@ -190,6 +245,7 @@ class SeoModule extends BaseModule {
 
     if (!found) {
       result.addCheck('seo:sitemap', false, {
+        severity: 'warning',
         message: 'No sitemap.xml found',
         suggestion: 'Generate a sitemap.xml for search engine discovery',
       });
@@ -211,6 +267,7 @@ class SeoModule extends BaseModule {
 
     if (!found) {
       result.addCheck('seo:robots-txt', false, {
+        severity: 'warning',
         message: 'No robots.txt found',
         suggestion: 'Create a robots.txt to guide search engine crawlers',
       });

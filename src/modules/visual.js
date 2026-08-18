@@ -76,6 +76,7 @@ class VisualModule extends BaseModule {
     // Check for font-display strategy
     if (content.includes('@font-face') && !content.includes('font-display')) {
       result.addCheck(`visual:font-display:${relPath}`, false, {
+        severity: 'warning',
         file: relPath,
         message: '@font-face without font-display property — causes FOIT/FOUT',
         suggestion: 'Add "font-display: swap" or "font-display: optional" to @font-face',
@@ -92,9 +93,18 @@ class VisualModule extends BaseModule {
       const fonts = value.split(',').map(f => f.trim());
       const genericFamilies = ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui'];
 
-      if (fonts.length === 1 && !genericFamilies.includes(fonts[0].replace(/['"]/g, '').toLowerCase())) {
+      // A single value that is a CSS variable, a keyword (inherit/initial/
+      // unset/revert), a system stack (-apple-system) or empty is NOT a
+      // font with no fallback — the fallback lives in the variable / parent.
+      // Compiled Bootstrap (`font-family: var(--bs-body-font-family)`) alone
+      // produced dozens of blocking errors in the 2026-08-18 audit.
+      const single = fonts[0].replace(/['"]/g, '').toLowerCase();
+      const notAFont = !single || single.startsWith('var(') || single.startsWith('-apple-system')
+        || ['inherit', 'initial', 'unset', 'revert', 'revert-layer'].includes(single);
+      if (fonts.length === 1 && !notAFont && !genericFamilies.includes(single)) {
         result.addCheck(`visual:font-fallback:${relPath}`, false, {
           file: relPath,
+          severity: 'warning',
           message: `Font "${fonts[0]}" has no fallback font-family`,
           suggestion: 'Add a generic font family as fallback (e.g., sans-serif)',
         });
@@ -106,6 +116,7 @@ class VisualModule extends BaseModule {
     // Check for potential horizontal overflow issues
     if (content.includes('overflow-x: hidden') && content.includes('body')) {
       result.addCheck(`visual:body-overflow-hidden:${relPath}`, false, {
+        severity: 'warning',
         file: relPath,
         message: 'overflow-x: hidden on body — may hide underlying layout issues',
         suggestion: 'Fix the root cause of horizontal overflow instead of hiding it',
@@ -152,6 +163,7 @@ class VisualModule extends BaseModule {
       if (!hasWidth || !hasHeight) {
         result.addCheck(`visual:img-dimensions:${relPath}`, false, {
           file: relPath,
+          severity: 'warning',
           message: 'Image missing explicit width/height — causes layout shift (CLS)',
           suggestion: 'Add width and height attributes to <img> tags',
         });
@@ -160,7 +172,14 @@ class VisualModule extends BaseModule {
   }
 
   _checkViewport(relPath, content, result) {
-    if (content.includes('<html') && !content.includes('viewport')) {
+    // Only a FULL document owns its viewport meta: fragments/partials inherit
+    // the layout's, and Next.js/Nuxt/SvelteKit inject it into app layouts
+    // automatically (`app/layout.tsx` never contains the literal). Firing on
+    // "any file containing <html" was the second-largest visual FP class.
+    const isFullDocument = /<html[\s>]/i.test(content) && /<head[\s>]/i.test(content);
+    const frameworkLayout = /(^|\/)(app|src\/app|pages|website\/app)\/.*layout\.(tsx|jsx|js)$/.test(relPath.replace(/\\/g, '/'))
+      || /\.(tsx|jsx|vue|svelte)$/.test(relPath);
+    if (isFullDocument && !frameworkLayout && !content.includes('viewport')) {
       result.addCheck(`visual:viewport:${relPath}`, false, {
         file: relPath,
         message: 'Missing viewport meta tag',
@@ -171,21 +190,34 @@ class VisualModule extends BaseModule {
 
   _checkDesignTokens(projectRoot, cssFiles, result) {
     // Check for consistent use of CSS custom properties
+    // Count each variable ONCE PER FILE, and skip compiled/vendored/minified
+    // sheets: a design-token framework (Bootstrap sets `--bs-*` inside every
+    // component and theme scope) legitimately re-declares tokens per selector
+    // — that is scoping, not inconsistency. Measured 2026-08-18: 57 blocking
+    // errors on a compiled Bootstrap file. This is at most an info-level
+    // observation about token hygiene, never a gate failure.
     const allVars = new Map();
     for (const file of cssFiles) {
+      const rel = path.relative(projectRoot, file).replace(/\\/g, '/').toLowerCase();
+      if (/\.min\.(css|scss|less)$|(^|\/)(vendor|vendors|lib|libs|dist|build|static\/css|bootstrap|tailwind|node_modules)\//.test(rel)) continue;
       const content = fs.readFileSync(file, 'utf-8');
+      if (/--(bs|mdc|mat|mui|chakra|tw|ant|el|p|v)-[\w-]+\s*:/.test(content) && !/^\s*:root\s*\{/m.test(content)) continue;
+      const seen = new Set();
       const varDefs = content.match(/--[\w-]+\s*:/g) || [];
       for (const v of varDefs) {
         const name = v.replace(':', '').trim();
+        if (seen.has(name)) continue;
+        seen.add(name);
         allVars.set(name, (allVars.get(name) || 0) + 1);
       }
     }
 
-    // Check for duplicate variable definitions
+    // A token defined in more than 3 DIFFERENT files is worth a look.
     for (const [name, count] of allVars) {
       if (count > 3) {
         result.addCheck(`visual:duplicate-token:${name}`, false, {
-          message: `CSS variable "${name}" defined ${count} times — possible inconsistency`,
+          severity: 'info',
+          message: `CSS variable "${name}" defined in ${count} files — possible inconsistency`,
           suggestion: 'Define CSS custom properties in a single :root block',
         });
       }

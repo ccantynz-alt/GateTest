@@ -51,31 +51,53 @@ const AUTH_READS = [
   'jwt\\.verify', 'jsonwebtoken', 'Bearer ', 'Authorization',
   'headers\\.authorization', 'headers\\.get\\([\'"]authorization',
   'context\\.user', 'ctx\\.user', 'ctx\\.state\\.user',
+  // Evidence the handler ENFORCES something itself — a 401/403 response,
+  // a cookie/session read, an HMAC/signature or API-key/secret comparison.
+  // Absent from the original list, which is why five admin routes on this
+  // repo that return 401 on a bad cookie were reported "unprotected".
+  'status:\\s*40[13]\\b', "['\"]Unauthorized['\"]", "['\"]Forbidden['\"]",
+  'cookies\\(\\)', 'cookieStore', '_COOKIE_NAME', 'SESSION_COOKIE',
+  'getAdminUser', 'x-admin-token', 'timingSafeEqual', 'safeEqual\\(',
+  'authenticateApiKey', 'apiKey', 'API_KEY', 'CRON_SECRET', 'SIGNING_SECRET',
+  'WEBHOOK_SECRET', 'verifySignature', 'verifyHmac', 'x-hub-signature',
+  'stripe-signature', 'x-signature', 'checkPwCookie', 'requireSession',
 ];
+
+// Naming-convention signal: any identifier shaped like an auth guard
+// (`isAdminRequest`, `requireOwner`, `verifyApiKey`, `ensureLoggedIn`,
+// `hasAccessTo`, `passport.authenticate`). The fixed list above cannot keep
+// up with how teams name their guards — GateTest's own admin API uses
+// `isAdminRequest`, which `\bisAdmin\b` never matched, so the module reported
+// 83 "unprotected" admin routes on this repo (2026-08-18 audit).
+const AUTH_HEURISTIC_RE = /\b(?:is|has|require|requires|verify|check|assert|ensure|need|needs|with|must|guard|enforce|validate|authorize|authorise|protect)(?:[A-Z][A-Za-z0-9]*?)?(?:Auth|Admin|Access|Session|Permission|Perm|User|Owner|Role|Login|Logged|Token|Scope|Api[Kk]ey|Secret|Signature|Signed|Cron|Tick|Bearer|Credential|Identity|Principal|Member|Tenant|Account)\w*\b|\bpassport\.authenticate\b|\b(?:auth|authn|authz|authGuard|jwtGuard|apiKeyGuard|adminOnly|adminGuard|requireAdmin|isAuthorisedTick|isAuthorizedTick)\b/;
 
 const AUTH_SIGNAL_RE = new RegExp(
   [
     ...AUTH_MIDDLEWARE.map(m => `\\b${m}\\b`),
     ...AUTH_READS,
+    AUTH_HEURISTIC_RE.source,
   ].join('|')
 );
 
 // ─── route detection patterns ──────────────────────────────────────────────
 
-// Express: app.get/post/put/patch/delete/all
-const EXPRESS_ROUTE_RE = /(?:app|router)\s*\.\s*(get|post|put|patch|delete|all)\s*\(\s*['"`]([^'"`,]+)['"`]/g;
+// A ROUTE registration is `<obj>.<verb>('<path>', <handler...>)`: the path
+// starts with `/` (or `*`) AND is followed by a comma — there is always at
+// least a handler argument. `app.get('trust proxy fn')` is Express's
+// SETTINGS GETTER, not a route; it produced "unprotected routes" in express
+// core itself (2026-08-18 audit). One regex covers Express / Hono / Koa /
+// Fastify receivers so the same route is not reported 2–3× by overlapping
+// per-framework patterns.
+const EXPRESS_ROUTE_RE = /(?:app|router|hono|fastify|server|api|route[rs]?)\s*\.\s*(get|post|put|patch|delete|all|route)\s*\(\s*['"`]([/*][^'"`,\n]*)['"`]\s*,/g;
 
 // Next.js App Router: exported async function GET/POST/PUT/PATCH/DELETE
 const NEXTJS_EXPORT_RE = /^export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|ALL)\s*\(/gm;
 
-// Fastify: fastify.get/post etc.
-const FASTIFY_ROUTE_RE = /fastify\s*\.\s*(get|post|put|patch|delete|route)\s*\(\s*['"`]([^'"`,]+)['"`]/g;
-
-// Hono: app.get/post etc.
-const HONO_ROUTE_RE = /(?:app|router|hono)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"`]([^'"`,]+)['"`]/g;
-
-// Koa Router
-const KOA_ROUTE_RE = /router\s*\.\s*(get|post|put|patch|delete)\s*\(\s*['"`]([^'"`,]+)['"`]/g;
+// Kept as named aliases for readers of the code paths below; all four are
+// the same registration grammar.
+const FASTIFY_ROUTE_RE = EXPRESS_ROUTE_RE;
+const HONO_ROUTE_RE = EXPRESS_ROUTE_RE;
+const KOA_ROUTE_RE = EXPRESS_ROUTE_RE;
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -85,7 +107,15 @@ const PUBLIC_ROUTE_KEYWORDS = [
   '/public/', '/static/', '/assets/', '/favicon',
   '/login', '/signup', '/register', '/logout',
   '/verify-email', '/reset-password', '/forgot-password',
+  // Public-by-design website surfaces: badges, sitemaps, robots, LLM manifests,
+  // OG images, platform status, checkout creation (Stripe hosts the payment).
+  '/badge', '/sitemap', '/robots', 'llms.txt', '.txt', '/og', '/opengraph',
+  '/platform-status', '/checkout', '/preview', '/playground',
 ];
+
+// Paths whose data is sensitive whatever the HTTP method.
+const SENSITIVE_PATH_RE = /\b(admin|internal|private|account|settings|billing|user|users|me|profile|secret|token|key|keys|db|database|config|debug|cron|tick|worker|fix|server-fix|nuclear|delete|export)\b/i;
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE', 'ALL', 'ROUTE']);
 
 function isPublicRoute(routePath) {
   return PUBLIC_ROUTE_KEYWORDS.some(kw => routePath.toLowerCase().includes(kw));
@@ -111,8 +141,38 @@ function isPublicFile(relPath) {
   );
 }
 
+/**
+ * Return the WHOLE registration call expression starting at the match —
+ * `app.get('/x', isLoggedIn, handler)` — by balancing parentheses (strings
+ * skipped). The previous implementation walked to the first `{`, so a route
+ * whose middleware and handler were bare identifiers (no brace on that
+ * statement) was judged by whatever the NEXT statement's body contained, and
+ * every `isLoggedIn`-guarded route in OWASP NodeGoat came out "unprotected".
+ * Falls back to the handler's brace body, then to a 300-char window.
+ */
 function extractHandlerBody(content, matchIndex) {
-  // Walk forward from the match to find the handler function body
+  const open = content.indexOf('(', matchIndex);
+  // `export function GET(req)` is a DECLARATION — its parens are the
+  // parameter list, so balance braces (the body) instead of parens.
+  const isDeclaration = open !== -1 && /function\s+[A-Za-z0-9_$]*\s*$/.test(content.slice(matchIndex, open));
+  if (!isDeclaration && open !== -1 && open - matchIndex < 120) {
+    let depth = 0;
+    let quote = null;
+    for (let i = open; i < content.length; i++) {
+      const ch = content[i];
+      if (quote) {
+        if (ch === '\\') { i++; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; continue; }
+      if (ch === '(') depth++;
+      else if (ch === ')') {
+        depth--;
+        if (depth === 0) return content.slice(matchIndex, i + 1);
+      }
+    }
+  }
   let depth = 0;
   let start = -1;
   for (let i = matchIndex; i < content.length; i++) {
@@ -126,8 +186,21 @@ function extractHandlerBody(content, matchIndex) {
       }
     }
   }
-  // Fallback: return 300 chars after the match
   return content.slice(matchIndex, matchIndex + 300);
+}
+
+/**
+ * Router-level protection: `app.use(requireAuth)` / `router.use('/admin',
+ * adminOnly)` before a route protects every route registered after it.
+ * Returns the content offset after which routes count as guarded, or -1.
+ */
+function routerLevelAuthOffset(content) {
+  const re = /\.use\s*\(([^)]*)\)/g;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    if (AUTH_SIGNAL_RE.test(m[1])) return m.index;
+  }
+  return -1;
 }
 
 // ─── module ────────────────────────────────────────────────────────────────
@@ -146,7 +219,8 @@ class AuthBypassDetector extends BaseModule {
     let unprotected = 0;
 
     for (const file of files) {
-      const rel = path.relative(projectRoot, file);
+      // Forward slashes always — findings must not differ by host OS.
+      const rel = path.relative(projectRoot, file).split(path.sep).join('/');
       if (isPublicFile(rel)) continue;
 
       let content;
@@ -184,8 +258,14 @@ class AuthBypassDetector extends BaseModule {
         .map((i) => `\`${i.method.toUpperCase()} ${i.route}\` (line ${i.line})`)
         .join(', ');
       const extra = issues.length > 10 ? ` + ${issues.length - 10} more` : '';
+      // Severity is decided by RISK, not by "no keyword matched": an
+      // unauthenticated write, or a read of a sensitive path, blocks; an
+      // anonymous GET of a non-sensitive path is a warning — most public
+      // APIs serve exactly that on purpose, and blocking a build for it is
+      // Forbidden #25 (we are the painkiller, not the bottleneck).
+      const risky = issues.some((i) => MUTATING.has(i.method.toUpperCase()) || SENSITIVE_PATH_RE.test(i.route));
       result.addCheck(`auth-bypass:${rel}`, false, {
-        severity: 'error',
+        severity: risky ? 'error' : 'warning',
         message: `${issues.length} unprotected route${issues.length !== 1 ? 's' : ''} in \`${rel}\`: ${routeList}${extra}`,
         file: rel,
         line: issues[0].line,
@@ -239,10 +319,13 @@ class AuthBypassDetector extends BaseModule {
         const body = extractHandlerBody(content, matchIdx);
         if (AUTH_SIGNAL_RE.test(body)) continue;
 
-        // Derive route from file path
+        // Derive route from file path. The app dir may be nested
+        // (`website/app/api/...`), so strip everything up to and including
+        // the LAST `app/` (or `pages/`) segment, not just a leading one.
         const routePath = rel
           .replace(/\\/g, '/')
-          .replace(/^app/, '')
+          .replace(/^(?:.*\/)?(?:app|pages)\//, '/')
+          .replace(/^app$/, '/')
           .replace(/\/route\.(ts|js|tsx|jsx)$/, '')
           .replace(/\/\(.*?\)/g, '') // remove Next.js route groups
           || '/';
@@ -255,13 +338,11 @@ class AuthBypassDetector extends BaseModule {
       return issues;
     }
 
-    // Express / Fastify / Hono / Koa pattern
-    const routePatterns = [
-      { re: EXPRESS_ROUTE_RE,  framework: 'express' },
-      { re: FASTIFY_ROUTE_RE,  framework: 'fastify' },
-      { re: HONO_ROUTE_RE,     framework: 'hono' },
-      { re: KOA_ROUTE_RE,      framework: 'koa' },
-    ];
+    // Express / Fastify / Hono / Koa — one registration grammar, one pass
+    // (the per-framework regexes used to overlap and list each route 2–3×).
+    const routePatterns = [{ re: EXPRESS_ROUTE_RE, framework: 'express' }];
+    const guardedFrom = routerLevelAuthOffset(content);
+    const seen = new Set();
 
     for (const { re } of routePatterns) {
       re.lastIndex = 0;
@@ -271,6 +352,11 @@ class AuthBypassDetector extends BaseModule {
         if (isPublicRoute(routePath)) continue;
 
         const matchIdx = m.index;
+        // Registered after a router-level auth middleware → protected.
+        if (guardedFrom !== -1 && matchIdx > guardedFrom) continue;
+        const key = `${method}:${routePath}:${matchIdx}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         const lineNo   = content.slice(0, matchIdx).split('\n').length;
         const lineText = lines[lineNo - 1] || '';
 

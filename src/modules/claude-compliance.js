@@ -201,9 +201,16 @@ class ClaudeComplianceModule extends BaseModule {
         }
       }
 
-      // 2. Not-implemented stubs.
+      // 2. Not-implemented stubs. `raise NotImplementedError` inside an
+      // abstract base / interface method (the surrounding class subclasses
+      // ABC, the method has a docstring, or the module defines an
+      // `abstractmethod`) is the CORRECT Python idiom for "subclasses must
+      // override" — Flask's own base classes tripped 11 blocking errors on
+      // it (2026-08-18 audit). Only a bare stub in a concrete function is a
+      // finding (it crashes whoever calls it at runtime).
       for (const p of STUB_PATTERNS) {
         if (p.re.test(line)) {
+          if (/NotImplementedError/.test(p.label) && ClaudeComplianceModule._looksAbstract(lines, i, lines.join('\n'))) break;
           result.addCheck(`claude-compliance:stub:${rel}:${i + 1}`, false, {
             severity: ctx.isTest ? 'info' : 'error',
             message: `Not-implemented stub — ${p.label}`,
@@ -303,5 +310,58 @@ class ClaudeComplianceModule extends BaseModule {
     return out;
   }
 }
+
+/**
+ * True when a `raise NotImplementedError` at `lineIdx` sits in an abstract /
+ * interface context: the file imports ABC/abstractmethod, the enclosing
+ * class derives from ABC/Protocol/Interface, the method is decorated
+ * `@abstractmethod`, or the method body opens with a docstring (the
+ * documented "override me" contract).
+ */
+ClaudeComplianceModule._looksAbstract = function (lines, lineIdx, content) {
+  if (/from\s+abc\s+import|import\s+abc\b|\babstractmethod\b|typing\.Protocol|\(Protocol\)|\bInterface\b/.test(content)) return true;
+  const indent = (l) => (l.match(/^\s*/) || [''])[0].length;
+  const myIndent = indent(lines[lineIdx] || '');
+  // Find the enclosing `def` (lower indent, walking up).
+  let defIdx = -1;
+  for (let k = lineIdx - 1; k >= 0 && k >= lineIdx - 60; k--) {
+    const l = lines[k];
+    if (!l.trim()) continue;
+    if (indent(l) < myIndent && /^\s*(async\s+)?def\s+/.test(l)) { defIdx = k; break; }
+    if (indent(l) < myIndent && /^\s*class\s+/.test(l)) break;
+  }
+  if (defIdx === -1) return false;
+  const deco = lines[defIdx - 1] || '';
+  if (/@\w*abstract\w*|@overload/.test(deco)) return true;
+  // End of the (possibly multi-line) signature: first line from the def
+  // that ends with ':' (ignoring trailing comments).
+  let sigEnd = defIdx;
+  for (let k = defIdx; k < lineIdx; k++) {
+    if (/:\s*(#.*)?$/.test(lines[k])) { sigEnd = k; break; }
+  }
+  // Body between the signature and the raise: only docstring / comments /
+  // blank lines means the method EXISTS to say "override me" — the Python
+  // abstract-method idiom, not an unfinished stub.
+  const TQ = /"""|'''/;
+  const body = lines.slice(sigEnd + 1, lineIdx).map((l) => l.trim()).filter(Boolean);
+  let inDoc = false;
+  let hasDocstring = false;
+  for (const l of body) {
+    if (inDoc) { if (TQ.test(l)) inDoc = false; continue; }
+    if (/^r?("""|''')/.test(l)) {
+      hasDocstring = true;
+      const closes = (l.match(new RegExp(TQ.source, 'g')) || []).length >= 2;
+      if (!closes) inDoc = true;
+      continue;
+    }
+    if (l.startsWith('#') || l === 'pass' || l === '...') continue;
+    return false; // real logic before the raise → a genuine stub in a concrete function
+  }
+  // A METHOD whose whole body is the raise (with or without a docstring)
+  // is the "subclasses override this" idiom. A bare module-level FUNCTION
+  // that only raises is an unfinished stub — flag it.
+  const isMethod = indent(lines[defIdx]) > 0 || /^\s*(async\s+)?def\s+\w+\s*\(\s*(self|cls)\b/.test(lines[defIdx]);
+  return hasDocstring || isMethod;
+};
 
 module.exports = ClaudeComplianceModule;

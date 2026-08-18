@@ -278,3 +278,46 @@ const cfg = { x: maybeUndefinedThing };
     assert.ok(realFind);
   });
 });
+
+describe('UndefinedRefModule — multi-line multi-declarator statements (2026-08-18 audit)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-uref-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('declares every binding of `let a = 1,\n b = f(),\n c;` — the NodeGoat chart shape', async () => {
+    write(tmp, 'app/chart.js', `
+var margin = { top: 20, right: 20, bottom: 30, left: 50 },
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom,
+    parseDate;
+function draw() {
+  parseDate = width + height;
+  return { margin: margin, w: width, h: height, p: parseDate };
+}
+module.exports = draw;
+`);
+    const r = await run(tmp);
+    const bad = r.checks.filter((c) => !c.passed && /width|height|parseDate|margin/.test(c.message || ''));
+    assert.strictEqual(bad.length, 0, JSON.stringify(bad.map((c) => c.message)));
+  });
+
+  it('POSITIVE CONTROL: a genuinely undeclared name in the same file is still flagged', async () => {
+    write(tmp, 'app/x.js', `
+var a = 1,
+    b = 2;
+const config = {
+  handler: neverDeclaredAnywhere,
+  values: [a, b],
+};
+module.exports = config;
+`);
+    const r = await run(tmp);
+    assert.ok(r.checks.some((c) => !c.passed && c.name && c.name.includes('undefined-ref:neverDeclaredAnywhere:')), JSON.stringify(r.checks));
+    assert.ok(!r.checks.some((c) => !c.passed && /undefined-ref:(a|b):/.test(c.name || '')), 'a and b are declared');
+  });
+
+  it('_splitTopLevel ignores commas inside brackets and strings', () => {
+    const parts = UndefinedRefModule._splitTopLevel(`a = { x: 1, y: [1, 2] }, b = "p,q", c = f(1, 2)`);
+    assert.deepStrictEqual(parts.map((p) => p.trim().split(/\s/)[0]), ['a', 'b', 'c']);
+  });
+});

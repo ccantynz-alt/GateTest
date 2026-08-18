@@ -247,3 +247,33 @@ describe('ClaudeComplianceModule — @ts-ignore density', () => {
     assert.equal(fail(r, 'ts-ignore-density').length, 0);
   });
 });
+
+describe('ClaudeComplianceModule — abstract-method NotImplementedError is the idiom, not a stub (2026-08-18 audit)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cc-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('is silent on an ABC subclass / @abstractmethod / docstring-contract method (Flask base classes)', async () => {
+    write(tmp, 'src/base.py', [
+      'from abc import ABC, abstractmethod',
+      'class Loader(ABC):',
+      '    @abstractmethod',
+      '    def get_source(self, environment, template):',
+      '        raise NotImplementedError',
+    ].join('\n') + '\n');
+    write(tmp, 'src/sessions.py', [
+      'class SessionInterface:',
+      '    def open_session(self, app, request):',
+      '        """Subclasses must implement this."""',
+      '        raise NotImplementedError',
+    ].join('\n') + '\n');
+    const r = await run(tmp);
+    assert.equal(fail(r, 'stub').length, 0, JSON.stringify(fail(r, 'stub')));
+  });
+
+  it('POSITIVE CONTROL: a bare NotImplementedError in a concrete function still fires', async () => {
+    write(tmp, 'src/api.py', 'def charge(card):\n    raise NotImplementedError\n');
+    const r = await run(tmp);
+    assert.equal(fail(r, 'stub').length, 1);
+  });
+});

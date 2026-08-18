@@ -33,3 +33,16 @@ describe('RubyModule — baseline shape', () => {
     await assert.doesNotReject(mod.run(result, { projectRoot: tmp }));
   });
 });
+
+describe('RubyModule — eval rule targets non-literal arguments (2026-08-18 audit)', () => {
+  const { LANGUAGE_SPECS } = require('../src/core/universal-checker');
+  const rule = LANGUAGE_SPECS.ruby.patterns.find((p) => p.name === 'eval').pattern;
+  it('eval of a STRING LITERAL is the safe form and is not flagged', () => {
+    assert.strictEqual(rule.test(`  buf = binding.eval('@_out_buf')`), false);
+    assert.strictEqual(rule.test(`  eval("1 + 1")`), false);
+  });
+  it('POSITIVE CONTROL: eval of a variable / expression fires', () => {
+    assert.strictEqual(rule.test(`  eval(params[:code])`), true);
+    assert.strictEqual(rule.test(`  instance_eval user_input`), true);
+  });
+});

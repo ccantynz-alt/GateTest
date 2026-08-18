@@ -33,3 +33,17 @@ describe('PythonModule — baseline shape', () => {
     await assert.doesNotReject(mod.run(result, { projectRoot: tmp }));
   });
 });
+
+describe('PythonModule — exec/eval are builtins, not methods (2026-08-18 audit)', () => {
+  const { LANGUAGE_SPECS } = require('../src/core/universal-checker');
+  const rule = (n) => LANGUAGE_SPECS.python.patterns.find((p) => p.name === n).pattern;
+  it('does not flag SQLModel `session.exec(select(...))` or `cursor.exec(`', () => {
+    assert.strictEqual(rule('exec').test('    results = session.exec(select(Hero)).all()'), false);
+    assert.strictEqual(rule('exec').test('    cursor.exec(query)'), false);
+    assert.strictEqual(rule('eval').test('    node.eval(ctx)'), false);
+  });
+  it('POSITIVE CONTROL: the real builtins still fire', () => {
+    assert.strictEqual(rule('exec').test('    exec(compile(code, name, "exec"))'), true);
+    assert.strictEqual(rule('eval').test('    return eval(expr)'), true);
+  });
+});

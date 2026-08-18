@@ -31,6 +31,11 @@ const NAMED_COLORS = {
   fuchsia: { r: 255, g: 0, b: 255 },
 };
 
+// Reusable fragments/partials/components get their labels and alt text from
+// the page that includes them; a missing attribute THERE is a warning, on a
+// real page it stays an error.
+const FRAGMENT_PATH_RE = /(^|\/)(fragments?|partials?|includes?|_includes|components?|snippets?|layouts?)\//i;
+
 class AccessibilityModule extends BaseModule {
   constructor() {
     super('accessibility', 'Accessibility (WCAG 2.2, AA + AAA-aligned) Audit');
@@ -86,6 +91,7 @@ class AccessibilityModule extends BaseModule {
       const attrs = match[1];
       if (!/\balt\s*=/i.test(attrs)) {
         result.addCheck(`a11y:img-alt:${relPath}`, false, {
+          ...(FRAGMENT_PATH_RE.test(relPath.replace(/\\/g, '/')) ? { severity: 'warning' } : {}),
           file: relPath,
           message: 'Image missing alt attribute',
           suggestion: 'Add alt="description" for informative images or alt="" for decorative',
@@ -99,12 +105,19 @@ class AccessibilityModule extends BaseModule {
     // JSX attributes can contain `>` inside arrow functions (e.g. onChange={() => ...}),
     // so we look ahead up to 600 chars after <input to find label-related attributes
     // rather than trying to capture all attrs in one regex stop-at->  pass.
+    // A UI-kit PRIMITIVE (`components/ui/input.tsx` and friends) forwards
+    // its props — the label is attached wherever it is used, not inside the
+    // primitive. Checking it produces one guaranteed false positive per
+    // design system (shadcn/ui, Radix wrappers; 2026-08-18 audit).
+    if (/(^|\/)(components?\/ui|ui\/primitives?|primitives?)\/(input|textarea|select|checkbox|radio|switch|form)[^/]*$/i.test(relPath.replace(/\\/g, '/'))) return;
+    // Strip HTML comments so a commented-out <input> is not "unlabelled".
+    const contentNoComments = content.replace(/<!--[\s\S]*?-->/g, (m) => ' '.repeat(m.length));
     const inputStart = /<input\b/gi;
     let startMatch;
-    while ((startMatch = inputStart.exec(content)) !== null) {
+    while ((startMatch = inputStart.exec(contentNoComments)) !== null) {
       const pos = startMatch.index;
       // Grab a generous lookahead window (covers multiline JSX props + arrow fns)
-      const window = content.slice(pos, pos + 600);
+      const window = contentNoComments.slice(pos, pos + 600);
       // Determine type (default "text")
       const typeMatch = window.match(/\btype\s*=\s*["'](\w+)["']/i);
       const type = typeMatch ? typeMatch[1].toLowerCase() : 'text';
@@ -122,6 +135,7 @@ class AccessibilityModule extends BaseModule {
 
       if (!hasLabel) {
         result.addCheck(`a11y:input-label:${relPath}`, false, {
+          ...(FRAGMENT_PATH_RE.test(relPath.replace(/\\/g, '/')) ? { severity: 'warning' } : {}),
           file: relPath,
           message: `Input (type="${type}") missing accessible label`,
           suggestion: 'Add aria-label, aria-labelledby, or an associated <label> element',
@@ -141,6 +155,7 @@ class AccessibilityModule extends BaseModule {
     for (let i = 1; i < headings.length; i++) {
       if (headings[i] > headings[i - 1] + 1) {
         result.addCheck(`a11y:heading-hierarchy:${relPath}`, false, {
+        severity: 'warning',
           file: relPath,
           message: `Heading level skipped: h${headings[i - 1]} to h${headings[i]}`,
           suggestion: 'Use sequential heading levels (h1 > h2 > h3) without skipping',
@@ -184,7 +199,11 @@ class AccessibilityModule extends BaseModule {
   }
 
   _checkLanguageAttribute(relPath, content, result) {
-    if (content.includes('<html') && !/lang\s*=\s*["']\w/i.test(content)) {
+    // Only a FULL document owns <html lang>: fragments/partials that merely
+    // mention "<html" (or Thymeleaf `<html xmlns:th>` layout stubs with no
+    // <head>) inherit it from the layout that wraps them.
+    const fullDocument = /<html[\s>]/i.test(content) && /<head[\s>]/i.test(content);
+    if (fullDocument && !/<html[^>]*\blang\s*=\s*["']\w/i.test(content) && !/lang\s*=\s*\{/.test(content)) {
       result.addCheck(`a11y:html-lang:${relPath}`, false, {
         file: relPath,
         message: 'Missing lang attribute on <html> element',
@@ -197,7 +216,7 @@ class AccessibilityModule extends BaseModule {
     // Only check standalone HTML files, not React/Vue/Svelte components.
     // TSX/JSX files render as part of a component tree; the <main> will
     // live in a child page component, not the layout wrapper.
-    if (!content.includes('<html')) return;
+    if (!/<html[\s>]/i.test(content) || !/<head[\s>]/i.test(content)) return;
     if (/\.(tsx?|jsx?|vue|svelte)$/i.test(relPath)) return;
 
     const landmarks = ['<main', 'role="main"', '<nav', 'role="navigation"'];
@@ -262,6 +281,7 @@ class AccessibilityModule extends BaseModule {
     if ((content.includes('animation') || content.includes('transition')) &&
         !content.includes('prefers-reduced-motion')) {
       result.addCheck(`a11y:reduced-motion-css:${relPath}`, false, {
+        severity: 'warning',
         file: relPath,
         message: 'CSS animations/transitions without prefers-reduced-motion media query',
         suggestion: 'Add @media (prefers-reduced-motion: reduce) { ... } to disable animations',
@@ -402,11 +422,15 @@ class AccessibilityModule extends BaseModule {
             }
           );
         } else if (ratio < 7) {
-          // Passes large text AAA but fails normal text AAA
+          // Passes WCAG AA (4.5:1) — fails only the AAA target. AAA is an
+          // aspiration, not the legal/contractual bar most teams ship to;
+          // blocking a build on it (57 errors on compiled Bootstrap in the
+          // 2026-08-18 audit) makes us the bottleneck. Warning.
           result.addCheck(
             `a11y:contrast-static:${relPath}:${totalChecked}`,
             false,
             {
+              severity: 'warning',
               file: relPath,
               selector,
               foreground: colorMatch[1].trim(),

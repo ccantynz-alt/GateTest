@@ -52,12 +52,35 @@ class MutationModule extends BaseModule {
       return;
     }
 
+    // Mutation testing needs an INSTALLED, GREEN suite to be meaningful. A
+    // repo whose deps are not installed here (fresh clone, no node_modules)
+    // cannot be mutated — that is our environment, not the customer's
+    // defect. Reported as an info skip; unitTests owns "your tests fail".
+    // (2026-08-18 audit: this was a blocking error on express, NodeGoat and
+    // this repo, and on a Python repo it mutated docs JS with `node --test`.)
+    const pkgPath = path.join(projectRoot, 'package.json');
+    if (fs.existsSync(pkgPath) && !fs.existsSync(path.join(projectRoot, 'node_modules'))) {
+      result.addCheck('mutation:baseline', true, {
+        severity: 'info',
+        message: 'Skipped — dependencies are not installed, so the suite cannot run as a mutation baseline',
+        suggestion: 'Run "npm ci" before scanning, or run mutation testing in CI',
+      });
+      return;
+    }
+    if (!fs.existsSync(pkgPath)) {
+      result.addCheck('mutation:baseline', true, {
+        severity: 'info',
+        message: 'Skipped — mutation testing supports Node.js projects (package.json) only',
+      });
+      return;
+    }
+
     // Verify tests pass before mutating
     const baseline = this._exec(testCmd, { cwd: projectRoot, timeout: 120000 });
     if (baseline.exitCode !== 0) {
-      result.addCheck('mutation:baseline', false, {
-        message: 'Tests must pass before mutation testing can run',
-        severity: 'error',
+      result.addCheck('mutation:baseline', true, {
+        message: 'Skipped — the suite does not pass, so mutants cannot be measured (see unitTests for the failure)',
+        severity: 'info',
         suggestion: 'Fix failing tests first, then re-run mutation testing',
       });
       return;

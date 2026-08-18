@@ -206,18 +206,29 @@ class EnvVarsModule extends BaseModule {
     let issues = 0;
 
     // Missing-from-example: referenced in code, not declared.
+    // Severity follows RISK: only an UNGUARDED read (no `||`/`??`/`.get(k, d)`
+    // fallback) in a repo that HAS an `.env.example` can "boot a broken app".
+    // A guarded read, or a repo with no example file at all (nothing to be
+    // missing from), is a warning. Message names the language's own idiom
+    // (`os.environ["X"]`, not `process.env.X`, on a Python file).
+    // (2026-08-18 audit: fastapi's `os.environ.get("FASTAPI_ENV")` with a
+    // fallback was a blocking error, worded as `process.env.`.)
+    const hasExampleFile = ['.env.example', '.env.sample', '.env.template'].some((f) => fs.existsSync(path.join(projectRoot, f)));
     for (const [key, refs] of referenced) {
       if (isRuntimeAllowed(key)) continue;
       if (declared.has(key)) continue;
       const firstRef = refs[0];
+      const unguarded = refs.some((r) => !r.guarded);
+      const lang = firstRef.lang || 'js';
+      const idiom = lang === 'py' ? `os.environ["${key}"]` : lang === 'go' ? `os.Getenv("${key}")` : `process.env.${key}`;
       issues += this._flag(result, `env-vars:missing-from-example:${key}`, {
-        severity: 'error',
+        severity: unguarded && hasExampleFile ? 'error' : 'warning',
         key,
         file: firstRef.file,
         line: firstRef.line,
         references: refs.length,
-        message: `\`process.env.${key}\` is read in ${refs.length} location(s) (first: ${firstRef.file}:${firstRef.line}) but \`${key}\` is NOT in \`.env.example\` / \`.env.sample\` / CI env — production deploy will boot a broken app`,
-        suggestion: `Add \`${key}=\` to \`.env.example\` with a comment explaining what it is. If it has a safe default, use \`process.env.${key} || <default>\` at the call site.`,
+        message: `\`${idiom}\` is read in ${refs.length} location(s) (first: ${firstRef.file}:${firstRef.line}) but \`${key}\` is NOT in \`.env.example\` / \`.env.sample\` / CI env${unguarded ? ' — an unguarded read boots a broken app when it is unset' : ' (every read has a fallback, so this is documentation debt, not a boot risk)'}`,
+        suggestion: `Add \`${key}=\` to \`.env.example\` with a comment explaining what it is.${unguarded ? ` If it has a safe default, use a fallback at the call site.` : ''}`,
       });
     }
 
@@ -437,8 +448,15 @@ class EnvVarsModule extends BaseModule {
           // For JS, skip matches inside a string literal (these are
           // documentation / advice strings, not real reads).
           if (isJs && isInString(raw, m.index)) continue;
+          // A read WITH a fallback (`|| default`, `?? default`, `.get(K, d)`,
+          // `getenv(K, d)`, `?.`) cannot break boot when the key is absent —
+          // that is exactly what the fallback is for. Record it as guarded.
+          const tail = raw.slice(m.index + m[0].length, m.index + m[0].length + 60);
+          const guarded = /^\s*(?:\)|\]|\))*\s*(?:\|\||\?\?|\?\.|\?\s|\|\|=)/.test(tail)
+            || /^\s*,\s*[^)]+\)/.test(tail) && /(?:\.get|getenv)\s*\(\s*['"]?[A-Z_]+['"]?\s*$/.test(raw.slice(0, m.index + m[0].length))
+            || /\b(?:os\.environ\.get|os\.getenv|getenv)\s*\(\s*['"][A-Z0-9_]+['"]\s*,/.test(raw);
           if (!referenced.has(key)) referenced.set(key, []);
-          referenced.get(key).push({ file: rel, line: i + 1 });
+          referenced.get(key).push({ file: rel, line: i + 1, guarded, lang: isJs ? 'js' : (isGo ? 'go' : 'py') });
         }
       }
     }

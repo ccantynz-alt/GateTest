@@ -144,7 +144,7 @@ class DeployReadiness extends BaseModule {
 
     // Main score check
     result.addCheck('deploy-readiness:score', passed, {
-      severity: passed ? 'info' : (band.level === 'warning' ? 'warning' : 'error'),
+      severity: passed ? 'info' : 'warning', // a DERIVED score never blocks on its own — whatever dragged it down already does (2026-08-18 audit: one phantom blocker per repo)
       message: `${band.emoji} Deploy Readiness: ${score}/100 — ${band.label}`,
       details: {
         score,

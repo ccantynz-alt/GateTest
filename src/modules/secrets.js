@@ -259,7 +259,12 @@ class SecretsModule extends BaseModule {
    * @returns {boolean}
    */
   _matchingFileExists(projectRoot, pattern) {
-    const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'vendor', '.gatetest']);
+    // Test fixtures / examples / testdata are COMMITTED ON PURPOSE (flask's
+    // tests/test_apps/.env, gin's testdata/certificate/*.pem) — their
+    // presence is not evidence that a real secret is about to leak, so they
+    // do not make the missing-pattern advisory a blocking error.
+    const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'vendor', '.gatetest',
+      'test', 'tests', '__tests__', 'spec', 'specs', 'fixtures', 'fixture', 'testdata', 'test_apps', 'examples', 'example', 'docs', 'benchmarks', 'known-bad', 'reliability-corpus']);
     const matches = (name) => (
       pattern === '.env'
         ? (name === '.env' || name.startsWith('.env.'))
@@ -278,7 +283,7 @@ class SecretsModule extends BaseModule {
         if (entry.isDirectory()) {
           if (SKIP.has(entry.name)) continue;
           if (walk(path.join(dir, entry.name), depth + 1)) return true;
-        } else if (matches(entry.name)) {
+        } else if (matches(entry.name) && !/\.(example|sample|template|dist)$/.test(entry.name)) {
           return true;
         }
       }

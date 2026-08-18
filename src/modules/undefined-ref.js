@@ -375,10 +375,22 @@ class UndefinedRefModule extends BaseModule {
     for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g)) {
       scope.add(m[1]);
     }
-    // Multi-binding declarations: `let a, b, c;` — capture every name.
-    for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+([^;\n=]+)[;=]/g)) {
-      for (const piece of m[1].split(',')) {
-        const name = piece.trim().split(/[\s:[{]/)[0];
+    // Multi-binding declarations: `let a, b, c;` AND the initialised,
+    // multi-line form
+    //     let a = 1,
+    //         b = foo(),
+    //         c;
+    // The old regex stopped at the first `=` or newline, so `b` and `c`
+    // above were never declared and every later use was "undefined" — 20
+    // blocking errors on one NodeGoat chart file (2026-08-18 audit). Walk
+    // forward from the keyword balancing brackets/strings to the terminating
+    // `;` at depth 0, then split declarators on top-level commas.
+    for (const m of src.matchAll(/(?:^|\n)[ \t]*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+/g)) {
+      const start = m.index + m[0].length;
+      const decl = UndefinedRefModule._readDeclaration(src, start);
+      if (!decl) continue;
+      for (const piece of UndefinedRefModule._splitTopLevel(decl)) {
+        const name = piece.trim().split(/[\s:[{=]/)[0];
         if (/^[A-Za-z_$][\w$]*$/.test(name)) scope.add(name);
       }
     }
@@ -645,5 +657,66 @@ class UndefinedRefModule extends BaseModule {
     return false;
   }
 }
+
+
+/**
+ * Read one declaration statement starting at `start` (just after the
+ * `const|let|var` keyword) up to its terminating `;` at bracket depth 0, or
+ * a newline that ends a statement (no trailing comma/operator). Strings and
+ * template literals are skipped. Returns the declarator text or null.
+ */
+UndefinedRefModule._readDeclaration = function (src, start) {
+  let depth = 0;
+  let quote = null;
+  let i = start;
+  const max = Math.min(src.length, start + 20000);
+  for (; i < max; i++) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; continue; }
+    if (ch === '/' && src[i + 1] === '/') { const nl = src.indexOf('\n', i); if (nl === -1) break; i = nl; continue; }
+    if (ch === '/' && src[i + 1] === '*') { const end = src.indexOf('*/', i + 2); if (end === -1) break; i = end + 1; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') { depth--; if (depth < 0) break; }
+    else if (ch === ';' && depth === 0) break;
+    else if (ch === '\n' && depth === 0) {
+      // ASI: the statement ends here unless the line trails with a
+      // continuation token (`,`, `=`, an operator) or the next line starts
+      // with one.
+      const before = src.slice(start, i).replace(/\s+$/, '');
+      const after = src.slice(i + 1, i + 200).replace(/^\s+/, '');
+      if (!/[,=+\-*/&|?:(\[{.]$/.test(before) && !/^[,.?:+\-*/&|]/.test(after)) break;
+    }
+  }
+  return src.slice(start, i);
+};
+
+/** Split on commas at bracket depth 0 (outside strings). */
+UndefinedRefModule._splitTopLevel = function (text) {
+  const out = [];
+  let depth = 0;
+  let quote = null;
+  let cur = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      cur += ch;
+      if (ch === '\\') { cur += text[i + 1] || ''; i++; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; cur += ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{' || ch === '<') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}' || ch === '>') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+};
 
 module.exports = UndefinedRefModule;

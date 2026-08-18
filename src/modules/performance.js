@@ -130,6 +130,12 @@ class PerformanceModule extends BaseModule {
     const largeImages = [];
 
     for (const file of imageFiles) {
+      // Only images that could be SERVED to a user matter for web
+      // performance. Docs screenshots, README art, test fixtures and design
+      // sources are not on the request path (flask/fastapi docs images were
+      // blocking errors in the 2026-08-18 audit).
+      const rel = path.relative(projectRoot, file).replace(/\\/g, '/').toLowerCase();
+      if (/(^|\/)(docs?|documentation|screenshots?|assets\/readme|\.github|tests?|__tests__|spec|fixtures?|examples?|design|figma|art|marketing|blog|content)\//.test(rel)) continue;
       const stats = fs.statSync(file);
       if (stats.size > 200 * 1024) { // 200KB
         largeImages.push({
@@ -141,6 +147,7 @@ class PerformanceModule extends BaseModule {
 
     if (largeImages.length > 0) {
       result.addCheck('perf:large-images', false, {
+        severity: 'warning',
         message: `${largeImages.length} image(s) over 200KB`,
         details: largeImages.slice(0, 10),
         suggestion: 'Convert to WebP/AVIF format and compress images',

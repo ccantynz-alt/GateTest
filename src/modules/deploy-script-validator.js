@@ -31,8 +31,13 @@ const { makeAutoFix } = require('../core/ai-fix-engine');
 const HEALTH_URL_RE_QUOTED = /(?:curl|wget|fetch|healthcheck|health.?check|ready.?check|liveness|readiness|probe)[^\n'"]{0,80}(['"`])(\/[a-z/_\-0-9]{1,60})\1/gi;
 const HEALTH_URL_RE_BARE   = /(?:curl|wget)\s+https?:\/\/[^\s/'"]{1,80}(\/[a-z/_\-0-9]{1,60})(?:\s|$|['"?])/gi;
 
-// k8s probe path
-const K8S_PROBE_RE  = /(?:path|httpGet\.path)\s*:\s*['"]?(\/[a-z/_\-0-9]{1,60})['"]?/gi;
+// k8s probe path — `path:` ONLY (never `mountPath:` / `subPath:` — a secret
+// volume mount is not a health URL; 2026-08-18 audit on spring-petclinic).
+const K8S_PROBE_RE  = /(?<![A-Za-z])(?:path|httpGet\.path)\s*:\s*['"]?(\/[a-z/_\-0-9]{1,60})['"]?/gi;
+
+// Health endpoints a FRAMEWORK registers without any route in the repo:
+// Spring Boot Actuator, ASP.NET health checks, k8s conventions.
+const FRAMEWORK_BUILTIN_HEALTH = /^\/(?:actuator(?:\/.*)?|livez|readyz|healthz|health\/(?:live|ready)|_health|hc|ping)$/i;
 
 // Next.js App Router route file: app/api/health/route.ts → /api/health
 function nextjsRouteFromPath(rel) {
@@ -85,7 +90,9 @@ class DeployScriptValidator extends BaseModule {
     const allFiles = this._collectFiles(projectRoot, ['*']);
 
     for (const file of allFiles) {
-      const rel = path.relative(projectRoot, file);
+      // Forward slashes always — the Next.js route regex below matched
+      // nothing on Windows (backslash paths), leaving the registry blind.
+      const rel = path.relative(projectRoot, file).split(path.sep).join('/');
       if (rel.includes('node_modules') || rel.includes('.git')) continue;
 
       let content;
@@ -146,10 +153,16 @@ class DeployScriptValidator extends BaseModule {
       return;
     }
 
+    // The route registry only understands Next.js / Express / Fastify. On a
+    // Spring / Django / Rails / Go repo it is EMPTY — not "no routes exist",
+    // but "GateTest cannot see them" — so a mismatch there is our blindness,
+    // reported as a warning; framework built-ins (Actuator, /livez) match.
+    const registryIsBlind = registeredRoutes.size === 0;
     let mismatches = 0;
     for (const [url, { file, line }] of deployHealthUrls) {
       // Check exact match or prefix match (e.g. /health matches /health or /healthz)
       const matched = registeredRoutes.has(url) ||
+        FRAMEWORK_BUILTIN_HEALTH.test(url) ||
         Array.from(registeredRoutes).some(r => r === url || url.startsWith(r) || r.startsWith(url));
 
       if (!matched) {
@@ -163,8 +176,8 @@ class DeployScriptValidator extends BaseModule {
           : ' No health-like routes found in codebase.';
 
         result.addCheck(`deploy-script-validator:mismatch:${url}`, false, {
-          severity: 'error',
-          message: `Health-check URL \`${url}\` (from ${file}:${line}) has no matching registered route.${candidateHint}`,
+          severity: registryIsBlind ? 'warning' : 'error',
+          message: `Health-check URL \`${url}\` (from ${file}:${line}) has no matching registered route${registryIsBlind ? ' that GateTest can see (only Next.js/Express/Fastify routes are indexed)' : ''}.${candidateHint}`,
           file,
           line,
           fix: `Either register a \`${url}\` route in your app, or update ${file} to use an existing route.`,

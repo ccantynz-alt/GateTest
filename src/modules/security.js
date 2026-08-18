@@ -110,9 +110,14 @@ class SecurityModule extends BaseModule {
           });
         }
       } catch {
-        result.addCheck('security:npm-audit', false, {
-          message: 'npm audit failed to run',
-          suggestion: 'Run "npm audit" manually to check for vulnerabilities',
+        // "The tool could not run here" (no lockfile, offline, registry
+        // down) is a fact about the scan environment, not a vulnerability
+        // in the customer's code. Info, never a blocking error — this was
+        // a gate failure on 4 of 9 real repos in the 2026-08-18 audit.
+        result.addCheck('security:npm-audit', true, {
+          severity: 'info',
+          message: 'npm audit could not run in this environment (no lockfile, offline, or registry unreachable) — dependency vulnerabilities were not checked here',
+          suggestion: 'Run "npm audit" manually or in CI to check for vulnerabilities',
         });
       }
     }
@@ -143,7 +148,11 @@ class SecurityModule extends BaseModule {
       { regex: /\$\{.*req\.(params|query|body)/g, name: 'unsanitized user input in template', severity: 'critical' },
       { regex: /res\.redirect\s*\(\s*req\./g, name: 'open redirect risk', severity: 'high' },
       { regex: /\.createReadStream\s*\(\s*req\./g, name: 'path traversal risk', severity: 'critical' },
-      { regex: /Math\.random\s*\(/g, name: 'Math.random() for security (use crypto)', severity: 'moderate' },
+      // Math.random() is only a SECURITY finding when the value becomes a
+      // token / secret / id / nonce / password / OTP / session / key. Used
+      // for jitter, dates, sampling, animation or test data it is fine —
+      // 10/10 sampled hits in the 2026-08-18 audit were that kind.
+      { regex: /(?:token|secret|nonce|otp|password|passcode|session|salt|apiKey|api_key|csrf|verification|reset|invite|code|id|uuid|key)\w*\s*[:=]\s*[^;\n]*Math\.random\s*\(|Math\.random\s*\([^;\n]*(?:toString\(36\)|toString\(16\))[^;\n]*(?:token|secret|nonce|otp|password|session|salt|key|id)/gi, name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)', severity: 'moderate' },
       { regex: /disable.*csrf|csrf.*disable/gi, name: 'CSRF protection disabled', severity: 'critical' },
     ];
 
@@ -630,11 +639,28 @@ class SecurityModule extends BaseModule {
         if (docRe.test(trimmed)) {
           continue;
         }
+        // ANY comment line is documentation, whatever it says — a doc
+        // comment reading `# api_key = "CHANGEME_XXXXXXXX"` is not a
+        // credential in the binary. (sinatra's own docs blocked the gate on
+        // exactly this in the 2026-08-18 audit.) Real secrets in comments do
+        // exist but are the exception; they still surface through the
+        // dedicated `secrets` module's entropy checks.
+        if (/^\s*(\/\/|#(?!!)|\/?\*|--|;|<!--)/.test(trimmed)) {
+          continue;
+        }
+        // Obvious placeholders are not secrets: CHANGEME, your-key-here,
+        // xxxx, <insert>, ${VAR}, process.env lookups on the same line.
+        if (/CHANGE_?ME|YOUR[_-]?[A-Z_]*(KEY|SECRET|TOKEN)|<[^>]*(key|secret|token|password)[^>]*>|x{6,}|\$\{[A-Z_]+\}|process\.env\.|os\.environ|getenv\(|placeholder|REPLACE_?ME|insert[_-]?(key|token)/i.test(line)) {
+          continue;
+        }
 
+        let matchedThisLine = false;
         for (const pattern of secretPatterns) {
+          if (matchedThisLine) break; // one line = one secret, not one per overlapping pattern
           pattern.regex.lastIndex = 0;
           const match = pattern.regex.exec(line);
           if (match) {
+            matchedThisLine = true;
             // Build a redacted preview
             const matchedText = match[0];
             const redacted = matchedText.length > 10
@@ -848,14 +874,22 @@ class SecurityModule extends BaseModule {
 
     for (const item of mustIgnore) {
       if (!item.check) {
-        // Verify the files actually exist before flagging
-        const exists = this._collectFiles(projectRoot, ['*']).some(f =>
-          path.basename(f).includes(item.pattern) || f.includes(item.pattern)
-        );
+        // Verify the files actually exist before flagging — outside test /
+        // fixture / example dirs, which commit such files on purpose.
+        const FIXTURE_RE = /(^|[\\/])(tests?|__tests__|specs?|fixtures?|testdata|test_apps|examples?|docs|benchmarks|known-bad|reliability-corpus)([\\/]|$)/i;
+        const exists = this._collectFiles(projectRoot, ['*']).some(f => {
+          const rel = path.relative(projectRoot, f);
+          if (FIXTURE_RE.test(rel)) return false;
+          const base = path.basename(f);
+          if (/\.(example|sample|template|dist)$/.test(base)) return false;
+          return base.includes(item.pattern) || rel.includes(item.pattern);
+        });
         if (exists) {
+          // The `secrets` module owns this finding at error severity when a
+          // real file is at risk; this one is the corroborating advisory.
           result.addCheck(`security:gitignore:${item.pattern}`, false, {
             file: '.gitignore',
-            severity: item.pattern === 'node_modules' ? 'warning' : 'error',
+            severity: 'warning',
             message: `${item.label} present in the project but not in .gitignore`,
             suggestion: `Add "${item.pattern}" to .gitignore`,
           });

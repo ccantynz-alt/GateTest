@@ -105,14 +105,32 @@ class DataIntegrityModule extends BaseModule {
     // Prisma
     const prismaSchema = path.join(projectRoot, 'prisma/schema.prisma');
     if (fs.existsSync(prismaSchema)) {
-      const { exitCode } = this._exec('npx prisma validate 2>&1', { cwd: projectRoot });
-      if (exitCode === 0) {
-        result.addCheck('data:prisma-schema', true, { message: 'Prisma schema valid' });
-      } else {
-        result.addCheck('data:prisma-schema', false, {
-          message: 'Prisma schema validation failed',
-          suggestion: 'Run "npx prisma validate" to see errors',
+      // Never let `npx` DOWNLOAD prisma to validate with it: on a fresh
+      // clone that spent 60 s fetching the CLI, then reported a blocking
+      // "schema validation failed" (2026-08-18 audit). Not installed → skip.
+      const prismaInstalled = fs.existsSync(path.join(projectRoot, 'node_modules', 'prisma'));
+      if (!prismaInstalled) {
+        result.addCheck('data:prisma-schema', true, {
+          severity: 'info',
+          message: 'Prisma schema present but the prisma CLI is not installed in this environment — validation deferred to CI',
+          suggestion: 'Run "npm ci" before scanning to include schema validation',
         });
+      } else {
+        const { exitCode, stdout, stderr } = this._exec('npx --no-install prisma validate 2>&1', { cwd: projectRoot });
+        if (exitCode === 0) {
+          result.addCheck('data:prisma-schema', true, { message: 'Prisma schema valid' });
+        } else if (/could not determine executable|not found|ENOENT|Cannot find module/i.test(stdout + stderr)) {
+          result.addCheck('data:prisma-schema', true, {
+            severity: 'info',
+            message: 'prisma CLI could not start in this environment — validation deferred to CI',
+          });
+        } else {
+          result.addCheck('data:prisma-schema', false, {
+            message: 'Prisma schema validation failed',
+            details: (stdout + stderr).split(/\r?\n/).slice(-15),
+            suggestion: 'Run "npx prisma validate" to see errors',
+          });
+        }
       }
 
       // Check for missing @unique / @@unique constraints

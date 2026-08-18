@@ -110,6 +110,7 @@ class BaseModule {
         cwd: options.cwd || process.cwd(),
         stdio: ['pipe', 'pipe', 'pipe'],
         maxBuffer: options.maxBuffer || 10 * 1024 * 1024,
+        ...(options.env ? { env: options.env } : {}),
       });
       return { stdout, stderr: '', exitCode: 0, signal: null, timedOut: false };
     } catch (err) {

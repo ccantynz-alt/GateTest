@@ -563,3 +563,45 @@ describe('security — path traversal', () => {
     assert.deepStrictEqual(found.map((f) => f.name), []);
   });
 });
+
+// ── secrets scan precision (2026-08-18 audit) ──────────────────────────────
+async function scanSecrets(source, file = 'src/config.rb') {
+  fs.mkdirSync(path.join(tmp, path.dirname(file)), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+  fs.writeFileSync(path.join(tmp, file), source);
+  const mod = new SecurityModule();
+  const result = makeResult();
+  await mod.run(result, { projectRoot: tmp });
+  return result.checks.filter((c) => !c.passed && /^security:secret:/.test(c.name));
+}
+
+describe('security — secrets in comments / placeholders / overlapping patterns', () => {
+  it('a doc comment showing a credential-shaped example is not a secret (sinatra docs)', async () => {
+    const hits = await scanSecrets([
+      '# Configure like so:',
+      '#   set :session_secret, "CHANGEME_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"',
+      '#   password = "hunter2hunter2"',
+      'set :sessions, true',
+    ].join('\n'));
+    assert.deepStrictEqual(hits.map((h) => h.name), []);
+  });
+
+  it('obvious placeholders (CHANGEME / your-key / process.env on the line) are not secrets', async () => {
+    const hits = await scanSecrets([
+      'const apiKey = "YOUR_API_KEY_GOES_HERE_1234";',
+      'const token = process.env.TOKEN || "fallback-token-value";',
+      'password: "CHANGEME_please_rotate_me"',
+    ].join('\n'), 'src/config.js');
+    assert.deepStrictEqual(hits.map((h) => h.name), []);
+  });
+
+  it('one line with one secret yields ONE finding even when hex and base64 patterns both match', async () => {
+    const hits = await scanSecrets('const secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";\n', 'src/keys.js');
+    assert.strictEqual(hits.length, 1, JSON.stringify(hits.map((h) => h.name)));
+  });
+
+  it('POSITIVE CONTROL: a real hardcoded credential in code still fires', async () => {
+    const hits = await scanSecrets('const dbUrl = "postgres://admin:s3cretpassw0rd@db.internal:5432/app";\n', 'src/db.js');
+    assert.strictEqual(hits.length, 1, JSON.stringify(hits.map((h) => h.name)));
+  });
+});

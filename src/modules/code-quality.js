@@ -521,8 +521,11 @@ class CodeQualityModule extends BaseModule {
         // Count occurrences in stripped content (subtract the import line itself)
         const occurrences = stripped.split(new RegExp(`\\b${name}\\b`)).length - 1;
         if (occurrences <= 1) {
+          // Hygiene, not a defect: an unused import never breaks a build or
+          // a user. Warning — `lint` owns the strict form via ESLint.
           result.addCheck(`quality:unused-import:${relPath}:${name}`, false, {
             file: relPath,
+            severity: 'warning',
             message: `Import "${name}" appears unused`,
             suggestion: `Remove unused import "${name}"`,
           });
