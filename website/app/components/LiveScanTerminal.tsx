@@ -47,20 +47,20 @@ export default function LiveScanTerminal({ repoUrl, tier, sessionId, onComplete,
     let current = 0;
 
     addLog({ type: "info", message: `GATETEST — Scanning ${repoUrl.replace("https://github.com/", "")}` });
-    addLog({ type: "info", message: `Running ${tier} suite: ${modules.length} modules` });
+    addLog({ type: "info", message: tier === "quick" ? `Running quick suite: ${modules.length} modules` : `Running ${tier} suite: the full engine (every applicable module) — showing the first ${modules.length} as they queue` });
 
     const simulateModules = () => {
       if (current >= modules.length) {
-        addLog({ type: "info", message: "All modules complete. Waiting for API response..." });
+        addLog({ type: "info", message: "Engine running — results arrive when every module has finished..." });
         return;
       }
 
       const mod = modules[current];
-      addLog({ type: "module-start", module: mod, message: `Starting ${mod}...` });
+      addLog({ type: "module-start", module: mod, message: `Queued ${mod}` });
       setProgress(Math.round((current / modules.length) * 90));
 
       setTimeout(() => {
-        addLog({ type: "module-pass", module: mod, message: `${mod} — complete` });
+        addLog({ type: "module-pass", module: mod, message: `${mod} — running on the engine` });
         current++;
         setProgress(Math.round((current / modules.length) * 90));
         simulateModules();

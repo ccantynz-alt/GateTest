@@ -137,7 +137,7 @@ export default function SemgrepPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
             <Link
-              href="/"
+              href="/playground"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm"
               style={{ background: "#2dd4bf", color: "#0a0a12" }}
             >
@@ -281,7 +281,7 @@ export default function SemgrepPage() {
             finds what no pattern covers. One-time payment per scan.
           </p>
           <Link
-            href="/"
+            href="/playground"
             className="inline-flex items-center justify-center px-8 py-4 rounded-xl font-semibold"
             style={{ background: "#2dd4bf", color: "#0a0a12" }}
           >

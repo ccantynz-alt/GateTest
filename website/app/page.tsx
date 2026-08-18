@@ -56,6 +56,12 @@ import HomeStack from "./components/HomeStack";
 import HomeTrust from "./components/HomeTrust";
 import Footer from "./components/Footer";
 
+// The homepage owns its own canonical. It used to live on the ROOT layout
+// (`alternates.canonical: "/"`), which every page without its own metadata
+// inherited — 20+ pages told search engines their canonical URL was the
+// homepage (2026-08-18 audit).
+export const metadata = { alternates: { canonical: "/" } };
+
 export default function Home() {
   return (
     <>

@@ -651,11 +651,11 @@ export default function PlaygroundPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Link
-                      href={`/checkout?tier=quick&repo=${encodeURIComponent(result.repo_url)}`}
+                      href={`/checkout?tier=full&repo=${encodeURIComponent(result.repo_url)}`}
                       className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
                       style={{ background: "linear-gradient(135deg, #059669, #0891b2)" }}
                     >
-                      Full Scan — $29
+                      Full Scan — $99
                     </Link>
                     <Link
                       href={`/checkout?tier=scan_fix&repo=${encodeURIComponent(result.repo_url)}`}

@@ -1,10 +1,11 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const metadata: Metadata = {
   title: "GateTest vs SonarQube — The Smarter Alternative in 2026",
   description:
-    "GateTest replaces SonarQube with 120 AI-powered modules, AI auto-fix PRs at the Scan + Fix tier and above, and per-scan pricing. No complex setup. No per-seat licensing. Just results.",
+    `GateTest replaces SonarQube with ${TOTAL_MODULES} AI-powered modules, AI auto-fix PRs at the Scan + Fix tier and above, and per-scan pricing. No complex setup. No per-seat licensing. Just results.`,
   keywords: [
     "SonarQube alternative",
     "SonarQube vs GateTest",
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GateTest vs SonarQube — The Smarter Alternative in 2026",
     description:
-      "GateTest replaces SonarQube with 120 AI-powered modules, AI auto-fix PRs at the Scan + Fix tier and above, and per-scan pricing. No complex setup. No per-seat licensing.",
+      `GateTest replaces SonarQube with ${TOTAL_MODULES} AI-powered modules, AI auto-fix PRs at the Scan + Fix tier and above, and per-scan pricing. No complex setup. No per-seat licensing.`,
     url: "/compare/sonarqube",
     siteName: "GateTest",
     type: "website",
@@ -34,7 +35,7 @@ const faqItems = [
   },
   {
     q: "How does GateTest pricing compare to SonarQube?",
-    a: "SonarQube Cloud charges per active user per month. SonarQube Community Edition requires you to run your own server. GateTest charges per scan — $29 for a quick scan, $99 for all 121 modules, charged once at checkout. No server to maintain, no per-seat licensing, no annual contracts.",
+    a: "SonarQube Cloud and Server are priced by lines of code — tiers jump as your codebase grows, so a 5% increase in LOC can move you up a whole tier. SonarQube Community Build is free but you run (and upgrade, back up and tune) the server yourself. GateTest charges per scan — $29 for a quick scan, $99 for the full engine, charged once at checkout. No server to maintain, no LOC tiers, no annual contracts.",
   },
   {
     q: "Does GateTest post commit statuses and PR comments like SonarQube does?",
@@ -55,7 +56,7 @@ const faqItems = [
 ];
 
 const comparisonRows = [
-  { feature: "120 scanning modules", gatetest: true, competitor: false },
+  { feature: `${TOTAL_MODULES} scanning modules`, gatetest: true, competitor: false },
   { feature: "AI code review (Claude)", gatetest: true, competitor: false },
   { feature: "Auto-fix pull requests", gatetest: true, competitor: false },
   { feature: "Pay per scan (not per seat)", gatetest: true, competitor: false },
@@ -63,7 +64,7 @@ const comparisonRows = [
   { feature: "Accessibility scanning (WCAG 2.2, AA + AAA-aligned)", gatetest: true, competitor: false },
   { feature: "Visual regression testing", gatetest: true, competitor: false },
   { feature: "Mutation testing (via GitHub Action)", gatetest: true, competitor: false },
-  { feature: "Kubernetes / Terraform / Dockerfile scanning", gatetest: true, competitor: false },
+  { feature: "Kubernetes / Terraform / Dockerfile scanning", gatetest: true, competitor: true },
   { feature: "Prompt / LLM safety scanning", gatetest: true, competitor: false },
   { feature: "Per-scan pricing (no per-seat licensing, no annual contract)", gatetest: true, competitor: false },
   { feature: "Code smell & duplication detection", gatetest: true, competitor: true },
@@ -132,23 +133,23 @@ export default function SonarQubePage() {
           </h1>
           <p className="text-lg text-white/60 max-w-2xl leading-relaxed">
             SonarQube was built in 2006 — before AI, before cloud-native CI/CD, before modern
-            security threats. GateTest is built for 2026: 120 AI-powered modules, AI auto-fix PRs at the Scan + Fix tier ($199) and above,
+            security threats. GateTest is built for 2026: {TOTAL_MODULES} AI-powered modules, AI auto-fix PRs at the Scan + Fix tier ($199) and above,
             zero server setup, and per-scan pricing.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
             <Link
-              href="/"
+              href="/playground"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm"
               style={{ background: "#2dd4bf", color: "#0a0a12" }}
             >
               Scan My Repo — From $29
             </Link>
             <Link
-              href="/"
+              href="/modules"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 120 Modules
+              See All {TOTAL_MODULES} Modules
             </Link>
           </div>
         </div>
@@ -216,7 +217,7 @@ export default function SonarQubePage() {
               },
               {
                 title: "Pay per scan, not per seat",
-                body: "SonarQube Cloud pricing scales with developer headcount — the more your team grows, the higher your bill. GateTest charges per result: $29 quick scan, $99 full 121-module scan. A 50-person team pays the same as a solo founder for the same scan.",
+                body: "SonarQube pricing scales with lines of code — the more your codebase grows, the higher the tier. GateTest charges per result: $29 quick scan, $99 full-engine scan. A 2-million-line monorepo pays the same as a weekend project for the same scan.",
               },
               {
                 title: "Faster feedback loop",
@@ -263,7 +264,7 @@ export default function SonarQubePage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/"
+              href="/playground"
               className="inline-flex items-center justify-center px-8 py-4 rounded-xl font-semibold"
               style={{ background: "#2dd4bf", color: "#0a0a12" }}
             >

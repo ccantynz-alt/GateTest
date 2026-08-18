@@ -46,7 +46,7 @@ export default function Navbar() {
           {["Modules", "Compare", "Pricing"].map((item) => (
             <a
               key={item}
-              href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+              href={`/#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
               className={`text-sm transition-colors ${
                 scrolled
                   ? "text-muted hover:text-foreground"
@@ -159,7 +159,7 @@ export default function Navbar() {
           {["Modules", "Compare", "Pricing"].map((item) => (
             <a
               key={item}
-              href={`#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+              href={`/#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
               className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"}`}
               onClick={() => setMobileOpen(false)}
             >

@@ -78,7 +78,11 @@ const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'coverage', '.gatete
 const EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.cjs', '.mjs', '.json', '.md', '.txt']);
 
 // Three digits, "modules" only — never "checks", which is a different unit.
-const CLAIM_RE = /\b(\d{3})[\s-]modules?\b/g;
+// Up to three descriptive words may sit between the number and "modules"
+// ("120 AI-powered modules", "See All 120 Modules", "120 scanning modules")
+// — the 2026-08-18 audit found 26 stale claims of exactly that shape which
+// the tighter form let through. Case-insensitive for headings.
+const CLAIM_RE = /\b(\d{3})[\s-](?:[A-Za-z][A-Za-z+-]*[\s-]){0,3}modules?\b/gi;
 
 /** Lower bounds and approximations are deliberately loose, not stale. */
 const LOOSE_RE = /(>=|≥|~|at least|no fewer|minimum|was\s+\d)/i;

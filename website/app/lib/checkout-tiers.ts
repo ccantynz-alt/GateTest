@@ -37,21 +37,21 @@ export const TIERS: Record<string, ScanTier> = {
   full: {
     name: "Full Scan",
     priceInCents: 9900,
-    modules: "all-120",
+    modules: "all-applicable",
     description:
-      "The full engine suite (88 modules) — security, supply chain, auth, CI hardening, AI review, and more; mutation + chaos ship via the GitHub Action. Scan-only (no auto-fix — that ships at Scan + Fix $199 and above).",
+      "The full engine — every module that applies to a repository: security, supply chain, auth, CI hardening, structure, AI review, and more. (Live-URL and WordPress modules need a deployed site; mutation + chaos ship via the GitHub Action.) Scan-only (no auto-fix — that ships at Scan + Fix $199 and above).",
   },
   scan_fix: {
     name: "Scan + Fix",
     priceInCents: 19900,
-    modules: "all-120+pair-review+architecture",
+    modules: "all-applicable+pair-review+architecture",
     description:
       "Everything in Full Scan, plus a second-Claude pair-review critique on every fix (correctness/completeness/readability/test-coverage rubric) and a separate architecture-annotator report on codebase-shape design observations. Same PR, deeper deliverable.",
   },
   nuclear: {
     name: "Forensic Scan",
     priceInCents: 39900,
-    modules: "all-120+nuclear-stack",
+    modules: "all-applicable+forensic-stack",
     description:
       "Everything in Scan + Fix, PLUS: real Claude diagnosis on every finding (no templated snippets), cross-finding attack-chain correlation (textbook session-forgery / supply-chain vectors no per-finding scanner can see), board-ready CISO report (OWASP / SOC2 / CIS v8 / 30-60-90), and a CTO-readable executive summary report. Mutation testing and chaos / fuzz pass are also available via the GitHub Action (mutation: true / chaos: true) — they need a CI runner so they ship wherever your CI runs.",
   },

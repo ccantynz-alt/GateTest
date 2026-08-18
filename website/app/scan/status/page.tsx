@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import FindingsPanel, { type Finding } from "@/app/components/FindingsPanel";
 import LiveScanTerminal from "@/app/components/LiveScanTerminal";
+import { SUPPORT_EMAIL } from "@/app/lib/site-url";
+import REGISTRY_MODULES from "@/app/lib/mcp-remote-modules.json";
 import { extractIssuesFromModules, type UnparseableIssue } from "@/app/lib/issue-extractor";
 
 interface ModuleResult {
@@ -146,16 +148,15 @@ export default function ScanStatus() {
     return () => clearInterval(t);
   }, [scanning]);
 
-  // Setup animation modules
+  // Setup the in-progress module grid from the REAL registry (the hosted
+  // MCP manifest is generated from src/core/registry.js). The previous list
+  // hand-typed 22 names, 7 of which are not GateTest modules at all, and
+  // showed "Module 3 of 22" for a 121-module scan (2026-08-18 audit).
   useEffect(() => {
     if (!params.tier) return;
     const names = params.tier === "quick"
       ? ["syntax", "lint", "secrets", "codeQuality"]
-      : ["syntax", "lint", "secrets", "codeQuality", "security", "accessibility",
-         "seo", "links", "compatibility", "dataIntegrity", "documentation",
-         "performance", "aiReview", "fakeFixDetector", "dependencyFreshness",
-         "maliciousDeps", "licenses", "iacSecurity", "ciHardening",
-         "migrations", "authFlaws", "flakyTests"];
+      : (REGISTRY_MODULES.modules as Array<{ name: string }>).map((m) => m.name);
     setAnimModules(names.map((n) => ({ name: n, status: "pending" as const, checks: 0, issues: 0, duration: 0 })));
   }, [params.tier]);
 
@@ -166,12 +167,13 @@ export default function ScanStatus() {
       setAnimIndex((prev) => {
         const next = prev + 1;
         if (next >= animModules.length) return prev;
+        // Progress only — checks/duration stay 0 until the real result
+        // arrives; a fabricated "17 checks · 320ms" is a lie the customer
+        // pays $99 to read.
         setAnimModules((mods) =>
           mods.map((m, i) => ({
             ...m,
             status: i < next ? "passed" : i === next ? "running" : "pending",
-            checks: i < next ? 5 + i * 3 : 0,
-            duration: i < next ? 80 + i * 40 : 0,
           }))
         );
         return next;
@@ -203,39 +205,11 @@ export default function ScanStatus() {
     }
 
     if (!params.repo) return;
+    // The scan is started by <LiveScanTerminal> (mounted below whenever
+    // scanning && repo) — exactly ONE POST /api/scan/run. This page used to
+    // fire its own POST as well, so two paid runs raced each other and the
+    // second could re-charge on a session the first had not yet completed.
     scanTriggered.current = true;
-
-    fetch("/api/scan/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: params.id, repoUrl: params.repo, tier: params.tier }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        // Normalise any status the UI doesn't render (pending, running,
-        // cancelled, unexpected) into a failed result so the user never
-        // sees a page stuck at 100% with a misleading "Scanning..." header.
-        const knownStates = new Set(["complete", "failed", "expired"]);
-        if (!data || !knownStates.has(data.status)) {
-          setScanResult({
-            status: "failed",
-            modules: data?.modules || [],
-            totalModules: data?.totalModules || 0,
-            completedModules: data?.completedModules || 0,
-            totalIssues: data?.totalIssues || 0,
-            totalFixed: data?.totalFixed || 0,
-            duration: data?.duration || 0,
-            error: data?.error || `Scan returned unexpected state: ${data?.status || "none"}`,
-          });
-        } else {
-          setScanResult(data);
-        }
-        setScanning(false);
-      })
-      .catch((err) => {
-        setScanResult({ status: "failed", modules: [], totalModules: 0, completedModules: 0, totalIssues: 0, totalFixed: 0, duration: 0, error: err.message });
-        setScanning(false);
-      });
   }, [params]);
 
   const formatTime = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${(s % 60).toString().padStart(2, "0")}s` : `${s}s`;
@@ -404,8 +378,26 @@ export default function ScanStatus() {
               repoUrl={params.repo}
               tier={params.tier}
               sessionId={params.id}
-              onComplete={(data) => {
-                setScanResult(data as unknown as ScanResult);
+              onComplete={(raw) => {
+                const data = raw as unknown as ScanResult;
+                // Normalise any status the UI doesn't render (pending,
+                // running, cancelled) into a failed result so the page never
+                // sits at 100% under a "Scanning..." header.
+                const knownStates = new Set(["complete", "failed", "expired"]);
+                if (!data || !knownStates.has(data.status)) {
+                  setScanResult({
+                    status: "failed",
+                    modules: data?.modules || [],
+                    totalModules: data?.totalModules || 0,
+                    completedModules: data?.completedModules || 0,
+                    totalIssues: data?.totalIssues || 0,
+                    totalFixed: data?.totalFixed || 0,
+                    duration: data?.duration || 0,
+                    error: data?.error || `Scan returned unexpected state: ${data?.status || "none"}`,
+                  });
+                } else {
+                  setScanResult(data);
+                }
                 setScanning(false);
               }}
               onError={(err) => {
@@ -927,14 +919,45 @@ export default function ScanStatus() {
           </div>
         )}
 
-        {/* Failed — scan ran but something went wrong */}
+        {/* Failed — scan ran but something went wrong. The customer has
+            PAID: "Try Again" must re-run THIS session (idempotent on the
+            same session id), never send them back to checkout, and
+            "contact support" must be a link that carries the session id. */}
         {isFailed && (
           <div className="text-center">
             <div className="p-5 rounded-xl bg-amber-50 border border-amber-200 mb-4">
               <p className="font-bold text-amber-700">{scanResult?.error || "Scan failed"}</p>
-              <p className="text-sm text-muted mt-1">Contact support to re-run the scan or receive a credit.</p>
+              <p className="text-sm text-muted mt-1">
+                Your payment is safe — a failed run is never charged twice. Re-run it now, or{" "}
+                <a
+                  className="underline"
+                  href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Scan failed — session ${params.id || "unknown"}`)}&body=${encodeURIComponent(`Repo: ${params.repo || "?"}\nTier: ${params.tier || "?"}\nSession: ${params.id || "?"}\nError: ${scanResult?.error || "?"}`)}`}
+                >
+                  email support with this session
+                </a>{" "}
+                for a manual re-run or a credit.
+              </p>
             </div>
-            <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm">Try Again</Link>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {params.repo && params.id ? (
+                <button
+                  type="button"
+                  className="btn-primary px-6 py-3 text-sm"
+                  onClick={() => {
+                    setScanResult(null);
+                    setScanning(true);
+                    scanTriggered.current = false;
+                    setAnimIndex(0);
+                    startTimeRef.current = Date.now();
+                  }}
+                >
+                  Re-run this scan
+                </button>
+              ) : (
+                <Link href="/#pricing" className="btn-primary px-6 py-3 text-sm">Start a new scan</Link>
+              )}
+              <Link href="/" className="px-6 py-3 text-sm rounded-xl border border-border">Back to GateTest</Link>
+            </div>
           </div>
         )}
 

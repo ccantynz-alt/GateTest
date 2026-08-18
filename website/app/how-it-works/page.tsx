@@ -14,16 +14,16 @@ const LIMITS = [
   "Doesn't fix bugs that span 5+ files without human review. Multi-file refactors are flagged but require an engineer to drive.",
   "Coverage on Rust, Go, and Java is shallower than JS/TS/Python today. We have language-specific modules for nine non-JS backends but the depth is honestly thinner than our JS coverage.",
   "Hosted website scans read up to 50 source files per scan (prioritised by relevance) — enough for most small-to-mid repos, but a large monorepo gets a representative slice, not exhaustive coverage. The CLI and GitHub Action scan everything, with no file cap.",
-  "No on-prem deployment yet. Everything runs against our managed Vapron + Neon stack today. Air-gapped customers are on the roadmap.",
+  "No on-prem deployment yet. Everything runs on our own managed host with a Postgres (Neon) queue today. Air-gapped customers are on the roadmap.",
   "No VSCode extension that runs in real time yet. Today's loop is push → CI → PR comment. Editor integration is on the list.",
 ];
 
 const DATA_FLOW = [
   { label: "Frontend", value: "Next.js 16 (App Router) + Tailwind 4. Server Components everywhere except where interactivity demands client." },
-  { label: "Runtime",  value: "Node on Vapron. Every request handler is stateless — no in-memory persistence between requests." },
+  { label: "Runtime",  value: "Node on our own managed host. Every request handler is stateless — no in-memory persistence between requests." },
   { label: "Database", value: "Postgres on Neon. Holds scan_queue, audit log, fix-recipe store, customer sessions." },
   { label: "Payments", value: "Stripe upfront-charge. Scan tiers are one-time payments at checkout — no auto-renew. Continuous ($49/mo) and MCP ($29/mo) are monthly subscriptions, cancel anytime." },
-  { label: "AI layer", value: "Anthropic Claude Sonnet 5. Our key for managed scans; your key for the self-healing CI bot in your repo." },
+  { label: "AI layer", value: "Anthropic Claude — Fable 5 on the paid fix tiers (Scan + Fix, Forensic), Sonnet 5 on the free and high-volume paths. Our key for managed scans; your key for the self-healing CI bot in your repo." },
   { label: "Git host",  value: "Dual-host: GitHub App webhook and Gluecron Signal Bus. HostBridge abstraction means new hosts plug in without rewiring." },
   { label: "Browser",   value: "Playwright (open-source, Microsoft) — used internally for chaos, explorer, and runtime-error modules. Not a paid competitor; an implementation detail." },
 ];
@@ -326,7 +326,7 @@ jobs:
             Run it against your code
           </h2>
           <p className="text-white/55 max-w-2xl mb-8 leading-relaxed">
-            Architecture is just words until you see the report. The free URL scan takes about ten seconds and
+            Architecture is just words until you see the report. The free URL scan takes well under a minute and
             returns a real health score against your live site.
           </p>
 

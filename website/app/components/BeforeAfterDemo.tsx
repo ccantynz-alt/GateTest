@@ -68,14 +68,13 @@ export default function BeforeAfterDemo() {
                 <ul className="text-sm space-y-2.5 mb-3">
                   <Step state="done">Re-runs the gate to isolate the failing module</Step>
                   <Step state="done">Reads the project conventions (README, AGENTS.md)</Step>
-                  <Step state="done">Generates the fix with Claude Sonnet 5</Step>
+                  <Step state="done">Generates the fix with Claude (Fable 5 on the fix tiers)</Step>
                   <Step state="done">Validates the fix re-passes the gate</Step>
                   <Step state="done">Writes a regression test for the bug</Step>
                   <Step state="working">Pair-reviews the fix with a second Claude</Step>
                 </ul>
                 <p className="text-xs text-muted">
-                  ~38 seconds, ~$0.02 in Anthropic API spend per fix on the
-                  $99 tier. Margin: 100x.
+                  Typically well under a minute per fix. Fixes ship at Scan + Fix ($199) and above.
                 </p>
               </>
             }

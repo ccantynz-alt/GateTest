@@ -1,6 +1,7 @@
 ﻿import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+// Rendered on the Node runtime: production is a Node server (the box), where
+// `runtime = "edge"` made this route 502 and every social share lost its image.
 export const alt = "How GateTest works — architecture, modules, flywheel, tiers";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -82,6 +83,9 @@ export default async function Image() {
         {/* Subtext */}
         <div
           style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
             fontSize: 28,
             color: "rgba(255,255,255,0.65)",
             maxWidth: 920,
@@ -89,7 +93,9 @@ export default async function Image() {
             marginBottom: 36,
           }}
         >
-          121 modules — deterministic first. <span style={{ color: "#2dd4bf" }}>One Claude pass when it&apos;s worth it.</span> Zero hype.
+          <span>121 modules — deterministic first.</span>
+          <span style={{ color: "#2dd4bf" }}>One Claude pass when it&apos;s worth it.</span>
+          <span>Zero hype.</span>
         </div>
 
         {/* Pillars row */}

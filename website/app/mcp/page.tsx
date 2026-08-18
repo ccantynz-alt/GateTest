@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import McpCheckoutButton from "./McpCheckoutButton";
 import { ALL_TOOLS, TOOL_COUNT } from "./tools-data";
+import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const metadata: Metadata = {
   title: "GateTest MCP — Free Local Server, $29/mo Hosted Endpoint",
   description:
     "The full 121-module GateTest engine inside Claude Code, Cursor, and any MCP-compatible AI — 100% free on your own machine. $29/mo adds the hosted endpoint for claude.ai web/mobile plus hosted scan history.",
   openGraph: {
-    title: "GateTest MCP — The 120-Module Engine in Your Editor",
+    title: `GateTest MCP — The ${TOTAL_MODULES}-Module Engine in Your Editor`,
     description:
       `Give Claude eyes, ears & hands: all ${TOOL_COUNT} tools — live-page screenshots (eyes), Sentry/Datadog/Rollbar errors (ears), pass/fail fix verification (hands) — free on your machine. $29/mo for the hosted endpoint (claude.ai web/mobile) + hosted history.`,
     url: "/mcp",

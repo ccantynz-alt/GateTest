@@ -79,7 +79,7 @@ export default function WordPressLanding() {
           plugin update or once a quarter — that&apos;s how the pricing was designed.
         </p>
 
-        <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+        <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {TIERS.map((tier) => (
             <div
               key={tier.name}
@@ -232,17 +232,6 @@ const TIERS = [
       "Plain-language report you can share",
       "Step-by-step fix instructions",
       "Best for: post-plugin-update, quarterly checkups",
-    ],
-  },
-  {
-    name: "Continuous",
-    price: "$19",
-    cadence: "per month",
-    includes: [
-      "Weekly scan on schedule",
-      "Email alerts on new CVEs affecting your stack",
-      "Side-by-side diff when something changes",
-      "Best for: production sites with real revenue",
     ],
   },
 ];

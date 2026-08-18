@@ -1,6 +1,7 @@
 {
-  "generatedAt": "2026-07-07",
-  "count": 120,
+  "generatedAt": "2026-08-18",
+  "source": "scripts/generate-mcp-remote-modules.js — generated from src/core/registry.js, do not hand-edit",
+  "count": 121,
   "modules": [
     {
       "name": "syntax",
@@ -36,7 +37,7 @@
     },
     {
       "name": "accessibility",
-      "description": "Accessibility (WCAG 2.2 automated audit — AA + AAA-aligned)"
+      "description": "Accessibility (WCAG 2.2, AA + AAA-aligned) Audit"
     },
     {
       "name": "performance",
@@ -345,6 +346,10 @@
     {
       "name": "importCycle",
       "description": "Import-cycle detector — catches circular dependencies that cause runtime TDZ / undefined-import bugs"
+    },
+    {
+      "name": "spineHealth",
+      "description": "Structural integrity — blast radius, layering violations, god files, and coupling trend"
     },
     {
       "name": "moneyFloat",

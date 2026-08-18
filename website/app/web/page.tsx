@@ -96,7 +96,7 @@ export default function WebLanding() {
           Pay per scan. No subscription required for the one-shot.
         </p>
 
-        <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+        <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
           {TIERS.map((tier) => (
             <div
               key={tier.name}
@@ -208,17 +208,6 @@ const TIERS = [
       "Live browser runtime capture",
       "Health Score + per-rule deductions",
       "Best for: post-deploy, post-redesign, quarterly audits",
-    ],
-  },
-  {
-    name: "Continuous",
-    price: "$49",
-    cadence: "per month",
-    includes: [
-      "Scan on every push (if GitHub-connected)",
-      "Weekly scheduled scan",
-      "Email alert on score regression",
-      "Best for: production sites with real revenue",
     ],
   },
 ];

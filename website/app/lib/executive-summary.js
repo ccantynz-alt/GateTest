@@ -45,7 +45,7 @@ function buildSummaryPrompt({ scanStats, topFindings, chains, hostname }) {
   const hostLine = hostname ? `\nHOST: ${wrapUntrusted('host', hostname)}` : '';
 
   return `${ANTI_INJECTION_PREAMBLE}
-You are the executive-summary composer for GateTest's $399 Nuclear tier. The customer's CTO will read this report. They are technical but they don't have time for jargon. Keep every sentence concrete and specific.
+You are the executive-summary composer for GateTest's $399 Forensic tier. The customer's CTO will read this report. They are technical but they don't have time for jargon. Keep every sentence concrete and specific.
 
 Source material:
 
@@ -240,7 +240,7 @@ function renderExecutiveSummary(result, { hostname } = {}) {
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('<sub>This executive summary is part of the <a href="https://gatetest.io">GateTest $399 Nuclear</a> tier. It synthesises the per-finding diagnosis and cross-finding correlation reports into a single read for senior stakeholders.</sub>');
+  lines.push('<sub>This executive summary is part of the <a href="https://gatetest.io">GateTest $399 Forensic</a> tier. It synthesises the per-finding diagnosis and cross-finding correlation reports into a single read for senior stakeholders.</sub>');
   return lines.join('\n');
 }
 

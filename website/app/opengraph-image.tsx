@@ -1,6 +1,7 @@
 ﻿import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+// Rendered on the Node runtime: production is a Node server (the box), where
+// `runtime = "edge"` made this route 502 and every social share lost its image.
 export const alt = "GateTest — AI-powered QA platform";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -63,9 +64,14 @@ export default async function Image() {
           </span>
         </div>
 
-        {/* Headline */}
+        {/* Headline — satori (next/og) requires an explicit display on any
+            element with more than one child; text + <br/> + <span> was not
+            valid and made the route 502 / the build fail. */}
         <div
           style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             fontSize: 52,
             fontWeight: 700,
             color: "#111827",
@@ -74,9 +80,8 @@ export default async function Image() {
             marginBottom: 24,
           }}
         >
-          AI writes fast.
-          <br />
-          <span style={{ color: "#0f766e" }}>GateTest keeps it honest.</span>
+          <div style={{ display: "flex" }}>AI writes fast.</div>
+          <div style={{ display: "flex", color: "#0f766e" }}>GateTest keeps it honest.</div>
         </div>
 
         {/* Subtext */}

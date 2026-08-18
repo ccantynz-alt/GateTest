@@ -52,9 +52,6 @@ export const metadata: Metadata = {
     "WCAG",
     "SEO audit",
   ],
-  alternates: {
-    canonical: "/",
-  },
   openGraph: {
     title: "GateTest — AI writes fast. GateTest keeps it honest.",
     description:

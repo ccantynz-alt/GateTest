@@ -166,8 +166,8 @@ export default function TrustPage() {
                 <>
                   We use the <code className="text-foreground">secrets</code>{" "}
                   module on our own code. Zero hardcoded credentials. Stripe
-                  + Anthropic keys live in Vercel environment variables,
-                  rotated quarterly.
+                  + Anthropic keys live in the production host&apos;s environment
+                  (never in the repo), rotated quarterly.
                 </>
               }
             />

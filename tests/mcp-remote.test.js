@@ -185,7 +185,10 @@ describe('remote MCP — subscription gate', () => {
       params: { name: 'list_modules', arguments: {} },
     });
     assert.ok(!res.result.isError);
-    assert.match(res.result.content[0].text, /120/);
+    // The manifest is generated from src/core/registry.js — assert the LIVE
+    // count, never a typed number (a typed 120 hid module #121 for 3 weeks).
+    const { BUILT_IN_MODULES } = require('../src/core/registry.js');
+    assert.match(res.result.content[0].text, new RegExp(String(Object.keys(BUILT_IN_MODULES).length)));
   });
 
   it('gated tool without key returns upgrade instructions, not a crash', async () => {

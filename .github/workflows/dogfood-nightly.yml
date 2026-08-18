@@ -49,6 +49,27 @@ jobs:
           node --test --test-force-exit --test-timeout=60000 tests/*.test.js 2>&1 | tee .dogfood/sweep.log || true
           grep -E "^# (tests|pass|fail|skip)" .dogfood/sweep.log > .dogfood/sweep-summary.txt || true
 
+      - name: Self-scan — full suite (measures "green on our own repo")
+        # The hero's "N/N modules green" chip was CARRIED (greenSource:
+        # "carried", greenMeasuredAt: null) since it was first typed — nothing
+        # ever measured it (2026-08-18 audit). Run the full deterministic
+        # engine on this repo and count modules that reported zero errors.
+        # mutation/e2e/unitTests are CI-runner concerns already covered by the
+        # sweep above and are skipped so the count is about the SCANNER.
+        run: |
+          GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --suite full \
+            --skip-module mutation --skip-module e2e --skip-module unitTests --skip-module dataIntegrity \
+            > .dogfood/self-full.log 2>&1 || true
+          node -e '
+            const r = require("./.gatetest/reports/gatetest-report-latest.json");
+            const mods = r.results || [];
+            const scanned = mods.length;
+            const green = mods.filter((m) => (m.checks || []).every((c) => c.passed || (c.severity || "error") !== "error")).length;
+            require("fs").writeFileSync(".dogfood/self-green.env", "GREEN=" + green + "\nSCANNED=" + scanned + "\n");
+            console.log("self-scan: " + green + "/" + scanned + " modules green");
+          '
+          cat .dogfood/self-green.env >> "$GITHUB_ENV"
+
       - name: Regenerate website testing statistics
         # Bridges continuous self-testing → the numbers shown on the site.
         # Reuses the sweep log just captured (no second suite run) and writes
@@ -56,7 +77,8 @@ jobs:
         # the public "N+" claim is always an under-statement. The next step
         # opens a PR if the JSON changed — Craig reviews before it ships.
         run: |
-          node scripts/generate-site-stats.js --tap-log .dogfood/sweep.log
+          node scripts/generate-site-stats.js --tap-log .dogfood/sweep.log \
+            ${GREEN:+--green $GREEN} ${SCANNED:+--scanned $SCANNED}
           cp website/app/data/site-stats.json .dogfood/site-stats.json || true
 
       - name: Self-scan — dependencies module

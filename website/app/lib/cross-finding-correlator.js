@@ -50,7 +50,7 @@ function buildCorrelationPrompt({ findings, hostname }) {
   const hostLine = hostname ? `\nHOST: ${wrapUntrusted('host', hostname)}` : '';
 
   return `${ANTI_INJECTION_PREAMBLE}
-You are the cross-finding correlation engine for GateTest's $399 Nuclear tier. Per-finding diagnoses already exist (those are produced separately). YOUR job is different — find COMBINATIONS of findings that together form a real attack chain or an unintended interaction.
+You are the cross-finding correlation engine for GateTest's $399 Forensic tier. Per-finding diagnoses already exist (those are produced separately). YOUR job is different — find COMBINATIONS of findings that together form a real attack chain or an unintended interaction.
 
 Examples of valid chains:
 - CSP unsafe-inline + CORS wildcard + cookie httpOnly:false → XSS to session takeover
@@ -276,7 +276,7 @@ function renderCorrelationReport(result) {
   }
   lines.push('---');
   lines.push('');
-  lines.push('<sub>Cross-finding correlation is part of the <a href="https://gatetest.io">GateTest $399 Nuclear</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>');
+  lines.push('<sub>Cross-finding correlation is part of the <a href="https://gatetest.io">GateTest $399 Forensic</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>');
   return lines.join('\n');
 }
 

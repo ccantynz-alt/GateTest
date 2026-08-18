@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const metadata: Metadata = {
   title: "GateTest vs GitHub Code Scanning — The Complete QA Platform",
@@ -68,7 +69,7 @@ const comparisonRows = [
   { feature: "Prompt / LLM safety scanning", gatetest: true, competitor: false },
   { feature: "Works with non-GitHub git hosts", gatetest: true, competitor: false },
   { feature: "Pay per scan (no per-seat licensing)", gatetest: true, competitor: false },
-  { feature: "120 scanning modules total", gatetest: true, competitor: false },
+  { feature: `${TOTAL_MODULES} scanning modules total`, gatetest: true, competitor: false },
   { feature: "PR / commit status integration", gatetest: true, competitor: true },
   { feature: "SARIF output format", gatetest: true, competitor: true },
 ];
@@ -135,17 +136,17 @@ export default function GitHubCodeScanningPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
             <Link
-              href="/"
+              href="/playground"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm"
               style={{ background: "#2dd4bf", color: "#0a0a12" }}
             >
               Scan My Repo — From $29
             </Link>
             <Link
-              href="/"
+              href="/modules"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 120 Modules
+              See All {TOTAL_MODULES} Modules
             </Link>
           </div>
         </div>
@@ -279,7 +280,7 @@ export default function GitHubCodeScanningPage() {
             visual regression, and more. Same PR workflow as GitHub Code Scanning.
           </p>
           <Link
-            href="/"
+            href="/playground"
             className="inline-flex items-center justify-center px-8 py-4 rounded-xl font-semibold"
             style={{ background: "#2dd4bf", color: "#0a0a12" }}
           >

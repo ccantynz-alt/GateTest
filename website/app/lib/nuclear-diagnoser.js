@@ -318,7 +318,7 @@ function renderDiagnosis(result) {
 function renderDiagnosesReport(diagnoses, summary) {
   const ok = diagnoses.filter((d) => d.ok).length;
   const lines = [];
-  lines.push('## GateTest Nuclear Diagnosis Report');
+  lines.push('## GateTest Forensic Diagnosis Report');
   lines.push('');
   lines.push(`Each finding below was diagnosed individually by Claude — explanation, root cause, recommendation, platform notes. No category-matched templates.`);
   if (summary) {

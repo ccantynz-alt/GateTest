@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const metadata: Metadata = {
   title: "GateTest vs ESLint — Why 2026 Developers Are Moving On",
@@ -68,7 +69,7 @@ const comparisonRows = [
   { feature: "Mutation testing (via GitHub Action)", gatetest: true, competitor: false },
   { feature: "Zero configuration required", gatetest: true, competitor: false },
   { feature: "Pay per scan (not per seat)", gatetest: true, competitor: false },
-  { feature: "120 scanning modules total", gatetest: true, competitor: false },
+  { feature: `${TOTAL_MODULES} scanning modules total`, gatetest: true, competitor: false },
 ];
 
 export default function EsLintPage() {
@@ -134,17 +135,17 @@ export default function EsLintPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
             <Link
-              href="/"
+              href="/playground"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm"
               style={{ background: "#2dd4bf", color: "#0a0a12" }}
             >
               Scan My Repo — From $29
             </Link>
             <Link
-              href="/"
+              href="/modules"
               className="inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm border border-white/15 text-white/70 hover:border-white/30 hover:text-white transition-colors"
             >
-              See All 120 Modules
+              See All {TOTAL_MODULES} Modules
             </Link>
           </div>
         </div>
@@ -285,7 +286,7 @@ export default function EsLintPage() {
             Keep ESLint in your editor. Add GateTest to your CI gate for everything ESLint can&rsquo;t see.
           </p>
           <Link
-            href="/"
+            href="/playground"
             className="inline-flex items-center justify-center px-8 py-4 rounded-xl font-semibold"
             style={{ background: "#2dd4bf", color: "#0a0a12" }}
           >

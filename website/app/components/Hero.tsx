@@ -82,7 +82,7 @@ export default function Hero() {
             </p>
             <p className="text-base text-gray-500 mb-8 fade-up">
               Pay per scan &mdash; no seat licences, no minimum. Built on{" "}
-              <span className="font-semibold text-gray-700">Claude Sonnet 5</span>.
+              <span className="font-semibold text-gray-700">Claude</span> &mdash; Fable 5 on the fix tiers, Sonnet 5 everywhere else.
             </p>
 
             {/* Live URL scan — the real product, in-hero */}
@@ -171,13 +171,17 @@ export default function Hero() {
               </div>
             </div>
 
-            {/* floating KPI chip for depth */}
+            {/* floating KPI chip for depth — the green count is shown ONLY when
+                the nightly self-scan measured it (greenSource "measured");
+                a carried number is not a stat (2026-08-18 audit). */}
             <div className="product-chip hidden sm:flex items-center gap-2.5 absolute -bottom-5 -left-5 px-4 py-3 rounded-xl">
               <div className="text-2xl font-extrabold text-[#0f766e] tabular-nums leading-none">
-                <CountUp value={String(siteStats.modules.green)} duration={1400} />/{siteStats.modules.scanned}
+                {siteStats.modules.greenSource === "measured"
+                  ? <><CountUp value={String(siteStats.modules.green)} duration={1400} />/{siteStats.modules.scanned}</>
+                  : <><CountUp value={String(siteStats.modules.total)} duration={1400} /></>}
               </div>
               <div className="text-[11px] text-gray-500 leading-tight">
-                modules green<br />on our own repo
+                {siteStats.modules.greenSource === "measured" ? <>modules green<br />on our own repo</> : <>modules loaded<br />every commit</>}
               </div>
             </div>
           </div>
@@ -214,7 +218,9 @@ export default function Hero() {
         <div className="mx-auto max-w-7xl px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-y-7 gap-x-6">
           <BandStat num={siteStats.tests.displayPassing} label="tests passing, every commit" />
           <BandStat num={String(siteStats.modules.total)} label="modules in one gate" />
-          <BandStat num={siteStats.modules.displayGreen} label="green on our own repo" />
+          {siteStats.modules.greenSource === "measured"
+            ? <BandStat num={siteStats.modules.displayGreen} label="green on our own repo" />
+            : <BandStat num="1" label="gate · one decision per push" />}
           <BandStat num="$29+" label="per scan · no seat licences" />
         </div>
       </div>

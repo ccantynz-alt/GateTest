@@ -296,7 +296,7 @@ test('renderDiagnosesReport — full report with mixed results', () => {
     { finding: { detail: 'No DMARC' }, ok: false, reason: 'too vague' },
   ];
   const out = renderDiagnosesReport(ds, 'Nuclear diagnoser: 1 diagnosed, 1 skipped');
-  assert.match(out, /Nuclear Diagnosis Report/);
+  assert.match(out, /Forensic Diagnosis Report/);
   assert.match(out, /Each finding below was diagnosed individually/);
   assert.match(out, /1 diagnosed, 1 skipped/);
   assert.match(out, /Missing HSTS/);
@@ -315,7 +315,7 @@ test('renderDiagnosesReport — all-skipped flag', () => {
 
 test('renderDiagnosesReport — empty diagnoses', () => {
   const out = renderDiagnosesReport([], 'Nuclear diagnoser: 0 diagnosed, 0 skipped');
-  assert.match(out, /Nuclear Diagnosis Report/);
+  assert.match(out, /Forensic Diagnosis Report/);
   assert.match(out, /0 diagnosed/);
 });
 

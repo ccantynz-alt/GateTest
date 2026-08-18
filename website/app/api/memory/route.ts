@@ -37,7 +37,7 @@ async function authorise(req: NextRequest) {
   if (!tierAllowed(auth.key.tier_allowed)) {
     return {
       fail: NextResponse.json(
-        { error: "Memory requires Scan+Fix or Nuclear tier" },
+        { error: "Memory requires the Scan+Fix or Forensic tier" },
         { status: 403 }
       ),
     };

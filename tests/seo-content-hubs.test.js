@@ -210,7 +210,11 @@ test("layout emits Organization + WebSite + SoftwareApplication JSON-LD", () => 
 test("landing layout keeps SoftwareApplication JSON-LD and canonical", () => {
   const layout = read("layout.tsx");
   assert.match(layout, /"@type":\s*"SoftwareApplication"/);
-  assert.match(layout, /canonical:\s*"\/"/);
+  // The homepage canonical lives on page.tsx, NOT the root layout — a root
+  // canonical is inherited by every page without its own metadata, which
+  // told search engines 20+ pages were duplicates of "/" (2026-08-18 audit).
+  assert.doesNotMatch(layout, /canonical:\s*"\/"/);
+  assert.match(read("page.tsx"), /canonical:\s*"\/"/);
   // metadataBase is what turns every relative canonical in the app into an
   // absolute one. Losing it makes them all silently invalid.
   assert.match(layout, /metadataBase:\s*new URL\(SITE_URL\)/);

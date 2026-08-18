@@ -182,7 +182,10 @@ export async function POST(req: NextRequest) {
           "line_items[0][price_data][product_data][name]": `GateTest ${tier.name}`,
           "line_items[0][price_data][product_data][description]": tier.description,
           "line_items[0][quantity]": "1",
-          success_url: `${BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+          // Subscriptions have no scan to start — the success page shows what
+          // happens next (key by email / every-push scanning) instead of
+          // handing off to /scan/status, which failed for them (2026-08-18).
+          success_url: `${BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}&kind=subscription&tier=${encodeURIComponent(input.tier || "")}`,
           cancel_url: `${BASE_URL}/checkout/cancel`,
         })
       : new URLSearchParams({
