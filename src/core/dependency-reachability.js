@@ -1,0 +1,155 @@
+'use strict';
+
+/**
+ * Dependency reachability — turn "N vulnerabilities" into "which of these
+ * can actually hurt you".
+ *
+ * Why (2026-08-18, Craig: "nailing the sore points matters most"): the
+ * second-loudest complaint about every incumbent — Dependabot, Snyk, GHAS,
+ * npm audit — is alert fatigue: CVEs in dev-only tooling, in packages that
+ * are installed but never imported, in transitive deps of a build script.
+ * Filippo Valsorda's "Dependabot is a noise machine" is exactly this. A
+ * gate that blocks on them teaches the team to bypass the gate.
+ *
+ * Classification per vulnerable package (npm audit v7+ JSON):
+ *   dev-only         every direct root that pulls it in is a devDependency
+ *   installed-unused production dependency, but no non-test source file
+ *                    imports it (or its direct root)
+ *   reachable        production dependency AND imported from source
+ *
+ * Only `reachable` critical/high advisories should BLOCK. The others are
+ * shown — as warning (installed-unused) or info (dev-only / low) — with the
+ * reason stated, never hidden. Pure functions + a tiny fs adapter so it is
+ * testable on fixture JSON.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue', '.svelte']);
+const TEST_PATH_RE = /(^|\/)(tests?|__tests__|spec|specs|e2e|cypress|__mocks__|fixtures?|stories|storybook|scripts?|tools?|bench(marks?)?|docs?)\//i;
+const TEST_FILE_RE = /\.(test|spec|stories|e2e|bench)\.[a-z]+$|\.config\.[cm]?[jt]s$/i;
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'vendor', '.gatetest', '.claude', '.turbo', '.cache']);
+
+/** Collect the set of package names imported from PRODUCTION source. */
+function collectImportedPackages(projectRoot, opts = {}) {
+  const maxFiles = opts.maxFiles || 4000;
+  const imported = new Set();
+  let seen = 0;
+  const walk = (dir, depth) => {
+    if (depth > 12 || seen >= maxFiles) return;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (seen >= maxFiles) return;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full, depth + 1); continue; }
+      if (!SOURCE_EXTS.has(path.extname(e.name).toLowerCase())) continue;
+      const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
+      if (TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel)) continue;
+      seen++;
+      let src;
+      try { src = fs.readFileSync(full, 'utf8'); } catch { continue; }
+      for (const name of extractImports(src)) imported.add(name);
+    }
+  };
+  walk(projectRoot, 0);
+  return imported;
+}
+
+/** Package names from require()/import/import()/export-from specifiers. */
+function extractImports(src) {
+  const out = new Set();
+  const re = /(?:require\s*\(\s*|import\s*\(\s*|from\s+|import\s+)['"]([^'"\n]+)['"]/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const spec = m[1];
+    if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('node:') || spec.startsWith('#')) continue;
+    const parts = spec.split('/');
+    out.add(spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]);
+  }
+  return out;
+}
+
+function readManifest(projectRoot) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+    return {
+      prod: new Set(Object.keys(pkg.dependencies || {})),
+      dev: new Set([...Object.keys(pkg.devDependencies || {}), ...Object.keys(pkg.optionalDependencies || {})]),
+    };
+  } catch {
+    return { prod: new Set(), dev: new Set() };
+  }
+}
+
+/**
+ * Walk `via` chains up to the DIRECT roots (packages named in package.json).
+ * npm audit v7+: vulnerabilities[name].via = [advisory objects | parent names];
+ * `effects` lists packages that depend on this one. A root is direct when
+ * `isDirect` is true or the name is in the manifest.
+ */
+function directRootsOf(name, vulns, manifest, seen = new Set()) {
+  if (seen.has(name)) return new Set();
+  seen.add(name);
+  const v = vulns[name];
+  const roots = new Set();
+  const isDirect = (v && v.isDirect) || manifest.prod.has(name) || manifest.dev.has(name);
+  if (isDirect) roots.add(name);
+  const parents = new Set([...(v && Array.isArray(v.effects) ? v.effects : [])]);
+  for (const p of parents) for (const r of directRootsOf(p, vulns, manifest, seen)) roots.add(r);
+  if (roots.size === 0 && !isDirect) roots.add(name); // orphan chain — treat itself as the root (unknown provenance)
+  return roots;
+}
+
+/**
+ * @param {object} audit          parsed `npm audit --json`
+ * @param {object} ctx            { manifest: {prod,dev}, imported: Set<string> }
+ * @returns {Array<{name, severity, class, roots, reason, fixAvailable, direct}>}
+ */
+function classifyAdvisories(audit, ctx) {
+  const vulns = (audit && audit.vulnerabilities) || {};
+  const manifest = ctx.manifest || { prod: new Set(), dev: new Set() };
+  const imported = ctx.imported || new Set();
+  const out = [];
+  for (const [name, v] of Object.entries(vulns)) {
+    const severity = String(v.severity || 'info').toLowerCase();
+    const roots = [...directRootsOf(name, vulns, manifest)];
+    const prodRoots = roots.filter((r) => manifest.prod.has(r) || !manifest.dev.has(r));
+    const devOnly = roots.length > 0 && prodRoots.length === 0;
+    const anyImported = [name, ...roots].some((r) => imported.has(r));
+    let cls;
+    let reason;
+    if (devOnly) {
+      cls = 'dev-only';
+      reason = `pulled in only by devDependencies (${roots.join(', ')}) — never ships to production`;
+    } else if (!anyImported) {
+      cls = 'installed-unused';
+      reason = `a production dependency${roots.length && roots[0] !== name ? ` (via ${prodRoots.join(', ')})` : ''} that no non-test source file imports — installed, not used`;
+    } else {
+      cls = 'reachable';
+      reason = `imported from production source${roots.length && roots[0] !== name ? ` via ${prodRoots.join(', ')}` : ''}`;
+    }
+    out.push({ name, severity, class: cls, roots, reason, fixAvailable: v.fixAvailable !== false && v.fixAvailable !== undefined ? v.fixAvailable : false, direct: Boolean(v.isDirect), range: v.range || null });
+  }
+  return out;
+}
+
+/** Severity a gate should apply: only reachable critical/high blocks. */
+function gateSeverity(item) {
+  const hi = item.severity === 'critical' || item.severity === 'high';
+  if (item.class === 'reachable') return hi ? 'error' : 'warning';
+  if (item.class === 'installed-unused') return hi ? 'warning' : 'info';
+  return 'info';
+}
+
+function analyseProject(audit, projectRoot) {
+  const manifest = readManifest(projectRoot);
+  const imported = collectImportedPackages(projectRoot);
+  const items = classifyAdvisories(audit, { manifest, imported });
+  const counts = { reachable: 0, 'installed-unused': 0, 'dev-only': 0 };
+  for (const i of items) counts[i.class]++;
+  return { items, counts, imported, manifest };
+}
+
+module.exports = { classifyAdvisories, gateSeverity, analyseProject, collectImportedPackages, extractImports, directRootsOf, readManifest };

@@ -87,7 +87,7 @@ class SecurityModule extends BaseModule {
       return;
     }
 
-    const { exitCode, stdout } = this._exec('npm audit --json 2>/dev/null', { cwd: projectRoot });
+    const { exitCode, stdout } = this._exec('npm audit --json', { cwd: projectRoot, timeout: 120000 });
 
     if (exitCode === 0) {
       result.addCheck('security:npm-audit', true, { message: 'No known vulnerabilities' });
@@ -99,7 +99,44 @@ class SecurityModule extends BaseModule {
         const high = vulns.high || 0;
         const moderate = vulns.moderate || 0;
 
-        if (critical > 0 || high > 0) {
+        // Reachability-gated (src/core/dependency-reachability.js): only a
+        // critical/high advisory in a PRODUCTION dependency that source code
+        // actually IMPORTS blocks. Dev-only tooling and installed-but-unused
+        // packages are reported with the reason, never as a red X — the
+        // Dependabot/Snyk "noise machine" complaint is exactly those.
+        let analysis = null;
+        try {
+          analysis = require('../core/dependency-reachability').analyseProject(audit, projectRoot);
+        } catch (err) { // error-ok — reachability is a refinement; fall back to raw counts below
+          console.error('[security] dependency reachability failed:', err && err.message ? err.message : err);
+        }
+        if (analysis && analysis.items.length > 0) {
+          const { gateSeverity } = require('../core/dependency-reachability');
+          const reachableHigh = analysis.items.filter((i) => i.class === 'reachable' && (i.severity === 'critical' || i.severity === 'high'));
+          const c = analysis.counts;
+          for (const item of analysis.items) {
+            const sev = gateSeverity(item);
+            if (sev === 'info' && !(item.severity === 'critical' || item.severity === 'high')) continue; // low/moderate dev-only: summary only
+            result.addCheck(`security:npm-audit:${item.name}`, false, {
+              severity: sev,
+              file: 'package.json',
+              message: `${item.severity} advisory in ${item.name}${item.range ? ` (${item.range})` : ''} — ${item.reason}`,
+              suggestion: item.fixAvailable ? `Run "npm audit fix" (a non-breaking fix is available for ${item.name})` : `Upgrade or replace ${item.name}; no automatic fix is available`,
+              reachability: item.class,
+            });
+          }
+          if (reachableHigh.length > 0) {
+            result.addCheck('security:npm-audit', false, {
+              message: `${reachableHigh.length} reachable critical/high advisor${reachableHigh.length === 1 ? 'y' : 'ies'} (${reachableHigh.map((i) => i.name).join(', ')}) — plus ${c['installed-unused']} installed-but-unused and ${c['dev-only']} dev-only advisories that do not block`,
+              suggestion: 'Fix the reachable ones first: they are imported by production code.',
+            });
+          } else {
+            result.addCheck('security:npm-audit', true, {
+              severity: 'info',
+              message: `No reachable critical/high advisories. ${critical + high} critical/high advisor${critical + high === 1 ? 'y' : 'ies'} exist in dev-only (${c['dev-only']}) or installed-but-unused (${c['installed-unused']}) packages — shown above, not blocking. ${moderate} moderate.`,
+            });
+          }
+        } else if (critical > 0 || high > 0) {
           result.addCheck('security:npm-audit', false, {
             message: `${critical} critical, ${high} high, ${moderate} moderate vulnerabilities`,
             suggestion: 'Run "npm audit fix" or update vulnerable packages',
