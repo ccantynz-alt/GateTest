@@ -16,7 +16,7 @@ import https from "https";
 import { getDb } from "./db";
 import { loadRepoFiles, resolveRepoAuth } from "./gluecron-client";
 import { type RepoFile, TIERS } from "./scan-modules";
-import { runEngineForTier, CLI_ENGINE_TIERS } from "./scan-engine-dispatch";
+import { runEngineForTier, CLI_ENGINE_TIERS, type RankedFinding, type FindingSummary } from "./scan-engine-dispatch";
 
 /** Safe set of tier names — anything outside this set falls back to "quick". */
 const KNOWN_TIERS = new Set(Object.keys(TIERS));
@@ -65,6 +65,9 @@ export interface ScanResult {
   filesInRepo?: number;
   coverageTruncated?: boolean;
   engine?: "cli" | "runTier";
+  /** ranked + cross-module-deduped findings (CLI engine tiers) */
+  findings?: RankedFinding[];
+  findingSummary?: FindingSummary | null;
 }
 
 function stripeApi(
@@ -227,7 +230,7 @@ export async function runScan(
     console.warn(`[scan-executor] ${owner}/${repo}: ${loaded.warning}`);
   }
 
-  const { modules, totalIssues, engineUsed } = await runEngineForTier({
+  const { modules, totalIssues, engineUsed, findings, findingSummary } = await runEngineForTier({
     tier: normalisedTier,
     owner,
     repo,
@@ -254,6 +257,8 @@ export async function runScan(
     filesInRepo: files.length,
     coverageTruncated: loaded.truncated,
     engine: engineUsed,
+    findings,
+    findingSummary,
   };
 }
 

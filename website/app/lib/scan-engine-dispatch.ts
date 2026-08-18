@@ -51,11 +51,39 @@ export interface EngineDispatchInput {
   deadlineMs?: number;
 }
 
+export interface RankedFinding {
+  id: string;
+  module: string;
+  rule: string;
+  severity: "error" | "warning" | "info";
+  confidence: number;
+  blocking: boolean;
+  file: string | null;
+  line: number | null;
+  message: string;
+  suggestion: string | null;
+  class: string | null;
+  duplicateOf: string | null;
+}
+
+export interface FindingSummary {
+  total: number;
+  blocking: number;
+  softErrors: number;
+  warnings: number;
+  info: number;
+  duplicatesCollapsed: number;
+  hiddenLowConfidence: number;
+}
+
 export interface EngineDispatchResult {
   modules: ModuleResultEnvelope[];
   totalIssues: number;
   engineUsed: "cli" | "runTier";
   engineMeta?: Record<string, unknown>;
+  /** ranked + deduped (CLI engine only; the in-memory runTier has no registry) */
+  findings?: RankedFinding[];
+  findingSummary?: FindingSummary | null;
 }
 
 interface CliEngineRunner {
@@ -70,6 +98,8 @@ interface CliEngineRunner {
     duration: number;
     engine: string;
     engineMeta?: Record<string, unknown>;
+    findings?: RankedFinding[];
+    findingSummary?: FindingSummary | null;
   }>;
 }
 
@@ -105,6 +135,8 @@ export async function runEngineForTier(input: EngineDispatchInput): Promise<Engi
           totalIssues: cliResult.totalIssues,
           engineUsed: "cli",
           engineMeta: cliResult.engineMeta,
+          findings: cliResult.findings || [],
+          findingSummary: cliResult.findingSummary || null,
         };
       }
       // eslint-disable-next-line no-console

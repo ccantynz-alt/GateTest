@@ -77,10 +77,24 @@ function collectFindings(results) {
   for (const r of Array.isArray(results) ? results : []) {
     for (const c of (r && r.checks) || []) {
       if (c.passed || c.suppressed) continue;
+      // Cross-module duplicates (stamped by src/core/finding-registry.js —
+      // the same file:line:class already shown under its owning module)
+      // are folded here; the gate counts them, the reader does not need
+      // to read them three times.
+      if (c.duplicateOf) continue;
       out.push({ module: r.module, check: c, priority: priorityOf(c) });
     }
   }
   return out;
+}
+
+/** How many checks were folded as cross-module duplicates (for the footer). */
+function countFoldedDuplicates(results) {
+  let n = 0;
+  for (const r of Array.isArray(results) ? results : []) {
+    for (const c of (r && r.checks) || []) if (c && !c.passed && c.duplicateOf) n++;
+  }
+  return n;
 }
 
 /**
@@ -144,6 +158,7 @@ function triageFindings(results, opts = {}) {
 }
 
 module.exports = {
+  countFoldedDuplicates,
   SEVERITY_WEIGHT,
   DEFAULT_LIMIT,
   priorityOf,

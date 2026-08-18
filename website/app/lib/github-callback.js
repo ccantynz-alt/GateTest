@@ -179,6 +179,9 @@ function linkifyFinding(detail, owner, repo, sha) {
  * @param {string|null} [targetUrl]
  * @returns {string}
  */
+/** Hard budget for the ranked "What matters" list — 5 inline items, never a wall. */
+const PR_COMMENT_TOP_FINDINGS = 5;
+
 function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'advisory') {
   const ownerRepoParts = String(repository || '').split('/');
   const owner = ownerRepoParts[0] || '';
@@ -221,6 +224,38 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
     const failed = modules.filter((m) => m.issues > 0 || m.status === 'failed');
     const passed = modules.filter((m) => m.issues === 0 && m.status !== 'failed');
 
+    // "What matters" — the ranked, cross-module-deduped registry view when
+    // the engine produced one. A hard BUDGET of PR_COMMENT_TOP_FINDINGS
+    // findings, blocking first, then severity, then confidence; everything
+    // else lives in the collapsed per-module section. This is the direct
+    // answer to the loudest complaint about every review bot: walls of
+    // noise with the one thing that matters buried in the middle.
+    const ranked = Array.isArray(scanResult.findings) ? scanResult.findings.filter((f) => f && !f.duplicateOf) : [];
+    const fsum = scanResult.findingSummary || null;
+    if (ranked.length > 0) {
+      const top = ranked.slice(0, PR_COMMENT_TOP_FINDINGS);
+      lines.push(`### What matters (${Math.min(top.length, ranked.length)} of ${ranked.length}, ranked)`);
+      lines.push('');
+      for (const f of top) {
+        const sev = f.blocking ? '🔴' : f.severity === 'error' ? '🟠' : f.severity === 'warning' ? '🟡' : '🔵';
+        const where = f.file ? linkifyFinding(`${f.file}${f.line ? `:${f.line}` : ''}`, owner, repoName, sha) : '';
+        const conf = typeof f.confidence === 'number' && f.confidence < 1 ? ` · confidence ${Math.round(f.confidence * 100)}%` : '';
+        lines.push(`- ${sev} **${f.rule || f.module}** ${where ? `${where} — ` : ''}${String(f.message || '').slice(0, 200)}${conf}`);
+      }
+      if (ranked.length > top.length) {
+        lines.push(`- *…${ranked.length - top.length} more, by module below*`);
+      }
+      const notes = [];
+      if (fsum && fsum.duplicatesCollapsed > 0) notes.push(`${fsum.duplicatesCollapsed} duplicate report${fsum.duplicatesCollapsed === 1 ? '' : 's'} folded (the same line flagged by more than one module counts once)`);
+      if (fsum && fsum.hiddenLowConfidence > 0) notes.push(`${fsum.hiddenLowConfidence} low-confidence error${fsum.hiddenLowConfidence === 1 ? '' : 's'} held back from blocking (shown, not enforced)`);
+      if (notes.length) { lines.push(''); lines.push(`<sub>${notes.join(' · ')}</sub>`); }
+      lines.push('');
+    }
+
+    if (failed.length > 0 && ranked.length > 0) {
+      lines.push('<details><summary>All findings by module</summary>');
+      lines.push('');
+    }
     if (failed.length > 0) {
       lines.push('### Issues by module');
       lines.push('');
@@ -241,6 +276,10 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
       if (failed.length > 15) {
         lines.push('');
         lines.push(`*…and ${failed.length - 15} more modules with issues*`);
+      }
+      if (ranked.length > 0) {
+        lines.push('');
+        lines.push('</details>');
       }
     }
 

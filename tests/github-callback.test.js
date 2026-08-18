@@ -910,3 +910,31 @@ describe('postPrComment — idempotent via signature marker', () => {
     assert.strictEqual(calls[2].init.method, 'PATCH');
   });
 });
+
+// ── "What matters": budgeted, ranked, deduped (2026-08-18) ────────────────
+describe('buildMarkdownComment — What matters budget', () => {
+  const mk = (i, over = {}) => ({
+    id: `m:r${i}`, module: 'security', rule: `security:rule${i}`, severity: 'error', confidence: 1, blocking: true,
+    file: `src/f${i}.js`, line: i + 1, message: `finding ${i}`, suggestion: null, class: null, duplicateOf: null, ...over,
+  });
+  const base = { status: 'complete', totalIssues: 12, duration: 1200, modules: [{ name: 'security', status: 'failed', checks: 20, issues: 12, duration: 5, details: Array.from({ length: 12 }, (_, i) => `[error] finding ${i}`) }] };
+
+  it('shows at most 5 ranked findings, says how many more, and reports folded duplicates + held-back errors', () => {
+    const findings = [...Array.from({ length: 9 }, (_, i) => mk(i)), mk(99, { duplicateOf: 'm:r0' }), mk(98, { duplicateOf: 'm:r1' })];
+    const body = buildMarkdownComment('o/r', 'abc1234def', { ...base, findings, findingSummary: { total: 9, blocking: 9, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 2, hiddenLowConfidence: 1 } }, null, 'strict');
+    assert.match(body, /### What matters \(5 of 9, ranked\)/);
+    assert.strictEqual((body.match(/^- 🔴 \*\*security:rule\d\*\*/gm) || []).length, 5, 'exactly five inline items');
+    assert.match(body, /…4 more, by module below/);
+    assert.match(body, /2 duplicate reports folded/);
+    assert.match(body, /1 low-confidence error held back from blocking/);
+    assert.match(body, /<details><summary>All findings by module<\/summary>/, 'the per-module wall is collapsed when a ranked view exists');
+    assert.doesNotMatch(body, /security:rule99/, 'a duplicate never appears in the ranked list');
+  });
+
+  it('falls back to the per-module list when the engine produced no registry (in-memory quick tier)', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', base, null, 'strict');
+    assert.doesNotMatch(body, /What matters/);
+    assert.doesNotMatch(body, /<details><summary>All findings by module/);
+    assert.match(body, /### Issues by module/);
+  });
+});

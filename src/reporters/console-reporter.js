@@ -18,7 +18,7 @@ const COLORS = {
   bgYellow: '\x1b[43m',
 };
 
-const { triageFindings } = require('../core/finding-triage');
+const { triageFindings, countFoldedDuplicates } = require('../core/finding-triage');
 const { siteUrl } = require('../core/site-url');
 
 class ConsoleReporter {
@@ -105,6 +105,10 @@ class ConsoleReporter {
     if (hiddenCount > 0) {
       console.log('');
       console.log(`  ${COLORS.dim}${hiddenCount} more finding(s) not shown — ${COLORS.reset}gatetest --all${COLORS.dim} for everything.${COLORS.reset}`);
+    }
+    const folded = countFoldedDuplicates(summary.results);
+    if (folded > 0) {
+      console.log(`  ${COLORS.dim}${folded} duplicate report(s) folded — the same line flagged by more than one module counts once.${COLORS.reset}`);
     }
   }
 

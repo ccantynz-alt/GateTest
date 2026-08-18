@@ -46,6 +46,12 @@ class JsonReporter {
       },
       results: summary.results,
       failures: summary.failedModules,
+      // Ranked, cross-module-deduped view (src/core/finding-registry.js).
+      // Counts in `summary.checks` are the gate's truth; this is what to
+      // SHOW — consumers should render `findings` and mention
+      // `findingSummary.duplicatesCollapsed` / `.hiddenLowConfidence`.
+      findings: Array.isArray(summary.findings) ? summary.findings : [],
+      findingSummary: summary.findingSummary || null,
     };
 
     fs.writeFileSync(filepath, JSON.stringify(report, null, 2));

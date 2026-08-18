@@ -303,6 +303,11 @@ async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, 
     return {
       modules: translated.modules,
       totalIssues: translated.totalIssues,
+      // Ranked, cross-module-deduped findings from src/core/finding-registry
+      // (severity/confidence/file/line intact — the flat `details` strings
+      // above lose all of that). Consumers render THIS when present.
+      findings: Array.isArray(summary.findings) ? summary.findings.slice(0, 500) : [],
+      findingSummary: summary.findingSummary || null,
       duration: Date.now() - started,
       engine: 'cli',
       engineMeta: {

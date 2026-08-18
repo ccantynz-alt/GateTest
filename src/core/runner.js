@@ -976,8 +976,27 @@ class GateTestRunner extends EventEmitter {
     // are visible in the report but don't fail the gate.
     const gateStatus = (failed.length === 0 && totalBlockingErrors === 0) ? 'PASSED' : 'BLOCKED';
 
+    // Finding registry: one defect = one finding across modules, ranked by
+    // blocking → severity → confidence. Counts above are UNTOUCHED (the gate
+    // already decided); reporters use `findings`/`findingSummary` to show
+    // the ranked, deduped view and to say how many duplicates were folded
+    // and how many low-confidence errors were held back (2026-08-18).
+    const resultsJson = this.results.map(r => r.toJSON());
+    let findings = [];
+    let findingSummary = null;
+    try {
+      const registry = require('./finding-registry');
+      registry.annotateDuplicates(resultsJson, { threshold: this._blockThreshold });
+      findings = registry.normalizeFindings(resultsJson, { threshold: this._blockThreshold });
+      findingSummary = registry.summarizeFindings(findings);
+    } catch (err) { // error-ok — the registry is a presentation layer; a bug in it must never break a scan
+      console.error('[GateTest] finding registry failed:', err && err.message ? err.message : err);
+    }
+
     return {
       gateStatus,
+      findings,
+      findingSummary,
       timestamp: new Date().toISOString(),
       duration: endTime - startTime,
       diffOnly: this.options.diffOnly,
@@ -1011,7 +1030,7 @@ class GateTestRunner extends EventEmitter {
         total: totalFixes,
         details: this.results.flatMap(r => r.fixes),
       },
-      results: this.results.map(r => r.toJSON()),
+      results: resultsJson,
       failedModules: failed.map(r => ({
         module: r.module,
         error: String(r.error),

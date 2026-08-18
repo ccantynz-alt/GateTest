@@ -38,7 +38,7 @@ describe('scan-engine-dispatch — the one place engine choice lives', () => {
 describe('every hosted scan path dispatches through runEngineForTier', () => {
   it('scan-executor (worker tick, Stripe job, /api/v1/scan) no longer calls runTier directly', () => {
     const src = read('website/app/lib/scan-executor.ts');
-    assert.match(src, /import \{ runEngineForTier, CLI_ENGINE_TIERS \} from "\.\/scan-engine-dispatch"/);
+    assert.match(src, /import \{ runEngineForTier, CLI_ENGINE_TIERS[^}]*\} from "\.\/scan-engine-dispatch"/);
     assert.doesNotMatch(src, /\brunTier\(/, 'scan-executor must not bypass the dispatcher');
     assert.match(src, /loadRepoFiles\(owner, repo, ref, token/, 'must read the WHOLE repo via the archive loader');
     assert.doesNotMatch(src, /MAX_FILES_TO_READ = 50/, 'the 50-file sample cap is gone');
