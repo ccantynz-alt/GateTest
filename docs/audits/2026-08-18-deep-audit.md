@@ -64,13 +64,13 @@ Recall on NodeGoat unchanged at ~6/13 planted classes — the recall gap is adva
 | 1 | Read any public repo with zero credentials, whole repo, one request | **shipped** | KI #100/#101; 2.5% coverage |
 | 2 | Real engine on every hosted path + deterministic every-push tier | **shipped** | four hosted paths disagreed on "full" |
 | 3 | Precision as a product: measured FP cuts → per-rule precision shown to users, auto-demotion, "noisiest 10 rules" panel | first pass shipped | complaint #1 |
-| 4 | Finding registry: one defect = one finding, mandatory file:line, cross-module dedupe | queued | eval ×3, secrets ×4, `file:null` |
-| 5 | The 5-comment PR: budgeted, ranked, evidence-attached, never repeated | queued | complaints #3/#9/#22 |
+| 4 | Finding registry: one defect = one finding, mandatory file:line, cross-module dedupe | **shipped** (99c59379) | eval ×3, secrets ×4, `file:null` |
+| 5 | The 5-comment PR: budgeted, ranked, evidence-attached, never repeated | budget + ranking shipped (99c59379); evidence gate for AI findings queued | complaints #3/#9/#22 |
 | 6 | Recall on the vulns buyers benchmark (NoSQLi, template XSS, cookie flags, IDOR, CSRF, helmet) + published benchmarks with misses | queued | 6/13 on NodeGoat |
 | 7 | Fix PRs with proof: originating module re-run, TS syntax gate, fail-closed scanner gate, tests executed, injection guard, path allow-list; CLI orchestrator tests the hypothesis | queued | audit #7/#8/#9; complaint #19 |
-| 8 | Reachability-gated dependency alerts (import-graph exists) | queued | complaint #2 |
+| 8 | Reachability-gated dependency alerts | **shipped** (af22bc79) | complaint #2 |
 | 9 | Isolation you can read: no customer code on the box (skip list shipped) → sandbox + published model + on-box option | partial | complaint #13 |
-| 10 | New-code attribution proven by git; deterministic re-scans; `--diff-against <scan-id>` | queued | complaints #7/#20 |
+| 10 | New-code attribution proven by git; deterministic re-scans; `--diff-against <scan-id>` | attribution shipped (fdc9907d); deterministic re-scan proof queued | complaints #7/#20 |
 | 11 | Pipeline reliability: leases, dead-letter, terminal classification, callback retry, `pending` status, fetch/module timeouts, queue depth on /api/status | queued | audit #11/#17/#18 |
 | 12 | Language depth beyond JS/TS — honestly labelled, then Python built as a real second tier; fix `smart-suite-selector` | queued | audit #13 |
 | 13 | Suppression in place: 👎 on the PR writes `.gatetestignore` and feeds precision | queued | complaint #15 |
