@@ -1,0 +1,282 @@
+{
+  "generatedAt": "2026-08-14T04:48:21.046Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 16,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 10,
+      "SonarQube": 0,
+      "Semgrep": 5,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 2
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49292530",
+        "author": "alansaber",
+        "type": "comment",
+        "title": null,
+        "text": "What more depth is there to go to? Compaction is a single LLM call (practically) which can have some deterministic diffing&#x2F;extraction baked in, or multiple LLM calls (generally wasteful). There's only 1 summary in the context window at one time. Every prompt goes [CONVERSATION_HISTORY] + input -> model turn. As soon as total context exceeds that it compacts, so there's no summarisation overflow (you can enable an agent to access past summarisations from past compactions, but the snake starts to eat it's own tail).",
+        "url": "https://news.ycombinator.com/item?id=49292530",
+        "points": null,
+        "numComments": null,
+        "storyId": 49289654,
+        "createdAt": "2026-08-13T22:20:04Z",
+        "createdAtUnix": 1786659604,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49290885",
+        "author": "sltkr",
+        "type": "comment",
+        "title": null,
+        "text": "It was really cool! The ease of getting started was definitely one of the selling points for the “home computers” of that era (GW-BASIC ran on IBM compatible PCs instead, but the appeal of BASIC was the same). Brevity was an important feature since a lot of people obtained programs by typing them over from a magazine or recording them from the radio. And of course, there was no such thing as auto-complete (let alone AI generation).That being said, SDL isn't actually that bad either. A minimal example is about 40 lines of code [1], not counting comments and blank lines, but including lines with just a curly brace which you could easily remove if you were concerned about size. A slightly more serious implementation of Snake runs about 345 lines of code [2].And to be fair, DONKEY.BAS is also cheating slightly on the line metric by stuffing lines full of statements, like for example: A$=INKEY$:IF A$=CHR$(27) THEN 1298 ELSE POKE 106,0:IF LEN(A$)>0 THEN LINE (CX,CY)-(CX+28,CY+44),0,BF:CX=252-CX:PUT (CX,CY),CAR%,PRESET:SOUND 200,1 1. https:&#x2F;&#x2F;examples.libsdl.org&#x2F;SDL3&#x2F;renderer&#x2F;01-clear&#x2F; 2. https:&#x2F;&#x2F;examples.libsdl.org&#x2F;SDL3&#x2F;demo&#x2F;01-snake&#x2F;",
+        "url": "https://news.ycombinator.com/item?id=49290885",
+        "points": null,
+        "numComments": null,
+        "storyId": 49289465,
+        "createdAt": "2026-08-13T19:35:54Z",
+        "createdAtUnix": 1786649754,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49285488",
+        "author": "snaking0776",
+        "type": "comment",
+        "title": null,
+        "text": "I hope this is sarcasm. I sometimes can’t tell here",
+        "url": "https://news.ycombinator.com/item?id=49285488",
+        "points": null,
+        "numComments": null,
+        "storyId": 49283840,
+        "createdAt": "2026-08-13T13:20:39Z",
+        "createdAtUnix": 1786627239,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49284206",
+        "author": "bojangleslover",
+        "type": "story",
+        "title": "Show HN: Carolina Cloud Nextflow",
+        "text": "Nextflow is an orchestration platform not entirely unlike Kubernetes, Slurm, Snakemake and others. It is quite popular in the bioinformatics community. Some details:-Uses gVisor containers -Reuses input file with \"host locality\" -10% faster than AWS HealthOmics -First-class support for LLMsIf you're into bioinformatics, or just curious about how biologists are using compute, please check it out!Link to launch post: https:&#x2F;&#x2F;carolinacloud.substack.com&#x2F;p&#x2F;nf-ccloud-launch-what-i...Link to benchmarking post: https:&#x2F;&#x2F;carolinacloud.substack.com&#x2F;p&#x2F;nf-ccloud-launch-benchm...",
+        "url": "https://carolinacloud.io/#/nextflow",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49284206,
+        "createdAt": "2026-08-13T11:03:57Z",
+        "createdAtUnix": 1786619037,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49283539",
+        "author": "carljungslabtek",
+        "type": "comment",
+        "title": null,
+        "text": "You basically pointed this out already but there’s a big difference between something designed to notify you about something you might not have known, similar to what you’d find on a community bulletin board, and something trying to manipulate you into buying something you don’t need at all.I think a lot of people use the term “ad” to refer solely to the latter category. This goes back to the origin of modern advertising (and even earlier with snake oil salesman and charlatans, which were scamming merchants using music and stage shows lol — sound familiar?) and using the term “public relations” as an alternative to “propaganda”.",
+        "url": "https://news.ycombinator.com/item?id=49283539",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270726,
+        "createdAt": "2026-08-13T09:28:49Z",
+        "createdAtUnix": 1786613329,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49283454",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "That doesn't mean that it will actually be resolved. And do you really want to be doing that with everyone you ever do business with for the rest of your life?",
+        "url": "https://news.ycombinator.com/item?id=49283454",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270726,
+        "createdAt": "2026-08-13T09:18:38Z",
+        "createdAtUnix": 1786612718,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49283312",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "> People and their sociocultural biasesNo, intent matters. If you drugged someone with caffeine (or someone drank it not knowing what it was) then their symptoms would also be called ill effects.",
+        "url": "https://news.ycombinator.com/item?id=49283312",
+        "points": null,
+        "numComments": null,
+        "storyId": 49218040,
+        "createdAt": "2026-08-13T08:55:30Z",
+        "createdAtUnix": 1786611330,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49282851",
+        "author": "lesostep",
+        "type": "comment",
+        "title": null,
+        "text": "Well, eastern dragons always reminded me more of a giant oarfish. And some central europe dragons weren't that far off, being described as flying snakes.I think \"every culture has a dragon\" is kinda misleading.\"Every culture has a creature that got translated as a dragon\" seems closer to the truth. The creatures themselves have a great variety between them.",
+        "url": "https://news.ycombinator.com/item?id=49282851",
+        "points": null,
+        "numComments": null,
+        "storyId": 49218040,
+        "createdAt": "2026-08-13T07:43:15Z",
+        "createdAtUnix": 1786606995,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49282612",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Why not? I'm assuming that the watermark detector won't have plausible false positives on human-written text otherwise it won't have much merit to begin with.If a detector flags something in your text and you've properly attributed that text to another author then what is there to worry about?",
+        "url": "https://news.ycombinator.com/item?id=49282612",
+        "points": null,
+        "numComments": null,
+        "storyId": 49250109,
+        "createdAt": "2026-08-13T07:03:57Z",
+        "createdAtUnix": 1786604637,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49282575",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "Those aren't based on a recognisable watermark but dumb heuristics.",
+        "url": "https://news.ycombinator.com/item?id=49282575",
+        "points": null,
+        "numComments": null,
+        "storyId": 49250109,
+        "createdAt": "2026-08-13T06:58:44Z",
+        "createdAtUnix": 1786604324,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49291031",
+        "author": "mdean",
+        "type": "comment",
+        "title": null,
+        "text": "Disclosure: I work at Semgrep but figure other engineers may find the approach we used interesting.",
+        "url": "https://news.ycombinator.com/item?id=49291031",
+        "points": null,
+        "numComments": null,
+        "storyId": 49291030,
+        "createdAt": "2026-08-13T19:51:42Z",
+        "createdAtUnix": 1786650702,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49291030",
+        "author": "mdean",
+        "type": "story",
+        "title": "SHA pinning GitHub Actions across an organization",
+        "text": "SHA pinning GitHub Actions across an organization",
+        "url": "https://semgrep.dev/blog/2026/sha-pinning-for-github-actions-org-wide/",
+        "points": 8,
+        "numComments": 2,
+        "storyId": 49291030,
+        "createdAt": "2026-08-13T19:51:42Z",
+        "createdAtUnix": 1786650702,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49289480",
+        "author": "mohammedqannan",
+        "type": "story",
+        "title": "SecurePkt – High-Speed, Post-Quantum UDP Tunnel Protocol and SOCKS5 Gateway`",
+        "text": "SecurePkt – High-Speed, Post-Quantum UDP Tunnel Protocol and SOCKS5 Gateway`",
+        "url": "https://pypi.org/project/securepkt/",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49289480,
+        "createdAt": "2026-08-13T17:46:35Z",
+        "createdAtUnix": 1786643195,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49287254",
+        "author": "hypendev",
+        "type": "comment",
+        "title": null,
+        "text": "There are some similarities, especially in some syntax ideas. I'd say the core difference from the DX side is that Slint stylistically aligns more with CSS on some areas and allows things such as assignments, Hypen aligns more with Swift UI and separates those things from the UI completely.Also the integration story is quite different, where Slint is more leaning into a \"component integration\" model, Hypen leans more into a \"just a display layer\" model with strict state&#x2F;UI&#x2F;action segregation.",
+        "url": "https://news.ycombinator.com/item?id=49287254",
+        "points": null,
+        "numComments": null,
+        "storyId": 49280061,
+        "createdAt": "2026-08-13T15:13:22Z",
+        "createdAtUnix": 1786634002,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49286554",
+        "author": "hypendev",
+        "type": "comment",
+        "title": null,
+        "text": "Mostly its the core syntax, it's terribly noisy. Also parts of the implementation itself. While I cannot enumerate the taste, I can give you some examples.For example:- Class constructors cannot be in definition headers, i.e. class Something(Int a, Int b)- The whole final and const&#x2F;static const mess- required is annoying and really \"slapped on\"- shorthand syntax is => instead of =, personal pet peeve- positional, named and optional parameters segregation makes things noisy- concurrency, in which an event loop sounds like a great idea but ends up causing pain with multi-threading and background work so you have to spawn diff isolates- the whole `await fn()` vs `fn()` validity issue, where you can miss the await keyword and it still compiles is such a slap in the face. think now they solved it, but you could also have returns from non-return functions and vice-versa.- `dynamic` and generics in the same language have caused many bad designs- extension types also feel hacked on- type inference is annoying and highly contextual vs out of the box- Worst sin: DateTime.now() returns different things based on the platform its running on, making it highly unreliable for something so important",
+        "url": "https://news.ycombinator.com/item?id=49286554",
+        "points": null,
+        "numComments": null,
+        "storyId": 49280061,
+        "createdAt": "2026-08-13T14:31:30Z",
+        "createdAtUnix": 1786631490,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49282827",
+        "author": "sublinear",
+        "type": "comment",
+        "title": null,
+        "text": "> ... I would just have a rule which I had to follow.I don't mean to be a downer, but to prevent anxiety I try not to be so strict with myself.A process can be freeing at first, but eventually the idea can seep in that I'm missing out, wasting precious time on earth, or that I'm \"trapped\". Nothing triggers a panic attack quite like depersonalization&#x2F;derealization.I try to question whether my motivations are covering up fear. I don't want to be so afraid of decision fatigue that it locks me into even more misery.Anyway it's for that reason that I treat processes as recommendations instead of rules. At the crossroads, I'd prefer visualizing a blue star or green checkmark projected onto the turn. Like a GPS, I'm totally free to ignore it and force it to recalculate the route. Now it's a fun adventure when I deviate instead of \"breaking the rules\".e.g. \"You broke the rule! Now something bad will happen!\" vs \"I wonder what's new since the last time I came this way\"Huge difference.",
+        "url": "https://news.ycombinator.com/item?id=49282827",
+        "points": null,
+        "numComments": null,
+        "storyId": 49279197,
+        "createdAt": "2026-08-13T07:38:38Z",
+        "createdAtUnix": 1786606718,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [
+    {
+      "phrase": "false positive",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49282612",
+          "url": "https://news.ycombinator.com/item?id=49282612",
+          "snippet": "Why not? I'm assuming that the watermark detector won't have plausible false positives on human-written text otherwise it won't have much merit to begin with.If a detector flags something in your text"
+        }
+      ]
+    },
+    {
+      "phrase": "false positives",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49282612",
+          "url": "https://news.ycombinator.com/item?id=49282612",
+          "snippet": "Why not? I'm assuming that the watermark detector won't have plausible false positives on human-written text otherwise it won't have much merit to begin with.If a detector flags something in your text"
+        }
+      ]
+    }
+  ],
+  "actionItems": []
+}

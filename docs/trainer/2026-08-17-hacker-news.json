@@ -1,0 +1,132 @@
+{
+  "generatedAt": "2026-08-17T03:50:59.458Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 7,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 6,
+      "SonarQube": 0,
+      "Semgrep": 1,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 0
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49325517",
+        "author": "akersten",
+        "type": "comment",
+        "title": null,
+        "text": "Respectfully, you are all missing the point.Watermarking is bad not just because of the principled stance that your tool should not be working against your own interests (the passionate argument in TFA), but specifically because it lends credence to the idea that AI detection is a valid and possible thing to do perfectly.As technologists of course we know \"oh well yes but with some confidence interval we can detect AI token bias across a large corpus of text.\" To JimBob in charge of publishing your paper or reviewing your PhD submission, all he knows is \"anthropic says AI detection is possible so this 30% chance your paper was written by AI means you've plagiarized.\" Do you really think you're winning the argument with the certified, law-approved plagiarism detection machine? No, you're not, and your career is over.It's irresponsible to develop watermarking because it is not anywhere close to a perfect science, but it will be treated like one by people with the power to ruin your lives. Even if you've never touched AI in your life, your paper is going through the \"maybe it says you cheated\" box, and you better hope those dice don't come up snake eyes.",
+        "url": "https://news.ycombinator.com/item?id=49325517",
+        "points": null,
+        "numComments": null,
+        "storyId": 49324087,
+        "createdAt": "2026-08-17T01:11:37Z",
+        "createdAtUnix": 1786929097,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49325417",
+        "author": "bigbadfeline",
+        "type": "comment",
+        "title": null,
+        "text": "> Its good to separate usecases and market fit from what the tools unlock.Good for what? It doesn't affect the economic equation in any way.> You can't use AI to front-run the discovery and research processes, > Their next iteration includes this contextStill no change to the fact that \"aside from selling you this wonderful capability, it's a snake eating it's own tail\".AGI simply doesn't fit in the current economic model and it's tempting to assume that the econ model will change to accommodate AI for the good of the people -surely the big AI bosses keep promising it and will continue to do so.However, all evidence on the ground paints a different picture of the future - continued inflation, compute and general asset trickle-up and concentration, with a government too entangled in the scheme to be able to change it.",
+        "url": "https://news.ycombinator.com/item?id=49325417",
+        "points": null,
+        "numComments": null,
+        "storyId": 49322233,
+        "createdAt": "2026-08-17T00:53:42Z",
+        "createdAtUnix": 1786928022,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49325093",
+        "author": "superze",
+        "type": "comment",
+        "title": null,
+        "text": "He is just the poor little head of the snake.",
+        "url": "https://news.ycombinator.com/item?id=49325093",
+        "points": null,
+        "numComments": null,
+        "storyId": 49323932,
+        "createdAt": "2026-08-17T00:04:16Z",
+        "createdAtUnix": 1786925056,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49323527",
+        "author": "cyanydeez",
+        "type": "comment",
+        "title": null,
+        "text": "ok, lets take a todo app. Everyones naive first project in modern JS framework world. Before AI, it took a week worth of work to git some simple todos, maybe a calender function, probably a reminder. Some very set of basic functionality.No one was going to buy it in that state, great.Nowe we have AI; in an afternoon, it'll pound out a todo app and all your choice of fixings. Great!No one is still going to buy it; 2x, because the \"total addressable market\" is not the globe, because, you know, joe over there learning basic programming can do it just the same as you now. There's no secret sauce.Whose making money? the guy selling you AI. Great, but you know, your apps not going to sell when anyone can implement any moderately time consuming app.So not only do you have the poor business model of your todo app, you also have the poor marketability of a todo app, since any AI can do it just as well as you.So yeah, sure, AI is building apps, but aside from selling you this wonderful capability, it's a snake eating it's own tail.",
+        "url": "https://news.ycombinator.com/item?id=49323527",
+        "points": null,
+        "numComments": null,
+        "storyId": 49322233,
+        "createdAt": "2026-08-16T20:48:05Z",
+        "createdAtUnix": 1786913285,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49322942",
+        "author": "markvdb",
+        "type": "comment",
+        "title": null,
+        "text": "Have a look at ERE. Don't get fooled by the snake oil sounding url. I ignored it for years because of that, but it's a sound framework to help you answer the question you are asking.https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Jacob_Lund_Fiskerhttps:&#x2F;&#x2F;earlyretirementextreme.com&#x2F;",
+        "url": "https://news.ycombinator.com/item?id=49322942",
+        "points": null,
+        "numComments": null,
+        "storyId": 49320984,
+        "createdAt": "2026-08-16T19:35:46Z",
+        "createdAtUnix": 1786908946,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49317777",
+        "author": "hypfer",
+        "type": "comment",
+        "title": null,
+        "text": "Snake oil claude slop. No other words for it.If someone or something is executing code on your machine, you have already lost. Making it _slightly harder_ for it to eventually get your passwords anyway is mostly a performative action.__Btw, enable \"showdead\" and enjoy OP actually pasting LLM output verbatim as a \"defense\".- https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=49317802- https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=49317819Maybe claude can reword your claude slop for you. You can still edit those posts I guess.__bukershok 2 minutes ago [dead] | parent | context | flag | vouch | favorite | on: Show HN: Laptop is the last place your secrets are...Worth separating two things here.That's curl | tar, not curl | sh, as a few people noted. But the real answer is: don't use it. The recommended install is brew install jitpass&#x2F;tap&#x2F;jitpass.Releases are Developer ID signed and notarized by Apple. Homebrew quarantines its download and Gatekeeper checks it against the notarization ticket before it runs. jit doctor reports the Team ID it verified, so you can check rather than take my word for it. jit upgrade refuses to install anything whose signature and checksum don't both verify, with no override flag.The tarball line is there for people without Homebrew, and it is the weaker path precisely because curl sets no quarantine bit, so Gatekeeper never consults the ticket. Point taken: leading with it in the README undercuts the argument on the same page. I'll flip the order.__Sorry if this violates the \"no dunking\" rule or whatever, but this cancer needs to be eradicated.",
+        "url": "https://news.ycombinator.com/item?id=49317777",
+        "points": null,
+        "numComments": null,
+        "storyId": 49317546,
+        "createdAt": "2026-08-16T07:42:09Z",
+        "createdAtUnix": 1786866129,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49325118",
+        "author": "cyanydeez",
+        "type": "comment",
+        "title": null,
+        "text": "modern america's education pipeline is seriously corrupted and was corrupted on purpose to prevent social classes (ie, ghettos) from excelling. Most of this stems from the 60's desegregation and what should be called the \"cement pool\" affect, where white people, rather than allow desegregating public pools, filled these pools with cement, ruining the public asset for fear of intermingling.Instead of allowing races and women into the public benefits sphere, they slowly dismantled the social safetynet.In the specific instance for education, pushing state funding onto the city property taxes and school districts ensured impoverished areas would continue to fund impoverished schools and as the decades wore on, this tightening of budgets bled into it's surroundings and then the dismantling of funds as per-head attendence started via magnet, charter schools and now school voucher programs for private schools and the rest.This is a pipeline designed to punish society for integration. this is \"critical race theory\" in the next 5 decades.You can blame it on techno culture, but that's just the indirect cause of fundamentally desociallizing&#x2F;devaluing public assets. You can make a direct association, also, with the rise of the business class as another attack on normalzing this type of segregation without laws.",
+        "url": "https://news.ycombinator.com/item?id=49325118",
+        "points": null,
+        "numComments": null,
+        "storyId": 49320803,
+        "createdAt": "2026-08-17T00:08:20Z",
+        "createdAtUnix": 1786925300,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": []
+  },
+  "painPoints": [],
+  "actionItems": []
+}

@@ -1,0 +1,447 @@
+{
+  "generatedAt": "2026-08-18T03:45:23.193Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 27,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 12,
+      "SonarQube": 0,
+      "Semgrep": 10,
+      "CodeQL": 5,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 0
+    },
+    "painPointsFound": 3
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49339626",
+        "author": "skydhash",
+        "type": "comment",
+        "title": null,
+        "text": "Lol. On almost every post someone comes in to say that $problem was easily solved by AI. Usually out of the whole context of the thread.Snake oil level comments.",
+        "url": "https://news.ycombinator.com/item?id=49339626",
+        "points": null,
+        "numComments": null,
+        "storyId": 49334409,
+        "createdAt": "2026-08-18T00:32:24Z",
+        "createdAtUnix": 1787013144,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49339295",
+        "author": "shykes",
+        "type": "comment",
+        "title": null,
+        "text": "Great! I just sent you an email :)",
+        "url": "https://news.ycombinator.com/item?id=49339295",
+        "points": null,
+        "numComments": null,
+        "storyId": 49334209,
+        "createdAt": "2026-08-17T23:52:21Z",
+        "createdAtUnix": 1787010741,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49338467",
+        "author": "whtrbt",
+        "type": "comment",
+        "title": null,
+        "text": "There’s a fascinating book called Don’t Sleep, There Are Snakes by Daniel Everett that covers the Piraha people in the Amazon.Their language is unusual: no recurrent sentences, almost no discussion of the past. I’m not suggesting they are unconscious but there appears to be something different going on with the Piraha sociolinguistically.",
+        "url": "https://news.ycombinator.com/item?id=49338467",
+        "points": null,
+        "numComments": null,
+        "storyId": 49336909,
+        "createdAt": "2026-08-17T22:21:29Z",
+        "createdAtUnix": 1787005289,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49337942",
+        "author": "shykes",
+        "type": "comment",
+        "title": null,
+        "text": "Are you interested in integrating with more CI platforms, including less \"traditional\" ones, like dagger.io? If so I would love to talk :)",
+        "url": "https://news.ycombinator.com/item?id=49337942",
+        "points": null,
+        "numComments": null,
+        "storyId": 49334209,
+        "createdAt": "2026-08-17T21:31:49Z",
+        "createdAtUnix": 1787002309,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49336434",
+        "author": "snyssfx",
+        "type": "story",
+        "title": "Wiki for Pet Projects with Clojure and Polylith",
+        "text": "Wiki for Pet Projects with Clojure and Polylith",
+        "url": "https://snyssfx.com/blog/wiki_for_pet_projects.html",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49336434,
+        "createdAt": "2026-08-17T19:34:05Z",
+        "createdAtUnix": 1786995245,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49332152",
+        "author": "snikeris",
+        "type": "comment",
+        "title": null,
+        "text": "What properties make a language more LLM-friendly? I've found Claude will readily make use of a REPL when available.",
+        "url": "https://news.ycombinator.com/item?id=49332152",
+        "points": null,
+        "numComments": null,
+        "storyId": 49325384,
+        "createdAt": "2026-08-17T15:00:20Z",
+        "createdAtUnix": 1786978820,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49331579",
+        "author": "__MatrixMan__",
+        "type": "comment",
+        "title": null,
+        "text": "> I don’t think that a glitzy marketing campaign with a positive spin (which some have advocated that Anthropic do) is the way to win back that trust — at this point, saying that AI will cure cancer is more a cliche than it is inspiring, and most people think it is deceptive. The thing that will work is actually curing cancer.The way to do this is with large automated wetlabs running experiments and generating novel training data on the behavior of cells.It's with partnerships with governments and universities that educate the masses to the point where many of us are better able to contribute towards the project of growing the available knowledge in a useful way.It's with more NIH funding and fewer anti-science propagandists attacking that funding so they can sell their snake oil without pesky facts getting in the way.What's actually happening is our data centers are spewing carcinogens into places where humans will breathe them and we're lying to ourselves about how if we just keep going this way we'll cure cancer.Stop making the world less habitable by trying to squeeze another drop of model utility out of the existing knowledge, and start helping with the creation of new knowledge.It's going to take decades to ramp up. Let's turn the page and get started.",
+        "url": "https://news.ycombinator.com/item?id=49331579",
+        "points": null,
+        "numComments": null,
+        "storyId": 49325789,
+        "createdAt": "2026-08-17T14:27:35Z",
+        "createdAtUnix": 1786976855,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49331222",
+        "author": "nyku",
+        "type": "story",
+        "title": "Apple's App Tracking Transparency treated its own apps better than rivals",
+        "text": "Apple's App Tracking Transparency treated its own apps better than rivals",
+        "url": "https://www.bundeskartellamt.de/SharedDocs/Meldung/EN/Pressemitteilungen/2026/08_17_2026_Apple_ATTF.html",
+        "points": 240,
+        "numComments": 93,
+        "storyId": 49331222,
+        "createdAt": "2026-08-17T14:07:59Z",
+        "createdAtUnix": 1786975679,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49330318",
+        "author": "snkzhong",
+        "type": "story",
+        "title": "Show HN: RaisFast – A single-binary BaaS and headless CMS in Rust",
+        "text": "Show HN: RaisFast – A single-binary BaaS and headless CMS in Rust",
+        "url": "https://github.com/RaisFast/raisfast",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49330318,
+        "createdAt": "2026-08-17T13:14:38Z",
+        "createdAtUnix": 1786972478,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49328877",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Faceted search under active filters",
+        "text": "Faceted search under active filters",
+        "url": "https://medium.com/@s_nikolaev/faceted-search-under-active-filters-7768fb479ad8",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49328877,
+        "createdAt": "2026-08-17T10:40:37Z",
+        "createdAtUnix": 1786963237,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49328140",
+        "author": "nyku",
+        "type": "story",
+        "title": "The 7.2 kernel has been released",
+        "text": "The 7.2 kernel has been released",
+        "url": "https://lwn.net/Articles/1088991/",
+        "points": 5,
+        "numComments": 0,
+        "storyId": 49328140,
+        "createdAt": "2026-08-17T09:03:01Z",
+        "createdAtUnix": 1786957381,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49326947",
+        "author": "dns_snek",
+        "type": "comment",
+        "title": null,
+        "text": "I'm not taking anything as given. If it suffers from false positives then you have nothing to worry about because the signal won't have any merit -- just like existing AI detectors today. If it doesn't suffer from false positives then you have nothing to worry about because your text won't be detected.",
+        "url": "https://news.ycombinator.com/item?id=49326947",
+        "points": null,
+        "numComments": null,
+        "storyId": 49250109,
+        "createdAt": "2026-08-17T05:47:51Z",
+        "createdAtUnix": 1786945671,
+        "intent": "bug"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49337275",
+        "author": "paimapi",
+        "type": "comment",
+        "title": null,
+        "text": "I was going to say, the acceptance of bottom-of-the-barrel and subsequent capital investment in SEO as some industry-standard practice has pretty much lowered our standards for writing and comprehensibility across the boardit probably doesn't help that the US education system is so deeply broken with how rooted it is in segregation-era practices [0][1][2]. the average gets dragged down quite a bit when some districts receive so much money that they're flying their Spell Bowl teams to nationals and putting them up in hotels while another one a few miles away can't afford to pay for textbooks. average reading levels suffer and consequently so too does the effort that people put into writing well and reading critically[0] https:&#x2F;&#x2F;www.shankerinstitute.org&#x2F;segfunding[1] https:&#x2F;&#x2F;www.jchs.harvard.edu&#x2F;research-areas&#x2F;working-papers&#x2F;s...[2] https:&#x2F;&#x2F;edlawcenter.org&#x2F;research&#x2F;the-color-of-opportunity&#x2F;",
+        "url": "https://news.ycombinator.com/item?id=49337275",
+        "points": null,
+        "numComments": null,
+        "storyId": 49336573,
+        "createdAt": "2026-08-17T20:36:33Z",
+        "createdAtUnix": 1786998993,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49336903",
+        "author": "frollogaston",
+        "type": "comment",
+        "title": null,
+        "text": "It's easy from an armchair to say things like they should just get more capacity, or they should segregate free repos onto other servers. But maybe they are doing what you're thinking, and with that churn they get mistakes that cause outages, esp dealing with legacy systems. I've been there (not at GitHub or MSFT).",
+        "url": "https://news.ycombinator.com/item?id=49336903",
+        "points": null,
+        "numComments": null,
+        "storyId": 49330597,
+        "createdAt": "2026-08-17T20:12:33Z",
+        "createdAtUnix": 1786997553,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49335741",
+        "author": "adolph",
+        "type": "comment",
+        "title": null,
+        "text": "The thing about the EcoFlow Stream is that has things like phase alignment which allows it to be plugged directly into a household outlet without transfer switches to segregate grid phase from the phase of power created by the V2X inverter's phase. It also handles solar input.I suppose that future V2X systems will incorporate direct plug-in tech, but note the transfer switch used by the system in the video.",
+        "url": "https://news.ycombinator.com/item?id=49335741",
+        "points": null,
+        "numComments": null,
+        "storyId": 49333932,
+        "createdAt": "2026-08-17T18:44:32Z",
+        "createdAtUnix": 1786992272,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49335692",
+        "author": "ssl-3",
+        "type": "comment",
+        "title": null,
+        "text": "Just because it's the real world. :)If things aren't segregated and the power goes off while I'm cooking, the aircon is running, the water heater is doing its thing, or whatever, then: I exceed 3kW.3kW is the maximum that the device can supply. If load exceeds maximum, then something will (must) fail.Hopefully it fails gracefully, but I mean: I've been married before and I understand how terrific and fantastic it can be when things go slightly wrong at home when I'm not around to address them. The less Rube Goldberg my creations are, the more peaceful my life is.(None of this modern name-brand grid-tied stuff is any particular danger to linemen. It won't output anything on those terminals if it doesn't have an AC waveform to synchronize with.)",
+        "url": "https://news.ycombinator.com/item?id=49335692",
+        "points": null,
+        "numComments": null,
+        "storyId": 49333932,
+        "createdAt": "2026-08-17T18:40:39Z",
+        "createdAtUnix": 1786992039,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49335228",
+        "author": "croemer",
+        "type": "comment",
+        "title": null,
+        "text": "Why do you need to segregate them? Can't you switch the rest off? Or is the problem that otherwise you'd supply neighbors as well?",
+        "url": "https://news.ycombinator.com/item?id=49335228",
+        "points": null,
+        "numComments": null,
+        "storyId": 49333932,
+        "createdAt": "2026-08-17T18:11:12Z",
+        "createdAtUnix": 1786990272,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49334798",
+        "author": "ssl-3",
+        "type": "comment",
+        "title": null,
+        "text": "And the proposed battery solution only works at up to 3kW. My electric range uses more than that, and my water heater, clothes dryer, and aircon each come close.And, sure: I can get by very well with refrigeration, networking, computing and&#x2F;or TV, and lights during a power outage. But those loads need to be segregated, or it just doesn't work. That adds more expense.And since those segregated loads don't even come anywhere near 3kW, it isn't clear to me how I'm to be maximizing my local use of surplus power events.There are grid-interactive battery solutions from companies like EG4 that can go betwixt the entire house and its grid connection, but this isn't it.",
+        "url": "https://news.ycombinator.com/item?id=49334798",
+        "points": null,
+        "numComments": null,
+        "storyId": 49333932,
+        "createdAt": "2026-08-17T17:42:01Z",
+        "createdAtUnix": 1786988521,
+        "intent": "bug"
+      },
+      {
+        "objectId": "49334487",
+        "author": "jurassic",
+        "type": "comment",
+        "title": null,
+        "text": "Today everyone's talking about the availability problems, but GitHub has a much bigger problem which is that its way of modeling work is not aligned with how people need to work with agents. I think the social value of GitHub has always been really overblown, and now it's actually an Achilles heel.Now that we know prompt injection is such a massive risk, it seems insane to allow members of the public to leave comments on issues and pull requests that your agents may see. Which means the way that open source interacts with the public needs to fundamentally change away from the open GitHub model and towards a model of trusted contribution only. Feedback from the public has to come through carefully monitored channels that we can be sure our agents are not gonna pick up and run with. Public comment has to be kept totally segregated from our trusted work queue, which is how many people treat GitHub issues. We just simply can't have people, including malicious actors, able to drop a comment any and everywhere they want. I'm honestly astonished that GitHub hasn't even taken the most basic step of allowing you to create a read-only public repository with no commenting functionality.",
+        "url": "https://news.ycombinator.com/item?id=49334487",
+        "points": null,
+        "numComments": null,
+        "storyId": 49333728,
+        "createdAt": "2026-08-17T17:21:14Z",
+        "createdAtUnix": 1786987274,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49333789",
+        "author": "throwawaypath",
+        "type": "comment",
+        "title": null,
+        "text": "modern america's education pipeline is seriously corrupted and was corrupted on purpose to prevent social classes (ie, Whites, Asians, Jews) from excelling. Most of this stems from the 10's postmodernism and what should be called the \"woke\" affect, where white people, rather than allow meritocracy and education flourish, filled these classrooms with unqualified students, ruining the public asset for fear of being called racist.Instead of allowing races and women into the public benefits sphere, they slowly dismantled the social safetynet.In the specific instance for education, pushing state funding onto the state income taxes and school districts ensured rich areas would continue to fund impoverished schools and as the decades wore on, this ballooning of budgets bled into it's surroundings and then the dismantling of merit as per-head attendence started via magnet, charter schools and now school voucher programs for private schools and the rest.This is a pipeline designed to punish society for perceived racism. this is \"critical race theory\" in the next 5 decades.You can blame it on leftist culture, but that's just the indirect cause of fundamentally desociallizing&#x2F;devaluing public assets. You can make a direct association, also, with the rise of the DEI class as another attack on normalzing this type of segregation without laws.",
+        "url": "https://news.ycombinator.com/item?id=49333789",
+        "points": null,
+        "numComments": null,
+        "storyId": 49320803,
+        "createdAt": "2026-08-17T16:35:05Z",
+        "createdAtUnix": 1786984505,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49326927",
+        "author": "Drupon",
+        "type": "comment",
+        "title": null,
+        "text": "Thought terminating cope from people unwilling to accept that they live in a nation full of cruel oinking swine, enough to control the government at the moment. No, they must be foreign assets. Thinking that way makes it easier to ignore the fact that the American individualist (read: selfish and cruel) ideology is baked into every aspect of the country's propaganda. Much easier to ignore it, write hagiographies that have the greed that drove the smugglers and wealthy elite to found this country's morals replaced by rapping stage actors. Craft narratives that the crumbling of the fine character of a nation practicing racial segregation until only half a century ago is actually the crafty infiltration of the savage slavic mind.",
+        "url": "https://news.ycombinator.com/item?id=49326927",
+        "points": null,
+        "numComments": null,
+        "storyId": 49325159,
+        "createdAt": "2026-08-17T05:42:44Z",
+        "createdAtUnix": 1786945364,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49326592",
+        "author": "bananaboy",
+        "type": "comment",
+        "title": null,
+        "text": "Same here, I played a lot of LORD! Only a little bit of BRE. Incidentally the author of LORD Seth Robinson continues making games long after LORD. I think he’s semiretired now but he has been working on an ai-coded photoshop clone https:&#x2F;&#x2F;github.com&#x2F;SethRobinson&#x2F;Patchy",
+        "url": "https://news.ycombinator.com/item?id=49326592",
+        "points": null,
+        "numComments": null,
+        "storyId": 49231418,
+        "createdAt": "2026-08-17T04:36:50Z",
+        "createdAtUnix": 1786941410,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [
+      {
+        "objectId": "49338461",
+        "author": "rowbin",
+        "type": "comment",
+        "title": null,
+        "text": "Can recommend https:&#x2F;&#x2F;codefloe.com",
+        "url": "https://news.ycombinator.com/item?id=49338461",
+        "points": null,
+        "numComments": null,
+        "storyId": 49331033,
+        "createdAt": "2026-08-17T22:20:59Z",
+        "createdAtUnix": 1787005259,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49336343",
+        "author": "jeremyjh",
+        "type": "comment",
+        "title": null,
+        "text": "Agreed. Just moved some of my projects to codefloe.com (Forgejo) this weekend. FYI - it provides a lot more than a link to git.",
+        "url": "https://news.ycombinator.com/item?id=49336343",
+        "points": null,
+        "numComments": null,
+        "storyId": 49330597,
+        "createdAt": "2026-08-17T19:27:50Z",
+        "createdAtUnix": 1786994870,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49335253",
+        "author": "fatterypt",
+        "type": "comment",
+        "title": null,
+        "text": "For a forgejo host, check codefloe.com if what you need is a place to host personal projects or smaller teams. It’s been rock solid and it is now the default choice for anything outside of work I’ll do.",
+        "url": "https://news.ycombinator.com/item?id=49335253",
+        "points": null,
+        "numComments": null,
+        "storyId": 49331033,
+        "createdAt": "2026-08-17T18:13:03Z",
+        "createdAtUnix": 1786990383,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49334317",
+        "author": "stock_toaster",
+        "type": "comment",
+        "title": null,
+        "text": "Codefloe[1] is another forjego (with some custom patches, I believe) hosted instance.[1]: https:&#x2F;&#x2F;codefloe.com",
+        "url": "https://news.ycombinator.com/item?id=49334317",
+        "points": null,
+        "numComments": null,
+        "storyId": 49331033,
+        "createdAt": "2026-08-17T17:08:55Z",
+        "createdAtUnix": 1786986535,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49332275",
+        "author": "tom1337",
+        "type": "comment",
+        "title": null,
+        "text": "> Warning: Failed to download action 'https:&#x2F;&#x2F;codeload.github.com&#x2F;'.> Error: Response status code does not indicate success: 429 (Too Many Requests).> Warning: Back off 19.714 seconds before retry.> Warning: Failed to download action 'https:&#x2F;&#x2F;codeload.github.com&#x2F;'.> Error: Response status code does not indicate success: 502 (Bad Gateway).> Warning: Back off 22.228 seconds before retry.> Error: Response status code does not indicate success: 429 (Too Many Requests).> Error: Failed to download archive 'https:&#x2F;&#x2F;codeload.github.com&#x2F;' after 3 attempts.Nice - even their own action runners are getting rate limited atm",
+        "url": "https://news.ycombinator.com/item?id=49332275",
+        "points": null,
+        "numComments": null,
+        "storyId": 49330597,
+        "createdAt": "2026-08-17T15:07:21Z",
+        "createdAtUnix": 1786979241,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": []
+  },
+  "painPoints": [
+    {
+      "phrase": "false positive",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49326947",
+          "url": "https://news.ycombinator.com/item?id=49326947",
+          "snippet": "I'm not taking anything as given. If it suffers from false positives then you have nothing to worry about because the signal won't have any merit -- just like existing AI detectors today. If it doesn'"
+        }
+      ]
+    },
+    {
+      "phrase": "false positives",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49326947",
+          "url": "https://news.ycombinator.com/item?id=49326947",
+          "snippet": "I'm not taking anything as given. If it suffers from false positives then you have nothing to worry about because the signal won't have any merit -- just like existing AI detectors today. If it doesn'"
+        }
+      ]
+    },
+    {
+      "phrase": "doesn't work",
+      "count": 1,
+      "examples": [
+        {
+          "objectId": "49334798",
+          "url": "https://news.ycombinator.com/item?id=49334798",
+          "snippet": "And the proposed battery solution only works at up to 3kW. My electric range uses more than that, and my water heater, clothes dryer, and aircon each come close.And, sure: I can get by very well with "
+        }
+      ]
+    }
+  ],
+  "actionItems": []
+}

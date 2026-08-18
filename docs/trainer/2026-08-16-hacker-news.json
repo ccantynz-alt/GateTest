@@ -1,0 +1,247 @@
+{
+  "generatedAt": "2026-08-16T03:49:23.916Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 15,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 7,
+      "SonarQube": 1,
+      "Semgrep": 2,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 2,
+      "Checkmarx": 3
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49315318",
+        "author": "fluoridation",
+        "type": "comment",
+        "title": null,
+        "text": "You can still sell snake oil that's purported to improve ECGs.",
+        "url": "https://news.ycombinator.com/item?id=49315318",
+        "points": null,
+        "numComments": null,
+        "storyId": 49314403,
+        "createdAt": "2026-08-15T23:36:14Z",
+        "createdAtUnix": 1786836974,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49315272",
+        "author": "Aerroon",
+        "type": "comment",
+        "title": null,
+        "text": ">How many ECGs can you sell vs how many other snake-oil products?A lot, probably. You could sell people on the idea that it should be a part of your yearly health screening.\"And if you really care about your health you should do them every 3 months to catch problems early!\"or some such.",
+        "url": "https://news.ycombinator.com/item?id=49315272",
+        "points": null,
+        "numComments": null,
+        "storyId": 49314403,
+        "createdAt": "2026-08-15T23:29:16Z",
+        "createdAtUnix": 1786836556,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49315200",
+        "author": "sscaryterry",
+        "type": "comment",
+        "title": null,
+        "text": "How many ECGs can you sell vs how many other snake-oil products? :)(Edit: This is intended to be sarcastic. I agree 100% with the comment)(Edit 2: Added the smiley face)",
+        "url": "https://news.ycombinator.com/item?id=49315200",
+        "points": null,
+        "numComments": null,
+        "storyId": 49314403,
+        "createdAt": "2026-08-15T23:17:59Z",
+        "createdAtUnix": 1786835879,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49313208",
+        "author": "forestrywat",
+        "type": "comment",
+        "title": null,
+        "text": "Alzheimer's is tricky. The person who is consenting to the procedure may not be the person in the OR. And both parties are vulnerable to scams and snake oil. This procedure needs studies, so there's a clear rate of success we can understand and communicate.",
+        "url": "https://news.ycombinator.com/item?id=49313208",
+        "points": null,
+        "numComments": null,
+        "storyId": 49312008,
+        "createdAt": "2026-08-15T18:52:19Z",
+        "createdAtUnix": 1786819939,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49311786",
+        "author": "lifeisstillgood",
+        "type": "comment",
+        "title": null,
+        "text": "The example of “transcibe the initial project discussion, turn that into BDD and that makes the rails to guide the AI is … either brilliant and insightful or a snake eating it’s own tail.I think it has to be worth a try though…",
+        "url": "https://news.ycombinator.com/item?id=49311786",
+        "points": null,
+        "numComments": null,
+        "storyId": 49310495,
+        "createdAt": "2026-08-15T16:15:52Z",
+        "createdAtUnix": 1786810552,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49311096",
+        "author": "ecshafer",
+        "type": "comment",
+        "title": null,
+        "text": "The wonderful book \"Rise and Kill First\" is a history of Israeli assassinations, with their policy of going after the \"head of the snake\". There are some interesting sections on how Israel used assassination to inhibit missile programs in the Middle East, including Egypt. Its a pretty easy read despite being long.",
+        "url": "https://news.ycombinator.com/item?id=49311096",
+        "points": null,
+        "numComments": null,
+        "storyId": 49271382,
+        "createdAt": "2026-08-15T14:53:56Z",
+        "createdAtUnix": 1786805636,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49309658",
+        "author": "futevolei",
+        "type": "comment",
+        "title": null,
+        "text": "Yeah you can do that. I’m not an electrician, I was raised in a family with multiple union electricians though so I know enough to be dangerous. You would need a new “home run” cable from the outlet to your main panel and this assumes your panel has space for another breaker. Snaking that cable through and stapling it so there are no loose wires will probably require breaking drywall along the path. As for the existing wires, I think best case would be if the outside outlet was the last outlet in the circuit. Then you can just disconnect them from the plug and cap them off and label as abandoned. If it’s not the last outlet but rather in between then I think you need to snake new wire to reconnect the outlets on both sides directly but not sure.",
+        "url": "https://news.ycombinator.com/item?id=49309658",
+        "points": null,
+        "numComments": null,
+        "storyId": 49101849,
+        "createdAt": "2026-08-15T11:20:39Z",
+        "createdAtUnix": 1786792839,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [
+      {
+        "objectId": "49309412",
+        "author": "ylynbuilds",
+        "type": "comment",
+        "title": null,
+        "text": "It depends. Since I started coding with AI, I rarely review the code for my personal projects — I only run the code-review skill on critical features. But for internal company projects, we still run a strict code review tool, SonarQube, at build&#x2F;release time to check code quality and security.",
+        "url": "https://news.ycombinator.com/item?id=49309412",
+        "points": null,
+        "numComments": null,
+        "storyId": 49298901,
+        "createdAt": "2026-08-15T10:30:06Z",
+        "createdAtUnix": 1786789806,
+        "intent": "neutral"
+      }
+    ],
+    "Semgrep": [
+      {
+        "objectId": "49316534",
+        "author": "groundzeros2015",
+        "type": "comment",
+        "title": null,
+        "text": "No we don't. Public schools are incentivized not to help high performers. It actually hurts their metrics and budget. The widespread gifted&#x2F;talented experience in public school ended in the late 90s.The actual intelligence segregation is self-selected. PMC parents live together in the same neighborhoods. Whether you believe in genetic or social factors, the smart kids come from here.In the 80s and 90s there was an educational culture that believed in finding overlooked geniuses regardless of where they are from. That narrative is completely dead. All institutions expect kids to come prepared with a resume from their youth, and have few avenues for identifying talent that doesn't meet their mold.",
+        "url": "https://news.ycombinator.com/item?id=49316534",
+        "points": null,
+        "numComments": null,
+        "storyId": 49312845,
+        "createdAt": "2026-08-16T03:06:20Z",
+        "createdAtUnix": 1786849580,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49309095",
+        "author": "wizzwizz4",
+        "type": "comment",
+        "title": null,
+        "text": "In the US, where race is entirely defined by skin pigmentation and there's heavy segregation (\"redlining\") of living quarters, sure: databases aren't necessary. But in places where race is defined by heritage or culture, things which can be disguised by the targets of a regime, these databases are a vital part of any serious ethnic cleansing operation. I don't remember the statistic in IBM and the Holocaust that compares Jew survival rates in occupied countries with versus without digitised censuses, but the difference was stark.",
+        "url": "https://news.ycombinator.com/item?id=49309095",
+        "points": null,
+        "numComments": null,
+        "storyId": 49307592,
+        "createdAt": "2026-08-15T09:29:47Z",
+        "createdAtUnix": 1786786187,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [
+      {
+        "objectId": "49314074",
+        "author": "xX_Hacker_Xx",
+        "type": "comment",
+        "title": null,
+        "text": "there is a AI designed drug for hair loss that i know of.its slow-release oral minoxidil formulation called MINX. AI helped with the formulation [1].its in in similar category as VDPHL01. Hundreds of millions if not a billion dollars has been invested into Veradermics, and their main product is VDPHL01 (also an extended-release oral formulation).[1] https:&#x2F;&#x2F;x.com&#x2F;anagenxyz&#x2F;status&#x2F;2071601868841595082",
+        "url": "https://news.ycombinator.com/item?id=49314074",
+        "points": null,
+        "numComments": null,
+        "storyId": 49313367,
+        "createdAt": "2026-08-15T20:33:33Z",
+        "createdAtUnix": 1786826013,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49313119",
+        "author": "breadzeppelin__",
+        "type": "comment",
+        "title": null,
+        "text": "I've been working on generating a large code base for the last couple of weeks. Finally got around to generating a sort of code-duplication report and have spent the last week just having it de-duplicating logic that had been strewn all over the place (eg 11 different functions all doing date math to add x days to a date). dozens of items that had each been similar functions duplicated numerous times. crazy. (opus-5-utracode)",
+        "url": "https://news.ycombinator.com/item?id=49313119",
+        "points": null,
+        "numComments": null,
+        "storyId": 49312845,
+        "createdAt": "2026-08-15T18:38:47Z",
+        "createdAtUnix": 1786819127,
+        "intent": "neutral"
+      }
+    ],
+    "Checkmarx": [
+      {
+        "objectId": "49311679",
+        "author": "cionutd",
+        "type": "comment",
+        "title": null,
+        "text": "Hi HN, I built CheckMate after I was diagnosed with ADHD recently, and it made me rethink what I actually wanted from one of these apps. CheckMate turns habits into quests. You earn XP for completing them, and you can invite friends into co-op raids where everyone’s check-ins damage a boss or grow something together. You can add your friends and they can cheer you on if you check in a quest. I did not want for users to feel the pressure of streaks so I don t have those, it only counts up when you return you are greeted with a welcome message. The progress you already made stays there. There is no HP loss or reset waiting when you return. I’m building it on my own with Expo, React Native, SQLite, Supabase, and Realtime. It is available on iOS and Android. And I have been iterating on it for about 100 days since launch. You can track all the changes made in the website. There are also shared focus sessions and a private journal with trends, I wanted the app to be able to accommodate all my needs. It does require an account because of the multiplayer features. I’d especially like feedback on whether the raids feel motivating or whether they introduce another kind of pressure.Tnx for reading!",
+        "url": "https://news.ycombinator.com/item?id=49311679",
+        "points": null,
+        "numComments": null,
+        "storyId": 49311678,
+        "createdAt": "2026-08-15T16:01:30Z",
+        "createdAtUnix": 1786809690,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49311678",
+        "author": "cionutd",
+        "type": "story",
+        "title": "CheckMate: An RPG inspired habit tracker with quests, co-op raids, Journal",
+        "text": "CheckMate: An RPG inspired habit tracker with quests, co-op raids, Journal",
+        "url": "https://checkmate-daily.com/",
+        "points": 1,
+        "numComments": 1,
+        "storyId": 49311678,
+        "createdAt": "2026-08-15T16:01:30Z",
+        "createdAtUnix": 1786809690,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49310143",
+        "author": "6ty6thhDJEHDE",
+        "type": "comment",
+        "title": null,
+        "text": "This is easy for Amp Code to do but not so easy for other people with different types of businesses.I started at a business doing millions of customer transactions worth 100s of millions of dollars and their whole process was a complete YOLO Playground. As a result they lost money, people (it is high stress if everything breaks all the time) and most importantly: customer confidence.What brought back some sanity? The basics for a mature business: deployment reviews and approvals, removing prod access, code reviews, QA in the loop. Release notes. All these things come up in audits. In SOC1 because the customer wants assurances, in SOC2 because we need to show prospects that we are serious and mature enough to get their business.Please don't think it is just theatre. If you get away with bending the rules to the bare minimum to get a checkmark then good for you and all the power to you.But if you are running a business where you are dealing with critical systems, PII, customer data, money, etc. Well maybe being very strict about having good change management policies in place will actually help you mature.That maturity will also allow you to get customers. Because guess what, most customers who are going to trust you with their business have some expectations about how you run your ship.I wish my company was as \"simple\" as Amp. No disrespect, I love what they do. But it doesn't really look like the kind of business where you get in serious trouble for using a minimal process with high trust in people.Think about that when you read this. What could go wrong in your business. Don't project Amp's process on yours if your business is different.",
+        "url": "https://news.ycombinator.com/item?id=49310143",
+        "points": null,
+        "numComments": null,
+        "storyId": 49308073,
+        "createdAt": "2026-08-15T12:48:52Z",
+        "createdAtUnix": 1786798132,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

@@ -1,0 +1,191 @@
+{
+  "generatedAt": "2026-08-15T03:39:37.459Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 11,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 3,
+      "SonarQube": 0,
+      "Semgrep": 3,
+      "CodeQL": 2,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 1,
+      "Checkmarx": 2
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49301563",
+        "author": "guypod",
+        "type": "comment",
+        "title": null,
+        "text": "(I'm the founder of Snyk and Tessl, apply what biases you wish)I think we're mixing three optimizations: higher success rate, higher consistency and higher efficiency.Success rate is about building confidence the agent can succeed. The hardest part here is defining what success is in the first place, and creating evals that help you measure it. Consistency is about guardrails. The harness shines here, as it takes control away from the model, moving it to hooks that force certain paths, or require the use of deterministic tools for certain steps. Given consistency and success rate, you can work on efficiency. You can save cognition (tokens) by moving work to tools, try to use a cheaper model, etc.These three build on one another, at least if you want to scale them. You can't improve consistency if you don't define success, and you can't add efficiency if you're not consistent.",
+        "url": "https://news.ycombinator.com/item?id=49301563",
+        "points": null,
+        "numComments": null,
+        "storyId": 49164896,
+        "createdAt": "2026-08-14T17:06:01Z",
+        "createdAtUnix": 1786727161,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49298274",
+        "author": "snake_doc",
+        "type": "comment",
+        "title": null,
+        "text": "lol what no, AI competition is super competitive in China; bytedance has 50% of the inference market and mostly serves from outside of Chinahttps:&#x2F;&#x2F;www.bloomberg.com&#x2F;news&#x2F;articles&#x2F;2026-06-17&#x2F;microsoft...Bytedance which runs China’s most popular Doubao AI chatbot; is spending $70B in CapEx this year, most of it outside of China (Malaysia, Thailand, Brazil, etc; and they are allowed to lease NVIDIA chips). This is roughly 50% of Microsoft CapEx.https:&#x2F;&#x2F;www.tomshardware.com&#x2F;pc-components&#x2F;gpus&#x2F;chinas-byted...",
+        "url": "https://news.ycombinator.com/item?id=49298274",
+        "points": null,
+        "numComments": null,
+        "storyId": 49296627,
+        "createdAt": "2026-08-14T13:16:39Z",
+        "createdAtUnix": 1786713399,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49296273",
+        "author": "Borkdude",
+        "type": "story",
+        "title": "Multi-Player Snake",
+        "text": "Multi-Player Snake",
+        "url": "https://multi-snake.michielborkent.nl/",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49296273,
+        "createdAt": "2026-08-14T09:05:11Z",
+        "createdAtUnix": 1786698311,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49300530",
+        "author": "Bridged7756",
+        "type": "comment",
+        "title": null,
+        "text": "Local man refutes science because it disagrees with his beliefs. \"I know I'm right, it's {X entity} trying to brainwash us\".Historically women couldn't vote, and black people were segregated and worse. I guess those things were \"created and forced into the lexicon by political activists\" terms back them I guess.The core thing is that one term humanizes a group of people that contributes to communities, pay taxes, the other dehumanizes them and opens the gate to justifying well, criminalization and prosecuting. You decided to choose the later.",
+        "url": "https://news.ycombinator.com/item?id=49300530",
+        "points": null,
+        "numComments": null,
+        "storyId": 49298894,
+        "createdAt": "2026-08-14T15:56:28Z",
+        "createdAtUnix": 1786722988,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49299575",
+        "author": "raverbashing",
+        "type": "comment",
+        "title": null,
+        "text": "You'd need a segregated entry for B45, or just omit it entirely",
+        "url": "https://news.ycombinator.com/item?id=49299575",
+        "points": null,
+        "numComments": null,
+        "storyId": 49297801,
+        "createdAt": "2026-08-14T14:57:50Z",
+        "createdAtUnix": 1786719470,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49297313",
+        "author": "seantheviking",
+        "type": "comment",
+        "title": null,
+        "text": "What turned out as something to solve internal engineering problems at Kerno has now taken a life of it's own.Today we are releasing HarHQ, a way for you to implement, run and visualise your entire AI software factory in under 10 minutes. It's built on top of .HAR, an open-harness to run fleets of agents securely.Chatting with CTO&#x2F;VP of Engineering from startups to F100, the challenges of factory build out are the same (just different scales):1. How do I ensure agents are not shipping things that break compliance, policies and features, without chewing up more and more senior engineering hours... it's not just bugs, it's the entire business chain..2. 84% of devs use AI. 3% trust it.... how do I scale trust&#x2F;governance, so my junior devs act as a responsibly as my senior .. [or just automate this into the agent workflow]3. How do I understand the RoAI... this is not about model cost optimisation most people are still trying to understand if we are spending money&#x2F;time building the right things.... and have better answers for the CFOSimply put: Governance | Velocity with verification within the agent session | Costs&#x2F;usageWe have been using Har to solve this. Results so far: - Throughput per engineer up 4x - PR reviews have accelerated 2x because verification artifacts live on the PR and happen in agent session - No more breaking security policies ... we have semgrep, trivy and kerno running in the verfication pipelines - I can understand my cost per work unit, so the team is conscious of where they are spending tokensIt's open-source, adapts to your existing workflows, and is customisable. Works on any stack (web, mobile.. the lot)Would love to hear your feedbackCheck out: https:&#x2F;&#x2F;lnkd.in&#x2F;d-ZsecRr",
+        "url": "https://news.ycombinator.com/item?id=49297313",
+        "points": null,
+        "numComments": null,
+        "storyId": 49297312,
+        "createdAt": "2026-08-14T11:25:38Z",
+        "createdAtUnix": 1786706738,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [
+      {
+        "objectId": "49297022",
+        "author": "ingve",
+        "type": "story",
+        "title": "Scratch a simple data model, find a complex one",
+        "text": "Scratch a simple data model, find a complex one",
+        "url": "https://codeblog.jonskeet.uk/2026/08/14/scratch-a-simple-data-model-find-a-complex-one/",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49297022,
+        "createdAt": "2026-08-14T10:50:36Z",
+        "createdAtUnix": 1786704636,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49295941",
+        "author": "CodeLieutenant",
+        "type": "story",
+        "title": "Show HN: Native macOS SSH config manager with in-process tunnels",
+        "text": "Show HN: Native macOS SSH config manager with in-process tunnels",
+        "url": "https://www.sshmanager.app/",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49295941,
+        "createdAt": "2026-08-14T08:15:46Z",
+        "createdAtUnix": 1786695346,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [
+      {
+        "objectId": "49299824",
+        "author": "alexpotato",
+        "type": "comment",
+        "title": null,
+        "text": "> A 2025 Veracode report found that approximately 45% of AI-generated code samples failed security tests and contained critical vulnerabilitiesCo-worker of mine who was excellent at both system design AND coding and I were chatting about LLMS:Him: \"I guess coding will just be a hobby now\"Me: \"Coding def feels that way but software engineering as a profession is still alive and well.\"",
+        "url": "https://news.ycombinator.com/item?id=49299824",
+        "points": null,
+        "numComments": null,
+        "storyId": 49297637,
+        "createdAt": "2026-08-14T15:13:24Z",
+        "createdAtUnix": 1786720404,
+        "intent": "neutral"
+      }
+    ],
+    "Checkmarx": [
+      {
+        "objectId": "49300877",
+        "author": "philistine",
+        "type": "comment",
+        "title": null,
+        "text": "DO IT! They probably do not even consider the idea that they would lose customers due to UX. Lower rates, promotions, change of circumstances, but there probably isn't a checkmark in their loss of customer forms that include we made our user interface worse.",
+        "url": "https://news.ycombinator.com/item?id=49300877",
+        "points": null,
+        "numComments": null,
+        "storyId": 49299222,
+        "createdAt": "2026-08-14T16:20:44Z",
+        "createdAtUnix": 1786724444,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49298061",
+        "author": "Jamesbeam",
+        "type": "comment",
+        "title": null,
+        "text": "I understand why they do it.Every pound that makes it to America has the potential to kill thousands of Americans.But the way they try to solve this problem looks kinda dumb to me. This will just go as well as the three-week special operation in Iran.The people they kill are innocent, until proven guilty in front of a court.That is a core principle that we believe in if we are law-abiding citizens.Those Fishermen never had the chance to defend themselves in front of a court. Their crime was being born in the wrong place. I find that not sufficient to sentence them to death.Also you need to win the people over or they are going to fuck you. You don’t win the people over, you get Vietnam or Afghanistan.How do you win the people over, if everyone in the village those fishermen lived in knows you murdered their friends? People who simply had no choice to say no to the cartels for the sake of their families, who are now widows and orphans.Those poor Fishermen are really stuck between a rock and a hard place.What is most likely going to happen now is, those widows will turn to the cartels who now offer them food and support.Now those women say fuck the Americans. I will sit with my children on these drug boats until the day I die, to kill as many of them as possible. I am going to celebrate every American dying of an overdose. What do I have to lose? They already killed my husband, they can kill me as well.And that’s how the cartels will get women and children on these boats, and now what? It’s checkmate.A single video gets out how CIA covert operations kill innocent women and children on those boats, the cartels win.Those attacks are nothing more than stupid PR stunts and the CIA using these poor souls as guinea pigs for their drone shenanigans.It neither solves the cartels’ logistics nor the main problem. Americans fucking love their drugs.And as long as there is a lucrative black market, there will be people supplying it.",
+        "url": "https://news.ycombinator.com/item?id=49298061",
+        "points": null,
+        "numComments": null,
+        "storyId": 49295872,
+        "createdAt": "2026-08-14T12:53:29Z",
+        "createdAtUnix": 1786712009,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

@@ -1,0 +1,147 @@
+{
+  "generatedAt": "2026-08-13T04:51:22.149Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 8,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 6,
+      "SonarQube": 0,
+      "Semgrep": 0,
+      "CodeQL": 1,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49281648",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Install Manticore Search with one command",
+        "text": "Install Manticore Search with one command",
+        "url": "https://medium.com/@s_nikolaev/install-manticore-search-with-one-command-8ab5ba07a06b",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49281648,
+        "createdAt": "2026-08-13T03:57:58Z",
+        "createdAtUnix": 1786593478,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49281500",
+        "author": "wiseowise",
+        "type": "comment",
+        "title": null,
+        "text": "> Like what other profession markets themselves as \"Hey, our job is so easy that any schmuck off the street can enter the career with 4 months of training.\"Any profession with scammers, con artists, and snake-oil sellers?",
+        "url": "https://news.ycombinator.com/item?id=49281500",
+        "points": null,
+        "numComments": null,
+        "storyId": 49271994,
+        "createdAt": "2026-08-13T03:34:20Z",
+        "createdAtUnix": 1786592060,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49281278",
+        "author": "snaking0776",
+        "type": "comment",
+        "title": null,
+        "text": "I’m not so sure this is trivial and strongly depends on the biases of the agents that the group is composed of. It seems like some species of animals (humans, ants, wasps, etc) seem to select for intelligence in group settings more than individual intelligence. One of my favorite facts about human evolution is that in the process of becoming homo sapiens our brains actually shrunk relative to our ancestors possibly due to our reliance on social ties and specialization allowing for each individual unit to be “dumber” while the collective becomes more intelligent than any individual ever was.It’s not apparent to me that current LLM’s have the right biases for a trivial unit of “more LLM” = smarter. It seems apparent that LLM’s are under many metrics more “intelligent” than the average person but they still don’t rival our corporations or collectives in terms of intelligence and I don’t see them being plug in replacements for humans and maintaining the benefits of the collective structures yet. Not impossible but definitely not trivial in my mind. We and our cultures evolved to work together and the modern world is the result of the emergent structure that resulted.As a plug my favorite field relating to this is called stigmergy and basically describes how individual units like ants build intelligent collectives that are far greater than the sum of their parts.",
+        "url": "https://news.ycombinator.com/item?id=49281278",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270022,
+        "createdAt": "2026-08-13T02:52:58Z",
+        "createdAtUnix": 1786589578,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49278111",
+        "author": "TitaRusell",
+        "type": "comment",
+        "title": null,
+        "text": "There is a story of my aunt who got bitten by a snake when camping.She was foolish enough not to take out travel insurance. There was no way she was getting a medevac so a park ranger watched over her for a few days while her body was fighting death.This is why you should always have travel insurance because outside of Europe the first thing a doctor asks for is a credit card.",
+        "url": "https://news.ycombinator.com/item?id=49278111",
+        "points": null,
+        "numComments": null,
+        "storyId": 49274960,
+        "createdAt": "2026-08-12T20:27:37Z",
+        "createdAtUnix": 1786566457,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49274779",
+        "author": "Grombobulous",
+        "type": "comment",
+        "title": null,
+        "text": "Business is not bound to any sort of freedom of speech. There is no such thing, it does not exist. The first amendment covers government actions only.If I owned a social media network, I wouldn’t let Nazis, MLM peddlers, transphobes, pro-gun advocates, or anti-vaxxers, among others, on my network. That’s where my moral compass lies.Now, you might say that’s unfair, that’s not an open forum. I’m not being open-minded to other ideas or freedom-oriented.You don’t have to agree with me. Go use someone else’s product.The thing is, Zuckerberg has uniquely overarching control over Meta in ways that most public companies don’t. He has controlling special founder’s votes, he is the guy in charge, equivalent to a dictatorship.That means that anything Meta allows on their platform is a reflection of Zuckerberg himself. Whether or not that’s how the eyes of the law views it is very different than how it is from a moralistic “who is responsible?” angle.Zuckerberg can stop all hate and anger on his platform in one business meeting. Plenty of other platforms (public and private companies) including HN don’t allow the kind of conduct that Facebook and Instagram allow wholeheartedly.He chooses not to hold high standards for his platform because anger, fear, snake oil sales, and purposeful disinformation campaigns, among other shady business ventures, are profitable.And here we are, debating whether he and his company are responsible. After all, they just provide a neutral platform, right? If I get hit by an Amazon truck, it’s not their fault, that was a subcontractor! Companies enthusiastically create these mechanisms to detach themselves from the harm they bring.",
+        "url": "https://news.ycombinator.com/item?id=49274779",
+        "points": null,
+        "numComments": null,
+        "storyId": 49269818,
+        "createdAt": "2026-08-12T16:15:40Z",
+        "createdAtUnix": 1786551340,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49273291",
+        "author": "snk",
+        "type": "comment",
+        "title": null,
+        "text": "https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Timeline_of_historic_invention...",
+        "url": "https://news.ycombinator.com/item?id=49273291",
+        "points": null,
+        "numComments": null,
+        "storyId": 49271994,
+        "createdAt": "2026-08-12T14:50:42Z",
+        "createdAtUnix": 1786546242,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [],
+    "CodeQL": [
+      {
+        "objectId": "49274890",
+        "author": "codeulike",
+        "type": "comment",
+        "title": null,
+        "text": "Interested in this, but to work on an ipad that has youtube.com blocked via ScreenTime I imagine it probably wont work (unless you unblock youtube.com and the youtube becomes accessible via the browser). Unless they have found a way round this problem?",
+        "url": "https://news.ycombinator.com/item?id=49274890",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270881,
+        "createdAt": "2026-08-12T16:22:15Z",
+        "createdAtUnix": 1786551735,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49278395",
+        "author": "ymir_e",
+        "type": "story",
+        "title": "Show HN: Tmux-agent-switcher: see which Claude/Codex agents need your attention",
+        "text": "Since the start of this year I've coded pretty much exclusively by running multiple AI agents in parallel.Having tried a bunch of tools for managing them, I kept coming back to tmux. This is becaues I want to run them on a separate machine as I like being able to close my laptop, or even have long running tasks continue even if I board a flight without WiFi.So I built tmux-agent-switcher, a tmux plugin that gives me a better overview of all of them without replacing tmux as the core tech for managing processes on the server.Ctrl+n opens a sidebar showing windows across all sessions. The sidebar shows the agent's state as icons. After selecting an Idle session it also checkmarks it, so you get indicator if you've seen it or not. It also has Vim and \"number-based\" navigation styles.I didn't want to make a wrapper that would own how agents are launched, so I still run claude or codex normally. The plugin passively looks at tmux metadata, and visible terminal output to infer the agent state.There are downsides with this approach as UI changes or process name changes can break it. I will likely revisit it at some point to look at other approaches, but so far I haven't had any significant issues with it.I mentioned the project in another HN discussion recently and was a bit surprised 25 people starred it as it was just some tool I've been using that I hacked together. Regardless I figured I'd do a proper Show HN: https:&#x2F;&#x2F;github.com&#x2F;Ymirke&#x2F;tmux-agent-switcherI'm curious to hear what other people on here are using to run agents in the on a separate machine &#x2F; in the cloud.",
+        "url": "https://github.com/Ymirke/tmux-agent-switcher",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49278395,
+        "createdAt": "2026-08-12T20:53:14Z",
+        "createdAtUnix": 1786567994,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

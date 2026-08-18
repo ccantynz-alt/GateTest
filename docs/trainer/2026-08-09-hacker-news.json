@@ -1,0 +1,160 @@
+{
+  "generatedAt": "2026-08-09T04:18:10.196Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 9,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 8,
+      "SonarQube": 0,
+      "Semgrep": 0,
+      "CodeQL": 1,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 0
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49227740",
+        "author": "duxup",
+        "type": "comment",
+        "title": null,
+        "text": "That was the Gateway AnyKey keyboard:https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Gateway_AnyKey",
+        "url": "https://news.ycombinator.com/item?id=49227740",
+        "points": null,
+        "numComments": null,
+        "storyId": 49221220,
+        "createdAt": "2026-08-09T02:06:36Z",
+        "createdAtUnix": 1786241196,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49227138",
+        "author": "johnnyanmac",
+        "type": "comment",
+        "title": null,
+        "text": "I feel like that applies to all labor. labor is just business at ransom with productivity that they themselves cannot (or do not want) to do. If they could automate out humanity tomorrow, they would.In comes the snake oil salesmen telling them they can finally do this. Of course they will fall for the notion, even if they know it's not true. It's what they want oh so badly to be true.",
+        "url": "https://news.ycombinator.com/item?id=49227138",
+        "points": null,
+        "numComments": null,
+        "storyId": 49209539,
+        "createdAt": "2026-08-09T00:17:00Z",
+        "createdAtUnix": 1786234620,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49225033",
+        "author": "toit4wing",
+        "type": "comment",
+        "title": null,
+        "text": "So only the first video is marked: \"Made with AI Sounds or visuals were altered or fully generated\".I have seen this label before, I thought it meant that 'some' visuals were altered or generated. But it was shocking to me that the entire video was made by AI. The video of the researcher, his voice, all the visuals - all the snakes, the stitching together - everything is AI end to end. This is not \"Made with AI\", this is \"Made without a human\".And most such videos - the first few comments would clearly mark it as \"ai slop\". But these two videos there was no such comment. People seem to be engaging as if this video was completely human - or atleast it seems to me.Could be just my perception and maybe I am just catching upto how pervasive this all is.",
+        "url": "https://news.ycombinator.com/item?id=49225033",
+        "points": null,
+        "numComments": null,
+        "storyId": 49224311,
+        "createdAt": "2026-08-08T19:27:11Z",
+        "createdAtUnix": 1786217231,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49224971",
+        "author": "preisschild",
+        "type": "comment",
+        "title": null,
+        "text": "This is not an EU law anyways, this is snakeoil companies acting like having their data located in the EU will change who has access to it and will make it \"GDPR compliant\" (it wont since the CLOUD ACT still applies)",
+        "url": "https://news.ycombinator.com/item?id=49224971",
+        "points": null,
+        "numComments": null,
+        "storyId": 49223082,
+        "createdAt": "2026-08-08T19:21:18Z",
+        "createdAtUnix": 1786216878,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49222730",
+        "author": "riteshgharat",
+        "type": "story",
+        "title": "Show HN: TAMX – Personal Tamagotchi",
+        "text": "While scrolling reddit, I always find developer building cool stuffs using hardware. I want to build one for me... So, Meet TAMX: A pocket-sized ESP32 handheld. Wi-Fi tools, scientific calculator, AI chat, games, and a PowerPoint remote. Inspired by the classic Tamagotchi form factor.Features: • Wi-Fi Tools — Scan networks, monitor packets, or broadcast test beacons • AI Chat — Talk to Groq AI using an on-device QWERTY keyboard • Scientific Calculator — Expressions, linear&#x2F;quadratic solvers, graph plotter, modulo • Space News — Live headlines from the Spaceflight News API • Games — Snake, Pong, Dice • PPT Remote — Control PowerPoint on your laptop over Wi-FiI'd love feedback, feature suggestions, or contributions from the community!Github: https:&#x2F;&#x2F;github.com&#x2F;riteshgharat&#x2F;tamx Demo: https:&#x2F;&#x2F;riteshgharat.github.io&#x2F;tamx",
+        "url": "https://news.ycombinator.com/item?id=49222730",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49222730,
+        "createdAt": "2026-08-08T15:25:30Z",
+        "createdAtUnix": 1786202730,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49221423",
+        "author": "snake_doc",
+        "type": "comment",
+        "title": null,
+        "text": "> We can now generate a single 15-day forecast in less than a minute on a TPU, empowering forecasters to quickly evaluate the probability distribution of potentially devastating tail-risks.Crazy",
+        "url": "https://news.ycombinator.com/item?id=49221423",
+        "points": null,
+        "numComments": null,
+        "storyId": 49220126,
+        "createdAt": "2026-08-08T12:54:57Z",
+        "createdAtUnix": 1786193697,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49221389",
+        "author": "getfacl",
+        "type": "comment",
+        "title": null,
+        "text": "The author is a snake oil pusher so I don't expect anything reasonable or useful.",
+        "url": "https://news.ycombinator.com/item?id=49221389",
+        "points": null,
+        "numComments": null,
+        "storyId": 49221124,
+        "createdAt": "2026-08-08T12:51:29Z",
+        "createdAtUnix": 1786193489,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49220546",
+        "author": "snakaya",
+        "type": "story",
+        "title": "Show HN: Vibsync – One Shared Memory for Claude Code, Cursor and Codex (MCP)",
+        "text": "Show HN: Vibsync – One Shared Memory for Claude Code, Cursor and Codex (MCP)",
+        "url": "https://vibsync.com/",
+        "points": 3,
+        "numComments": 0,
+        "storyId": 49220546,
+        "createdAt": "2026-08-08T10:47:52Z",
+        "createdAtUnix": 1786186072,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [],
+    "CodeQL": [
+      {
+        "objectId": "49225061",
+        "author": "CoderLuii",
+        "type": "story",
+        "title": "Show HN: HolyCode Cloud – persistent Linux workstations for AI",
+        "text": "Show HN: HolyCode Cloud – persistent Linux workstations for AI",
+        "url": "https://holycode.cloud",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49225061,
+        "createdAt": "2026-08-08T19:29:51Z",
+        "createdAtUnix": 1786217391,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": []
+  },
+  "painPoints": [],
+  "actionItems": []
+}
