@@ -168,6 +168,20 @@ Full report: `docs/audits/2026-08-18-deep-audit.md`.
   "Nuclear"→"Forensic" in $399 deliverables; carried "120/120 green" replaced by
   a measured nightly self-scan; wp/web phantom Continuous cards removed.
 
+**Shipped later the same day against the sore points (Craig: "nailing the
+sore points matters the most"), commits 99c59379 + af22bc79:**
+- **Finding registry** (`src/core/finding-registry.js`): one defect = one
+  finding across modules (file:line:class dedupe, owning module keeps it),
+  ranked blocking → severity → confidence → exploitable class → concrete
+  location; runner emits `summary.findings`/`findingSummary`, console folds
+  duplicates, PR comment opens with "What matters (5 of N, ranked)" + folded/
+  held-back counts, per-module wall collapsed. NodeGoat: 9 eval reports → 3.
+- **Reachability-gated dependency alerts** (`src/core/dependency-reachability.js`):
+  only critical/high advisories in imported production dependencies block;
+  installed-unused warn, dev-only info, reason stated. NodeGoat: 137 → 15
+  blocking. Windows: npm audit's `2>/dev/null` made it "could not run" — fixed.
+- how-it-works "How we keep it quiet" section states all of it (sync rule).
+
 **Craig actions surfaced by the audit (Boss Rule / box-side):**
 1. `GATETEST_PRIVATE_KEY` on the box is still the doc placeholder → GitHub App
    auth dead (statuses, PR comments, private repos). KI #100.

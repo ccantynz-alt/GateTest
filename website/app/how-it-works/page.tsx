@@ -18,6 +18,33 @@ const LIMITS = [
   "No VSCode extension that runs in real time yet. Today's loop is push → CI → PR comment. Editor integration is on the list.",
 ];
 
+const QUIET_RULES = [
+  {
+    title: "One defect is one finding",
+    body: "When three modules flag the same line — say a tainted eval() seen by the taint tracer, the security scanner and code quality — you read it once, owned by the module with the most detail. Folded duplicates are counted and disclosed, never silently dropped.",
+  },
+  {
+    title: "Ranked by risk, budgeted to five",
+    body: "The PR comment opens with the five findings that matter most — blocking first, then severity, then confidence, exploitable classes before hygiene, a concrete file:line before an aggregate. Everything else is collapsed under it. Nobody scrolls a wall.",
+  },
+  {
+    title: "Dependency alerts that can actually hurt you",
+    body: "A CVE blocks only when it sits in a production dependency your source actually imports. Dev-only tooling and installed-but-unused packages are reported with the reason — \"pulled in only by devDependencies\" — and never turn the check red.",
+  },
+  {
+    title: "Errors need confidence to block",
+    body: "Every error carries a confidence score from path and source context. Below the threshold it is shown, not enforced, and the report says how many were held back. Rules your team keeps dismissing are softened automatically by the flywheel.",
+  },
+  {
+    title: "Environment failures are not your defects",
+    body: "If a tool cannot run where the scan runs — no lockfile, no browser, no test runner installed — that is reported as a skip with the reason. It never becomes a red X on your code.",
+  },
+  {
+    title: "Fragments, fixtures and vendored code are not pages",
+    body: "SEO, accessibility and layout rules run on full documents, not template partials; test fixtures, docs screenshots and compiled vendor CSS are recognised for what they are. Measured on real repositories, with a positive control for every rule so quiet never means muted.",
+  },
+];
+
 const DATA_FLOW = [
   { label: "Frontend", value: "Next.js 16 (App Router) + Tailwind 4. Server Components everywhere except where interactivity demands client." },
   { label: "Runtime",  value: "Node on our own managed host. Every request handler is stateless — no in-memory persistence between requests." },
@@ -150,6 +177,28 @@ export default function HowItWorksPage() {
           </div>
 
           <ModuleGrid />
+        </section>
+
+        {/* ============================================================
+            3b. HOW WE KEEP IT QUIET — the sore points, answered in the engine
+            (shipped 2026-08-18; every claim here is a tested code path)
+           ============================================================ */}
+        <section className="mb-24" aria-labelledby="quiet">
+          <h2 id="quiet" className="text-2xl sm:text-3xl font-bold mb-3">
+            How we keep it quiet
+          </h2>
+          <p className="text-white/55 max-w-3xl mb-8 leading-relaxed">
+            The loudest complaint about every scanner is noise. These are not settings you tune — they are how the
+            engine works by default.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {QUIET_RULES.map((q) => (
+              <div key={q.title} className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+                <h3 className="font-semibold text-white mb-1.5">{q.title}</h3>
+                <p className="text-sm text-white/55 leading-relaxed">{q.body}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* ============================================================
