@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/app/lib/site-url";
 
 type State =
@@ -112,7 +113,7 @@ export default function CheckoutSuccess() {
             <a className="underline" href={`mailto:${SUPPORT_EMAIL}?subject=Checkout%20session%20${encodeURIComponent(state.sessionId || "unknown")}`}>{SUPPORT_EMAIL}</a>{" "}
             with your Stripe receipt and we will start it by hand.
           </p>
-          <a href="/" className="px-5 py-2.5 rounded-xl text-sm font-bold border border-border">Back to GateTest</a>
+          <Link href="/" className="px-5 py-2.5 rounded-xl text-sm font-bold border border-border">Back to GateTest</Link>
         </div>
       </div>
     );

@@ -109,7 +109,7 @@ export async function runEngineForTier(input: EngineDispatchInput): Promise<Engi
       }
       // eslint-disable-next-line no-console
       console.warn(`[engine-dispatch] CLI engine returned 0 modules for ${owner}/${repo} (${tier}) — falling back to runTier`, cliResult.engineMeta || {});
-    } catch (err) {
+    } catch (err) { // error-ok — deliberate degradation: a CLI-engine crash falls back to the in-memory runTier below so the customer gets honest partial coverage, never nothing
       // eslint-disable-next-line no-console
       console.error(`[engine-dispatch] CLI engine crashed for ${owner}/${repo} (${tier}), falling back to runTier:`, err instanceof Error ? err.message : String(err));
     }

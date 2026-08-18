@@ -139,7 +139,7 @@ const LANGUAGE_SPECS = {
       // reaches it); the risk is eval of an expression/variable. The old
       // pattern flagged exactly the safe case (`binding.eval('@_out_buf')`
       // in sinatra) and missed the dangerous one.
-      { name: 'eval', pattern: /(?<![.\w])(?:instance_|class_|module_)?eval(?:\s*\(\s*|\s+)(?!['"])[A-Za-z_(\[@$:]/, severity: 'error',
+      { name: 'eval', pattern: /(?<![.\w])(?:instance_|class_|module_)?eval(?:\s*\(\s*|\s+)(?!['"])[A-Za-z_([@$:]/, severity: 'error',
         message: 'eval() of a non-literal expression — arbitrary code execution risk',
         suggestion: 'Refactor to call the target method directly; never eval user-controlled strings.' },
       { name: 'system-interp', pattern: /(system|`|exec)\s*\(?\s*["'][^"']*#\{/, severity: 'error',

@@ -689,7 +689,7 @@ UndefinedRefModule._readDeclaration = function (src, start) {
       // with one.
       const before = src.slice(start, i).replace(/\s+$/, '');
       const after = src.slice(i + 1, i + 200).replace(/^\s+/, '');
-      if (!/[,=+\-*/&|?:(\[{.]$/.test(before) && !/^[,.?:+\-*/&|]/.test(after)) break;
+      if (!/[,=+\-*/&|?:([{.]$/.test(before) && !/^[,.?:+\-*/&|]/.test(after)) break;
     }
   }
   return src.slice(start, i);
