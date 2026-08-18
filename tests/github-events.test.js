@@ -403,3 +403,22 @@ describe('processGitHubEvent — workflow_run ci_fix', () => {
     assert.strictEqual(args.queueStore.calls.enqueueScan.length, 0);
   });
 });
+
+// ── base sha capture (2026-08-18: "in this change" attribution) ────────────
+const { test: _t2 } = require('node:test');
+const _assert2 = require('node:assert/strict');
+const { extractGitHubEvent: _extract2 } = require('../website/app/lib/github-events.js');
+_t2('push carries before as baseSha; branch-create (all-zero before) carries none', () => {
+  const sha = 'a'.repeat(40);
+  const before = 'b'.repeat(40);
+  const r = _extract2('push', 'd1', { after: sha, before, ref: 'refs/heads/main', repository: { full_name: 'o/r' } });
+  _assert2.equal(r.kind, 'enqueue');
+  _assert2.equal(r.payload.baseSha, before);
+  const r2 = _extract2('push', 'd2', { after: sha, before: '0'.repeat(40), ref: 'refs/heads/new', repository: { full_name: 'o/r' } });
+  _assert2.equal(r2.payload.baseSha, null);
+});
+_t2('pull_request carries base.sha as baseSha', () => {
+  const r = _extract2('pull_request', 'd3', { action: 'opened', repository: { full_name: 'o/r' }, pull_request: { number: 5, head: { sha: 'c'.repeat(40), ref: 'feat' }, base: { sha: 'd'.repeat(40), ref: 'main' } } });
+  _assert2.equal(r.kind, 'enqueue');
+  _assert2.equal(r.payload.baseSha, 'd'.repeat(40));
+});

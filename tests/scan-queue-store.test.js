@@ -95,6 +95,7 @@ describe('enqueueScan', () => {
       'refs/heads/main',
       7,
       'gluecron',
+      null, // base_sha — not supplied by this caller
     ]);
   });
 
@@ -125,6 +126,7 @@ describe('enqueueScan', () => {
       null,
       null,
       'gluecron',
+      null,
     ]);
   });
 

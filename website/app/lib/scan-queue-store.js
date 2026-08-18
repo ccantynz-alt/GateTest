@@ -48,6 +48,9 @@ async function ensureScanQueueTable(sql) {
     next_run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
   await sql`ALTER TABLE scan_queue ADD COLUMN IF NOT EXISTS host TEXT NOT NULL DEFAULT 'gluecron'`;
+  // base_sha: the commit this push/PR is compared against, so findings can
+  // say whether they sit in code THIS change touched (2026-08-18).
+  await sql`ALTER TABLE scan_queue ADD COLUMN IF NOT EXISTS base_sha TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_ready
     ON scan_queue (status, next_run_at)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_scan_queue_repo_sha
@@ -70,6 +73,7 @@ async function ensureScanQueueTable(sql) {
  * @param {string} opts.sha
  * @param {string|null} [opts.ref]
  * @param {number|null} [opts.pullRequestNumber]
+ * @param {string|null} [opts.baseSha]      commit the change is compared against (push.before / PR base)
  * @param {'github'|'gluecron'} [opts.host]  source host; default 'gluecron'
  * @param {Function} opts.sql
  * @returns {Promise<{duplicate: boolean, id: number|null}>}
@@ -80,6 +84,7 @@ async function enqueueScan({
   sha,
   ref = null,
   pullRequestNumber = null,
+  baseSha = null,
   host = 'gluecron',
   sql,
 }) {
@@ -96,12 +101,13 @@ async function enqueueScan({
       : Number(pullRequestNumber);
 
   const safeHost = host === 'github' ? 'github' : 'gluecron';
+  const safeBase = typeof baseSha === 'string' && /^[0-9a-f]{40}$/i.test(baseSha) ? baseSha : null;
 
   const rows = await sql`
     INSERT INTO scan_queue
-      (event_id, repository, sha, ref, pull_request_number, host, status, attempts, next_run_at)
+      (event_id, repository, sha, ref, pull_request_number, host, base_sha, status, attempts, next_run_at)
     VALUES
-      (${eventId}, ${repository}, ${sha}, ${ref}, ${prNum}, ${safeHost}, 'queued', 0, NOW())
+      (${eventId}, ${repository}, ${sha}, ${ref}, ${prNum}, ${safeHost}, ${safeBase}, 'queued', 0, NOW())
     ON CONFLICT (event_id) DO NOTHING
     RETURNING id
   `;
@@ -146,7 +152,7 @@ async function claimNextJob(sql) {
     FROM next
     WHERE q.id = next.id
     RETURNING q.id, q.event_id, q.repository, q.sha, q.ref,
-              q.pull_request_number, q.host, q.attempts
+              q.pull_request_number, q.host, q.attempts, q.base_sha
   `;
 
   if (!Array.isArray(rows) || rows.length === 0) return null;

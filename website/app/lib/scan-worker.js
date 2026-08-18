@@ -172,7 +172,7 @@ async function runWorkerTick({
   try {
     // Pass the pushed SHA so the scan describes the commit the status is
     // posted on, not whatever HEAD has moved to since the push.
-    scanResult = await runScan(repoUrl, scanTier, { ref: job.sha || undefined });
+    scanResult = await runScan(repoUrl, scanTier, { ref: job.sha || undefined, baseRef: job.base_sha || undefined });
   } catch (err) {
     scanResult = {
       status: 'failed',

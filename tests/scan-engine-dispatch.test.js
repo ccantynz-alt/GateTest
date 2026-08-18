@@ -56,9 +56,9 @@ describe('every hosted scan path dispatches through runEngineForTier', () => {
 
   it('runScan scans the pushed SHA, and the worker passes it', () => {
     const exec = read('website/app/lib/scan-executor.ts');
-    assert.match(exec, /opts: \{ ref\?: string \} = \{\}/);
+    assert.match(exec, /opts: \{ ref\?: string; baseRef\?: string \} = \{\}/);
     const worker = read('website/app/lib/scan-worker.js');
-    assert.match(worker, /runScan\(repoUrl, scanTier, \{ ref: job\.sha \|\| undefined \}\)/);
+    assert.match(worker, /runScan\(repoUrl, scanTier, \{ ref: job\.sha \|\| undefined, baseRef: job\.base_sha \|\| undefined \}\)/);
   });
 
   it('the worker defaults to the deterministic tier (full engine, no AI spend), escalating to full only with allowance', () => {

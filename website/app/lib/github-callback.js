@@ -230,17 +230,32 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
     // else lives in the collapsed per-module section. This is the direct
     // answer to the loudest complaint about every review bot: walls of
     // noise with the one thing that matters buried in the middle.
-    const ranked = Array.isArray(scanResult.findings) ? scanResult.findings.filter((f) => f && !f.duplicateOf) : [];
+    let ranked = Array.isArray(scanResult.findings) ? scanResult.findings.filter((f) => f && !f.duplicateOf) : [];
     const fsum = scanResult.findingSummary || null;
+    // Attribution: when the scan knew the base commit, findings carry
+    // `inDiff`. Findings in files THIS change touched come first (that is
+    // what a reviewer is here for); pre-existing ones are counted, not
+    // hidden — old code counted as new is the SonarQube complaint that has
+    // been open since 2023, and the answer is to say which is which.
+    const attributed = typeof scanResult.changedFiles === 'number' && ranked.some((f) => typeof f.inDiff === 'boolean');
+    let preExisting = 0;
+    if (attributed) {
+      preExisting = ranked.filter((f) => !f.inDiff).length;
+      ranked = [...ranked.filter((f) => f.inDiff), ...ranked.filter((f) => !f.inDiff)];
+    }
     if (ranked.length > 0) {
       const top = ranked.slice(0, PR_COMMENT_TOP_FINDINGS);
-      lines.push(`### What matters (${Math.min(top.length, ranked.length)} of ${ranked.length}, ranked)`);
+      const inDiffCount = attributed ? ranked.length - preExisting : null;
+      lines.push(attributed
+        ? `### What matters — ${inDiffCount} in this change, ${preExisting} pre-existing (${Math.min(top.length, ranked.length)} of ${ranked.length} shown, ranked)`
+        : `### What matters (${Math.min(top.length, ranked.length)} of ${ranked.length}, ranked)`);
       lines.push('');
       for (const f of top) {
         const sev = f.blocking ? '🔴' : f.severity === 'error' ? '🟠' : f.severity === 'warning' ? '🟡' : '🔵';
         const where = f.file ? linkifyFinding(`${f.file}${f.line ? `:${f.line}` : ''}`, owner, repoName, sha) : '';
         const conf = typeof f.confidence === 'number' && f.confidence < 1 ? ` · confidence ${Math.round(f.confidence * 100)}%` : '';
-        lines.push(`- ${sev} **${f.rule || f.module}** ${where ? `${where} — ` : ''}${String(f.message || '').slice(0, 200)}${conf}`);
+        const tag = attributed ? (f.inDiff ? ' `in this change`' : ' `pre-existing`') : '';
+        lines.push(`- ${sev} **${f.rule || f.module}**${tag} ${where ? `${where} — ` : ''}${String(f.message || '').slice(0, 200)}${conf}`);
       }
       if (ranked.length > top.length) {
         lines.push(`- *…${ranked.length - top.length} more, by module below*`);

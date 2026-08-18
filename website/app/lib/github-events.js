@@ -155,6 +155,9 @@ function extractGitHubEvent(eventType, delivery, parsed) {
     if (/^0{40}$/.test(sha)) {
       return { kind: 'ignore', reason: 'branch delete push (all-zero sha)' };
     }
+    // push.before is the previous tip — the base for "what did this push
+    // change" attribution. All-zeros on a branch create → no base.
+    const before = typeof p.before === 'string' && /^[0-9a-f]{40}$/i.test(p.before) && !/^0{40}$/.test(p.before) ? p.before : null;
     return {
       kind: 'enqueue',
       payload: {
@@ -163,6 +166,7 @@ function extractGitHubEvent(eventType, delivery, parsed) {
         sha,
         ref,
         pullRequestNumber: null,
+        baseSha: before,
       },
     };
   }
@@ -197,6 +201,8 @@ function extractGitHubEvent(eventType, delivery, parsed) {
     if (number === null) {
       return { kind: 'error', reason: 'pull_request.number is required' };
     }
+    const base = pr.base && typeof pr.base === 'object' ? /** @type {Record<string, unknown>} */ (pr.base) : null;
+    const baseSha = base && typeof base.sha === 'string' && /^[0-9a-f]{40}$/i.test(base.sha) ? base.sha : null;
     return {
       kind: 'enqueue',
       payload: {
@@ -205,6 +211,7 @@ function extractGitHubEvent(eventType, delivery, parsed) {
         sha,
         ref,
         pullRequestNumber: number,
+        baseSha,
       },
     };
   }
@@ -317,6 +324,7 @@ async function processGitHubEvent({
       sha: payload.sha,
       ref: payload.ref,
       pullRequestNumber: payload.pullRequestNumber,
+      baseSha: payload.baseSha || null,
       host: 'github',
       sql,
     });

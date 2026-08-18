@@ -938,3 +938,22 @@ describe('buildMarkdownComment — What matters budget', () => {
     assert.match(body, /### Issues by module/);
   });
 });
+
+describe('buildMarkdownComment — in-this-change attribution', () => {
+  const mk = (i, over = {}) => ({
+    id: `m:r${i}`, module: 'security', rule: `security:rule${i}`, severity: 'error', confidence: 1, blocking: true,
+    file: `src/f${i}.js`, line: 1, message: `finding ${i}`, suggestion: null, class: null, duplicateOf: null, ...over,
+  });
+  it('lists findings in files this change touched first, tags each, and counts pre-existing ones', () => {
+    const findings = [mk(0, { inDiff: false }), mk(1, { inDiff: false }), mk(2, { inDiff: true }), mk(3, { inDiff: false })];
+    const body = buildMarkdownComment('o/r', 'abc1234def', {
+      status: 'complete', totalIssues: 4, duration: 100, modules: [{ name: 'security', status: 'failed', checks: 4, issues: 4, duration: 1, details: ['[error] x'] }],
+      findings, findingSummary: { total: 4, blocking: 4, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 },
+      changedFiles: 3, baseRef: 'b'.repeat(40),
+    }, null, 'strict');
+    assert.match(body, /### What matters — 1 in this change, 3 pre-existing/);
+    const items = body.split('\n').filter((l) => /^- 🔴/.test(l));
+    assert.match(items[0], /security:rule2.*`in this change`/);
+    assert.match(items[1], /`pre-existing`/);
+  });
+});

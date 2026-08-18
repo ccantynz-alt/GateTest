@@ -66,8 +66,11 @@ export interface ScanResult {
   coverageTruncated?: boolean;
   engine?: "cli" | "runTier";
   /** ranked + cross-module-deduped findings (CLI engine tiers) */
-  findings?: RankedFinding[];
+  findings?: Array<RankedFinding & { inDiff?: boolean }>;
   findingSummary?: FindingSummary | null;
+  /** number of files this push/PR changed vs baseRef (null = no base known) */
+  changedFiles?: number | null;
+  baseRef?: string | null;
 }
 
 function stripeApi(
@@ -173,12 +176,13 @@ export async function runScanDirect(
 export async function runScan(
   repoUrl: string,
   tier: string,
-  opts: { ref?: string } = {}
+  opts: { ref?: string; baseRef?: string } = {}
 ): Promise<ScanResult> {
   const startTime = Date.now();
   // Scan the commit that was pushed, not whatever HEAD is by the time the
   // worker gets to the job — a status posted on SHA X must describe SHA X.
   const ref = opts.ref && /^[A-Za-z0-9._\/-]+$/.test(opts.ref) ? opts.ref : "HEAD";
+  const baseRef = opts.baseRef && /^[0-9a-f]{40}$/i.test(opts.baseRef) && opts.baseRef !== ref ? opts.baseRef : null;
 
   // Accept Gluecron URLs first; fall back to GitHub URLs so customer-supplied
   // links work in either form during the migration window.
@@ -230,6 +234,31 @@ export async function runScan(
     console.warn(`[scan-executor] ${owner}/${repo}: ${loaded.warning}`);
   }
 
+  // "Is this finding in code THIS change touched?" — the loudest complaint
+  // about quality gates is failing on old code counted as new. When the
+  // event carried a base commit, load its tree too (one more archive read)
+  // and diff by content; findings in changed files are tagged `inDiff`.
+  // Attribution only — the gate decision is unchanged.
+  let changedFiles: Set<string> | null = null;
+  if (baseRef && engineTier) {
+    try {
+      const baseLoaded = await loadRepoFiles(owner, repo, baseRef, token, {
+        maxFiles: ENGINE_MAX_FILES,
+        prioritize: prioritizeManifest,
+        deadlineMs,
+      });
+      const baseByPath = new Map(baseLoaded.fileContents.map((f) => [f.path, f.content]));
+      changedFiles = new Set<string>();
+      for (const f of fileContents) {
+        const before = baseByPath.get(f.path);
+        if (before === undefined || before !== f.content) changedFiles.add(f.path);
+      }
+    } catch (err) { // error-ok — attribution is a refinement; a base read failure must not fail the scan
+      console.warn(`[scan-executor] ${owner}/${repo}: base ${baseRef.slice(0, 7)} unreadable, findings not attributed:`, err instanceof Error ? err.message : String(err));
+      changedFiles = null;
+    }
+  }
+
   const { modules, totalIssues, engineUsed, findings, findingSummary } = await runEngineForTier({
     tier: normalisedTier,
     owner,
@@ -257,8 +286,10 @@ export async function runScan(
     filesInRepo: files.length,
     coverageTruncated: loaded.truncated,
     engine: engineUsed,
-    findings,
+    findings: changedFiles && findings ? findings.map((f) => ({ ...f, inDiff: f.file ? changedFiles!.has(f.file) : false })) : findings,
     findingSummary,
+    changedFiles: changedFiles ? changedFiles.size : null,
+    baseRef,
   };
 }
 
