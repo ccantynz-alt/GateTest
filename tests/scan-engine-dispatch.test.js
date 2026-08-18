@@ -73,9 +73,9 @@ describe('every hosted scan path dispatches through runEngineForTier', () => {
     assert.match(types, /^\s*deterministic: QUICK_SHADOW_MODULES,/m);
   });
 
-  it('cli-engine-runner accepts extra skipModules but always keeps mutation + chaos skipped', () => {
+  it('cli-engine-runner accepts extra skipModules but always keeps the hosted-unsafe set skipped', () => {
     const runner = read('website/app/lib/cli-engine-runner.js');
     assert.match(runner, /skipModules = \[\]/);
-    assert.match(runner, /new Set\(\['mutation', 'chaos', \.\.\./);
+    assert.match(runner, /new Set\(\[\.\.\.HOSTED_UNSAFE_MODULES, \.\.\./);
   });
 });

@@ -36,6 +36,24 @@ const { execSync } = require('child_process');
  */
 
 const DEFAULT_SUITE = 'full';
+
+/**
+ * Modules the HOSTED engine must never run, whatever the suite says.
+ *
+ * The workspace is a customer's repository materialised on OUR production
+ * box. Any module that executes something the customer controls is remote
+ * code execution by design — the exact shape of the 2025 CodeRabbit breach
+ * (a PR-supplied tool config executed with the platform's credentials):
+ *   - mutation / chaos          — run the customer's test suite / a browser
+ *   - unitTests / integrationTests / e2e — `npm test`, `npm run <script>`,
+ *                                  `pytest`, `go test`, cypress…
+ *   - lint                      — ESLint LOADS `eslint.config.js`, which is
+ *                                  arbitrary JavaScript (stylelint likewise)
+ * These modules are first-class in the CLI and the GitHub Action, where the
+ * customer's own runner executes the customer's own code. Here they are
+ * reported as skipped. (2026-08-18 hardening; see docs/ARCHITECTURE.md.)
+ */
+const HOSTED_UNSAFE_MODULES = ['mutation', 'chaos', 'unitTests', 'integrationTests', 'e2e', 'lint'];
 const DEFAULT_TIME_BUDGET_MS = 240_000;
 const DETAIL_CAP_PER_MODULE = 200;
 
@@ -266,7 +284,7 @@ async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, 
       // mutation) to keep the main gate fast; reused here to keep the
       // website's paid scans honest about what actually ran.
       summary = await new GateTest(workspaceRoot, opts).init().runSuite(suite, {
-        skipModules: [...new Set(['mutation', 'chaos', ...(Array.isArray(skipModules) ? skipModules : [])])],
+        skipModules: [...new Set([...HOSTED_UNSAFE_MODULES, ...(Array.isArray(skipModules) ? skipModules : [])])],
       });
     } catch (err) {
       process.exitCode = previousExitCode;
@@ -312,5 +330,4 @@ module.exports = {
   isPathSafe,
   DEFAULT_SUITE,
   MAX_WORKSPACE_BYTES,
-  DETAIL_CAP_PER_MODULE,
-};
+  DETAIL_CAP_PER_MODULE, HOSTED_UNSAFE_MODULES };

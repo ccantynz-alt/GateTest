@@ -94,7 +94,7 @@ GateTest/
 ├── src/
 │   ├── index.js            ← Main library entry
 │   ├── core/               ← Config, runner, registry, cache, CI gen, GitHub bridge
-│   ├── modules/            ← 120 REGISTERED MODULES (128 .js files in this directory — 8 are shared helpers/base classes, not standalone scanners; verify with `node bin/gatetest.js --list | grep -cE '^  [a-zA-Z]'`). This directory has grown steadily since launch — see docs/MODULES.md for the full current breakdown by category rather than an enumerated count here, which drifts every time a module is added and was found stale (claiming 53) during the 2026-07-20 audit.
+│   ├── modules/            ← 121 REGISTERED MODULES (128 .js files in this directory — 8 are shared helpers/base classes, not standalone scanners; verify with `node bin/gatetest.js --list | grep -cE '^  [a-zA-Z]'`). This directory has grown steadily since launch — see docs/MODULES.md for the full current breakdown by category rather than an enumerated count here, which drifts every time a module is added and was found stale (claiming 53) during the 2026-07-20 audit.
 │   ├── reporters/          ← Console, JSON, HTML, SARIF, JUnit
 │   ├── scanners/           ← Continuous scanner
 │   └── hooks/              ← Pre-commit, pre-push
@@ -230,3 +230,25 @@ GateTest/
 
 ---
 
+
+## HOSTED SCAN PATH (2026-08-18 — read before touching any /api/scan/* route)
+
+Every hosted scan — `/api/scan/run`, the worker tick behind the GitHub App /
+Gluecron webhooks, the Stripe `checkout.session.completed` job, `/api/v1/scan`
+— goes through TWO shared pieces, and only those:
+
+| Piece | File | Rule |
+|---|---|---|
+| Repo loading | `website/app/lib/gluecron-client.ts` → `loadRepoFiles()` (uses `repo-snapshot.js`) | ONE archive download (credentialed → anonymous → per-blob API fallback). Default cap 4,000 text files for engine tiers, 60 for the in-memory quick tier. Never re-add a "read 50 files through the Contents API" loop. |
+| Engine choice | `website/app/lib/scan-engine-dispatch.ts` → `runEngineForTier()` | quick/quick_shadow → in-memory `runTier` (23 TS modules, the free funnel); **deterministic** / full / scan_fix → CLI engine `full` suite via `cli-engine-runner.js`; nuclear → `nuclear` suite. `deterministic` = full engine with the Anthropic-calling modules skipped (`AI_ENGINE_MODULES`, asserted against `src/` by `tests/helpers/ai-module-names.js`). |
+
+The worker's default tier is `deterministic` (was `quick`), it scans the
+pushed SHA (`runScan(repoUrl, tier, { ref })`), and responses carry
+`coverage { filesAnalysed, filesInRepo, truncated, engine }` so a customer can
+see how much of the repo the engine actually saw. `tests/scan-engine-dispatch.test.js`
+fails the suite if any path bypasses the dispatcher.
+
+**Why:** until 2026-08-18 only `/api/scan/run` bridged to the real engine; the
+worker/Stripe/v1 paths ran the 23-module in-memory re-implementation on a
+50-file sample at HEAD, and even `/api/scan/run` read 50 files with 12
+extensions — a $399 Forensic scan of a 2,000-file repo analysed ~2.5% of it.

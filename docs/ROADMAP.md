@@ -131,6 +131,89 @@ Apply these guidelines to: module warning/error messages, CLI output strings, PR
 
 ---
 
+## 2026-08-18 DEEP AUDIT — WHAT SHIPPED, WHAT IS QUEUED (READ THIS EVERY SESSION)
+
+Craig 2026-08-18: *"remove all limitations developers have with pre-existing
+tools … audit at the highest/deepest level along with the website … we don't
+want false positives … what are the 20 biggest advancements."* Four parallel
+audits ran (competitor complaints across ~60 sources, engine false-positive
+measurement on 8 real repos, website/sync audit, engineering/security audit).
+Full report: `docs/audits/2026-08-18-deep-audit.md`.
+
+**Shipped the same day (commits b0b45c25 → 5df15098):**
+- **The free funnel no longer depends on any git-host credential.** Public repos
+  are read via one anonymous archive download (`website/app/lib/repo-snapshot.js`);
+  `/api/scan/preview`, the playground stream and `/api/scan/run` proceed with
+  no token. Verified live: KI #101's product half is CLOSED without the box key.
+- **Every hosted scan path runs the real engine on the whole repo.**
+  `website/app/lib/scan-engine-dispatch.ts` is the ONE place engine choice
+  lives; `loadRepoFiles` reads up to 4,000 text files in one request; the
+  worker scans the pushed SHA at the new `deterministic` tier (full engine,
+  AI modules skipped). Before: 23 TS modules on 50 files, HEAD, quick tier.
+- **Blocking false positives cut ~90% on real repos** (express 7→0, flask 20→3,
+  petclinic 270→9, NodeGoat 358→41 with every planted vuln still caught) —
+  seo/authBypass/visual/a11y/subprocess/unitTests/undefinedRef/security/
+  python/ruby/claudeCompliance/links/envVars/deployScriptValidator/
+  performance/deployReadiness, each with positive + negative controls.
+- **Security:** SSRF guard + rate limits on /api/scan/url|nuclear|server;
+  Slack fails closed; cron header bypass removed; recipe writes need
+  `GATETEST_RECIPE_STORE_TOKEN` (client confidence delta ignored); server-fix
+  Forensic branch admin-only; chat limiter module-scoped; webhook status
+  passthrough; ssrf-guard blocks 100.64/10 (Tailscale), 198.18/15, 224/4, 240/4.
+- **Website:** playground upsell mis-priced ($29→tier=quick) fixed; subscription
+  success page; single scan trigger + honest progress + re-run on failure; MCP
+  button pauses when email is unconfigured; hosted MCP manifest generated from
+  the registry (was 120); 15 stale count claims; root canonical moved; OG images
+  render; compare-page facts (SonarQube LOC pricing / IaC; no container images);
+  "Nuclear"→"Forensic" in $399 deliverables; carried "120/120 green" replaced by
+  a measured nightly self-scan; wp/web phantom Continuous cards removed.
+
+**Craig actions surfaced by the audit (Boss Rule / box-side):**
+1. `GATETEST_PRIVATE_KEY` on the box is still the doc placeholder → GitHub App
+   auth dead (statuses, PR comments, private repos). KI #100.
+2. `CRON_SECRET` repo secret unset → the off-Vercel tick workflow 401s / the
+   queue is only drained by the box's systemd timer. `gh secret set CRON_SECRET`
+   with the box's value.
+3. `RESEND_API_KEY` unset → MCP keys never email; the button now pauses itself.
+4. `GATETEST_RECIPE_STORE_TOKEN` (new) → recipe writes are 503 until set on the box.
+5. Legal/privacy pages still name Vercel as infrastructure/sub-processor
+   (`legal/privacy/page.tsx:258,495-501`, `legal/terms/page.tsx:255,629,761`)
+   — counsel/Craig copy.
+6. Decide: URL-scan "Continuous" ($19/$49 cards removed from /wp,/web) — real
+   tier or not? And "Full Scan = all 121 modules" vs the honest "every module
+   that applies to a repository" (URL/WordPress modules need a live site).
+7. Install Playwright on the box or /api/web/scan keeps reporting *our*
+   missing browser as a customer finding (`explorer:playwright`).
+
+**Queued (pre-authorised, ranked — see the report's Top-20 for the why):**
+- fastapi residue: `innerHTML` reported by security AND codeQuality (dup),
+  docs_src secrets at conf 1 (`confidence.js:107-131` path list); sinatra
+  `system "kill -9 #{pid}"` (integer interpolation); gin `ciSecurity` trivy
+  SARIF perms; python deadCode multi-line imports + decorated defs
+  (`dead-code-extractor.js:417-450`); duplicateCode string-collapse per-offset
+  reporting; flakyTests real-clock tautology; errorSwallow callback-style
+  Mongo APIs; dependencies maven parent-BOM; compat:browserslist on non-web
+  repos; aiHallucination tsconfig paths; bashSafety `message: null`.
+- Cross-module dedupe (eval ×3, innerHTML ×2, secrets ×4, open-redirect ×2,
+  SQLi ×3) — a finding registry keyed by file:line:class.
+- Per-rule precision telemetry surfaced in PR comments + `--noise`
+  (competitor complaint #1); PR-comment budget (5 inline, ranked).
+- Reachability-gated dependency alerts (competitor complaint #2).
+- Auth for /api/status secrets listing; DB-backed rate limits; queue lease
+  column + dead-letter; callback retry + `pending` status at enqueue; per-
+  fetch timeouts; installation rebinding check on the GitHub callback.
+- AI fix verification: run the originating module on the fixed file, TS
+  syntax gate, mandatory fail-closed scanner gate, prompt-injection guard on
+  code-writing prompts, path allow-list on overwrite targets; CLI orchestrator
+  `_runTests` must test the HYPOTHESIS, not the on-disk original.
+- Language depth beyond JS/TS (Python second tier, Go/Java/Ruby regex-only —
+  label honestly or build); `smart-suite-selector` sends non-JS diffs to
+  JS-only modules.
+- DX: `--json`/`--format`, `--fail-on`, distinct exit codes, SARIF
+  fingerprints + rule help URLs, one VS Code extension, pre-commit recipe.
+- Website: per-page canonical/titles on billing/checkout/scan/*, compare-page
+  citations + as-of dates, single URL-scan flow, hero repo/URL toggle.
+
 ## KNOWN ISSUES — QUEUED FOR FIX
 
 | # | Issue | Severity | Status |
@@ -211,7 +294,7 @@ Apply these guidelines to: module warning/error messages, CLI output strings, PR
 | 98 | **The scan queue never drained — `column q.host does not exist`. Found 2026-08-05 by probing the live tick endpoint after deploying.** `POST /api/scan/worker/tick` answered **HTTP 200** with `{"ok":false,"reclaimed":0,"error":"column q.host does not exist"}`. Production's `scan_queue` predated the dual-host `host` column. `ensureScanQueueTable()` ships the idempotent `ADD COLUMN IF NOT EXISTS`, but was only called from `/api/db/init` and the GitHub callback — the ENQUEUE path migrated itself, the CONSUME path did not. So the worker failed on every tick and reported it under a 200, invisible to any status-code health check. The worker now ensures the schema before claiming. Fixed `d3fe3738`; verified live: `{"ok":true,"idle":true,"reclaimed":0}`. **Lesson:** a self-migrating writer plus a non-migrating reader is a silent split-brain; migrate on both sides. | — | RESOLVED — fixed and verified in production. |
 | 99 | **THE GITHUB APP IS POINTED AT A DEAD DOMAIN, so no push has ever reached us. Found 2026-08-05; CRAIG ACTION, cannot be fixed from this repo.** Measured: `scan_queue` contains **0 rows — nothing has ever been enqueued**; `https://gatetest.ai/api/webhook` returns **HTTP 000** (NXDOMAIN, registry redemption since 2026-07-29); `https://gatetest.io/api/webhook` returns **200**; the App still advertises `external_url = https://gatetest.ai`. Every webhook GitHub has attempted has failed to deliver. **This is the real reason a Marketplace reviewer would install, push, and see nothing** — and it survives the two fixes shipped today (KI #98, KI #41), which make the drain work but cannot conjure events that never arrive. After 2026-08-05 the pipeline is correct from `/api/webhook` onward and severed before it. Craig must set the App's Webhook URL (and `external_url`, Setup URL, Callback URL) to `gatetest.io` on app `3322634`; GitHub's "Recent Deliveries" tab should currently show nothing but failures. See `docs/marketplace/CRAIG-PRE-SUBMIT-CHECKLIST.md` §2. | **CRITICAL** | OPEN — Craig action, blocks the entire product. |
 | 100 | **NO WORKING GITHUB CREDENTIAL EXISTS ON THE PRODUCTION BOX — every stored token returns 401 "Bad credentials". Found 2026-08-05 by the first end-to-end pipeline test ever run.** A signed push event was fired at the public `/api/webhook` (HMAC verified, enqueued as `scan_queue` row 1 — the first row the production table has ever held; the enqueue-kick claimed it instantly and the systemd timer handled the retry cadence correctly). The scan then failed: `fetchTree` got 401 because `GITHUB_TOKEN` in `website/.env.local` is dead — as is the copy in `.env.vercel` and every `.env.local.bak-*` (all tested directly against the GitHub API from the box). The box's `gh` CLI is not logged in and there is no `.git-credentials`. **Consequence: even after the webhook URL is fixed (KI #99), every scan fails at repo fetch, and every commit-status / PR-comment callback fails the same way — the entire GitHub-facing half of the product has had no working credential for an unknown period.** Nothing noticed because nothing ever consumed the queue until today (KI #41/#98). An automated fix was correctly blocked: moving a credential from Craig's dev machine to the box is a credential-exfiltration pattern the tool refuses, and rightly so. **Craig, two options (5 min):** (a) durable — paste `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY` into `website/.env.local` (the code already mints installation tokens: `website/app/lib/github-app.ts`); (b) quick — mint a fresh PAT with repo scope and replace `GITHUB_TOKEN`. Then `systemctl restart gatetest-web` and watch row 1 retry to completion. Note for the payload contract: real webhooks carry the canonical `crclabs-hq/GateTest` name; the `ccantynz-alt/gatetest` alias 301s at the API (fetch follows redirects, so stale-name jobs still work once a token exists). | **CRITICAL** | OPEN — Craig action; blocks scans AND callbacks even after KI #99. |
-| 101 | **THE FREE SCAN IS DEAD IN PRODUCTION FOR EVERY REPO, AND THE MONITOR THAT EXISTS TO CATCH THIS REPORTED THE SITE 10/11 HEALTHY THROUGHOUT. Found 2026-08-16 by probing the live site while answering "is this ready for public release?".** Measured against `https://gatetest.io`: `POST /api/scan/preview` returns `"appears to be empty or unreachable"` for `expressjs/express`, `vercel/next.js`, `jonschlinkert/is-odd` and our own public repo; `/playground` streams all 121 module names and then dies with `Cannot access expressjs/express — empty tree`. **This is the entire top of the funnel — a visitor arriving today is told THEIR repository is broken and leaves.** Root cause is KI #100's dead credential surfacing through two silent swallows in `website/app/lib/gluecron-client.ts`: `if (ghRes.ok)` skipped the 401 without recording it, and the Gluecron fallback's `return { paths: [] }` turned an unreadable tree into an empty one, which every caller renders as "this repo has no files". **Fixed in `3a9437bd`** — the failure now throws with the real cause and `describeGithubTreeFailure()` names a 401 as *our* configuration, "not your repository". **The credential itself is still Craig's to replace (KI #100 / `GATETEST_PRIVATE_KEY` placeholder), and the fix cannot reach production until `BOX_SSH_KEY`/`BOX_SSH_HOST` exist (see `deploy-box.yml`) — production is serving `ff0fe9b3`, built 2026-08-06.** Secondary finding, arguably the more important one: `readiness-probe.yml` had failed **100 consecutive scheduled runs over 5 days** and still missed this, because (a) it never ran the product, (b) `deploy/fresh` only asserted a commit stamp *existed* so a 10-day-old build passed a check named "fresh", and (c) it read `/api/status`'s `missing_*` lists but not `invalid_placeholders`, the field naming the dead key all along. All three closed and regression-tested; the summary now reports **PRODUCT BROKEN** distinctly from misconfiguration so a new failure stays legible inside a familiar red. | **CRITICAL** | **2026-08-16 UPDATE — deploy half RESOLVED.** `BOX_SSH_KEY`/`BOX_SSH_HOST` are set, Craig authorised the deploy key on the box, and the first successful automated deploy landed: production now serves `9244d8e5` (`deploy/fresh` green, 0.0d old) after 10 days stuck on `ff0fe9b3`. The engine fix is live and verified — `POST /api/scan/preview` now answers *"Could not read the file tree for expressjs/express: GateTest's git-host credential was rejected (401 Bad credentials) — this is our configuration, not your repository"* instead of blaming the customer's repo. Legal notes (KI-adjacent) also shipped: 0 rendered `[DRAFT` blocks on `/legal/terms` and `/legal/privacy`, banner retained. Fixed en route: the SSH step targeted `$HOME/gatetest` = the stale `/root/gatetest`, not the live `/opt/gatetest`. **Still OPEN on one thing only: `GATETEST_PRIVATE_KEY` is still the pasted doc example, so the 401 persists and `product/scan` stays red.** Craig action — replace it in `/opt/gatetest/website/.env.local` and `systemctl restart gatetest-web`; confirm the .pem comes from app_id 3322634 (`gatetesthq`), not the duplicate 3766251. |
+| 101 | **THE FREE SCAN IS DEAD IN PRODUCTION FOR EVERY REPO, AND THE MONITOR THAT EXISTS TO CATCH THIS REPORTED THE SITE 10/11 HEALTHY THROUGHOUT. Found 2026-08-16 by probing the live site while answering "is this ready for public release?".** Measured against `https://gatetest.io`: `POST /api/scan/preview` returns `"appears to be empty or unreachable"` for `expressjs/express`, `vercel/next.js`, `jonschlinkert/is-odd` and our own public repo; `/playground` streams all 121 module names and then dies with `Cannot access expressjs/express — empty tree`. **This is the entire top of the funnel — a visitor arriving today is told THEIR repository is broken and leaves.** Root cause is KI #100's dead credential surfacing through two silent swallows in `website/app/lib/gluecron-client.ts`: `if (ghRes.ok)` skipped the 401 without recording it, and the Gluecron fallback's `return { paths: [] }` turned an unreadable tree into an empty one, which every caller renders as "this repo has no files". **Fixed in `3a9437bd`** — the failure now throws with the real cause and `describeGithubTreeFailure()` names a 401 as *our* configuration, "not your repository". **The credential itself is still Craig's to replace (KI #100 / `GATETEST_PRIVATE_KEY` placeholder), and the fix cannot reach production until `BOX_SSH_KEY`/`BOX_SSH_HOST` exist (see `deploy-box.yml`) — production is serving `ff0fe9b3`, built 2026-08-06.** Secondary finding, arguably the more important one: `readiness-probe.yml` had failed **100 consecutive scheduled runs over 5 days** and still missed this, because (a) it never ran the product, (b) `deploy/fresh` only asserted a commit stamp *existed* so a 10-day-old build passed a check named "fresh", and (c) it read `/api/status`'s `missing_*` lists but not `invalid_placeholders`, the field naming the dead key all along. All three closed and regression-tested; the summary now reports **PRODUCT BROKEN** distinctly from misconfiguration so a new failure stays legible inside a familiar red. | **CRITICAL** | **2026-08-16 UPDATE — deploy half RESOLVED.** `BOX_SSH_KEY`/`BOX_SSH_HOST` are set, Craig authorised the deploy key on the box, and the first successful automated deploy landed: production now serves `9244d8e5` (`deploy/fresh` green, 0.0d old) after 10 days stuck on `ff0fe9b3`. The engine fix is live and verified — `POST /api/scan/preview` now answers *"Could not read the file tree for expressjs/express: GateTest's git-host credential was rejected (401 Bad credentials) — this is our configuration, not your repository"* instead of blaming the customer's repo. Legal notes (KI-adjacent) also shipped: 0 rendered `[DRAFT` blocks on `/legal/terms` and `/legal/privacy`, banner retained. Fixed en route: the SSH step targeted `$HOME/gatetest` = the stale `/root/gatetest`, not the live `/opt/gatetest`. **Still OPEN on one thing only: `GATETEST_PRIVATE_KEY` is still the pasted doc example, so the 401 persists and `product/scan` stays red.** Craig action — replace it in `/opt/gatetest/website/.env.local` and `systemctl restart gatetest-web`; confirm the .pem comes from app_id 3322634 (`gatetesthq`), not the duplicate 3766251. **2026-08-18 UPDATE — PRODUCT HALF RESOLVED WITHOUT THE KEY.** Public repos are now read through an anonymous archive download (`repo-snapshot.js`, commit `b0b45c25`); `POST /api/scan/preview` returns findings for expressjs/express in production (verified 04:37Z), the playground stream completes. The dead `GATETEST_PRIVATE_KEY` still blocks GitHub App auth (statuses/PR comments/private repos) — that part stays Craig's. |
 ---
 
 ---

@@ -232,12 +232,16 @@ describe('runFullEngine — mutation/chaos exclusion', () => {
     'utf8'
   );
 
-  it('always passes mutation + chaos in skipModules to runSuite(), merged with any caller-supplied extras', () => {
+  it('always skips every module that would execute customer-controlled code on the box, merged with any caller-supplied extras', () => {
     assert.match(
       src,
-      /runSuite\(suite,\s*\{\s*\n?\s*skipModules:\s*\[\.\.\.new Set\(\[\s*['"]mutation['"]\s*,\s*['"]chaos['"]\s*,\s*\.\.\./,
-      'runFullEngine must call runSuite(suite, { skipModules: [...new Set(["mutation", "chaos", ...skipModules])] }) — mutation/chaos can never run in the /tmp workspace (no npm install, no browser), and callers must be able to ADD skips (the deterministic tier) but never REMOVE those two'
+      /runSuite\(suite,\s*\{\s*\n?\s*skipModules:\s*\[\.\.\.new Set\(\[\.\.\.HOSTED_UNSAFE_MODULES,\s*\.\.\./,
+      'runFullEngine must call runSuite(suite, { skipModules: [...new Set([...HOSTED_UNSAFE_MODULES, ...skipModules])] }) — callers may ADD skips (the deterministic tier) but never REMOVE the hosted-unsafe set'
     );
+    const { HOSTED_UNSAFE_MODULES } = require('../website/app/lib/cli-engine-runner.js');
+    for (const m of ['mutation', 'chaos', 'unitTests', 'integrationTests', 'e2e', 'lint']) {
+      assert.ok(HOSTED_UNSAFE_MODULES.includes(m), `${m} runs customer code (or loads customer JS config) — it must never execute inside the hosted workspace`);
+    }
   });
 
   it('honours caller-supplied skipModules (the deterministic tier skips every Anthropic-calling module)', async () => {
