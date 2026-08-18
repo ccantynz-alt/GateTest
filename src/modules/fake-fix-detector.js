@@ -398,14 +398,19 @@ class FakeFixDetectorModule extends BaseModule {
     if (moduleConfig.diff != null) return moduleConfig.diff;
     if (runnerOptions.diff != null) return runnerOptions.diff;
 
-    // Diff against a specific ref
+    // Diff against a specific ref. ALWAYS scoped to the project root
+    // (`-- .`): when the scanned project is a SUBDIRECTORY of a larger git
+    // repo (a corpus fixture, a monorepo package, a hosted scan workspace
+    // inside a checkout) an unscoped `git diff` reports the ENCLOSING repo's
+    // changes — the reliability corpus flagged GateTest's own commit as 20
+    // "fake fixes" in a fixture that had not changed (2026-08-18).
     const against = moduleConfig.against || runnerOptions.against;
     const commands = against
-      ? [`git diff --unified=3 ${against}...HEAD`]
+      ? [`git diff --unified=3 ${against}...HEAD -- .`]
       : [
-          'git diff --unified=3 --cached',          // staged
-          'git diff --unified=3',                    // working tree
-          'git diff --unified=3 HEAD~1 HEAD',        // last commit
+          'git diff --unified=3 --cached -- .',          // staged
+          'git diff --unified=3 -- .',                    // working tree
+          'git diff --unified=3 HEAD~1 HEAD -- .',        // last commit
         ];
 
     for (const cmd of commands) {
