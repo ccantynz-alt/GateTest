@@ -124,15 +124,20 @@ export async function POST(req: NextRequest) {
 
       try {
         const auth = await resolveRepoAuth(owner, repo);
-        if (!auth.token) {
-          send("error", { error: `Cannot access ${owner}/${repo}${auth.error ? ` (${auth.error})` : ""}` });
+        // No token is fine for a public repo — fetchTree/fetchBlob fall back to
+        // the anonymous public archive (repo-snapshot.js, KI #100/#101).
+        const token = auth.token || "";
+
+        let files: string[];
+        try {
+          files = await fetchTree(owner, repo, "HEAD", token);
+        } catch (err) {
+          send("error", { error: `Cannot access ${owner}/${repo} (${err instanceof Error ? err.message : "tree read failed"})` });
           clearInterval(keepAlive);
           closed = true;
           controller.close();
           return;
         }
-
-        const files = await fetchTree(owner, repo, "HEAD", auth.token);
         if (files.length === 0) {
           send("error", { error: `Cannot access ${owner}/${repo} — empty tree` });
           clearInterval(keepAlive);
@@ -149,7 +154,7 @@ export async function POST(req: NextRequest) {
           await Promise.all(
             filesToFetch.map(async (p) => {
               try {
-                const content = await fetchBlob(owner, repo, p, "HEAD", auth.token as string);
+                const content = await fetchBlob(owner, repo, p, "HEAD", token);
                 return content ? { path: p, content } : null;
               } catch { return null; }
             })

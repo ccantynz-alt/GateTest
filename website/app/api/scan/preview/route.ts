@@ -163,17 +163,10 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
-  const token = auth.token || undefined;
-  if (!token) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `cannot access ${owner}/${repo}`,
-        hint: auth.error || "Repo may be private or unreachable. Free preview only works on public repos.",
-      },
-      { status: 403 }
-    );
-  }
+  // No git-host token is NOT a dead end for a public repo: fetchTree/fetchBlob
+  // fall back to the anonymous public archive (repo-snapshot.js), so the free
+  // funnel no longer depends on any credential being alive (KI #100/#101).
+  const token = auth.token || "";
 
   let files: string[] = [];
   try {

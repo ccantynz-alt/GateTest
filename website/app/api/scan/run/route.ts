@@ -149,19 +149,23 @@ async function scanRepo(owner: string, repo: string, tier: string): Promise<Scan
   // the repo endpoint to confirm the token has access before we attempt
   // the tree fetch.
   const auth = await resolveRepoAuth(owner, repo);
-  const token = auth.token || undefined;
+  // A missing token is not fatal for a PUBLIC repo — fetchTree/fetchBlob fall
+  // back to the anonymous public archive (repo-snapshot.js). Private repos
+  // still surface the tree-read failure below with the real cause.
+  const token = auth.token || "";
 
-  if (!token) {
+  let files: string[];
+  try {
+    files = await fetchTree(owner, repo, "HEAD", token);
+  } catch (err) {
     return {
       modules: [],
       totalIssues: 0,
       duration: Date.now() - startTime,
       authSource: auth.source,
-      error: `Cannot access ${owner}/${repo}${auth.error ? ` (${auth.error})` : ""}`,
+      error: `Cannot access ${owner}/${repo} (${err instanceof Error ? err.message : "tree read failed"})${auth.error ? ` — ${auth.error}` : ""}`,
     };
   }
-
-  const files = await fetchTree(owner, repo, "HEAD", token);
   if (files.length === 0) {
     return {
       modules: [],

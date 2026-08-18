@@ -290,6 +290,45 @@ export interface FetchTreeResult {
 
 const TREE_SIZE_WARN_THRESHOLD = 50_000;
 
+// ── Credential-free public snapshot (KI #100/#101 root-cause fix) ─────────
+// When every git-host credential fails (or none is configured), a PUBLIC repo
+// is still readable anonymously as a tarball — see repo-snapshot.js. This is
+// the LAST resort, tried after GitHub-token and Gluecron paths, so private
+// repos and configured hosts behave exactly as before.
+//
+// The memo below is a correctness-neutral cache, not state: fetchTree and the
+// N fetchBlob calls that follow it within one scan must not each re-download
+// the archive. Losing the memo (cold start, TTL expiry) only costs a repeat
+// download; the answer never changes. Bounded: 16 entries, 2-minute TTL.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const repoSnapshot = require("./repo-snapshot") as {
+  fetchPublicRepoSnapshot: (
+    owner: string,
+    repo: string,
+    ref?: string,
+  ) => Promise<{ paths: string[]; contents: Map<string, string>; truncated: boolean; warning: string | null }>;
+};
+type Snapshot = Awaited<ReturnType<typeof repoSnapshot.fetchPublicRepoSnapshot>>;
+const SNAPSHOT_TTL_MS = 120_000;
+const SNAPSHOT_MEMO_MAX = 16;
+const snapshotMemo = new Map<string, { expires: number; promise: Promise<Snapshot> }>();
+
+function publicSnapshot(owner: string, repo: string, ref: string): Promise<Snapshot> {
+  const key = `${owner}/${repo}@${ref || "HEAD"}`;
+  const now = Date.now();
+  const hit = snapshotMemo.get(key);
+  if (hit && hit.expires > now) return hit.promise;
+  if (snapshotMemo.size >= SNAPSHOT_MEMO_MAX) {
+    const oldest = [...snapshotMemo.entries()].sort((a, b) => a[1].expires - b[1].expires)[0];
+    if (oldest) snapshotMemo.delete(oldest[0]);
+  }
+  const promise = repoSnapshot.fetchPublicRepoSnapshot(owner, repo, ref || "HEAD");
+  snapshotMemo.set(key, { expires: now + SNAPSHOT_TTL_MS, promise });
+  // A failed download must not be memoised — the next caller should retry.
+  promise.catch(() => snapshotMemo.delete(key));
+  return promise;
+}
+
 /**
  * Name the cause of a failed GitHub tree read in terms the reader can act on,
  * and — critically — say WHOSE fault it is. A 401 is our credential, not the
@@ -408,22 +447,42 @@ export async function fetchTreeWithMetadata(
     }
   }
 
-  const res = await gluecronApi(
-    "GET",
-    `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(ref)}?recursive=1`,
-  );
-  // Both hosts failed. Throwing is the honest outcome: callers already wrap
-  // this in try/catch and surface the reason, whereas returning [] silently
-  // becomes "this repo is empty" downstream. A genuinely empty repo still
-  // returns 200 with an empty tree above and is unaffected.
-  if (res.status !== 200) {
-    throw new Error(treeUnreadable(owner, repo, githubFailure, `git host returned ${res.status}`));
+  let gluecronFailure: string | null = null;
+  let payload: (GluecronTreeResponse & { truncated?: boolean }) | null = null;
+  if (!getToken()) gluecronFailure = "no Gluecron token configured";
+  else try {
+    const res = await gluecronApi(
+      "GET",
+      `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tree/${encodeURIComponent(ref)}?recursive=1`,
+    );
+    if (res.status !== 200) gluecronFailure = `git host returned ${res.status}`;
+    else {
+      payload = res.data as unknown as GluecronTreeResponse & { truncated?: boolean };
+      if (!payload.tree) { gluecronFailure = "git host returned no tree"; payload = null; }
+    }
+  } catch (err) {
+    gluecronFailure = `git host unreachable (${err instanceof Error ? err.message : "network error"})`;
   }
-  const payload = res.data as unknown as GluecronTreeResponse & { truncated?: boolean };
-  if (!payload.tree) {
-    throw new Error(treeUnreadable(owner, repo, githubFailure, "git host returned no tree"));
+  if (!payload) {
+    // Both credentialed hosts failed. A PUBLIC repo is still readable
+    // anonymously — try the archive before giving up. Throwing is the honest
+    // outcome when that fails too: callers already wrap this in try/catch and
+    // surface the reason, whereas returning [] silently becomes "this repo is
+    // empty" downstream. A genuinely empty repo still returns 200 with an
+    // empty tree above and is unaffected.
+    try {
+      const snap = await publicSnapshot(owner, repo, ref);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[fetchTree] ${owner}/${repo}@${ref}: served from anonymous public archive (${snap.paths.length} paths) — git-host credentials failed: ${githubFailure || "no GitHub token"}; ${gluecronFailure}`,
+      );
+      return { paths: snap.paths, truncated: snap.truncated, warning: snap.warning };
+    } catch (snapErr) {
+      const snapMsg = snapErr instanceof Error ? snapErr.message : "public archive unavailable";
+      throw new Error(treeUnreadable(owner, repo, githubFailure, `${gluecronFailure}; ${snapMsg}`));
+    }
   }
-  const paths = payload.tree.filter((f) => f.type === "blob").map((f) => f.path);
+  const paths = (payload.tree || []).filter((f) => f.type === "blob").map((f) => f.path);
   const truncated = payload.truncated === true;
   let warning: string | null = null;
   if (truncated) {
@@ -482,19 +541,34 @@ export async function fetchBlob(
     } catch { /* fall through to gluecron */ }
   }
 
-  const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
-  const res = await gluecronApi(
-    "GET",
-    `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/")}${qs}`
-  );
-  if (res.status !== 200) return "";
-  const payload = res.data as unknown as GluecronContentsResponse;
-  if (!payload.content || payload.encoding !== "base64") return "";
+  // Gluecron is PAT-only (resolveRepoAuth never selects it without a token),
+  // so an unauthenticated round-trip per blob would be 60 wasted requests per
+  // scan — skip straight to the public snapshot when there is no token.
+  if (getToken()) {
+    try {
+      const qs = ref ? `?ref=${encodeURIComponent(ref)}&encoding=base64` : `?encoding=base64`;
+      const res = await gluecronApi(
+        "GET",
+        `/api/v2/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}${qs}`
+      );
+      if (res.status === 200) {
+        const payload = res.data as unknown as GluecronContentsResponse;
+        if (payload.content && payload.encoding === "base64") {
+          return Buffer.from(payload.content, "base64").toString("utf-8");
+        }
+      }
+    } catch {
+      /* fall through to the public snapshot */
+    }
+  }
+  // Every credentialed path failed — serve the blob from the anonymous public
+  // archive (memoised per repo, so this is a Map lookup after the first call).
   try {
-    return Buffer.from(payload.content, "base64").toString("utf-8");
+    const snap = await publicSnapshot(owner, repo, ref || "HEAD");
+    return snap.contents.get(filePath) || "";
   } catch {
     return "";
   }
