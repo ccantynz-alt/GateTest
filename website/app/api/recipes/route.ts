@@ -41,6 +41,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -206,6 +207,24 @@ export async function PUT(req: NextRequest) {
     );
   }
 
+  // WRITES require the shared recipe-store token — the same
+  // GATETEST_RECIPE_STORE_TOKEN the CLI client already sends as a Bearer.
+  // Unauthenticated PUT let anyone publish an `after_snippet` that every
+  // CLI / website fix consumer would then apply to customer code (recipe
+  // poisoning, 2026-08-18 audit). No token configured → writes are
+  // unavailable (503), never open.
+  const expectedToken = process.env.GATETEST_RECIPE_STORE_TOKEN || "";
+  if (!expectedToken) {
+    return NextResponse.json({ ok: false, reason: "recipe-writes-not-configured" }, { status: 503 });
+  }
+  const auth = req.headers.get("authorization") || "";
+  const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expectedToken);
+  if (!presented || a.length !== b.length || !timingSafeEqual(a, b)) {
+    return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -222,8 +241,11 @@ export async function PUT(req: NextRequest) {
   const filePath = typeof body.filePath === "string" ? body.filePath.slice(0, 512) : "";
   const beforeContent = typeof body.beforeContent === "string" ? body.beforeContent : "";
   const afterContent = typeof body.afterContent === "string" ? body.afterContent : "";
-  const confidenceDelta =
-    typeof body.confidenceDelta === "number" ? body.confidenceDelta : 0;
+  // The CLIENT does not get to vote on confidence. A submitted recipe starts
+  // at the store's base (0.5) and only earns promotion through server-
+  // observed successes; a client delta of +0.4 used to reach 0.9 — above the
+  // 0.65 apply threshold — on first submission.
+  const confidenceDelta = 0;
 
   if (!moduleName || !issue || !filePath || !beforeContent || !afterContent) {
     return NextResponse.json(

@@ -64,8 +64,9 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_BASE_URL ||
     (req.nextUrl.origin ? req.nextUrl.origin : "");
 
+  let result: { status: number; body: unknown };
   try {
-    await githubEvents.processGitHubEvent({
+    result = await githubEvents.processGitHubEvent({
       rawBody,
       eventType,
       delivery,
@@ -82,7 +83,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal webhook error" }, { status: 500 });
   }
 
-  return NextResponse.json({ status: "processing" });
+  // A bad signature (401), missing secret (503), full queue (429) or
+  // malformed payload (400) must be VISIBLE in GitHub's delivery log — a
+  // blanket 200 "processing" hid every one of them and disabled redelivery
+  // (2026-08-18 audit; /api/events/push already did this correctly).
+  if (result.status === 204) return new NextResponse(null, { status: 204 });
+  return NextResponse.json(result.body ?? { status: "processing" }, { status: result.status });
 }
 
 

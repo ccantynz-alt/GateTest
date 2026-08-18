@@ -48,6 +48,7 @@ const IMPORTANT: Array<{ name: string; why: string }> = [
   { name: "VAPRON_BASE_URL", why: "runtime-scan dispatch to the Vapron worker tier disabled — /web and /wp scans ship static probes only" },
   { name: "VAPRON_API_TOKEN", why: "pairs with VAPRON_BASE_URL — Vapron rejects unauthenticated dispatch" },
   { name: "VAPRON_DISPATCH_SECRET", why: "pairs with VAPRON_BASE_URL — signs outbound jobs and verifies Vapron's result callbacks (CRONTECH_DISPATCH_SECRET is the legacy alias)" },
+  { name: "GATETEST_RECIPE_STORE_TOKEN", why: "fix-recipe WRITES (PUT /api/recipes) are refused with 503 until set — the flywheel cannot learn from CLI fixes; must equal the token CLI users set as GATETEST_RECIPE_STORE_TOKEN" },
 ];
 
 // Purely optional integrations.

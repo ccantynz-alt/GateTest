@@ -22,6 +22,19 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { resolveAndValidateUrl } = require("@/app/lib/ssrf-guard") as {
+  resolveAndValidateUrl: (input: string) => Promise<{ ok: true; url: URL } | { ok: false; reason: string }>;
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
+  createLimiter: (opts: { windowMs: number; maxRequests: number }) => {
+    guard: (req: NextRequest) => Promise<{ allowed: boolean; status?: number; body?: Record<string, unknown>; headers?: Record<string, string> }>;
+  };
+  PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
+};
+const _hostScanLimiter = createLimiter(PRESETS.webScan);
+
 import https from "https";
 import http from "http";
 import dns from "dns";
@@ -162,6 +175,22 @@ export async function POST(req: NextRequest) {
   let parsed: URL;
   try { parsed = new URL(url); } catch {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+  }
+  // SSRF: the hostname must resolve to a PUBLIC address before we open a
+  // socket to it — this route accepted any host:port and used tls.connect /
+  // http.request against it, an unauthenticated internal port scanner
+  // (2026-08-18 audit). Web ports only.
+  const validated = await resolveAndValidateUrl(url);
+  if (!validated.ok) {
+    return NextResponse.json({ error: "That host cannot be scanned: it does not resolve to a public internet address" }, { status: 400 });
+  }
+  const explicitPort = parsed.port ? Number(parsed.port) : 0;
+  if (explicitPort && ![80, 443, 8080, 8443].includes(explicitPort)) {
+    return NextResponse.json({ error: "Only web ports (80, 443, 8080, 8443) can be scanned" }, { status: 400 });
+  }
+  const rl = await _hostScanLimiter.guard(req);
+  if (!rl.allowed) {
+    return NextResponse.json(rl.body || { error: "Too many scans — try again in a minute" }, { status: rl.status || 429, headers: rl.headers });
   }
 
   const hostname = parsed.hostname;

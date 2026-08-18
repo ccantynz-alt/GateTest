@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { getDb } from "@/app/lib/db";
  
 const moduleConfidence = require("@/app/lib/module-confidence.js") as {
@@ -28,10 +29,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function authorizedCron(req: NextRequest): boolean {
-  const vercelCronSecret = process.env.CRON_SECRET || "";
+  // Production is the box, not Vercel: `x-vercel-cron: 1` is a header any
+  // client can set, so it authorised nobody in particular (2026-08-18
+  // audit). Only the shared CRON_SECRET counts, compared in constant time.
+  const cronSecret = process.env.CRON_SECRET || "";
   const authHeader = req.headers.get("authorization") || "";
-  if (vercelCronSecret && authHeader === `Bearer ${vercelCronSecret}`) return true;
-  if (req.headers.get("x-vercel-cron") === "1") return true;
+  if (cronSecret && authHeader.startsWith("Bearer ")) {
+    const presented = Buffer.from(authHeader.slice(7));
+    const expected = Buffer.from(cronSecret);
+    if (presented.length === expected.length && timingSafeEqual(presented, expected)) return true;
+  }
   if (process.env.NODE_ENV !== "production") return true;
   return false;
 }

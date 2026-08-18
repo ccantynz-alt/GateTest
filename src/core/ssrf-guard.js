@@ -34,6 +34,13 @@ const PRIVATE_V4_RANGES = [
   /^169\.254\./,
   /^0\./,
   /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  // 100.64.0.0/10 — carrier-grade NAT AND the Tailscale tailnet range. The
+  // production box is on Tailscale (memory: that is how Craig reaches it),
+  // so a scan of http://100.x.y.z would have probed our own tailnet.
+  /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./,
+  /^198\.1[89]\./,          // 198.18.0.0/15 benchmark
+  /^(22[4-9]|23[0-9])\./,    // 224.0.0.0/4 multicast
+  /^(24[0-9]|25[0-5])\./,    // 240.0.0.0/4 reserved + broadcast
 ];
 
 /**

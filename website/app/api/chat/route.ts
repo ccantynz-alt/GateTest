@@ -29,6 +29,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createLimiter: _createChatLimiter, PRESETS: _CHAT_PRESETS } = require("@lib/rate-limit") as {
+  createLimiter: (preset: { windowMs: number; maxRequests: number }) => {
+    guard: (req: NextRequest) => Promise<{ allowed: boolean; body?: unknown; status?: number; headers?: Record<string, string> }>;
+  };
+  PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
+};
+const _chatLimiter = _createChatLimiter(_CHAT_PRESETS.chat || { windowMs: 60_000, maxRequests: 10 });
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { apiUrl: anthropicApiUrl, apiVersion: anthropicVersion } = require("@/app/lib/anthropic-config") as { apiUrl: (r?: string) => string; apiVersion: () => string };
 
 export const dynamic = "force-dynamic";
@@ -93,15 +101,9 @@ export async function POST(req: NextRequest) {
   // Best-effort rate limit. Reusing the existing limiter avoids a new
   // dep. Failures fall through (don't crash chat over rate-limit infra).
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
-      createLimiter: (preset: { windowMs: number; maxRequests: number }) => {
-        guard: (req: NextRequest) => Promise<{ allowed: boolean; body?: unknown; status?: number; headers?: Record<string, string> }>;
-      };
-      PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
-    };
-    const limiter = createLimiter(PRESETS.chat || { windowMs: 60_000, maxRequests: 10 });
-    const rl = await limiter.guard(req);
+    // Module-scoped: a limiter created per request starts every window at
+    // zero, so the 10/min cap never fired (2026-08-18 audit).
+    const rl = await _chatLimiter.guard(req);
     if (!rl.allowed) {
       return new Response(makeLocalStream("You're sending messages a bit fast — give it a moment and I'll catch up."), {
         status: 200,

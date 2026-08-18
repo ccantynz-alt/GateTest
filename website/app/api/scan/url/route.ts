@@ -12,6 +12,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { scanWebsite } from "@/app/lib/website-scanner";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { resolveAndValidateUrl } = require("@/app/lib/ssrf-guard") as {
+  resolveAndValidateUrl: (input: string) => Promise<{ ok: true; url: URL } | { ok: false; reason: string }>;
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
+  createLimiter: (opts: { windowMs: number; maxRequests: number }) => {
+    guard: (req: NextRequest) => Promise<{ allowed: boolean; status?: number; body?: Record<string, unknown>; headers?: Record<string, string> }>;
+  };
+  PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
+};
+const _urlScanLimiter = createLimiter(PRESETS.webScan);
 
 export const maxDuration = 30;
 
@@ -42,8 +54,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // SSRF: resolve the hostname and refuse private / reserved / metadata /
+  // tailnet targets BEFORE any request leaves the box. This route used to
+  // pass a regex-checked string straight to fetch(redirect:"follow") — an
+  // unauthenticated internal port scanner (2026-08-18 audit).
+  const validated = await resolveAndValidateUrl(url);
+  if (!validated.ok) {
+    return NextResponse.json(
+      { error: "That URL cannot be scanned: it does not resolve to a public internet address" },
+      { status: 400 }
+    );
+  }
+  const rl = await _urlScanLimiter.guard(req);
+  if (!rl.allowed) {
+    return NextResponse.json(rl.body || { error: "Too many scans — try again in a minute" }, { status: rl.status || 429, headers: rl.headers });
+  }
+
   try {
-    const result = await scanWebsite(url);
+    const result = await scanWebsite(validated.url.toString());
     return NextResponse.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Scan failed";

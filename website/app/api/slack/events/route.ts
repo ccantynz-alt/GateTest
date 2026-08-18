@@ -42,8 +42,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const timestamp = req.headers.get("x-slack-request-timestamp") || "";
   const signature = req.headers.get("x-slack-signature") || "";
 
-  // ── 1. Verify signature ───────────────────────────────────────────────────
-  if (SIGNING_SECRET && !verifySlashSignature(timestamp, rawBody, signature, SIGNING_SECRET)) {
+  // ── 1. Verify signature — FAIL CLOSED ─────────────────────────────────────
+  // With no signing secret configured this route used to accept ANY POST as
+  // a genuine slash command: a forged request could trigger a scan on the
+  // internal key and have the result posted to an attacker-chosen
+  // response_url (2026-08-18 audit). Unconfigured means unavailable.
+  if (!SIGNING_SECRET) {
+    return NextResponse.json({ error: "Slack integration is not configured on this deployment" }, { status: 503 });
+  }
+  if (!verifySlashSignature(timestamp, rawBody, signature, SIGNING_SECRET)) {
     return NextResponse.json({ error: "Invalid Slack signature" }, { status: 401 });
   }
 

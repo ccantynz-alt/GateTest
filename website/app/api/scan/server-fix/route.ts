@@ -9,6 +9,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/app/lib/admin-auth";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createLimiter: _mkLimiter, PRESETS: _RL_PRESETS } = require("@lib/rate-limit") as {
+  createLimiter: (opts: { windowMs: number; maxRequests: number }) => {
+    guard: (req: NextRequest) => Promise<{ allowed: boolean; status?: number; body?: Record<string, unknown>; headers?: Record<string, string> }>;
+  };
+  PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
+};
+const _serverFixLimiter = _mkLimiter(_RL_PRESETS.scanFix);
 import https from "https";
 
 // Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
@@ -423,13 +432,24 @@ export async function POST(req: NextRequest) {
   const hostname = body.hostname || "your-domain.com";
   const modules = body.modules || [];
 
+  const rl = await _serverFixLimiter.guard(req);
+  if (!rl.allowed) {
+    return NextResponse.json(rl.body || { error: "Too many requests — try again in a minute" }, { status: rl.status || 429, headers: rl.headers });
+  }
+  // The Forensic (Claude-driven) branch spends OUR Anthropic budget. A
+  // client-supplied `tier: "nuclear"` used to unlock it for anyone
+  // (2026-08-18 audit). This route is only called from the admin console
+  // tabs, so the branch requires the admin session; everyone else gets the
+  // free template path below.
+  const forensicAllowed = body.tier === "nuclear" && isAdminRequest(req);
+
   // Phase 3.1 — Forensic-tier diagnosis branch. When the caller's tier
   // is `nuclear`, replace category-matched shell templates with
   // Claude-driven evidence-tied diagnosis. The Quick / Full flows
   // continue to use the legacy template generators below — they ship
   // free with those tiers and their snippets are useful starting
   // points for non-Nuclear customers.
-  if (body.tier === "nuclear" && ANTHROPIC_API_KEY) {
+  if (forensicAllowed && ANTHROPIC_API_KEY) {
     const findings: Array<{ detail: string; module: string; severity: string }> = [];
     for (const mod of modules) {
       if (mod.status === "passed") continue;

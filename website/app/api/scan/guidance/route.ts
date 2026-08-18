@@ -10,6 +10,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { createLimiter: _mkLimiter, PRESETS: _RL_PRESETS } = require("@lib/rate-limit") as {
+  createLimiter: (opts: { windowMs: number; maxRequests: number }) => {
+    guard: (req: NextRequest) => Promise<{ allowed: boolean; status?: number; body?: Record<string, unknown>; headers?: Record<string, string> }>;
+  };
+  PRESETS: Record<string, { windowMs: number; maxRequests: number }>;
+};
+const _guidanceLimiter = _mkLimiter(_RL_PRESETS.scanFix);
 import { httpsJsonRequest } from "../../../lib/github-app";
 
 // Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
@@ -251,6 +259,13 @@ export async function POST(req: NextRequest) {
 
   const issues = body.issues || [];
   if (issues.length === 0) return NextResponse.json({ guidance: [] });
+
+  // Up to 20 Claude calls per request on OUR key with no limiter was free
+  // AI spend for anyone (2026-08-18 audit).
+  const rl = await _guidanceLimiter.guard(req);
+  if (!rl.allowed) {
+    return NextResponse.json(rl.body || { error: "Too many requests — try again in a minute" }, { status: rl.status || 429, headers: rl.headers });
+  }
 
   // First pass: match known patterns instantly (no API call)
   const guidance: Guidance[] = [];
