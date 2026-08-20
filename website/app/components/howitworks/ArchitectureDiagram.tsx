@@ -20,7 +20,7 @@ const NODES: Node[] = [
   { id: "queue", label: "scan_queue (Postgres)", detail: "idempotent via delivery id", y: 220, variant: "queue" },
   { id: "engine", label: "Worker fetches job  →  Gate runs 121 modules", detail: "deterministic, no AI by default", y: 310, variant: "engine" },
   { id: "cluster", label: "Findings clustered, ranked, capped per tier", detail: "root causes first, info-severity dropped", y: 410, variant: "engine" },
-  { id: "fix", label: "Flywheel  ·  AST → Rule → Recipe → Claude", detail: "first layer that wins ships the patch", y: 510, variant: "fix" },
+  { id: "fix", label: "Fix engine  ·  Recipe → Claude → Gates", detail: "patch must clear syntax + re-scan gates", y: 510, variant: "fix" },
   { id: "gate", label: "Test gen  +  syntax gate  +  scanner re-validation", detail: "broken fixes never reach the PR", y: 610, variant: "fix" },
   { id: "review", label: "Pair review  +  architecture annotation  ·  Tier 2+", detail: "second Claude critiques every fix", y: 700, variant: "review" },
   { id: "nuclear", label: "Correlation  +  Claude diagnosis  +  executive summary  ·  Forensic", detail: "attack chains across findings, per-finding diagnosis, CISO report (mutation + chaos run via GitHub Action)", y: 790, variant: "nuclear" },
