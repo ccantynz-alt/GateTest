@@ -255,7 +255,7 @@ export default function Privacy() {
               <li>Repository access uses GitHub&apos;s authenticated API with time-limited installation tokens</li>
               <li>Minimal permissions requested — read-only for contents, write only for PR comments and commit statuses</li>
               <li>No source code is written to disk, databases, or persistent storage at any point</li>
-              <li>Infrastructure hosted on Vercel with SOC 2 Type II compliance</li>
+              <li>Infrastructure hosted on dedicated cloud servers (Vultr), with DNS and edge services via Cloudflare and the database on Neon</li>
             </ul>
           </section>
 
@@ -492,15 +492,15 @@ export default function Privacy() {
                 <a href="https://www.anthropic.com/privacy" className="text-accent-light hover:underline ml-1" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
               </li>
               <li>
-                <strong>Vercel, Inc.</strong> (United States) — website, serverless function
-                hosting, edge network, analytics (in aggregate form only where enabled).
+                <strong>The Constant Company, LLC (Vultr)</strong> (United States) — cloud
+                server hosting for the website, API, and scan workers.
                 <br />
                 <em>Sees:</em> HTTP request metadata (IP, path, user-agent, timestamp), any
-                in-memory state during function execution.
+                in-memory state during request processing on our servers.
                 <br />
-                <em>Governed by:</em> Vercel Data Processing Addendum with SCCs for EU/UK
-                transfers.
-                <a href="https://vercel.com/legal/privacy-policy" className="text-accent-light hover:underline ml-1" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+                <em>Governed by:</em> Vultr Data Processing Agreement with SCCs for EU/UK
+                transfers where applicable.
+                <a href="https://www.vultr.com/legal/privacy/" className="text-accent-light hover:underline ml-1" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
               </li>
               <li>
                 <strong>Cloudflare, Inc.</strong> (United States) — DNS, edge network, DDoS

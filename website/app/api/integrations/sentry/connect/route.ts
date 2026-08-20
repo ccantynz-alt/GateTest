@@ -5,7 +5,7 @@
  * Sentry's authorization page. After they approve, Sentry redirects
  * back to /api/integrations/sentry/callback with a `code` param.
  *
- * Required env vars (BOSS RULE territory — Craig must add to Vercel):
+ * Required env vars (BOSS RULE territory — Craig must add on the deploy box):
  *   SENTRY_CLIENT_ID
  *   SENTRY_CLIENT_SECRET
  *
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       {
         ok: false,
         error: "SENTRY_CLIENT_ID is not configured. Sentry integration not yet active.",
-        hint: "Add SENTRY_CLIENT_ID + SENTRY_CLIENT_SECRET in Vercel env vars to enable.",
+        hint: "Add SENTRY_CLIENT_ID + SENTRY_CLIENT_SECRET in website/.env.local on the deploy box to enable.",
       },
       { status: 503 }
     );

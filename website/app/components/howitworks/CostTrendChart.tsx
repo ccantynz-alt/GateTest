@@ -3,7 +3,8 @@
  *
  * Sketches the Claude-call-ratio curve over time as recipes accumulate.
  * No real metrics — this is illustrative, plotted from a logistic decay
- * that matches the architectural intent described in try-fix.js.
+ * that matches the recipe-promotion design (src/core/recipe-promotion.js):
+ * repeat shapes stop reaching Claude as recipes earn promotion.
  */
 
 const POINTS = [
@@ -41,7 +42,7 @@ export default function CostTrendChart() {
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
-        aria-label="Cost trend: percentage of fixes served by Claude. Starts near 100 percent on early scans, drops below 30 percent after roughly 50 scans, trends toward 5 percent after 100-plus scans as the recipe layer accumulates."
+        aria-label="Illustrative design goal, not measured data: percentage of fixes served by Claude. Starts near 100 percent on early scans, drops below 30 percent after roughly 50 scans, trends toward 5 percent after 100-plus scans as promoted recipes accumulate."
         className="w-full h-auto min-w-[480px]"
       >
         <defs>

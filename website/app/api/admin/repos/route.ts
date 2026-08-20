@@ -96,7 +96,7 @@ export async function GET() {
   const token = await getBestGitHubToken();
   if (!token) {
     return NextResponse.json(
-      { error: "No GitHub token configured. Add one in Admin → Connected Accounts, or set GATETEST_GITHUB_TOKEN in Vercel env vars." },
+      { error: "No GitHub token configured. Add one in Admin → Connected Accounts, or set GATETEST_GITHUB_TOKEN in website/.env.local on the deploy box." },
       { status: 503 }
     );
   }

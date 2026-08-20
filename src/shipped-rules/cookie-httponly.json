@@ -9,9 +9,7 @@
     "replace": "httpOnly$1:$2true",
     "flags": "g"
   },
-  "promotedAt": "2026-05-17T00:00:00Z",
-  "promotedFromCustomers": 6,
-  "winRate": 0.96,
   "description": "Flip httpOnly: false to true on cookie/session options. Prevents document.cookie XSS exfiltration. Mirrors ast-httponly.",
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "origin": "curated"
 }

@@ -252,7 +252,7 @@ export default function Terms() {
               merging auto-fix pull requests; (c) any actions taken or not taken based on scan results
               or AI review output; (d) any third-party claims related to your code or repositories;
               (e) any failure of third-party infrastructure (including Stripe, GitHub, Anthropic,
-              Vercel, Cloudflare, or Neon) that is outside our reasonable control; (f) any loss
+              Vultr, Cloudflare, or Neon) that is outside our reasonable control; (f) any loss
               arising from use of the CLI tool, which is provided under the MIT License without
               warranty.
             </p>
@@ -626,7 +626,7 @@ export default function Terms() {
             <h2 className="text-lg font-semibold text-foreground mb-2">20. Export Controls and Sanctions Compliance</h2>
             {/* DRAFT — requires attorney review. Counsel should confirm the specific export-control
                 regimes that apply to the Service given its use of AI processing and US-based
-                sub-processors (Stripe, Anthropic, Vercel, Cloudflare), and should confirm the
+                sub-processors (Stripe, Anthropic, Vultr, Cloudflare), and should confirm the
                 sanctioned-jurisdiction list is current. */}
             <p>
               <strong>20.1 Sanctions.</strong> You may not access or use the Service if you are, or
@@ -758,7 +758,7 @@ export default function Terms() {
               outbreaks affecting us or our sub-processors; failures or disruptions of
               telecommunications, internet backbone, DNS, or certificate-authority infrastructure;
               failures or outages of upstream providers (including Stripe, GitHub, Anthropic,
-              Vercel, Cloudflare, or Neon); government action, embargo, sanction, export
+              Vultr, Cloudflare, or Neon); government action, embargo, sanction, export
               restriction, or change in law; labour disputes, strikes, or work stoppages; power
               failures; pandemic, epidemic, or public-health emergency; or any other event of the
               nature commonly described as force majeure. Where a force majeure event prevents

@@ -9,9 +9,7 @@
     "replace": "secure$1:$2true",
     "flags": "g"
   },
-  "promotedAt": "2026-05-17T00:00:00Z",
-  "promotedFromCustomers": 5,
-  "winRate": 0.91,
   "description": "Flip secure: false to true on cookie/session options. Forces TLS-only cookie transport. Mirrors ast-secure-cookie.",
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "origin": "curated"
 }

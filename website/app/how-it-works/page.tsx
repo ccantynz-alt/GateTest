@@ -209,11 +209,12 @@ export default function HowItWorksPage() {
             The fix flywheel
           </h2>
           <p className="text-white/55 max-w-3xl mb-8 leading-relaxed">
-            When the gate produces a finding that you&apos;ve paid to have fixed, our orchestrator
-            (<code className="font-mono text-teal-300/80 bg-white/[0.04] px-1.5 py-0.5 rounded text-xs">website/app/lib/try-fix.js</code>)
-            walks four layers in order. The first layer that produces a real patch wins. Each layer is bounded
-            by a 30-second soft timeout; a crash falls through; a no-op patch is rejected. The whole orchestrator
-            never throws.
+            When the gate produces a finding that you&apos;ve paid to have fixed, the pipeline is Claude
+            working under hard gates. The engine checks the recipe store first — a promoted recipe replays
+            for free. Otherwise Claude proposes a minimal, surgical diff (on the CI path, three competing
+            hypotheses in a single call). Every candidate patch must parse, and the fixed file is re-scanned:
+            the original finding must be gone and nothing new raised. A no-op patch is rejected, and per-tier
+            budget caps mean a fix can never cost more than you paid for it.
           </p>
 
           <FlywheelTable />
@@ -221,10 +222,12 @@ export default function HowItWorksPage() {
           <div className="mt-10 rounded-2xl border border-white/[0.08] bg-white/[0.015] p-4 sm:p-6">
             <h3 className="text-base font-semibold text-white mb-2">Cost trend as recipes accumulate</h3>
             <p className="text-sm text-white/55 mb-4 max-w-2xl leading-relaxed">
-              When Claude solves something and the diff is templatey, the
+              When Claude solves something and the diff is small and templatey, the
               <code className="mx-1 font-mono text-teal-300/80 bg-white/[0.04] px-1.5 py-0.5 rounded text-xs">auto-distill</code>
-              step records a recipe. Next time the same shape appears, the recipe layer wins and Claude is never called.
-              The Claude ratio is highest on day one and trends toward single digits over time.
+              step can record a recipe in your local store. A recipe replays — with Claude never called — once
+              it has been confirmed enough times to be promoted to stable; an unproven patch never auto-applies.
+              The chart below is the design goal: repeat shapes stop reaching Claude, so the paid-model share
+              falls as promoted recipes accumulate.
             </p>
             <CostTrendChart />
           </div>
@@ -263,7 +266,8 @@ export default function HowItWorksPage() {
           <p className="text-white/55 max-w-3xl mb-6 leading-relaxed">
             Beyond the managed scan, GateTest ships a GitHub Actions workflow that runs in <em>your</em> CI with
             <em> your</em> Anthropic key. When CI breaks, the workflow pipes the failing log through the same
-            AST → Rule → Recipe → Claude flywheel, applies the fix, and opens a follow-up PR. Same engine, same
+            fix engine — promoted recipes replay first, then Claude proposes three competing patches that must
+            survive the syntax and test gates — applies the fix, and opens a follow-up PR. Same engine, same
             recipe store, your bill on Anthropic rather than ours.
           </p>
 
@@ -300,7 +304,7 @@ jobs:
             {[
               { n: "1", t: "CI fails", d: "Workflow_run trigger fires on conclusion: failure." },
               { n: "2", t: "Logs in", d: "Heal step downloads the failing job's logs and the diff." },
-              { n: "3", t: "Flywheel", d: "Same AST → Rule → Recipe → Claude orchestrator runs." },
+              { n: "3", t: "Fix engine", d: "Recipe replay first, then Claude's three hypotheses race through syntax and test gates." },
               { n: "4", t: "Fix PR", d: "Patch lands on a follow-up branch, PR opens against your default." },
             ].map((step) => (
               <li key={step.n} className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">

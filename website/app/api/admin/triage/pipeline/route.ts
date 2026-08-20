@@ -715,7 +715,7 @@ export async function POST(req: NextRequest) {
       {
         error: "no-github-token",
         message:
-          "No GitHub token configured. Add one in Admin → Connected Accounts, or set GATETEST_GITHUB_TOKEN in Vercel env vars.",
+          "No GitHub token configured. Add one in Admin → Connected Accounts, or set GATETEST_GITHUB_TOKEN in website/.env.local on the deploy box.",
       },
       { status: 503 }
     );

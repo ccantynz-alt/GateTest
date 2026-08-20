@@ -1,7 +1,10 @@
 /**
- * The four flywheel layers, side-by-side. Each layer is a column on
- * desktop, stacks on mobile. Matches the orchestrator in
- * website/app/lib/try-fix.js — AST → Rule → Recipe → Claude.
+ * The four fix-pipeline stages, side-by-side. Each stage is a column on
+ * desktop, stacks on mobile. Matches what ships: recipe playback
+ * (src/core/flywheel-playback-engine.js) ahead of the Claude surgical-fix
+ * path, with the syntax and scanner gates every candidate patch must clear
+ * (cross-fix-syntax-gate / cross-fix-scanner-gate on the hosted route,
+ * syntax + test ranking in cli-fix-orchestrator.js on the CI path).
  */
 
 type Layer = {
@@ -19,59 +22,59 @@ type Layer = {
 const LAYERS: Layer[] = [
   {
     number: "1",
-    name: "AST",
-    cost: "$0.00",
-    description: "Babel-parsed deterministic transforms — currently ~10 canonical patterns covering TLS, cookies, parseInt radix, async-iteration, and the most common config flips.",
-    wins: "When the bug is a single config flag or call-site argument that can be flipped without semantic ambiguity.",
-    example: {
-      before: "https.Agent({\n  rejectUnauthorized: false\n})",
-      after:  "https.Agent({\n  rejectUnauthorized: true\n})",
-    },
-    accent: "text-teal-300",
-    border: "border-teal-500/30",
-    bg: "bg-teal-500/[0.04]",
-  },
-  {
-    number: "2",
-    name: "Rule",
-    cost: "$0.00",
-    description: "Regex and structural pattern engine for shapes the AST doesn't model. Same-file edits, deterministic replacements, fast path for high-frequency patterns.",
-    wins: "When the bug is a recognisable line-level shape that AST traversal would have to special-case.",
-    example: {
-      before: "console.log(user)",
-      after:  "logger.info({ user_id: user.id })",
-    },
-    accent: "text-indigo-300",
-    border: "border-indigo-500/30",
-    bg: "bg-indigo-500/[0.04]",
-  },
-  {
-    number: "3",
     name: "Recipe",
     cost: "$0.00",
-    description: "Cached fixes that Claude solved on a previous scan. The 'auto-distill' step records the before/after when Claude's diff is small and templatey — next time the same shape appears, the recipe wins.",
-    wins: "Anything Claude has solved before. The recipe layer is the flywheel — it learns from every paid fix.",
+    description: "Deterministic replay of fixes Claude has already proven. A recipe is distilled from a small, templatey Claude diff and replays only after it has been confirmed enough times to be promoted to stable — an unproven patch never auto-applies.",
+    wins: "Repeat shapes Claude has solved before, once their recipe has earned promotion. Zero cost, zero model call.",
     example: {
-      before: "// match by ruleKey + file ext\n// hit: js-reject-unauthorized\n// applied 7 times",
-      after:  "// recipe applied, zero cost\n// promoted to 'stable' at 3 hits",
+      before: "// match by ruleKey + file ext\n// hit: js-reject-unauthorized\n// recipe status: stable",
+      after:  "// recipe applied, zero cost\n// Claude never called",
     },
     accent: "text-amber-300",
     border: "border-amber-500/30",
     bg: "bg-amber-500/[0.04]",
   },
   {
-    number: "4",
+    number: "2",
     name: "Claude",
     cost: "paid",
-    description: "Anthropic Claude Sonnet 5. Only invoked when the first three layers all return null. Bounded by a 30s per-layer timeout, capped per tier so spend never exceeds margin.",
-    wins: "First-time-seen patterns. Bespoke business-logic bugs. Anything templated layers can't model.",
+    description: "Claude proposes a minimal, surgical diff for the finding — model chosen per tier. On the CI path it generates three competing hypotheses in a single call and the best-ranked candidate wins. Capped per tier so spend never exceeds margin.",
+    wins: "First-time-seen patterns. Bespoke business-logic bugs. Anything a template can't model.",
     example: {
       before: "// novel pattern: ad-hoc auth check\n// mixed with feature-flag rollout\n// no canonical shape",
-      after:  "// Claude reasons from your code\n// fix lands, auto-distill records\n// next time → recipe layer",
+      after:  "// Claude reasons from your code\n// three hypotheses, best wins\n// smallest diff that fixes it",
     },
     accent: "text-pink-300",
     border: "border-pink-500/30",
     bg: "bg-pink-500/[0.04]",
+  },
+  {
+    number: "3",
+    name: "Syntax gate",
+    cost: "$0.00",
+    description: "Every candidate patch must parse. A patch that breaks the file's syntax is discarded on the spot, a crash falls through to the next candidate, and a no-op diff is rejected outright.",
+    wins: "Stops a bad patch before it can touch your branch — nothing that fails to parse ever reaches a PR.",
+    example: {
+      before: "// candidate patch B\n// parse → SyntaxError",
+      after:  "// discarded, never applied\n// candidate A carries on",
+    },
+    accent: "text-indigo-300",
+    border: "border-indigo-500/30",
+    bg: "bg-indigo-500/[0.04]",
+  },
+  {
+    number: "4",
+    name: "Scanner gate",
+    cost: "$0.00",
+    description: "The fixed file is re-scanned by the same engine that raised the finding. The fix must make the original finding disappear without raising anything new — on the CI path your own test suite is run as the final judge.",
+    wins: "Proves the fix is real. A patch that silences the symptom but fails the re-scan or the tests never ships.",
+    example: {
+      before: "// re-scan: finding gone?\n// new findings introduced?\n// tests still green?",
+      after:  "// all three yes → patch lands\n// any no → rejected",
+    },
+    accent: "text-teal-300",
+    border: "border-teal-500/30",
+    bg: "bg-teal-500/[0.04]",
   },
 ];
 

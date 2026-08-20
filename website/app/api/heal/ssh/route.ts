@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
 
   if (!password && !privateKey) {
     return NextResponse.json({
-      error: "No SSH credentials. Set GATETEST_SSH_PASSWORD or GATETEST_SSH_KEY in Vercel env vars.",
+      error: "No SSH credentials. Set GATETEST_SSH_PASSWORD or GATETEST_SSH_KEY in website/.env.local on the deploy box.",
     }, { status: 400 });
   }
 

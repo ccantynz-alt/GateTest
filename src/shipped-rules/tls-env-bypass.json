@@ -9,9 +9,7 @@
     "replace": "",
     "flags": "gm"
   },
-  "promotedAt": "2026-05-17T00:00:00Z",
-  "promotedFromCustomers": 4,
-  "winRate": 0.97,
   "description": "Remove process.env.NODE_TLS_REJECT_UNAUTHORIZED = \"0\" — the global nuclear TLS-validation disable. Same effect as the ast-tls-env-bypass transform, applied as a line-level regex strip for non-AST contexts.",
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "origin": "curated"
 }
