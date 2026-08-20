@@ -1,0 +1,203 @@
+{
+  "generatedAt": "2026-08-19T03:47:07.734Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 12,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 8,
+      "SonarQube": 0,
+      "Semgrep": 0,
+      "CodeQL": 3,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49356009",
+        "author": "LouisLazaris",
+        "type": "comment",
+        "title": null,
+        "text": "There's a write-up here: https:&#x2F;&#x2F;dev.to&#x2F;grahamthedev&#x2F;snake-rendered-with-576-browser-...",
+        "url": "https://news.ycombinator.com/item?id=49356009",
+        "points": null,
+        "numComments": null,
+        "storyId": 49356006,
+        "createdAt": "2026-08-19T02:47:08Z",
+        "createdAtUnix": 1787107628,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49356006",
+        "author": "LouisLazaris",
+        "type": "story",
+        "title": "Snake rendered with 576 browser windows",
+        "text": "Snake rendered with 576 browser windows",
+        "url": "https://codepen.io/editor/GrahamTheDev/pen/019f90a9-1ed9-7d61-927e-31dd5256c79e",
+        "points": 1,
+        "numComments": 1,
+        "storyId": 49356006,
+        "createdAt": "2026-08-19T02:46:52Z",
+        "createdAtUnix": 1787107612,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49345428",
+        "author": "GolfPopper",
+        "type": "comment",
+        "title": null,
+        "text": ">this weird rainbow snake floating around.Sounds like it might have been a 'floater':https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Floater(I've had one myself for my whole life, a 'crystal worm'. I usually don't notice it, fortunately, but once it a while it will noticeably drift into my field of view while looking at a bright, blank field - like the blue sky or a monochrome computer screen.)",
+        "url": "https://news.ycombinator.com/item?id=49345428",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270194,
+        "createdAt": "2026-08-18T13:34:54Z",
+        "createdAtUnix": 1787060094,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49344682",
+        "author": "ibobev",
+        "type": "story",
+        "title": "Snakes and Ladders",
+        "text": "Snakes and Ladders",
+        "url": "https://entropicthoughts.com/snakes-and-ladders",
+        "points": 1,
+        "numComments": 1,
+        "storyId": 49344682,
+        "createdAt": "2026-08-18T12:28:03Z",
+        "createdAtUnix": 1787056083,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49342823",
+        "author": "nyku",
+        "type": "story",
+        "title": "OpenAI disbanded the team that assessed catastrophic model risks",
+        "text": "OpenAI disbanded the team that assessed catastrophic model risks",
+        "url": "https://thenextweb.com/news/openai-preparedness-team-disbanded-ipo-streamlining",
+        "points": 31,
+        "numComments": 14,
+        "storyId": 49342823,
+        "createdAt": "2026-08-18T08:06:58Z",
+        "createdAtUnix": 1787040418,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49342652",
+        "author": "saidnooneever",
+        "type": "comment",
+        "title": null,
+        "text": "weird shit that happen kinda happen to me a lot. i felt always that maybe my brain was malfunctioning.i still kinda do, because it just happen at random when i am outside. sometimes, usually in bright morning light, sunny morning. no i dont look at the sun, yes mostly its visible looking at the blue of the sky.last time i had it while in 1 on 1 with my manager. it took a lot of struggle not to try and rub my eye or tell her i was seeing this weird rainbow snake floating around.overloaded cones, hopefully thats not some indication of something bad but just 'tired eyes'.",
+        "url": "https://news.ycombinator.com/item?id=49342652",
+        "points": null,
+        "numComments": null,
+        "storyId": 49270194,
+        "createdAt": "2026-08-18T07:42:59Z",
+        "createdAtUnix": 1787038979,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49342278",
+        "author": "snyssfx",
+        "type": "comment",
+        "title": null,
+        "text": "Hey, thanks for the comment.One of the good things about Polylith is that it doesn't force me to migrate fully to it.It just tells me to use 3 directories: one of them is for shared mini-libraries, another one is for projects, and the last one is for applications' deps.edns.And in the future, if I decide to go all-in, Polylith has guides and roads for how to refactor the projects into libraries and components.So what you describe sounds like the same thing to me, yes :)",
+        "url": "https://news.ycombinator.com/item?id=49342278",
+        "points": null,
+        "numComments": null,
+        "storyId": 49336434,
+        "createdAt": "2026-08-18T06:55:42Z",
+        "createdAtUnix": 1787036142,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49341982",
+        "author": "shykes",
+        "type": "comment",
+        "title": null,
+        "text": "I'm confused as to what the accusation is exactly. Out of curiosity I browsed the site in question, which only increased my confusion.> But the Hanover Institute is not a real think tank.What does that mean exactly?> None of the reports have bylinesThe site actually addresses this at https:&#x2F;&#x2F;hanoverinstitute.com&#x2F;hanover&#x2F;about : Reports are published under the Institute’s name rather than an individual’s. That is the convention at institutional publishers, and it fits how the work is made: every report is produced against one standard and one citation bank. A reader is asked to weigh the sources, which are named in the sentence that carries each figure, rather than the author. > A small disclaimer at the bottom of the webpage notes that the organization was created on behalf of the Israeli Government Advertising Agency by Piro, Inc, a firm co-founded by Daniel Rosenberg, the producer of Spike Lee’s “Inside Man.”\"Small disclaimer\" implies that the site is attempting to hide its affiliation. But their \"about\" page, which is linked at the top of every page, is quite clear: WHO FUNDS THIS WORK The Institute’s materials are distributed by Piro, Inc. on behalf of Havas Media Germany GmbH, acting for the Israel Government Advertising Agency (LaPam). That relationship is registered under the Foreign Agents Registration Act, registration 7732, and every report published here is filed with the Department of Justice, where the registration and the filings can be read in full, and the funding page sets out when the relationship began and what the funder does not decide. That registration is why this site does not call itself independent, nonpartisan or neutral. What it offers instead is a method a reader can check: every figure carries the body that produced it, the year and the number, inside the sentence that makes the claim; sources that are a party to the events they describe are labelled as such and their counts are never presented as independently verified; and where the evidence is contested, the competing findings are given by name and date rather than settled. No report recommends a policy or tells a reader what to conclude. Those are properties of the work that can be tested against the work, which is the only kind of claim worth making here. > The institute’s “data reports” have footnotes and tables of contents, and they present arguments in a neutral tone, helping them appeal to chatbots like Claude or Gemini.So, they're guilty of good SEO?> Piro’s website says that it “author(s) content engineered for how LLMs evaluate credibility,” describing this service as \"AI Story Optimization.\" Others refer to this practice of influencing artificial intelligence as “LLM poisoning.”So the issue is that they use a LLM-friendly SEO service?> Many of the reports are formulaic, starting with an innocent question that someone might ask a chatbot.> “What Caused the Displacement of Palestinians in 1948?”> “Which Humanitarian Organizations Have Documented Israeli War Crimes?”> “What is the Current Situation in the Gaza Strip?”> In an article titled “Is the IDF the World’s Most Moral Army?” the Hanover Institute cites a 2022 poll that found that 47% of Israeli Jews believed that statement. Another report casts doubt on UNICEF's assertion that “90% of water and institutional infrastructure has been damaged or destroyed” in Gaza. Many of the reports conclude by linking the topic to rising antisemitism, oftentimes citing the same studies.So, the accusation is that they frame their opinion articles as a Q&A, and focus each article on a single question?I've read these articles: they are well written and make a visible effort to provide sources, while being transparent about the fact that they are not neutral.It's perfectly fine to criticize the actual content of these articles. But attacking their credibility by accusing them of \"LLM poisoning\" and implying that they're disguising their affiliation, is ridiculous and should be called out.",
+        "url": "https://news.ycombinator.com/item?id=49341982",
+        "points": null,
+        "numComments": null,
+        "storyId": 49337392,
+        "createdAt": "2026-08-18T06:18:36Z",
+        "createdAtUnix": 1787033916,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [],
+    "CodeQL": [
+      {
+        "objectId": "49356213",
+        "author": "codelion",
+        "type": "story",
+        "title": "The Recursive Economy: AI Self-Improvement and Scarcity",
+        "text": "The Recursive Economy: AI Self-Improvement and Scarcity",
+        "url": "https://recursive-economy.pages.dev/",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49356213,
+        "createdAt": "2026-08-19T03:16:21Z",
+        "createdAtUnix": 1787109381,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49352783",
+        "author": "codeulike",
+        "type": "comment",
+        "title": null,
+        "text": "Malcolm Walker, the founder and his son Richard Walker the current chairman are (for such an ordinary seeming supermarket) surprisingly progressive and have often spearheaded sustainability and corporate responsibility campaigns. Malcolm Walker was an active member of Greenpeace and Iceland worked with Greenpeace on several campaigns over the years.",
+        "url": "https://news.ycombinator.com/item?id=49352783",
+        "points": null,
+        "numComments": null,
+        "storyId": 49351324,
+        "createdAt": "2026-08-18T21:12:24Z",
+        "createdAtUnix": 1787087544,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49352262",
+        "author": "llama052",
+        "type": "comment",
+        "title": null,
+        "text": "Github Status: Incident with GitHub.comAug 17, 21:15 UTC Resolved - On August 17, 2026, from 13:28–21:15 UTC (7h 47m),GitHub.com experienced elevated errors and latency across Issues, Pull Requests, APIs, Actions, and Copilot. At peak, web&#x2F;API error rates were approximately 20%, while archive and raw-content downloads reached approximately 50%. SAML&#x2F;OIDC authentication, SCIM, and Team Sync were also affected, as well as Actions workflows in GHEC with Data Residency that depend on public workflow step definitions hosted on GitHub.com. Most services recovered by 16:36 UTC as our Central US datacenter recovered; Actions was degraded until approximately 18:03 UTC; and Copilot Token Service fully recovered by 21:02.Some of the failing traffic was moved from Central US to Northern Virginia where it was served successfully until the network failure in Central US was debugged and resolved. Delayed replies to a single internal endpoint triggered a latent retry bug in VS Code that amplified traffic by approximately 10x and caused delayed recovery for the Copilot Token Service.The immediate cause of the failure was network saturation on load balancers in Central US due to a new peak in traffic. Originally this was caused by an Istio sidecar pod reaching its concurrency limits and failing to auto scale correctly because of a misconfigured policy that watched host service but not sidecar limits. One failure cascaded to more and eventually four HAProxy nodes exhausted their flow limits, degrading the gateway auth path and causing widespread authentication latency and failures. The problem was worsened by optimistic retry logic which overloaded internal load balancers. Pausing HAProxy on those nodes simultaneously produced immediate broad recovery. The retry storm in Northern VA was fixed by 1) temporarily reducing gateway retry logic with a PR and 2) blocking inbound Copilot Token Service token requests at the load balancers with a 403, and then gradually ramping back up traffic per-site to allow callers to succeed. Residual Copilot authentication failures continued because client retry behavior amplified load: a failed token operation could generate many extra requests and enter a retry loop. Copilot Token Service traffic increased from a normal 7–9K RPS to 70–100K RPS. Reducing gateway authentication retries and blocking retry-triggering responses stabilized Copilot Token Service and completed recovery.Complicating factors that impeded recovery included a number of scraping attacks on codeload endpoints.To prevent recurrence, our follow-up actions include:- Correcting autoscaling policies to account for service-mesh sidecar concurrency and capacity.- Auditing Istio request, concurrency, and scaling limits across affected services.- Reviewing retry limits and backoff behavior across gateways and clients.- Addressing the VS Code retry behavior that amplified Copilot token traffic.So basically bad code pushes that caused request amplification and then huge gaps in operational scaling and reliability standards. Oof.",
+        "url": "https://news.ycombinator.com/item?id=49352262",
+        "points": null,
+        "numComments": null,
+        "storyId": 49332495,
+        "createdAt": "2026-08-18T20:31:38Z",
+        "createdAtUnix": 1787085098,
+        "intent": "bug"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49352434",
+        "author": "ares623",
+        "type": "comment",
+        "title": null,
+        "text": "The datacenter means I don't have read&#x2F;write YAML anymore. Checkmate. I would burn the world than ever deal with YAML again.",
+        "url": "https://news.ycombinator.com/item?id=49352434",
+        "points": null,
+        "numComments": null,
+        "storyId": 49349147,
+        "createdAt": "2026-08-18T20:44:45Z",
+        "createdAtUnix": 1787085885,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}

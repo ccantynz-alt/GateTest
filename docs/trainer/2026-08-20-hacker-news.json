@@ -1,0 +1,204 @@
+{
+  "generatedAt": "2026-08-20T03:47:16.456Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 12,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 9,
+      "SonarQube": 0,
+      "Semgrep": 1,
+      "CodeQL": 1,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 1
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49369742",
+        "author": "jonahx",
+        "type": "comment",
+        "title": null,
+        "text": "> and the only way to set a hard cap and sure you won't wake up the next day with a $10k bill is via OR.I checked this because it seemed so outrageous to me. But it's correct. Snakily, chatGPT first told me:<chat>That claim is outdated &#x2F; at least partly false now.OpenAI: Yes, OpenAI now supports enforceable hard API spend limits at both organization and project levels. You can configure the limit so API requests fail once the spend limit is reached.<&#x2F;chat>However, I checked the link it cited (https:&#x2F;&#x2F;help.openai.com&#x2F;en&#x2F;articles&#x2F;9186755-managing-project...), where is states:> Setting a monthly spend limit allows you to establish soft spending thresholds for your project. When usage exceeds this limit within a given calendar month (UTC), API requests will continue to be processed without interruption. This feature is designed to help you monitor usage through spend limit alerts, but it does not enforce a hard cap on spending.That's not what \"limit\" means!When I told chatGPT it had lied:<chat>You're right. I was wrong, and the page I cited explicitly contradicted what I told you. I should have checked the actual text instead of asserting it.<&#x2F;chat>",
+        "url": "https://news.ycombinator.com/item?id=49369742",
+        "points": null,
+        "numComments": null,
+        "storyId": 49364559,
+        "createdAt": "2026-08-20T02:28:43Z",
+        "createdAtUnix": 1787192923,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49369292",
+        "author": "snikolaev",
+        "type": "story",
+        "title": "Manticore Search 28.6.6: UUID document IDs, ordered GROUP_CONCAT(), and 16 fixes",
+        "text": "Manticore Search 28.6.6: UUID document IDs, ordered GROUP_CONCAT(), and 16 fixes",
+        "url": "https://medium.com/@s_nikolaev/manticore-search-28-6-6-uuid-document-ids-ordered-group-concat-and-16-fixes-49009d5de0b8",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49369292,
+        "createdAt": "2026-08-20T01:12:51Z",
+        "createdAtUnix": 1787188371,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49367315",
+        "author": "Markoff",
+        "type": "comment",
+        "title": null,
+        "text": "so much for Chinese eating dogs, it's way more prevalent in Korea than in China, even if you wanted dog meat in Beijing you have the best odds finding it in Korean restaurantpersonally was never interested in dog meat, tried snake, didn't like, ants&#x2F;crickets meh, bush rat is OK probably better than frog, donkey already better than pork, but my favorite is (Sichuanese) bullfrog, such a shame we don't eat them in Europe, amazing combo of great fish like meat with easy bones like chicken",
+        "url": "https://news.ycombinator.com/item?id=49367315",
+        "points": null,
+        "numComments": null,
+        "storyId": 49299974,
+        "createdAt": "2026-08-19T21:16:40Z",
+        "createdAtUnix": 1787174200,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49366386",
+        "author": "synkarius",
+        "type": "comment",
+        "title": null,
+        "text": "It is sad, but there is not nothing we can do about it.",
+        "url": "https://news.ycombinator.com/item?id=49366386",
+        "points": null,
+        "numComments": null,
+        "storyId": 49365733,
+        "createdAt": "2026-08-19T19:55:57Z",
+        "createdAtUnix": 1787169357,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49365216",
+        "author": "palmotea",
+        "type": "comment",
+        "title": null,
+        "text": "> The gotcha here is that I must hate politics that address the destruction of the planet so i am self-destructive. But you seem reluctant to ascribe working brain cells to people you disagree with, so your gotcha is worded to get a dummy to think. I wonder who told you people you disagree with are fools. Maybe those people aren't your friends. Maybe they secretly hate you.No, the point is the logic of your initial dismissal was asinine: e.g. the problem doesn't look big from space, therefore it must not be a really big deal, (and later, a conspiratorial) therefore the concern about and opposition to the problem must be \"non-organic.\"Then you went back into space again to talk about smog.What you need to do come back to Earth, look at things from the ground, sometimes from others' POV. Your space angle isn't deep or insightful, it may seem so on first glance, like the prose of an LLM instructed to say something deep, but it's similarly empty.> Emotional arguments and trusting snakes who hate you are what got you to where you are in the first place mentally. Time to be critical OF EVERYBODY. What is their angle? Are they paid?1. Honestly, that reads like a hallucination. It either literally is one or you assume too much.2. You're giving vibes like you lack anchors and are trending towards paranoia.> ...and feel i've said hurtful things. Being disagreed with IS hurtful in a way, it hurts to have your ideas picked on.heh> I just hope you can be more discerning and be more suspicious when panic is delivered into your feed trying to spin you up again for the thousandth time. Let your dopamine receptors finally burn out completely. ;)See point 1 above. But if you're trying to convince me to shut up, you've failed.",
+        "url": "https://news.ycombinator.com/item?id=49365216",
+        "points": null,
+        "numComments": null,
+        "storyId": 49349147,
+        "createdAt": "2026-08-19T18:22:24Z",
+        "createdAtUnix": 1787163744,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49363622",
+        "author": "dwoldrich",
+        "type": "comment",
+        "title": null,
+        "text": "I love how you're working through all this! There are indeed two sides to every coin.> Alright then. So I suppose you think that was \"a backyard issue... [and] it [was] politics to hate on [smog],\" and so the expensive efforts to mitigate it, like requiring catalytic converters and NOx mitigation should be repealed? Or not enacted in the first place?The gotcha here is that I must hate politics that address the destruction of the planet so i am self-destructive. But you seem reluctant to ascribe working brain cells to people you disagree with, so your gotcha is worded to get a dummy to think. I wonder who told you people you disagree with are fools. Maybe those people aren't your friends. Maybe they secretly hate you.Let's jump to the end of the argument where there's common ground. Of course pollution is real, I called living in smog disgusting, didn't I?Who has the power to deal with these huge negative externalities? Usually the government with regulation that hopefully doesn't create bigger downstream problems.Catalytic converters: good, regulation on factory outputs: good. See how we can agree?*But* political grifters love the fear pr0n, the power of panic. And so we also got the world ending climate emergency stuff. And that was an expensive grift for taxpayers and europeans never got to enjoy air conditioners, but thankfully it seems to be petering out now at least in the US. It is safe to unclench your butthole because the sky isn't falling, and it was never falling.> empathy skillsEmotional arguments and trusting snakes who hate you are what got you to where you are in the first place mentally. Time to be critical OF EVERYBODY. What is their angle? Are they paid?> You also mentioned \"propaganda campaigns,\" but think about it: investors are pouring literally trillions of dollars into AI. Who do you think is going to be running the \"propaganda campaigns,\" the people with the trillions or their opponents?I love this! You are thinking rightly, but you need to complete your thoughts.This place is CRAWLING with shills for the AI businesses. How do you think Anthropic grew from nothing to trillions so quickly? They have big line items on their financial statements for influence campaigns. It is an attack on us and IT IS WORKING SO WELL.Elon bought Twitter to run continual AI influence campaigns and for his other businesses and to get a trove of decades of exclusive training data in tweets and DM's.I didn't get shill mogged in this particular instance because I happened to be speaking in favor of AI data centers. If anything, i got a few shills backing me up, but they were downvoted for weak shillery.You will probably dig in your heels, and feel i've said hurtful things. Being disagreed with IS hurtful in a way, it hurts to have your ideas picked on.I just hope you can be more discerning and be more suspicious when panic is delivered into your feed trying to spin you up again for the thousandth time. Let your dopamine receptors finally burn out completely. ;)",
+        "url": "https://news.ycombinator.com/item?id=49363622",
+        "points": null,
+        "numComments": null,
+        "storyId": 49349147,
+        "createdAt": "2026-08-19T16:22:12Z",
+        "createdAtUnix": 1787156532,
+        "intent": "praise"
+      },
+      {
+        "objectId": "49360332",
+        "author": "blfr",
+        "type": "comment",
+        "title": null,
+        "text": "It's hard to measure ROI so we generally wouldn't. Even McKinseys and BCGs have a hard time showing ROIs.Sure, you could say all digital transformations are nebulous snake oil and don't deliver but I just don't think this is the case.",
+        "url": "https://news.ycombinator.com/item?id=49360332",
+        "points": null,
+        "numComments": null,
+        "storyId": 49353432,
+        "createdAt": "2026-08-19T11:58:21Z",
+        "createdAtUnix": 1787140701,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49358903",
+        "author": "nyku",
+        "type": "story",
+        "title": "Clop Returns with Custom Implant in Mass-Extortion Campaign",
+        "text": "Clop Returns with Custom Implant in Mass-Extortion Campaign",
+        "url": "https://reliaquest.com/blog/clop-returns-with-custom-implant-in-mass-extortion-campaign/",
+        "points": 2,
+        "numComments": 0,
+        "storyId": 49358903,
+        "createdAt": "2026-08-19T08:59:23Z",
+        "createdAtUnix": 1787129963,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49358386",
+        "author": "nyku",
+        "type": "story",
+        "title": "Meta and Google mobile apps gorge on user data: Study",
+        "text": "Meta and Google mobile apps gorge on user data: Study",
+        "url": "https://www.theregister.com/personal-tech/2026/08/18/meta-and-google-mobile-apps-gorge-on-user-data-study/5289171",
+        "points": 2,
+        "numComments": 1,
+        "storyId": 49358386,
+        "createdAt": "2026-08-19T07:53:54Z",
+        "createdAtUnix": 1787126034,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49369830",
+        "author": "Der_Einzige",
+        "type": "comment",
+        "title": null,
+        "text": "Another fun fact, most of the success of critical theory, post modernissm, \"neo-marxism\", left-wing intellectuals, etc is because of the three letters.They successfully kept western leftists overpaid and spewing fashionable nonsense in the academy instead of acting in the world. The fact that left-wing intellectuals are so trash is engineered on purpose.Jacques Lacan and his fake ass math equations in particular can only be explained this way as a literal psyop on academia.Chomsky was in bed deep with Epstein and the left has turned themselves into a pretzel trying to explain it . Foucault, Sartre, De Beauvoir were defenders of pedophilia. Foucault might actually have been a pedophile! Arendt (a jew) was fornicating with a Nazi (Heidegger) and ties herself into a pretzel defending it (after also defending American segregation for some reason???), Deleuze killed himself. Althusser went crazy and killed his wife. Wilheilm Reich went just as loony related to the \"orgone\" machine (despite mass psychology of fascism being a decent-ish book).Please just leave this decadent and degenerate misapplication of \"philosophy\" in the dust-bin where it belongs. Baudrillard is part of this.:https:&#x2F;&#x2F;thephilosophicalsalon.com&#x2F;the-cia-reads-french-theor...https:&#x2F;&#x2F;en.wikipedia.org&#x2F;wiki&#x2F;Who_Paid_the_Piper%3Fhttps:&#x2F;&#x2F;www.amazon.com&#x2F;-&#x2F;he&#x2F;Cultural-Cold-War-World-Letters&#x2F;...https:&#x2F;&#x2F;jacobin.com&#x2F;2018&#x2F;08&#x2F;fbi-infiltration-new-left-aoki-s...https:&#x2F;&#x2F;www.counterpunch.org&#x2F;2016&#x2F;08&#x2F;26&#x2F;in-the-shadow-of-the...https:&#x2F;&#x2F;www.nytimes.com&#x2F;2013&#x2F;09&#x2F;09&#x2F;us&#x2F;when-sartre-and-camus-...https:&#x2F;&#x2F;viewpointmag.com&#x2F;2021&#x2F;11&#x2F;08&#x2F;the-fbi-file-on-foucault...https:&#x2F;&#x2F;csuepress.columbusstate.edu&#x2F;cgi&#x2F;viewcontent.cgi?arti...https:&#x2F;&#x2F;www.radicalphilosophy.com&#x2F;article&#x2F;walking-through-wa...https:&#x2F;&#x2F;opiniojuris.org&#x2F;2009&#x2F;08&#x2F;04&#x2F;the-idf-is-deleuzian&#x2F;https:&#x2F;&#x2F;theopolisinstitute.com&#x2F;leithart_post&#x2F;deleuzian-war&#x2F;",
+        "url": "https://news.ycombinator.com/item?id=49369830",
+        "points": null,
+        "numComments": null,
+        "storyId": 49273010,
+        "createdAt": "2026-08-20T02:47:32Z",
+        "createdAtUnix": 1787194052,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [
+      {
+        "objectId": "49363899",
+        "author": "codeulike",
+        "type": "comment",
+        "title": null,
+        "text": "I'm in the UK and it always seems weird to me how in the USA its totally normal to publically register yourself as either a Democrat or a Republican. To me seems like the kind of thing that should be private. In the UK I might choose to be a member of a political party but no-one needs to know that except that particular party. Or I can just join no party and vote in private on polling day.",
+        "url": "https://news.ycombinator.com/item?id=49363899",
+        "points": null,
+        "numComments": null,
+        "storyId": 49363433,
+        "createdAt": "2026-08-19T16:42:16Z",
+        "createdAtUnix": 1787157736,
+        "intent": "neutral"
+      }
+    ],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": [
+      {
+        "objectId": "49369360",
+        "author": "b1gTekken",
+        "type": "comment",
+        "title": null,
+        "text": "\"Oh yeah; whattabout this other social illusion. Checkmate atheists.\"",
+        "url": "https://news.ycombinator.com/item?id=49369360",
+        "points": null,
+        "numComments": null,
+        "storyId": 49366743,
+        "createdAt": "2026-08-20T01:21:37Z",
+        "createdAtUnix": 1787188897,
+        "intent": "neutral"
+      }
+    ]
+  },
+  "painPoints": [],
+  "actionItems": []
+}
