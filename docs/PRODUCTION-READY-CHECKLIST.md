@@ -128,8 +128,9 @@ Started 2026-08-21 (this session). Check off with commit SHAs.
 - [ ] Heavy suite: `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js`
 - [ ] `cd website && npx next build` — zero errors
 - [ ] `node bin/gatetest.js --list` — all 121 modules load
-- [ ] Next.js security patch level current — KI #59 SSRF advisory
-      (`GHSA-c4j6-fc7j-m34r`) patched before launch
+- [x] Next.js security patch level current (2026-08-21) — KI #59 RESOLVED:
+      next@16.3.1, `npm audit` reports 0 vulnerabilities in both `website/`
+      and root; full regression pass green
 - [ ] systemd timers driving `/api/scan/worker/tick` + `/api/watches/tick`
       (verified 2026-08-06 — keep re-verifying after each deploy)
 - [ ] Lighthouse Performance 95+ / Accessibility 100 / SEO 100; mobile 320px–2560px
