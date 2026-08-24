@@ -282,6 +282,9 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
       const notes = [];
       if (fsum && fsum.duplicatesCollapsed > 0) notes.push(`${fsum.duplicatesCollapsed} duplicate report${fsum.duplicatesCollapsed === 1 ? '' : 's'} folded (the same line flagged by more than one module counts once)`);
       if (fsum && fsum.hiddenLowConfidence > 0) notes.push(`${fsum.hiddenLowConfidence} low-confidence error${fsum.hiddenLowConfidence === 1 ? '' : 's'} held back from blocking (shown, not enforced)`);
+      // Suppression in place (advancement #13): the dismissal affordance
+      // lives where the reviewer already is.
+      notes.push('disagree with a finding? reply `@gatetest ignore <module:rule>` — it lands in `.gatetestignore` on this branch and tunes GateTest\'s precision');
       if (notes.length) { lines.push(''); lines.push(`<sub>${notes.join(' · ')}</sub>`); }
       lines.push('');
     }

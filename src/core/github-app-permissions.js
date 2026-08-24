@@ -111,7 +111,10 @@ const APP_PERMISSIONS = [
  * simply never fires. `workflow_run` was missing from the listing for exactly
  * this reason, and CI-fix never ran on the App path.
  */
-const WEBHOOK_EVENTS = ['push', 'pull_request', 'workflow_run'];
+// `issue_comment` added 2026-08-25 for suppression-in-place: a repo
+// insider replies `@gatetest ignore <rule>` under the PR comment and the
+// webhook commits the rule to .gatetestignore on the PR branch.
+const WEBHOOK_EVENTS = ['push', 'pull_request', 'workflow_run', 'issue_comment'];
 
 /**
  * Which scope an API path requires. Ordered — first match wins, so the

@@ -103,6 +103,40 @@ function extractGitHubEvent(eventType, delivery, parsed) {
     return { kind: 'error', reason: 'repository.full_name is required' };
   }
 
+  if (eventType === 'issue_comment') {
+    // Suppression in place (advancement #13): a repo insider replies
+    // `@gatetest ignore <rule>` under the PR comment. Anything else on
+    // this event type is ignored.
+    const action = typeof p.action === 'string' ? p.action : '';
+    if (action !== 'created') return { kind: 'ignore', reason: `issue_comment action=${action || '<none>'}` };
+    const issue = p.issue && typeof p.issue === 'object' ? /** @type {Record<string, unknown>} */ (p.issue) : null;
+    const comment = p.comment && typeof p.comment === 'object' ? /** @type {Record<string, unknown>} */ (p.comment) : null;
+    if (!issue || !comment) return { kind: 'ignore', reason: 'issue_comment without issue/comment' };
+    if (!issue.pull_request) return { kind: 'ignore', reason: 'comment is not on a pull request' };
+    // eslint-disable-next-line global-require
+    const { parseSuppressionCommand, isAuthorizedCommenter } = require('./suppression-command');
+    const cmd = parseSuppressionCommand(typeof comment.body === 'string' ? comment.body : '');
+    if (!cmd) return { kind: 'ignore', reason: 'no suppression command in comment' };
+    const user = comment.user && typeof comment.user === 'object' ? /** @type {Record<string, unknown>} */ (comment.user) : null;
+    if (!isAuthorizedCommenter({
+      authorAssociation: comment.author_association,
+      userType: user && user.type,
+    })) {
+      return { kind: 'ignore', reason: 'commenter is not an owner/member/collaborator (or is a bot)' };
+    }
+    const prNumber = typeof issue.number === 'number' ? issue.number : null;
+    if (!prNumber) return { kind: 'error', reason: 'issue.number is required' };
+    return {
+      kind: 'suppress',
+      payload: {
+        repository: fullName,
+        prNumber,
+        rule: cmd.rule,
+        actor: user && typeof user.login === 'string' ? user.login : 'unknown',
+      },
+    };
+  }
+
   if (eventType === 'workflow_run') {
     const action = typeof p.action === 'string' ? p.action : '';
     if (action !== 'completed') {
@@ -274,6 +308,36 @@ async function processGitHubEvent({
   }
   if (extracted.kind === 'ignore') {
     return { status: 204, body: null };
+  }
+
+  // Suppression command (advancement #13) — write .gatetestignore on the
+  // PR head branch and record the dismissal for the precision flywheel.
+  if (extracted.kind === 'suppress') {
+    const { repository, prNumber, rule, actor } = extracted.payload;
+    // eslint-disable-next-line global-require
+    const { applySuppression, recordSuppression } = require('./suppression-command');
+    // eslint-disable-next-line global-require
+    const { resolveGitHubToken } = require('./github-callback');
+    const token = resolveGitHubToken(env);
+    if (!token) {
+      return { status: 200, body: { suppressed: false, reason: 'no GitHub token configured' } };
+    }
+    const [owner, repo] = repository.split('/');
+    const outcome = await applySuppression({
+      owner, repo, prNumber, rule, actor, token,
+      fetchImpl: fetchImpl || fetch,
+    });
+    if (outcome.ok && !outcome.already && sql) {
+      try {
+        await recordSuppression(sql, { repository, rule, actor, prNumber });
+      } catch (err) { // error-ok — telemetry must never undo a landed suppression
+        console.error('[github-webhook] recordSuppression failed:', err && err.message ? err.message : err);
+      }
+    }
+    return {
+      status: 200,
+      body: { suppressed: outcome.ok, ...(outcome.already ? { already: true } : {}), ...(outcome.reason ? { reason: outcome.reason } : {}) },
+    };
   }
 
   // workflow_run failure — kick the CI-fix route (fire-and-forget, never blocks).

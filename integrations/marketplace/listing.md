@@ -166,7 +166,7 @@ resubmitting rather than starting over.
 | **Setup URL** | `https://gatetest.io/github/setup` |
 | **Webhook URL** | `https://gatetest.io/api/webhook` |
 | **Callback URL** | `https://gatetest.io/api/github/callback` |
-| **Webhook events** | `push`, `pull_request`, `workflow_run` |
+| **Webhook events** | `push`, `pull_request`, `workflow_run`, `issue_comment` |
 | **Contents permission** | Read & write |
 | **Pull requests permission** | Read & write |
 | **Commit statuses permission** | Read & write |
@@ -198,9 +198,15 @@ resubmitting rather than starting over.
 > it (completed + failure → CI-fix kick). If the live App does not subscribe,
 > CI-fix silently never fires on the App path.
 >
+> **`issue_comment` is required** — the same handler implements suppression in
+> place: a repo owner/member/collaborator replies `@gatetest ignore <rule>`
+> under the GateTest PR comment and the rule is committed to
+> `.gatetestignore` on the PR branch. Without the subscription the command
+> silently does nothing.
+>
 > **Still needs a human:** the LIVE App config at
 > `github.com/organizations/Gate-Test/settings/apps/gatetesthq` cannot be read
-> from this repo. Confirm all five scopes and all three events match the table
+> from this repo. Confirm all five scopes and all four events match the table
 > above before submitting. `node scripts/marketplace-preflight.js` checks this
 > automatically when `gh` is authenticated.
 

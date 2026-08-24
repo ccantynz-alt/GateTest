@@ -19,6 +19,7 @@ Craig's accounts, in one sitting:
 | 0b | **No working GitHub credential on the box — every stored token is 401.** Scans can't fetch repos; commit statuses / PR comments can't post. Durable: paste `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY` (code support already shipped: `github-app.ts`). Quick: fresh PAT as `GITHUB_TOKEN`. Then `systemctl restart gatetest-web` | box `website/.env.local` | 5 min |
 | 1 | `/legal/terms` + `/legal/privacy` render **"DRAFT … not final legal terms"** | attorney | external |
 | 2 | live app **missing `issues:write`** — the PR comment the listing promises fails silently | App 3322634 settings | 1 min |
+| 2b | live app **must subscribe to the `issue_comment` webhook event** (added 2026-08-25 for suppression-in-place: `@gatetest ignore <rule>` replies) — without it the command silently does nothing | App 3322634 settings | 1 min |
 | 3 | `RESEND_API_KEY` unset — MCP-tier key delivery takes money and never sends | box `website/.env.local` | 2 min |
 | 4 | `CRON_SECRET` **repo secret** unset → the `cron-ticks` workflow is disarmed | repo secrets (optional) | 2 min |
 
