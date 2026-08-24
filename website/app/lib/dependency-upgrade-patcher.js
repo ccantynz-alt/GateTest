@@ -264,12 +264,17 @@ async function upgradeDep({ depName, fromVersion, toVersion, sourceFiles, readFi
       // Syntax gate — never ship broken code
       const checker = pickChecker(filePath);
       if (checker) {
+        // Checkers return { ok, reason } (cross-fix-syntax-gate contract).
+        // This used to read `.valid`/`.error` — fields that never existed —
+        // so every CHECKED patch was rejected as syntax-gate-failed; it went
+        // unnoticed because .ts files were unchecked until the 2026-08-25 TS
+        // gate landed and surfaced the mismatch.
         const gateResult = checker(patched);
-        if (!gateResult.valid) {
+        if (!gateResult.ok) {
           result.skippedFiles.push({
             file: filePath,
             reason: 'syntax-gate-failed',
-            detail: gateResult.error,
+            detail: gateResult.reason,
           });
           continue;
         }

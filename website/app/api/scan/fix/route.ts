@@ -247,8 +247,8 @@ const { hydrateFixWorkspace } = require("@/app/lib/fix-workspace-hydrator") as {
 const { validateFixesAgainstScanner } = require("@/app/lib/cross-fix-scanner-gate") as {
   validateFixesAgainstScanner: (opts: {
     fixes: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
-    originalFileContents: Array<{ path: string; content: string }>;
-    originalFindingsByModule: Record<string, string[]>;
+    originalFileContents?: Array<{ path: string; content: string }>;
+    originalFindingsByModule?: Record<string, string[]>;
     runTier: (tier: string, ctx: { owner: string; repo: string; files: string[]; fileContents: Array<{ path: string; content: string }> }) => Promise<{ modules: Array<{ name: string; details?: string[] }>; totalIssues: number }>;
     owner: string;
     repo: string;
@@ -2124,23 +2124,26 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Phase 1.2b — cross-file scanner re-validation. Only runs when the
-  // caller supplied the original workspace + findings. Without that
-  // baseline we can't tell which findings are NEW vs pre-existing, so
-  // skip silently — per-file iterative loop + syntax gate still ran.
+  // Phase 1.2b — cross-file scanner re-validation. MANDATORY (2026-08-18
+  // audit #7): when the caller supplied the original workspace + findings
+  // the gate diffs against that full baseline; when it didn't, the gate
+  // derives a baseline from each fix's own original content and scans it,
+  // so the gate can never be skipped by simply not passing a baseline.
+  // Scanner failure inside the gate is FAIL-CLOSED — unverified fixes are
+  // withheld from the PR.
   let scannerGateSummary: string | undefined;
   let scannerGateRolledBack: Array<{ file: string; reason: string; newFindings: string[] }> = [];
   let postFixFindingsByModule: Record<string, string[]> | undefined;
-  if (
-    Array.isArray(input.originalFileContents) &&
-    input.originalFileContents.length > 0 &&
-    input.originalFindingsByModule &&
-    typeof input.originalFindingsByModule === "object"
-  ) {
+  {
+    const hasBaseline =
+      Array.isArray(input.originalFileContents) &&
+      input.originalFileContents.length > 0 &&
+      input.originalFindingsByModule &&
+      typeof input.originalFindingsByModule === "object";
     const scannerGate = await validateFixesAgainstScanner({
       fixes,
-      originalFileContents: input.originalFileContents,
-      originalFindingsByModule: input.originalFindingsByModule,
+      originalFileContents: hasBaseline ? input.originalFileContents : undefined,
+      originalFindingsByModule: hasBaseline ? input.originalFindingsByModule : undefined,
       runTier,
       owner,
       repo,
@@ -2201,6 +2204,38 @@ export async function POST(req: NextRequest) {
     errors.push(`No regression test for ${s.sourceFile}: ${s.reason}`);
   }
   const testGenSummary = testGen.summary;
+
+  // Path allow-list on overwrite targets (2026-08-18 audit #7). Runs LAST,
+  // after test generation, so model-invented paths (generated tests) are
+  // covered too. Existing-file fixes get structural checks; new files
+  // additionally may not land under .github/, as root dotfiles, or with
+  // unknown extensions.
+  {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { filterFixesByPath } = require("@/app/lib/fix-path-guard") as {
+      filterFixesByPath: (fixes: Array<{ file: string; original?: string }>) => {
+        allowed: Array<{ file: string; fixed: string; original: string; issues: string[] }>;
+        rejected: Array<{ fix: { file: string }; reason: string }>;
+      };
+    };
+    const pathGate = filterFixesByPath(fixes);
+    if (pathGate.rejected.length > 0) {
+      for (const r of pathGate.rejected) {
+        errors.push(`Rejected write target ${r.fix?.file ?? "(empty)"}: ${r.reason}`);
+      }
+      fixes.length = 0;
+      fixes.push(...pathGate.allowed);
+    }
+    if (fixes.length === 0) {
+      return NextResponse.json({
+        status: "no_fixes",
+        message: "Every fix was rejected by the write-target path guard.",
+        errors,
+        skippedForBudget,
+        failedFiles,
+      });
+    }
+  }
 
   // Create a branch, commit fixes, open PR
   try {

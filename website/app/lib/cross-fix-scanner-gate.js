@@ -147,10 +147,13 @@ function attributeFindings(newFindings, fixedFilePaths) {
  *
  * @param {Object} opts
  * @param {Array<{ file, fixed, original, issues }>} opts.fixes
- * @param {Array<{ path, content }>} opts.originalFileContents
- * @param {Record<string, string[]>} opts.originalFindingsByModule
+ * @param {Array<{ path, content }>} [opts.originalFileContents]
+ *   Full pre-fix workspace. OPTIONAL: when absent, the gate derives a
+ *   baseline from each fix's own `original` content (fixed-files scope).
+ * @param {Record<string, string[]>} [opts.originalFindingsByModule]
  *   Findings from the pre-fix scan, grouped by module name. Each
- *   entry is the raw `details` array the module emitted.
+ *   entry is the raw `details` array the module emitted. OPTIONAL: when
+ *   absent, the gate computes it by scanning the baseline workspace.
  * @param {(tier: string, ctx: object) => Promise<{ modules: Array<{ name, details? }>, totalIssues: number }>} opts.runTier
  *   The scanner runner — typically `runTier` from
  *   `website/app/lib/scan-modules`, dependency-injected for tests.
@@ -180,8 +183,14 @@ async function validateFixesAgainstScanner(opts) {
   } = opts || {};
 
   if (!Array.isArray(fixes)) throw new TypeError('fixes must be an array');
-  if (!Array.isArray(originalFileContents)) throw new TypeError('originalFileContents must be an array');
-  if (!originalFindingsByModule || typeof originalFindingsByModule !== 'object') {
+  // Optional params: `undefined` means "derive it here"; anything else
+  // must be correctly typed — an explicit null or wrong type is a caller
+  // bug, not a request for the fallback.
+  if (originalFileContents !== undefined && !Array.isArray(originalFileContents)) {
+    throw new TypeError('originalFileContents must be an array');
+  }
+  if (originalFindingsByModule !== undefined
+      && (originalFindingsByModule === null || typeof originalFindingsByModule !== 'object')) {
     throw new TypeError('originalFindingsByModule must be an object');
   }
   if (typeof runTier !== 'function') throw new TypeError('runTier must be a function');
@@ -200,7 +209,63 @@ async function validateFixesAgainstScanner(opts) {
     };
   }
 
-  const postFixWorkspace = buildPostFixWorkspace(originalFileContents, fixes);
+  // The gate is MANDATORY (2026-08-18 audit #7). When the caller has no
+  // full-workspace baseline, derive one from the fixes themselves: every
+  // fix carries its file's original content, and a baseline scan of those
+  // originals gives an apples-to-apples diff scoped to the fixed files.
+  // Narrower than a whole-workspace baseline, but both runs then see the
+  // SAME scope, so "new finding" still means the fix introduced it.
+  const baselineWorkspace = Array.isArray(originalFileContents) && originalFileContents.length > 0
+    ? originalFileContents
+    : fixes
+        .filter((f) => f && typeof f.original === 'string' && f.original.length > 0)
+        .map((f) => ({ path: f.file, content: f.original }));
+
+  const scanFail = (stage, err) => {
+    // Fail CLOSED: a fix PR whose safety we could not verify does not
+    // ship (2026-08-18 audit #7 — "fix PRs with proof"). The previous
+    // fail-open here meant a scanner outage silently waived the gate.
+    const message = err && err.message ? err.message : String(err);
+    return {
+      accepted: [],
+      rolledBack: fixes.map((fix) => ({
+        ...fix,
+        reason: `scanner gate unavailable (${stage}: ${message}) — fail-closed, fix withheld from PR`,
+        newFindings: [],
+      })),
+      unattributedFindings: [],
+      postFixFindingsByModule: {},
+      summary: `scanner gate: FAIL-CLOSED — ${stage} scan threw (${message}); ${fixes.length} fix(es) withheld`,
+    };
+  };
+
+  const findingsByModuleOf = (runResult) => {
+    const byModule = {};
+    for (const m of runResult?.modules || []) {
+      if (m && m.name) {
+        byModule[m.name] = Array.isArray(m.details) ? m.details.slice() : [];
+      }
+    }
+    return byModule;
+  };
+
+  let baseline = originalFindingsByModule;
+  if (!baseline || typeof baseline !== 'object') {
+    let baselineRun;
+    try {
+      baselineRun = await runTier(tier, {
+        owner,
+        repo,
+        files: baselineWorkspace.map((f) => f.path),
+        fileContents: baselineWorkspace,
+      });
+    } catch (err) {
+      return scanFail('baseline', err);
+    }
+    baseline = findingsByModuleOf(baselineRun);
+  }
+
+  const postFixWorkspace = buildPostFixWorkspace(baselineWorkspace, fixes);
   const files = fileList || postFixWorkspace.map((f) => f.path);
 
   let runResult;
@@ -212,28 +277,12 @@ async function validateFixesAgainstScanner(opts) {
       fileContents: postFixWorkspace,
     });
   } catch (err) {
-    // If the scanner itself throws, fail OPEN — accept all fixes and
-    // record the failure in the summary. Failing closed here would
-    // block legitimate fixes whenever the scanner has a bug, which
-    // is worse than missing a cross-fix conflict.
-    const message = err && err.message ? err.message : String(err);
-    return {
-      accepted: fixes.slice(),
-      rolledBack: [],
-      unattributedFindings: [],
-      postFixFindingsByModule: {},
-      summary: `scanner gate: failed-open (runTier threw: ${message})`,
-    };
+    return scanFail('post-fix', err);
   }
 
-  const postFixFindingsByModule = {};
-  for (const m of runResult?.modules || []) {
-    if (m && m.name) {
-      postFixFindingsByModule[m.name] = Array.isArray(m.details) ? m.details.slice() : [];
-    }
-  }
+  const postFixFindingsByModule = findingsByModuleOf(runResult);
 
-  const newFindings = diffFindings(originalFindingsByModule, postFixFindingsByModule);
+  const newFindings = diffFindings(baseline, postFixFindingsByModule);
   const fixedFilePaths = new Set(fixes.map((f) => f.file));
   const { attributed, unattributed } = attributeFindings(newFindings, fixedFilePaths);
 

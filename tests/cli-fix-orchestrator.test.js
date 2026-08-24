@@ -205,3 +205,103 @@ describe('runFixBatch', () => {
     assert.equal(result.failed.length, 0);
   });
 });
+
+// ── hypothesis test runs exercise the HYPOTHESIS, not the on-disk original ──
+// 2026-08-18 audit #7: `node --test` loads the source from disk, so running
+// the test file without swapping the candidate in gave every hypothesis the
+// ORIGINAL's test result. These controls pin the swap-in behavior: the test
+// file can only pass for the CORRECT hypothesis, so the ranking must pick it
+// even when a plausible-but-wrong hypothesis parses fine.
+
+describe('hypothesis swap-in test runs (audit #7)', () => {
+  const DELIMS = [
+    '=== GATETEST_HYPOTHESIS_ALPHA ===',
+    '=== GATETEST_HYPOTHESIS_BETA ===',
+    '=== GATETEST_HYPOTHESIS_GAMMA ===',
+  ];
+
+  function fakeClaude(alpha, beta, gamma) {
+    return async () => [DELIMS[0], alpha, DELIMS[1], beta, DELIMS[2], gamma].join('\n');
+  }
+
+  test('the hypothesis that makes the tests pass wins over one that merely parses', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-swapin-'));
+    try {
+      const srcPath = path.join(tmp, 'adder.js');
+      // Broken original: subtracts instead of adds.
+      fs.writeFileSync(srcPath, 'module.exports = function add(a, b) { return a - b; };\n');
+      fs.mkdirSync(path.join(tmp, 'tests'));
+      fs.writeFileSync(path.join(tmp, 'tests', 'adder.test.js'), [
+        "const { test } = require('node:test');",
+        "const assert = require('node:assert');",
+        "const add = require('../adder.js');",
+        "test('adds', () => { assert.strictEqual(add(2, 3), 5); });",
+        '',
+      ].join('\n'));
+
+      const wrong   = 'module.exports = function add(a, b) { return a * b; };'; // parses, fails tests
+      const correct = 'module.exports = function add(a, b) { return a + b; };';
+      const broken  = 'module.exports = function add(a, b { return a + b; };';  // syntax error
+
+      const result = await runFixOrchestration({
+        filePath: srcPath,
+        issues: ['add() returns the wrong value'],
+        projectRoot: tmp,
+        maxAttempts: 1,
+        apiKey: 'test-key',
+        _callClaude: fakeClaude(wrong, correct, broken),
+      });
+
+      assert.equal(result.fixed, true);
+      assert.equal(result.rank, 1, 'winner must be the test-passing candidate (rank 1)');
+      assert.equal(result.testsPassed, true);
+      const onDisk = fs.readFileSync(srcPath, 'utf-8');
+      assert.match(onDisk, /a \+ b/, 'the CORRECT hypothesis must be applied');
+      // Before the fix, all candidates inherited the broken original's failing
+      // test result, every rank was 2, and lineDelta picked the winner blind.
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test('the original file is restored when every hypothesis fails its tests', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-swapin2-'));
+    try {
+      const srcPath = path.join(tmp, 'adder.js');
+      const original = 'module.exports = function add(a, b) { return a - b; };\n';
+      fs.writeFileSync(srcPath, original);
+      fs.mkdirSync(path.join(tmp, 'tests'));
+      fs.writeFileSync(path.join(tmp, 'tests', 'adder.test.js'), [
+        "const { test } = require('node:test');",
+        "const assert = require('node:assert');",
+        "const add = require('../adder.js');",
+        "test('adds', () => { assert.strictEqual(add(2, 3), 5); });",
+        '',
+      ].join('\n'));
+
+      const wrongA = 'module.exports = function add(a, b) { return a * b; };';
+      const wrongB = 'module.exports = function add(a, b) { return a / b; };';
+      const wrongC = 'module.exports = function add(a, b) { return b - a; };';
+
+      const result = await runFixOrchestration({
+        filePath: srcPath,
+        issues: ['add() returns the wrong value'],
+        projectRoot: tmp,
+        maxAttempts: 1,
+        apiKey: 'test-key',
+        _callClaude: fakeClaude(wrongA, wrongB, wrongC),
+      });
+
+      // All candidates parse but fail tests → best rank is 2; a rank-2 fix
+      // still ships (existing contract), but the mid-evaluation swaps must
+      // never leak: whatever was applied must be a HYPOTHESIS or the
+      // original — never a half-restored state.
+      const onDisk = fs.readFileSync(srcPath, 'utf-8');
+      const legal = [original.trim(), wrongA, wrongB, wrongC].map((s) => s.trim());
+      assert.ok(legal.includes(onDisk.trim()), 'on-disk content must be the original or a whole hypothesis');
+      assert.equal(result.testsPassed, false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

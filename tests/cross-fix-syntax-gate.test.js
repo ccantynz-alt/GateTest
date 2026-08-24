@@ -93,12 +93,15 @@ test('pickChecker — JS family routes to JS checker', () => {
   assert.equal(pickChecker('baz.cjs'), checkJsSyntax);
 });
 
-test('pickChecker — TS family returns null (unchecked)', () => {
-  assert.equal(pickChecker('foo.ts'), null);
-  assert.equal(pickChecker('foo.tsx'), null);
-  assert.equal(pickChecker('foo.mts'), null);
-  assert.equal(pickChecker('foo.cts'), null);
-  assert.equal(pickChecker('foo.jsx'), null);
+// DELIBERATE CONTRACT FLIP (2026-08-25, audit #7): TS-family files used to
+// pass through unchecked; the gate now validates them with the typescript
+// compiler already shipped in website/package.json.
+test('pickChecker — TS family gets a real checker', () => {
+  assert.equal(typeof pickChecker('foo.ts'), 'function');
+  assert.equal(typeof pickChecker('foo.tsx'), 'function');
+  assert.equal(typeof pickChecker('foo.mts'), 'function');
+  assert.equal(typeof pickChecker('foo.cts'), 'function');
+  assert.equal(typeof pickChecker('foo.jsx'), 'function');
 });
 
 test('pickChecker — unknown extensions return null', () => {
@@ -119,7 +122,12 @@ test('validateFixesSyntax — accepts valid fixes, rejects invalid ones', () => 
   ];
   const result = validateFixesSyntax({ fixes });
 
-  assert.equal(result.accepted.length, 3, 'js + json + tsx (passes through unchecked)');
+  // 2026-08-25 (audit #7): component.tsx is now accepted because it was
+  // CHECKED and is genuinely valid syntax — `definitely <not> JSX;` parses
+  // as chained less-than comparisons `(definitely < not) > JSX` — not
+  // because TS files pass through unchecked (they no longer do; see the
+  // checkTsSyntax tests below for a truly broken TSX rejection).
+  assert.equal(result.accepted.length, 3, 'js + json + tsx (checked, valid)');
   assert.equal(result.rejected.length, 2, 'broken.js + bad.json');
 
   const acceptedFiles = result.accepted.map((a) => a.file).sort();
@@ -137,7 +145,7 @@ test('validateFixesSyntax — accepts valid fixes, rejects invalid ones', () => 
   assert.match(badJson.reason, /invalid JSON/);
 
   const tsx = result.accepted.find((a) => a.file === 'app/component.tsx');
-  assert.equal(tsx.language, 'unchecked');
+  assert.equal(tsx.language, 'tsx'); // was 'unchecked' before the 2026-08-25 TS gate
 });
 
 test('validateFixesSyntax — empty fixes array returns empty result', () => {
@@ -212,4 +220,36 @@ test('summariseSyntaxGate — partial reject', () => {
   assert.match(summary, /1\/2 clean/);
   assert.match(summary, /1 rejected/);
   assert.match(summary, /b\.json/);
+});
+
+// ── TS-family syntax checking (2026-08-18 audit #7 — was pass-through) ─────
+const { checkTsSyntax } = require('../website/app/lib/cross-fix-syntax-gate');
+
+test('checkTsSyntax — valid TypeScript passes', () => {
+  const r = checkTsSyntax('interface A { x: number }\nexport const f = (a: A): number => a.x;\n', 'fix-validation.ts');
+  assert.equal(r.ok, true);
+});
+
+test('checkTsSyntax — broken TypeScript is rejected', () => {
+  const r = checkTsSyntax('export const f = (a: { : number) => a.x;\n', 'fix-validation.ts');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /syntax error/);
+});
+
+test('checkTsSyntax — valid TSX passes, broken TSX rejected', () => {
+  assert.equal(checkTsSyntax('export const C = () => <div className="a">hi</div>;\n', 'fix-validation.tsx').ok, true);
+  assert.equal(checkTsSyntax('export const C = () => <div<;\n', 'fix-validation.tsx').ok, false);
+});
+
+test('validateFixesSyntax — a .ts fix that does not parse is rejected, language=ts', () => {
+  const { accepted, rejected } = validateFixesSyntax({
+    fixes: [
+      { file: 'src/good.ts', fixed: 'export const a: number = 1;\n', original: '', issues: [] },
+      { file: 'src/bad.ts', fixed: 'const x: = ;;;(\n', original: '', issues: [] },
+    ],
+  });
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0].language, 'ts');
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].language, 'ts');
 });

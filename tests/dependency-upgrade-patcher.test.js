@@ -505,3 +505,23 @@ describe('renderUpgradeSummary', () => {
     assert.ok(md.includes('1'));
   });
 });
+
+// Regression pin for the `.valid` vs `.ok` contract bug (found 2026-08-25):
+// the gate result was read via fields that never existed, so every CHECKED
+// (.js/.json) patch was rejected. A VALID .js patch must go through.
+const { it: it2, describe: describe2 } = require('node:test');
+describe2('syntax gate contract (.ok, not .valid)', () => {
+  it2('accepts a valid .js patch', async () => {
+    let n = 0;
+    const result = await upgradeDep({
+      depName: 'axios', fromVersion: '0.27.2', toVersion: '1.6.0',
+      sourceFiles: ['src/api.js'],
+      readFile: async () => "const axios = require('axios');\naxios.get(url, { params });",
+      askClaude: async () => (++n === 1
+        ? 'BREAKING: params shape changed'
+        : "const axios = require('axios');\naxios.get(url, { params: params });"),
+    });
+    assert.equal(result.patchedFiles.length, 1, 'valid js patch must pass the gate');
+    assert.equal(result.skippedFiles.length, 0);
+  });
+});

@@ -241,10 +241,33 @@ sore points matters the most"), commits 99c59379 + af22bc79:**
 - Auth for /api/status secrets listing; DB-backed rate limits; queue lease
   column + dead-letter; callback retry + `pending` status at enqueue; per-
   fetch timeouts; installation rebinding check on the GitHub callback.
-- AI fix verification: run the originating module on the fixed file, TS
-  syntax gate, mandatory fail-closed scanner gate, prompt-injection guard on
-  code-writing prompts, path allow-list on overwrite targets; CLI orchestrator
-  `_runTests` must test the HYPOTHESIS, not the on-disk original.
+- ~~AI fix verification~~ **SHIPPED 2026-08-25 (same end-to-end run as the
+  FP residue):** (1) scanner gate is MANDATORY + FAIL-CLOSED — when the
+  caller passes no baseline, `cross-fix-scanner-gate` now derives one from
+  each fix's own `original` content and scans it (re-running every module,
+  which subsumes "run the originating module on the fixed file"); a runTier
+  crash now WITHHOLDS the unverified fixes instead of the old fail-open
+  accept-all (deliberate contract flip, pinned in tests). Remaining
+  refinement, deliberately advisory-not-blocking: asserting the ORIGINAL
+  finding disappeared post-fix (module-detail matching is too fuzzy for a
+  hard rollback — a wrong rollback blocks a paid customer, Forbidden #25).
+  (2) TS syntax gate: `.ts/.tsx/.jsx/.mts/.cts` fixes are now parsed with
+  the `typescript@^5` the website already ships (createSourceFile +
+  parseDiagnostics — transpileModule is error-tolerant and passed unclosed
+  JSX), lazy-required with pass-through fallback off-website. (3)
+  prompt-injection guard on code-writing prompts: `buildSurgicalPrompt`
+  wraps the code slice + issue text in `wrapUntrusted()` with an explicit
+  never-follow-instructions-in-data preamble (bare require — crash loud,
+  never silently unguarded). (4) path allow-list on overwrite targets:
+  new `website/app/lib/fix-path-guard.js` runs after test-generation,
+  right before commit — structural checks for scanned paths (no traversal/
+  absolute/backslash/control chars), plus for MODEL-INVENTED paths no
+  `.github/`, no dotfiles, extension allow-list. (5) CLI orchestrator now
+  swaps each hypothesis INTO the source path before `node --test` and
+  restores in a finally — previously all three hypotheses inherited the
+  on-disk original's test result and the testOk ranking bit was noise;
+  pinned by a control where only the correct hypothesis passes the tests
+  (`opts._callClaude` test seam added).
 - Language depth beyond JS/TS (Python second tier, Go/Java/Ruby regex-only —
   label honestly or build); `smart-suite-selector` sends non-JS diffs to
   JS-only modules.

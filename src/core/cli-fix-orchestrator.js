@@ -269,7 +269,11 @@ async function runFixOrchestration(opts) {
         _buildMultiHypothesisPrompt(filePath, content, issues, priorError);
 
       let responseText;
-      try   { responseText = await _callClaude(apiKey, systemPrompt, userPrompt, model); }
+      // opts._callClaude is a test seam — hypothesis ranking is unreachable
+      // deterministically through the real API, and the swap-in test-run
+      // behavior (audit #7) must stay pinned by a test.
+      const callClaude = opts._callClaude || _callClaude;
+      try   { responseText = await callClaude(apiKey, systemPrompt, userPrompt, model); }
       catch (e) { return { fixed: false, reason: `claude-error: ${e.message}` }; }
 
       const hypotheses = _parseHypotheses(responseText);
@@ -284,19 +288,40 @@ async function runFixOrchestration(opts) {
         fs.writeFileSync(h.tempPath, h.code, 'utf-8');
       }
 
-      // Validate all candidates concurrently
-      const evaluated = await Promise.all(hypotheses.map(async (h) => {
-        const syntaxResult = _validateSyntax(h.code, ext);
-        const testResult   = syntaxResult.passed ? _runTests(testFile, TEST_TIMEOUT_MS) : { passed: false, output: '' };
-        const lineDelta    = Math.abs(h.code.split('\n').length - content.split('\n').length);
-        return {
-          ...h,
-          rank:        _rank({ syntaxOk: syntaxResult.passed, testOk: testResult.passed }),
-          lineDelta,
-          syntaxError: syntaxResult.error || null,
-          testOutput:  testResult.output,
-          testOk:      testResult.passed,
-        };
+      // Syntax gate first — cheap and safe to do in one pass.
+      const withSyntax = hypotheses.map((h) => ({ ...h, syntaxResult: _validateSyntax(h.code, ext) }));
+
+      // Tests must exercise the HYPOTHESIS. `node --test` loads the source
+      // from disk, so running it without swapping the candidate in meant
+      // all three hypotheses received the on-disk ORIGINAL's test result —
+      // the ranking's testOk bit was identical noise across candidates
+      // (2026-08-18 audit #7). Swap each candidate into place, run, and
+      // restore the original in a finally so a crash can't leave a
+      // half-applied hypothesis in the working tree. Serial by necessity:
+      // the candidates share the source path.
+      if (testFile) {
+        try {
+          for (const h of withSyntax) {
+            if (!h.syntaxResult.passed) { h.testResult = { passed: false, output: '' }; continue; }
+            fs.writeFileSync(filePath, h.code, 'utf-8');
+            h.testResult = _runTests(testFile, TEST_TIMEOUT_MS);
+          }
+        } finally {
+          fs.writeFileSync(filePath, content, 'utf-8');
+        }
+      } else {
+        for (const h of withSyntax) {
+          h.testResult = { passed: h.syntaxResult.passed, output: '' };
+        }
+      }
+
+      const evaluated = withSyntax.map((h) => ({
+        ...h,
+        rank:        _rank({ syntaxOk: h.syntaxResult.passed, testOk: h.testResult.passed }),
+        lineDelta:   Math.abs(h.code.split('\n').length - content.split('\n').length),
+        syntaxError: h.syntaxResult.error || null,
+        testOutput:  h.testResult.output,
+        testOk:      h.testResult.passed,
       }));
 
       // Rank ASC (1 = best), lineDelta ASC as tiebreaker

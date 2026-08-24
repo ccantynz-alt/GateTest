@@ -64,6 +64,55 @@ function checkJsSyntax(source) {
 }
 
 /**
+ * TS-family syntax check via the compiler the website already ships
+ * (`typescript@^5` in website/package.json — approved stack, not a new
+ * dependency). `transpileModule` with reportDiagnostics surfaces SYNTAX
+ * errors without type-checking or executing anything, which is exactly
+ * a syntax gate's job. Lazy-required with a pass-through fallback so a
+ * stripped runtime (npm package without website devDeps) degrades to
+ * the old accept-unchecked behavior instead of crashing the fix path.
+ * Closes the ".ts/.tsx intentionally unhandled" gap (2026-08-18 audit #7).
+ */
+let _ts = null;
+let _tsTried = false;
+function loadTypescript() {
+  if (_tsTried) return _ts;
+  _tsTried = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, global-require
+    _ts = require('typescript');
+  } catch { _ts = null; }
+  return _ts;
+}
+
+function checkTsSyntax(source, fileName) {
+  if (typeof source !== 'string' || source.length === 0) {
+    return { ok: false, reason: 'empty source' };
+  }
+  const ts = loadTypescript();
+  if (!ts) return { ok: true }; // typescript unavailable — pass through (old behavior)
+  try {
+    // createSourceFile + parseDiagnostics, not transpileModule: the
+    // transpiler is deliberately error-tolerant and emits through many
+    // parse errors (an unclosed JSX element transpiles "fine"), while
+    // parseDiagnostics is the parser's own error list.
+    const name = fileName || 'fix-validation.ts';
+    const kind = /\.(tsx|jsx)$/i.test(name) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const sf = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, /* setParentNodes */ false, kind);
+    const errors = (sf.parseDiagnostics || []).filter((d) => d.category === ts.DiagnosticCategory.Error);
+    if (errors.length === 0) return { ok: true };
+    const first = errors[0];
+    const text = ts.flattenDiagnosticMessageText
+      ? ts.flattenDiagnosticMessageText(first.messageText, ' ')
+      : String(first.messageText);
+    return { ok: false, reason: `syntax error: ${text}` };
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    return { ok: false, reason: `syntax error: ${message}` };
+  }
+}
+
+/**
  * Try to syntax-check a single string as JSON.
  */
 function checkJsonSyntax(source) {
@@ -88,10 +137,12 @@ function pickChecker(filePath) {
   const lower = String(filePath || '').toLowerCase();
   if (lower.endsWith('.json')) return checkJsonSyntax;
   if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) return checkJsSyntax;
-  // .ts / .tsx / .jsx / .mts / .cts intentionally unhandled — TS-family
-  // syntax requires a real parser (the `typescript` package). Until
-  // that's added, those fixes are passed through. Tracked in
-  // CLAUDE.md ## THE FIX-FIRST BUILD PLAN.
+  if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts')) {
+    return (src) => checkTsSyntax(src, 'fix-validation.ts');
+  }
+  if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
+    return (src) => checkTsSyntax(src, 'fix-validation.tsx');
+  }
   return null;
 }
 
@@ -116,6 +167,7 @@ function validateFixesSyntax(opts) {
 
   const jsChecker = (checkers && checkers.js) || checkJsSyntax;
   const jsonChecker = (checkers && checkers.json) || checkJsonSyntax;
+  const tsChecker = (checkers && checkers.ts) || checkTsSyntax;
 
   const accepted = [];
   const rejected = [];
@@ -131,7 +183,11 @@ function validateFixesSyntax(opts) {
     let language;
     if (lower.endsWith('.json')) { checker = jsonChecker; language = 'json'; }
     else if (lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) { checker = jsChecker; language = 'js'; }
-    else { checker = null; language = 'unchecked'; }
+    else if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts')) {
+      checker = tsChecker; language = 'ts';
+    } else if (lower.endsWith('.tsx') || lower.endsWith('.jsx')) {
+      checker = (src) => tsChecker(src, 'fix-validation.tsx'); language = 'tsx';
+    } else { checker = null; language = 'unchecked'; }
 
     if (!checker) {
       // No checker for this extension — pass through. The accepted
@@ -172,5 +228,6 @@ module.exports = {
   // single-file check without going through the gate orchestrator.
   checkJsSyntax,
   checkJsonSyntax,
+  checkTsSyntax,
   pickChecker,
 };

@@ -239,7 +239,12 @@ test('validateFixesAgainstScanner — unattributed findings recorded but not blo
   assert.match(result.summary, /1 unattributed advisory finding/);
 });
 
-test('validateFixesAgainstScanner — fails open on runTier error', async () => {
+// DELIBERATE CONTRACT FLIP (2026-08-25, audit #7 "fix PRs with proof"):
+// this test used to assert fail-OPEN — a scanner error waived the gate and
+// every unverified fix shipped. The gate is now FAIL-CLOSED: a fix whose
+// safety could not be verified is withheld from the PR, with the reason on
+// the rollback record.
+test('validateFixesAgainstScanner — fails CLOSED on runTier error', async () => {
   const fixes = [{ file: 'src/a.js', fixed: 'x', original: 'y', issues: ['i'] }];
   const result = await validateFixesAgainstScanner({
     fixes,
@@ -248,10 +253,44 @@ test('validateFixesAgainstScanner — fails open on runTier error', async () => 
     runTier: async () => { throw new Error('scanner exploded'); },
     owner: 'x', repo: 'y',
   });
+  assert.equal(result.accepted.length, 0);
+  assert.equal(result.rolledBack.length, 1);
+  assert.match(result.rolledBack[0].reason, /fail-closed/);
+  assert.match(result.summary, /FAIL-CLOSED/);
+  assert.match(result.summary, /scanner exploded/);
+});
+
+test('validateFixesAgainstScanner — derives a baseline from fix originals when none is supplied (gate is mandatory)', async () => {
+  // No originalFileContents, no originalFindingsByModule: the gate must
+  // scan the originals itself. The stub reports a finding in a.js ONLY
+  // when the fixed content is present, so the derived-baseline diff must
+  // attribute it as NEW and roll the fix back.
+  const fixes = [{ file: 'src/a.js', fixed: 'BAD', original: 'GOOD', issues: ['i'] }];
+  const runTier = async (tier, ctx) => {
+    const a = ctx.fileContents.find((f) => f.path === 'src/a.js');
+    return {
+      modules: [{ name: 'security', details: a && a.content === 'BAD' ? ['src/a.js: introduced eval'] : [] }],
+      totalIssues: a && a.content === 'BAD' ? 1 : 0,
+    };
+  };
+  const result = await validateFixesAgainstScanner({ fixes, runTier, owner: 'x', repo: 'y' });
+  assert.equal(result.accepted.length, 0);
+  assert.equal(result.rolledBack.length, 1);
+  assert.match(result.rolledBack[0].newFindings[0], /introduced eval/);
+});
+
+test('validateFixesAgainstScanner — derived baseline accepts a clean fix', async () => {
+  const fixes = [{ file: 'src/a.js', fixed: 'CLEAN', original: 'DIRTY', issues: ['i'] }];
+  const runTier = async (tier, ctx) => {
+    const a = ctx.fileContents.find((f) => f.path === 'src/a.js');
+    return {
+      modules: [{ name: 'security', details: a && a.content === 'DIRTY' ? ['src/a.js: eval'] : [] }],
+      totalIssues: a && a.content === 'DIRTY' ? 1 : 0,
+    };
+  };
+  const result = await validateFixesAgainstScanner({ fixes, runTier, owner: 'x', repo: 'y' });
   assert.equal(result.accepted.length, 1);
   assert.equal(result.rolledBack.length, 0);
-  assert.match(result.summary, /failed-open/);
-  assert.match(result.summary, /scanner exploded/);
 });
 
 test('validateFixesAgainstScanner — multiple new findings on one file aggregate into one rollback', async () => {
