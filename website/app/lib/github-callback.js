@@ -27,6 +27,18 @@ const GITHUB_API = 'https://api.github.com';
 const STATUS_CONTEXT = 'gatetest / scan';
 const USER_AGENT = 'GateTest/1.0';
 
+// Per-fetch timeout (2026-08-18 audit advancement #11). A GitHub API call
+// that hangs holds the worker tick hostage — 10s is generous for a status
+// POST. Guarded so injected test fetchImpls without AbortSignal still work.
+const FETCH_TIMEOUT_MS = 10_000;
+function fetchTimeoutSignal() {
+  try {
+    return typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+      ? AbortSignal.timeout(FETCH_TIMEOUT_MS)
+      : undefined;
+  } catch { return undefined; }
+}
+
 /**
  * Pick the best available GitHub token from env.
  * @param {Record<string, string|undefined>} env
@@ -121,6 +133,7 @@ async function fetchRepoMode(owner, repo, token, fetchImpl = fetch, env = proces
     const res = await fetchImpl(
       `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.gatetest.json`,
       {
+        signal: fetchTimeoutSignal(),
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/vnd.github+json',
@@ -376,6 +389,7 @@ async function postCommitStatus({ owner, repo, sha, state, description, targetUr
 
   try {
     const res = await fetchImpl(`${GITHUB_API}/repos/${owner}/${repo}/statuses/${sha}`, {
+      signal: fetchTimeoutSignal(),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -446,6 +460,7 @@ async function postPrComment({ owner, repo, prNumber, body, token, fetchImpl, id
         const updateRes = await fetchImpl(
           `${GITHUB_API}/repos/${owner}/${repo}/issues/comments/${existing.id}`,
           {
+            signal: fetchTimeoutSignal(),
             method: 'PATCH',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -472,6 +487,7 @@ async function postPrComment({ owner, repo, prNumber, body, token, fetchImpl, id
 
   try {
     const res = await fetchImpl(`${GITHUB_API}/repos/${owner}/${repo}/issues/${prNumber}/comments`, {
+      signal: fetchTimeoutSignal(),
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -508,6 +524,7 @@ async function findExistingComment({ owner, repo, prNumber, token, fetchImpl, ma
     const res = await fetchImpl(
       `${GITHUB_API}/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100&page=${page}`,
       {
+        signal: fetchTimeoutSignal(),
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -632,4 +649,6 @@ module.exports = {
   postPrComment,
   findExistingComment,
   GATETEST_PR_COMMENT_MARKER,
+  // exposed for the enqueue-time pending status (advancement #11)
+  postCommitStatus,
 };

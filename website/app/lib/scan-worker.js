@@ -22,8 +22,30 @@
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { MAX_ATTEMPTS } = require('./scan-queue-store');
+const { MAX_ATTEMPTS, isTerminalScanError } = require('./scan-queue-store');
 const { timingSafeEqual } = require('crypto');
+
+/**
+ * Bounded retry for the result callback (advancement #11: "callback
+ * retry"). The callback is the customer-visible half of the pipeline —
+ * a commit status or Gluecron notification lost to one network blip
+ * means a scan that ran perfectly looks like it never happened. Three
+ * tries, linear backoff, then the caller's catch logs and moves on.
+ */
+async function callWithRetry(fn, { attempts = 3, delayMs = 400 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
 
 function safeEqual(a, b) {
   if (!a || !b) return false;
@@ -220,23 +242,23 @@ async function runWorkerTick({
       );
     }
 
-    // Fire callback with the real result. Never blocks the response
-    // beyond a reasonable timeout (the callback helper has its own
-    // error swallow).
+    // Fire callback with the real result, retried through transient
+    // failures — a lost callback makes a perfect scan look like it never
+    // ran. Still never throws to the tick.
     try {
       if (sendCallback) {
-        await sendCallback({
+        await callWithRetry(() => sendCallback({
           repository,
           sha: job.sha,
           ref: job.ref,
           pullRequestNumber: job.pull_request_number,
           host: job.host || 'gluecron',
           scanResult,
-        });
+        }));
       }
     } catch (err) {
       console.error(
-        '[scan-worker] sendCallback failed:',
+        '[scan-worker] sendCallback failed after retries:',
         err && err.message ? err.message : err
       );
     }
@@ -246,10 +268,15 @@ async function runWorkerTick({
 
   // Scan failed. Decide whether to retry or dead-letter.
   // job.attempts already reflects THIS attempt (claimNextJob incremented it).
-  const willRetry = job.attempts < MAX_ATTEMPTS;
-  const errMsg =
+  // Terminal errors (404 repo, dead credentials, empty repository) fail
+  // identically on every attempt — dead-letter immediately instead of
+  // burning MAX_ATTEMPTS ticks (advancement #11: terminal classification).
+  const rawErrMsg =
     (scanResult && scanResult.error) ||
     `scan returned status=${scanResult && scanResult.status}`;
+  const terminal = isTerminalScanError(rawErrMsg);
+  const willRetry = !terminal && job.attempts < MAX_ATTEMPTS;
+  const errMsg = terminal ? `[terminal] ${rawErrMsg}` : rawErrMsg;
 
   try {
     await queueStore.markFailed(job.id, errMsg, willRetry, sql);
@@ -262,22 +289,23 @@ async function runWorkerTick({
 
   // If this was the final attempt, notify Gluecron so it doesn't wait
   // indefinitely. The callback helper marks status='error' when
-  // scanResult.error is set.
+  // scanResult.error is set. Retried like the success callback — the
+  // dead-letter notification is the LAST signal the customer gets.
   if (!willRetry) {
     try {
       if (sendCallback) {
-        await sendCallback({
+        await callWithRetry(() => sendCallback({
           repository,
           sha: job.sha,
           ref: job.ref,
           pullRequestNumber: job.pull_request_number,
           host: job.host || 'gluecron',
           scanResult,
-        });
+        }));
       }
     } catch (err) {
       console.error(
-        '[scan-worker] dead-letter callback failed:',
+        '[scan-worker] dead-letter callback failed after retries:',
         err && err.message ? err.message : err
       );
     }
@@ -288,6 +316,7 @@ async function runWorkerTick({
     jobId: job.id,
     attempts: job.attempts,
     willRetry,
+    terminal,
     reclaimed,
     error: String(errMsg).slice(0, 500),
   };
@@ -296,5 +325,6 @@ async function runWorkerTick({
 module.exports = {
   isAuthorisedTick,
   runWorkerTick,
+  callWithRetry,
   MAX_DIFF_FILES,
 };

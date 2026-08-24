@@ -422,3 +422,70 @@ _t2('pull_request carries base.sha as baseSha', () => {
   _assert2.equal(r.kind, 'enqueue');
   _assert2.equal(r.payload.baseSha, 'd'.repeat(40));
 });
+
+// ── advancement #11: pending commit status at enqueue ──────────────────────
+const { describe: _d3, it: _t3 } = require('node:test');
+const _assert3 = require('node:assert');
+const _ge3 = require(require('path').resolve(__dirname, '..', 'website', 'app', 'lib', 'github-events.js'));
+const _crypto3 = require('crypto');
+
+function _signedPushArgs3({ token = 'ghp_test', duplicate = false } = {}) {
+  const secret = 'whsec';
+  const payload = {
+    after: 'a'.repeat(40),
+    ref: 'refs/heads/main',
+    repository: { full_name: 'octo/demo' },
+    head_commit: { id: 'a'.repeat(40) },
+  };
+  const rawBody = JSON.stringify(payload);
+  const sig = 'sha256=' + _crypto3.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const fetchCalls = [];
+  const fetchImpl = async (url, opts) => {
+    fetchCalls.push({ url, opts });
+    return { ok: true, status: url.includes('/statuses/') ? 201 : 200, json: async () => ({}) };
+  };
+  return {
+    args: {
+      rawBody,
+      eventType: 'push',
+      delivery: 'd-' + Math.floor(1e9 * 0.42),
+      signatureHeader: sig,
+      env: { GITHUB_WEBHOOK_SECRET: secret, ...(token ? { GITHUB_TOKEN: token } : {}) },
+      sql: async () => [],
+      queueStore: {
+        getQueueDepth: async () => 0,
+        enqueueScan: async () => ({ duplicate, id: 1 }),
+      },
+      fetchImpl,
+      baseUrl: 'https://gatetest.io',
+    },
+    fetchCalls,
+  };
+}
+
+_d3('pending status at enqueue (advancement #11)', () => {
+  _t3('posts state=pending to the commit right after a fresh enqueue', async () => {
+    const { args, fetchCalls } = _signedPushArgs3();
+    const r = await _ge3.processGitHubEvent(args);
+    _assert3.strictEqual(r.status, 202);
+    const statusCall = fetchCalls.find((c) => /\/repos\/octo\/demo\/statuses\//.test(c.url));
+    _assert3.ok(statusCall, 'a commit-status POST must be fired at enqueue');
+    const body = JSON.parse(statusCall.opts.body);
+    _assert3.strictEqual(body.state, 'pending');
+    _assert3.match(body.description, /queued/i);
+  });
+
+  _t3('no pending status for a duplicate delivery', async () => {
+    const { args, fetchCalls } = _signedPushArgs3({ duplicate: true });
+    const r = await _ge3.processGitHubEvent(args);
+    _assert3.strictEqual(r.status, 200);
+    _assert3.strictEqual(fetchCalls.filter((c) => /\/statuses\//.test(c.url)).length, 0);
+  });
+
+  _t3('no token → webhook still succeeds, no status attempted', async () => {
+    const { args, fetchCalls } = _signedPushArgs3({ token: null });
+    const r = await _ge3.processGitHubEvent(args);
+    _assert3.strictEqual(r.status, 202);
+    _assert3.strictEqual(fetchCalls.filter((c) => /\/statuses\//.test(c.url)).length, 0);
+  });
+});

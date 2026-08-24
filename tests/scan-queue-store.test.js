@@ -295,3 +295,66 @@ describe('contract guards', () => {
     await assert.rejects(() => reclaimStuck(), /sql tagged-template is required/);
   });
 });
+
+// ── advancement #11: terminal classification + queue stats ─────────────────
+const { isTerminalScanError, getQueueStats } = require(require('path').resolve(
+  __dirname, '..', 'website', 'app', 'lib', 'scan-queue-store.js'));
+
+describe('isTerminalScanError — retrying cannot fix these', () => {
+  it('terminal: 404 / bad credentials / empty repo / archived', () => {
+    for (const msg of [
+      'GitHub API 404: Not Found',
+      'clone failed: repository not found',
+      '401 Bad credentials',
+      'empty repository — nothing to scan',
+      'Repository access blocked',
+      'this repository has been archived',
+    ]) {
+      assert.strictEqual(isTerminalScanError(msg), true, msg);
+    }
+  });
+
+  it('retryable: rate limits, timeouts, 5xx, network errors', () => {
+    for (const msg of [
+      'GitHub API 403: rate limit exceeded',
+      'secondary limit hit, retry later',
+      'fetch failed: ETIMEDOUT',
+      'ECONNRESET while downloading archive',
+      'upstream returned 503',
+      'scan crashed: socket hang up',
+    ]) {
+      assert.strictEqual(isTerminalScanError(msg), false, msg);
+    }
+  });
+
+  it('a 404 message that also mentions a rate limit stays retryable', () => {
+    assert.strictEqual(isTerminalScanError('404 from api (rate limit exceeded)'), false);
+  });
+
+  it('empty/absent messages are not terminal', () => {
+    assert.strictEqual(isTerminalScanError(''), false);
+    assert.strictEqual(isTerminalScanError(null), false);
+  });
+});
+
+describe('getQueueStats', () => {
+  it('maps grouped counts and oldest queued age', async () => {
+    const sql = async () => [
+      { status: 'queued', n: 3, oldest_age_s: 120 },
+      { status: 'running', n: 1, oldest_age_s: 10 },
+      { status: 'done', n: 40, oldest_age_s: 90000 },
+      { status: 'dead', n: 2, oldest_age_s: 500 },
+    ];
+    const s = await getQueueStats(sql);
+    assert.deepStrictEqual(s, { queued: 3, running: 1, done: 40, dead: 2, oldest_queued_age_s: 120 });
+  });
+
+  it('empty queue → zeros and null age', async () => {
+    const s = await getQueueStats(async () => []);
+    assert.deepStrictEqual(s, { queued: 0, running: 0, done: 0, dead: 0, oldest_queued_age_s: null });
+  });
+
+  it('requires sql', async () => {
+    await assert.rejects(() => getQueueStats(), /sql tagged-template is required/);
+  });
+});

@@ -4,8 +4,11 @@
  * The "why isn't the site going?" endpoint. Unlike /api/admin/health (which
  * needs an admin session + makes real network calls, so it's useless when auth
  * itself is misconfigured), this endpoint:
- *   - needs NO auth, NO database, NO session, NO network — it can't hang and
- *     works even when everything else is broken;
+ *   - needs NO auth, NO session, NO network — it can't hang and works even
+ *     when everything else is broken. The one exception is the queue-depth
+ *     block (2026-08-18 audit advancement #11), which races the database
+ *     against a 2s timeout and degrades to an error string — never a hang,
+ *     never a 500;
  *   - returns ONLY booleans and variable NAMES — never a secret value, never a
  *     key, never a connection string.
  *
@@ -132,9 +135,31 @@ export async function GET(req: NextRequest) {
 
   const ready = missing.length === 0;
 
+  // Queue posture (advancement #11: "queue depth on /api/status") — the
+  // number that says whether pushes are actually being scanned. Bounded:
+  // the DB read races a 2s timeout so this probe keeps its can't-hang
+  // promise; any failure degrades to an error string.
+  let queue: Record<string, unknown>;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getDb } = require("@/app/lib/db") as { getDb: () => unknown };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const queueStore = require("@/app/lib/scan-queue-store") as {
+      getQueueStats: (sql: unknown) => Promise<Record<string, unknown>>;
+    };
+    queue = (await Promise.race([
+      queueStore.getQueueStats(getDb()),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("queue stats timed out (2s)")), 2000)),
+    ])) as Record<string, unknown>;
+  } catch (err) {
+    queue = { error: err instanceof Error ? err.message : "queue stats unavailable" };
+  }
+
   return NextResponse.json(
     {
       ready,
+      queue,
       // The headline: what to fix, by name, no values.
       missing_required: missing.map((v) => ({ name: v.name, why: v.why })),
       missing_important: importantMissing.map((v) => ({ name: v.name, why: v.why })),

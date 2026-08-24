@@ -281,7 +281,10 @@ describe('runWorkerTick — job failure with retry', () => {
       nextJob: makeJob({ id: 7, attempts: 2 }), // 2 < MAX_ATTEMPTS(5)
     });
     const runScan = async () =>
-      makeScanResult({ status: 'failed', error: 'GitHub 404' });
+      // Fixture text changed 2026-08-25: '404' is now (correctly) a
+      // TERMINAL error that dead-letters immediately; this test's intent is
+      // the attempts-below-MAX retry path, so it needs a retryable error.
+      makeScanResult({ status: 'failed', error: 'upstream returned 503' });
     const callbackCalls = [];
     const sendCallback = async (args) => {
       callbackCalls.push(args);
@@ -299,7 +302,7 @@ describe('runWorkerTick — job failure with retry', () => {
     assert.strictEqual(result.willRetry, true);
     assert.strictEqual(qs.calls.markFailed.length, 1);
     assert.strictEqual(qs.calls.markFailed[0].willRetry, true);
-    assert.match(qs.calls.markFailed[0].err, /GitHub 404/);
+    assert.match(qs.calls.markFailed[0].err, /upstream returned 503/);
     assert.strictEqual(callbackCalls.length, 0, 'no callback on retryable failure');
   });
 
@@ -571,5 +574,78 @@ describe('worker tick route — cron header contract (source-text)', () => {
       /x-vercel-cron-secret["']\s*\)\s*\|\|\s*bearer/,
       'custom header must fall back to the bearer token'
     );
+  });
+});
+
+// ── advancement #11: terminal dead-letter + callback retry ─────────────────
+const { callWithRetry } = require(path.resolve(
+  __dirname, '..', 'website', 'app', 'lib', 'scan-worker.js'));
+
+describe('terminal classification in the tick', () => {
+  it('a 404 scan error dead-letters on attempt 1 instead of burning retries', async () => {
+    const store = makeQueueStore({ nextJob: { id: 7, event_id: 'e', repository: 'o/r', sha: 'a'.repeat(40), ref: null, pull_request_number: null, attempts: 1 } });
+    const result = await runWorkerTick({
+      sql: async () => [],
+      queueStore: store,
+      runScan: async () => ({ status: 'failed', modules: [], error: 'GitHub API 404: Not Found' }),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.terminal, true);
+    assert.strictEqual(result.willRetry, false, 'terminal errors must not retry even on attempt 1');
+    assert.strictEqual(store.calls.markFailed.length, 1);
+    assert.strictEqual(store.calls.markFailed[0].willRetry, false);
+    assert.match(store.calls.markFailed[0].err, /^\[terminal\] /);
+  });
+
+  it('a rate-limit error still retries below MAX_ATTEMPTS', async () => {
+    const store = makeQueueStore({ nextJob: { id: 8, event_id: 'e', repository: 'o/r', sha: 'a'.repeat(40), ref: null, pull_request_number: null, attempts: 1 } });
+    const result = await runWorkerTick({
+      sql: async () => [],
+      queueStore: store,
+      runScan: async () => ({ status: 'failed', modules: [], error: '403 rate limit exceeded' }),
+      sendCallback: async () => ({}),
+    });
+    assert.strictEqual(result.terminal, false);
+    assert.strictEqual(result.willRetry, true);
+    assert.strictEqual(store.calls.markFailed[0].willRetry, true);
+  });
+});
+
+describe('callback retry', () => {
+  it('callWithRetry retries transient failures then succeeds', async () => {
+    let n = 0;
+    const out = await callWithRetry(async () => {
+      n += 1;
+      if (n < 3) throw new Error('blip');
+      return 'ok';
+    }, { attempts: 3, delayMs: 1 });
+    assert.strictEqual(out, 'ok');
+    assert.strictEqual(n, 3);
+  });
+
+  it('callWithRetry throws the last error after exhausting attempts', async () => {
+    let n = 0;
+    await assert.rejects(
+      () => callWithRetry(async () => { n += 1; throw new Error('always'); }, { attempts: 3, delayMs: 1 }),
+      /always/);
+    assert.strictEqual(n, 3);
+  });
+
+  it('the success callback is retried inside the tick (two blips → still delivered)', async () => {
+    const store = makeQueueStore({ nextJob: { id: 9, event_id: 'e', repository: 'o/r', sha: 'a'.repeat(40), ref: null, pull_request_number: null, attempts: 1 } });
+    let calls = 0;
+    const result = await runWorkerTick({
+      sql: async () => [],
+      queueStore: store,
+      runScan: async () => ({ status: 'complete', modules: [], totalModules: 1, completedModules: 1, totalIssues: 0, totalFixed: 0, duration: 1 }),
+      sendCallback: async () => {
+        calls += 1;
+        if (calls < 3) throw new Error('network blip');
+        return {};
+      },
+    });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(calls, 3, 'callback must be retried through transient failures');
   });
 });

@@ -284,6 +284,54 @@ async function reclaimStuck(sql) {
   return Array.isArray(rows) ? rows.length : 0;
 }
 
+/**
+ * Terminal-vs-retryable classification (2026-08-18 audit advancement #11).
+ * A repo that returns 404, dead credentials, or "empty repository" will
+ * fail identically on every attempt — retrying burns MAX_ATTEMPTS ticks
+ * and delays the dead-letter callback the customer is waiting on. Rate
+ * limits and network blips ARE worth retrying, so anything that smells
+ * like throttling is explicitly NOT terminal even when it carries a 403.
+ *
+ * @param {string} message  the scan error message
+ * @returns {boolean} true when retrying cannot possibly succeed
+ */
+const RETRYABLE_HINT_RE = /rate limit|secondary limit|abuse detection|timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|503|502|504/i;
+const TERMINAL_RE = /\b404\b|not found|bad credentials|\b401\b|repository (?:access )?(?:blocked|disabled|unavailable)|empty repository|unknown revision|no commit found|has been archived|repository is archived|invalid repository/i;
+
+function isTerminalScanError(message) {
+  const msg = String(message || '');
+  if (!msg) return false;
+  if (RETRYABLE_HINT_RE.test(msg)) return false;
+  return TERMINAL_RE.test(msg);
+}
+
+/**
+ * Full queue posture for /api/status (advancement #11: "queue depth on
+ * /api/status"). One query, grouped counts plus the age of the oldest
+ * waiting job — the number that says "the queue is moving" or "nothing
+ * has been picked up for an hour".
+ *
+ * @param {Function} sql
+ * @returns {Promise<{queued:number, running:number, done:number, dead:number, oldest_queued_age_s:number|null}>}
+ */
+async function getQueueStats(sql) {
+  if (!sql || typeof sql !== 'function') {
+    throw new Error('getQueueStats: sql tagged-template is required');
+  }
+  const rows = await sql`
+    SELECT status, COUNT(*)::int AS n,
+           EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))::int AS oldest_age_s
+    FROM scan_queue
+    GROUP BY status
+  `;
+  const stats = { queued: 0, running: 0, done: 0, dead: 0, oldest_queued_age_s: null };
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r.status in stats) stats[r.status] = r.n;
+    if (r.status === 'queued') stats.oldest_queued_age_s = r.oldest_age_s;
+  }
+  return stats;
+}
+
 module.exports = {
   ensureScanQueueTable,
   enqueueScan,
@@ -292,7 +340,9 @@ module.exports = {
   markFailed,
   deadLetter,
   getQueueDepth,
+  getQueueStats,
   reclaimStuck,
+  isTerminalScanError,
   MAX_ATTEMPTS,
   RETRY_BACKOFF_SECONDS,
 };

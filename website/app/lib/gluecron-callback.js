@@ -105,6 +105,11 @@ async function sendGluecronCallback(opts) {
   try {
     const res = await doFetch(url, {
       method: "POST",
+      // Per-fetch timeout (advancement #11): a hung callback must not hold
+      // the worker tick hostage. Guarded for test fetch doubles.
+      signal: (typeof AbortSignal !== "undefined" && AbortSignal.timeout)
+        ? AbortSignal.timeout(10_000)
+        : undefined,
       headers: {
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",

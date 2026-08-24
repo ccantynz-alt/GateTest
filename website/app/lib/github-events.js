@@ -334,6 +334,46 @@ async function processGitHubEvent({
     return { status: 500, body: { error: msg } };
   }
 
+  // Enqueue-time `pending` commit status (2026-08-18 audit advancement
+  // #11). Between the push and the scan completing, the customer's commit
+  // previously showed NOTHING from GateTest — indistinguishable from "the
+  // integration is dead". Fire-and-forget: a status failure never affects
+  // the webhook response, and no token simply skips it (posting statuses
+  // is the callback path's problem to report).
+  if (!enq.duplicate && payload.repository && payload.repository.includes('/') && payload.sha) {
+    try {
+      // eslint-disable-next-line global-require
+      const { resolveGitHubToken, postCommitStatus } = require('./github-callback');
+      const token = resolveGitHubToken(env);
+      if (token) {
+        const [owner, repo] = payload.repository.split('/');
+        const p = postCommitStatus({
+          owner,
+          repo,
+          sha: payload.sha,
+          state: 'pending',
+          description: 'GateTest — scan queued',
+          targetUrl: baseUrl ? `${baseUrl}/scan/status` : undefined,
+          token,
+          fetchImpl: fetchImpl || fetch,
+        });
+        if (p && typeof p.catch === 'function') {
+          p.catch((err) => {
+            console.error(
+              '[github-webhook] pending status failed:',
+              err && err.message ? err.message : err
+            );
+          });
+        }
+      }
+    } catch (err) {
+      console.error(
+        '[github-webhook] pending status threw:',
+        err && err.message ? err.message : err
+      );
+    }
+  }
+
   if (!enq.duplicate && fetchImpl && baseUrl) {
     try {
       const url = `${baseUrl}/api/scan/worker/tick`;
