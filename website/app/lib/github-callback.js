@@ -269,6 +269,12 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
         const conf = typeof f.confidence === 'number' && f.confidence < 1 ? ` · confidence ${Math.round(f.confidence * 100)}%` : '';
         const tag = attributed ? (f.inDiff ? ' `in this change`' : ' `pre-existing`') : '';
         lines.push(`- ${sev} **${f.rule || f.module}**${tag} ${where ? `${where} — ` : ''}${String(f.message || '').slice(0, 200)}${conf}`);
+        // Evidence-attached (advancement #5): the verified quote, so an
+        // AI finding is never taken on faith. One line, hard-truncated.
+        if (f.evidence) {
+          const quote = String(f.evidence).replace(/\s+/g, ' ').trim().slice(0, 120);
+          lines.push(`  <sub>evidence: \`${quote.replace(/`/g, "'")}\`</sub>`);
+        }
       }
       if (ranked.length > top.length) {
         lines.push(`- *…${ranked.length - top.length} more, by module below*`);

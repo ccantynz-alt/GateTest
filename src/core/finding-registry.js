@@ -112,6 +112,10 @@ function normalizeFindings(results, opts = {}) {
         line,
         message: String(c.message || c.name || ''),
         suggestion: c.suggestion || c.fix || null,
+        // Verified code quote (AI findings pass an evidence gate before
+        // this field is populated) — reporters attach it so the reader
+        // never takes an AI finding on faith (advancement #5).
+        evidence: typeof c.evidence === 'string' && c.evidence ? c.evidence : null,
         // classify on the message AND the rule name — a taint sink is named
         // `taint:sink:eval` while its message talks about flows, not eval()
         class: classify(`${c.message || ''} ${c.name || ''}`),

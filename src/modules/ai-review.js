@@ -155,7 +155,7 @@ class AiReviewModule extends BaseModule {
 
     try {
       const review = await this._callClaude(apiKey, fileContents, memory);
-      this._processReview(review, result, memory);
+      this._processReview(review, result, memory, fileContents);
     } catch (err) {
       result.addCheck('ai-review:error', false, {
         severity: 'warning',
@@ -228,6 +228,7 @@ For each issue found, respond in this exact JSON format:
     {
       "file": "path/to/file.js",
       "line": 42,
+      "evidence": "the EXACT code from the flagged line(s), copied verbatim from the file",
       "severity": "error|warning|info",
       "category": "security|performance|bug|quality|accessibility",
       "title": "Short description",
@@ -247,6 +248,10 @@ Rules:
 - Minor quality improvements are severity "info"
 - If the code is clean, return an empty issues array
 - Be specific about line numbers
+- EVERY issue MUST include "evidence": the flagged code copied VERBATIM from
+  the file. Findings whose evidence does not appear in the file are
+  DISCARDED by an automated gate — a finding without checkable evidence
+  does not exist.
 
 Files to review:
 
@@ -296,7 +301,7 @@ ${filesText}`;
     });
   }
 
-  _processReview(review, result, memory) {
+  _processReview(review, result, memory, fileContents) {
     // "No issues found" is only sayable when the model actually returned an
     // issues array. A missing array, or a reply we could not parse, means the
     // review did not produce a verdict — claiming it was clean there is a
@@ -315,7 +320,7 @@ ${filesText}`;
       return;
     }
 
-    const issues = review.issues;
+    let issues = review.issues;
 
     if (issues.length === 0) {
       result.addCheck('ai-review:clean', true, {
@@ -323,6 +328,37 @@ ${filesText}`;
         message: `AI review complete — code looks clean. ${review.summary || ''}`,
       });
       return;
+    }
+
+    // Evidence gate (2026-08-18 audit advancement #5, complaint #9):
+    // every finding must quote code that ACTUALLY APPEARS in a reviewed
+    // file, or it does not ship as a defect. Relocated findings (real
+    // quote, wrong line number) survive with the corrected line — models
+    // see bugs well and count lines badly. Rejects are surfaced in one
+    // aggregate info line so the gate is auditable, never silent.
+    if (Array.isArray(fileContents) && fileContents.length > 0) {
+      // eslint-disable-next-line global-require
+      const { gateAiReview } = require('../core/ai-evidence-gate');
+      const gated = gateAiReview(issues, fileContents);
+      if (gated.rejected.length > 0) {
+        const listed = gated.rejected
+          .slice(0, 5)
+          .map((r) => `"${String(r.issue && r.issue.title || 'untitled').slice(0, 60)}" (${r.reason})`)
+          .join('; ');
+        const extra = gated.rejected.length > 5 ? ` +${gated.rejected.length - 5} more` : '';
+        result.addCheck('ai-review:evidence-rejected', true, {
+          severity: 'info',
+          message: `${gated.rejected.length} AI finding(s) rejected by the evidence gate — the quoted code is not in the reviewed files: ${listed}${extra}`,
+        });
+      }
+      issues = gated.accepted;
+      if (issues.length === 0) {
+        result.addCheck('ai-review:clean', true, {
+          severity: 'info',
+          message: `AI review complete — every raised finding failed the evidence gate; nothing verifiable to report. ${review.summary || ''}`,
+        });
+        return;
+      }
     }
 
     // Convert AI findings to GateTest checks — but honour memory's
@@ -348,6 +384,12 @@ ${filesText}`;
         suggestion: issue.suggestion,
         explanation: issue.explanation,
         fixedCode: issue.fixedCode,
+        // Verified quote — reporters can attach it so the reader never has
+        // to take an AI finding on faith (advancement #5: evidence-attached).
+        evidence: issue.evidence,
+        ...(issue.evidenceVerdict === 'relocated'
+          ? { note: 'line corrected by the evidence gate — the model quoted real code at a different line' }
+          : {}),
       };
 
       // Wire up auto-fix: if Claude returned fixedCode, apply it to the file
