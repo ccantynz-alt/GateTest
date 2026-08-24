@@ -38,26 +38,48 @@ class CompatibilityModule extends BaseModule {
   }
 
   _checkBrowserslist(projectRoot, result) {
-    const hasConfig =
-      fs.existsSync(path.join(projectRoot, '.browserslistrc')) ||
-      (() => {
-        const pkgPath = path.join(projectRoot, 'package.json');
-        if (!fs.existsSync(pkgPath)) return false;
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-          return !!pkg.browserslist;
-        } catch { return false; }
-      })();
-
-    if (!hasConfig) {
-      result.addCheck('compat:browserslist', false, {
-        severity: 'warning',
-        message: 'No browserslist configuration found',
-        suggestion: 'Add a .browserslistrc or "browserslist" field in package.json',
-      });
-    } else {
-      result.addCheck('compat:browserslist', true);
+    const pkgPath = path.join(projectRoot, 'package.json');
+    let pkg = null;
+    if (fs.existsSync(pkgPath)) {
+      try { pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')); } catch { pkg = null; }
     }
+
+    const hasConfig =
+      fs.existsSync(path.join(projectRoot, '.browserslistrc')) || !!(pkg && pkg.browserslist);
+
+    if (hasConfig) {
+      result.addCheck('compat:browserslist', true);
+      return;
+    }
+
+    // Browserslist only means something for code that RUNS IN A BROWSER.
+    // Firing "no browserslist configuration" on a Go repo, a CLI, or a pure
+    // Node server tells the customer to configure a tool that has nothing
+    // to configure (2026-08-18 audit residue: fired on gin-gonic/gin).
+    // Require a web signal before warning: a browser-facing framework or
+    // bundler in package.json deps, a "browser" field, or shipped HTML.
+    const WEB_DEP_RE = /^(react|react-dom|preact|vue|svelte|@angular\/core|next|nuxt|astro|gatsby|solid-js|lit|jquery|webpack|vite|parcel|rollup|esbuild|@babel\/preset-env|autoprefixer|postcss|tailwindcss)$/;
+    const allDeps = pkg
+      ? Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) })
+      : [];
+    const isWebProject =
+      (pkg && (pkg.browser || allDeps.some((d) => WEB_DEP_RE.test(d)))) ||
+      fs.existsSync(path.join(projectRoot, 'index.html')) ||
+      fs.existsSync(path.join(projectRoot, 'public', 'index.html'));
+
+    if (!isWebProject) {
+      result.addCheck('compat:browserslist', true, {
+        severity: 'info',
+        message: 'No browser-facing code detected — browserslist not applicable',
+      });
+      return;
+    }
+
+    result.addCheck('compat:browserslist', false, {
+      severity: 'warning',
+      message: 'No browserslist configuration found',
+      suggestion: 'Add a .browserslistrc or "browserslist" field in package.json',
+    });
   }
 
   _checkNodeVersion(projectRoot, result) {

@@ -335,18 +335,38 @@ class ErrorSwallowModule extends BaseModule {
         }
       }
 
-      // 4. Node-callback `(err, ...) => { ... }` that doesn't branch
-      //    on err. Conservative: only flag if the callback body in the
-      //    next ~5 lines doesn't mention `err` — we look ONLY after
-      //    the opening brace to avoid counting the param itself.
-      const nodeCb = line.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/);
+      // 4. Node-callback `(err, ...) => { ... }` / `function (err, ...) { }`
+      //    that doesn't branch on err. The classic `function` form is how
+      //    every legacy Mongo/Redis/fs API takes its callback — the
+      //    arrow-only regex missed all of them (2026-08-18 audit residue).
+      //    Conservative: only flag if the callback BODY never mentions
+      //    `err`, scanning to the brace-balanced end of the callback (the
+      //    old fixed 5-line window false-fired on bodies that handle the
+      //    error on line 6+). We look ONLY after the opening brace to
+      //    avoid counting the param itself.
+      const nodeCb = line.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/)
+        || line.match(/function\s*(?:[A-Za-z_$][\w$]*\s*)?\(\s*(err|error)\s*,\s*[^)]+\)\s*\{/);
       if (nodeCb && !isInString(line, nodeCb.index) && !this._isSuppressed(lines, i)) {
         const errName = nodeCb[1];
-        // Body starts right after the `{` on this line.
+        // Body starts right after the `{` on this line; scan until the
+        // callback's braces balance (capped at 60 lines for pathological
+        // files — a longer body that still never says `err` has earned it).
         const braceOffset = line.indexOf('{', nodeCb.index + nodeCb[0].length - 1);
         const sameLineBody = braceOffset >= 0 ? line.slice(braceOffset + 1) : '';
-        const followingLines = lines.slice(i + 1, Math.min(lines.length, i + 6)).join('\n');
-        const bodyWindow = `${sameLineBody}\n${followingLines}`;
+        const bodyLines = [sameLineBody];
+        let depth = 1;
+        for (const ch of sameLineBody) {
+          if (ch === '{') depth += 1;
+          else if (ch === '}') depth -= 1;
+        }
+        for (let k = i + 1; k < Math.min(lines.length, i + 61) && depth > 0; k += 1) {
+          bodyLines.push(lines[k]);
+          for (const ch of lines[k]) {
+            if (ch === '{') depth += 1;
+            else if (ch === '}') { depth -= 1; if (depth === 0) break; }
+          }
+        }
+        const bodyWindow = bodyLines.join('\n');
         const mentionsErr = new RegExp(`\\b${errName}\\b`).test(bodyWindow);
         if (!mentionsErr) {
           issues += this._flag(result, `error-swallow:callback-err-ignored:${rel}:${i + 1}`, {

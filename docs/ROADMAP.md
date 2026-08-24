@@ -200,14 +200,39 @@ sore points matters the most"), commits 99c59379 + af22bc79:**
    missing browser as a customer finding (`explorer:playwright`).
 
 **Queued (pre-authorised, ranked — see the report's Top-20 for the why):**
-- fastapi residue: `innerHTML` reported by security AND codeQuality (dup),
-  docs_src secrets at conf 1 (`confidence.js:107-131` path list); sinatra
-  `system "kill -9 #{pid}"` (integer interpolation); gin `ciSecurity` trivy
-  SARIF perms; python deadCode multi-line imports + decorated defs
-  (`dead-code-extractor.js:417-450`); duplicateCode string-collapse per-offset
-  reporting; flakyTests real-clock tautology; errorSwallow callback-style
-  Mongo APIs; dependencies maven parent-BOM; compat:browserslist on non-web
-  repos; aiHallucination tsconfig paths; bashSafety `message: null`.
+- ~~FP residue list~~ **SHIPPED 2026-08-25 (Craig: "end to end"), all with
+  positive + negative controls in `tests/fp-residue-2026-08-18.test.js` (33
+  tests):** docs_src/doc_src/docs-src are example-data paths in confidence.js
+  (fastapi tutorial secrets stop blocking); python deadCode parses
+  parenthesized multi-line + backslash-continuation imports and skips
+  decorated defs (registered by their decorator, incl. multi-line decorator
+  calls); flakyTests real-clock fires only when the clock reading is ASSERTED
+  (inline or via a tracked variable) — reading the clock for a fixture id is
+  not flakiness; errorSwallow callback-err-ignored now also matches classic
+  `function (err, ...)` callbacks (the legacy Mongo/fs form the arrow-only
+  regex missed) and scans the brace-balanced body instead of a 5-line window
+  (err handled on line 6+ no longer false-fires); dependencies maven skips
+  missing-`<version>` warnings under a `<parent>` POM or a
+  `<dependencyManagement>` entry and no longer scans dependencyManagement
+  blocks as resolutions (petclinic); compat:browserslist requires a web
+  signal (browser framework/bundler dep, `browser` field, or index.html) —
+  Go repos/CLIs/pure-Node servers exempt, with a positive control that a
+  React app still warns; aiHallucination reads the repo's own
+  tsconfig/jsconfig `compilerOptions.paths` (JSONC-tolerant, root + one
+  level deep) so custom aliases aren't "hallucinated packages";
+  bashSafety findings now carry `message` + repo-relative `file` + `line`
+  (was: `fix` only with an absolute path → `message: null` downstream);
+  ruby `system-interp` downgrades to warning (stays visible, stops blocking)
+  when EVERY interpolation is a provable integer (`#{pid}` from `fork`,
+  `$$`, `Process.pid`, `.to_i`, digit literal) via a new per-pattern
+  `downgrade` hook in universal-checker — mixed integer+string interpolation
+  stays a blocking error. NOT touched: gin trivy SARIF perms (audit marks it
+  real — a true positive, not residue); fastapi innerHTML ×2 was already
+  folded by the finding registry (verified + pinned with a regression test).
+  duplicateCode shipped in the same pass: windows need ≥2 lines of actual
+  logic (string/number collapsing had made any two data tables "identical
+  code"), and overlapping window-offset groups coalesce so a long duplicated
+  region is ONE finding instead of one per offset.
 - Cross-module dedupe (eval ×3, innerHTML ×2, secrets ×4, open-redirect ×2,
   SQLi ×3) — a finding registry keyed by file:line:class.
 - Per-rule precision telemetry surfaced in PR comments + `--noise`

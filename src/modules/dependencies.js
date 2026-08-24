@@ -430,17 +430,36 @@ class DependenciesModule extends BaseModule {
   // -------------------------------------------------------------------------
 
   _checkMaven(manifest, result) {
-    // Find <dependency>...<version>...</version>...</dependency>
-    const deps = [...manifest.content.matchAll(/<dependency>([\s\S]*?)<\/dependency>/g)];
+    // A missing <version> is NOT "resolve whatever is newest" when the
+    // version is centrally managed — which is the RECOMMENDED Maven setup:
+    // a <parent> POM (spring-boot-starter-parent manages hundreds of
+    // versions; spring-petclinic produced a page of these warnings) or a
+    // <dependencyManagement> section / imported BOM in this same pom.
+    // 2026-08-18 audit residue. Only an unmanaged, versionless dependency
+    // is genuinely floating.
+    const content = manifest.content;
+    const hasParent = /<parent>[\s\S]*?<\/parent>/.test(content);
+    const mgmtBlocks = [...content.matchAll(/<dependencyManagement>([\s\S]*?)<\/dependencyManagement>/g)];
+    const managedIds = new Set();
+    for (const [, block] of mgmtBlocks) {
+      for (const [, body] of block.matchAll(/<dependency>([\s\S]*?)<\/dependency>/g)) {
+        const id = body.match(/<artifactId>\s*([^<]+?)\s*<\/artifactId>/);
+        if (id) managedIds.add(id[1].trim());
+      }
+    }
+    // Strip dependencyManagement before scanning: its entries DECLARE
+    // versions, they don't resolve them, so they can never float.
+    const resolved = content.replace(/<dependencyManagement>[\s\S]*?<\/dependencyManagement>/g, '');
+    const deps = [...resolved.matchAll(/<dependency>([\s\S]*?)<\/dependency>/g)];
     for (const [, body] of deps) {
       const idMatch = body.match(/<artifactId>\s*([^<]+?)\s*<\/artifactId>/);
       const versionMatch = body.match(/<version>\s*([^<]+?)\s*<\/version>/);
       const id = idMatch ? idMatch[1].trim() : 'unknown';
-      if (!versionMatch) {
+      if (!versionMatch && !hasParent && !managedIds.has(id)) {
         result.addCheck(`dependencies:wildcard:maven:${id}`, false, {
           severity: 'warning',
           file: manifest.rel,
-          message: `"${id}" has no <version> element — Maven will resolve whatever is newest`,
+          message: `"${id}" has no <version> element and no parent POM or dependencyManagement entry manages it — Maven will resolve whatever is newest`,
         });
       }
     }

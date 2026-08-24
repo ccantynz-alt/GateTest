@@ -283,15 +283,33 @@ class FlakyTestsModule extends BaseModule {
         }
       }
 
-      // 4. Real clock: Date.now() or new Date() without fake timers
+      // 4. Real clock: Date.now() or new Date() without fake timers.
+      // Reading the clock is not flaky by itself — a timestamp in a fixture
+      // id or a temp filename is deterministic in every way a test cares
+      // about. It becomes flaky only when the value is ASSERTED against, so
+      // flag a clock read only when it feeds an expect/assert: directly on
+      // the same line, or via a variable that later appears inside one.
+      // (2026-08-18 audit residue: the unconditional form was a tautology —
+      // "test reads clock, therefore flaky" — and mostly noise.)
       if ((/\bDate\.now\s*\(/.test(line) || /\bnew\s+Date\s*\(\s*\)/.test(line)) && !hasFakeTimers) {
-        issues += this._flag(result, `flaky-tests:real-clock:${rel}:${i + 1}`, {
-          severity: 'warning',
-          file: rel,
-          line: i + 1,
-          message: `${rel}:${i + 1} reads the real clock (\`Date.now()\` / \`new Date()\`) with no fake-timer setup in this file`,
-          suggestion: 'Call `jest.useFakeTimers()` / `vi.useFakeTimers()` / `sinon.useFakeTimers()` at the top of the describe, or inject a clock.',
-        });
+        const assertedInline = /\b(?:expect|assert(?:\.\w+)*|should)\s*\(?[^;\n]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/.test(line);
+        let assertedViaVar = false;
+        if (!assertedInline) {
+          const assign = line.match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^;]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/);
+          if (assign) {
+            const varRe = new RegExp(`\\b(?:expect|assert(?:\\.\\w+)*|should)\\s*\\(?[^;\\n]*\\b${assign[1]}\\b`);
+            assertedViaVar = lines.some((l, k) => k > i && varRe.test(l));
+          }
+        }
+        if (assertedInline || assertedViaVar) {
+          issues += this._flag(result, `flaky-tests:real-clock:${rel}:${i + 1}`, {
+            severity: 'warning',
+            file: rel,
+            line: i + 1,
+            message: `${rel}:${i + 1} asserts on a real clock reading (\`Date.now()\` / \`new Date()\`) with no fake-timer setup in this file`,
+            suggestion: 'Call `jest.useFakeTimers()` / `vi.useFakeTimers()` / `sinon.useFakeTimers()` at the top of the describe, or inject a clock.',
+          });
+        }
       }
 
       // 5. Real network

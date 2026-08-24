@@ -94,9 +94,15 @@ class BashSafetyModule extends BaseModule {
 
       for (const rule of RULES) {
         if (rule.pattern.test(rawLine)) {
+          // `message` + rel path + line are what the finding registry, the
+          // confidence scorer and the PR comment consume — this module used
+          // to emit only `fix` with an absolute path, which surfaced as
+          // `message: null` findings (2026-08-18 audit residue).
           result.addCheck(`bash-safety:${rule.code}:${rel}:${lineNum}`, false, {
             severity: rule.severity,
-            file,
+            file: rel,
+            line: lineNum,
+            message: rule.message(rawLine),
             fix: `${rel}:${lineNum} — ${rule.message(rawLine)}\nFix: handle the error explicitly or add "# gatetest:swallow-ok reason=\\"<reason>\\"" if intentional.`,
           });
         }
@@ -115,7 +121,8 @@ class BashSafetyModule extends BaseModule {
         if (rule.pattern.test(cmd)) {
           result.addCheck(`bash-safety:${rule.code}:package.json:${name}`, false, {
             severity: rule.severity,
-            file,
+            file: 'package.json',
+            message: `scripts.${name}: ${rule.message(cmd)}`,
             fix: `package.json scripts.${name} — ${rule.message(cmd)}\nFix: handle the error or remove the swallow pattern.`,
           });
         }

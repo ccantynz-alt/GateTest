@@ -64,8 +64,48 @@ const PATH_ALIAS_PREFIXES = [
   '@lib/', // this repo's own tsconfig path alias (see website/tsconfig.json)
 ];
 
-function isPathAlias(specifier) {
-  return PATH_ALIAS_PREFIXES.some(p => specifier.startsWith(p));
+function isPathAlias(specifier, extraPrefixes) {
+  if (PATH_ALIAS_PREFIXES.some(p => specifier.startsWith(p))) return true;
+  return !!extraPrefixes && extraPrefixes.some(p => specifier.startsWith(p));
+}
+
+/**
+ * The static list above only knows the COMMON alias conventions. A repo with
+ * its own tsconfig `paths` (`"#internal/*"`, `"$core/*"`, `"app/*"`) had every
+ * aliased import reported as a hallucinated package (2026-08-18 audit
+ * residue). Read the repo's declared aliases and trust them.
+ * Tolerant of JSONC (tsconfig allows comments and trailing commas).
+ */
+function collectTsconfigAliasPrefixes(projectRoot) {
+  const prefixes = new Set();
+  const candidates = ['tsconfig.json', 'tsconfig.base.json', 'jsconfig.json'];
+  try {
+    for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
+      if (entry.isDirectory() && !['node_modules', '.git', '.next', 'dist'].includes(entry.name)) {
+        for (const c of ['tsconfig.json', 'jsconfig.json']) {
+          candidates.push(path.join(entry.name, c));
+        }
+      }
+    }
+  } catch { /* unreadable root — fall through with root-level candidates */ }
+  for (const rel of candidates) {
+    const full = path.join(projectRoot, rel);
+    let raw;
+    try { raw = fs.readFileSync(full, 'utf-8'); } catch { continue; }
+    const jsonish = raw
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/[^\n]*$/gm, '')
+      .replace(/,\s*([}\]])/g, '$1');
+    let parsed;
+    try { parsed = JSON.parse(jsonish); } catch { continue; }
+    const paths = parsed && parsed.compilerOptions && parsed.compilerOptions.paths;
+    if (!paths || typeof paths !== 'object') continue;
+    for (const key of Object.keys(paths)) {
+      const prefix = key.endsWith('*') ? key.slice(0, -1) : key;
+      if (prefix) prefixes.add(prefix);
+    }
+  }
+  return [...prefixes];
 }
 
 // ─── common stdlib / well-known builtins (never flag these as unknown) ─────
@@ -240,6 +280,9 @@ class AiHallucinationDetector extends BaseModule {
     // dir -> deps visible from it. Populated lazily by _depsForDir.
     const depsCache = new Map();
 
+    // The repo's own declared path aliases (tsconfig/jsconfig `paths`).
+    const repoAliasPrefixes = collectTsconfigAliasPrefixes(projectRoot);
+
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
       if (rel.includes('node_modules') || rel.includes('.next')) continue;
@@ -256,7 +299,7 @@ class AiHallucinationDetector extends BaseModule {
       const imports = harvestImports(content);
       for (const { specifier, index } of imports) {
         if (isLocalImport(specifier)) continue;
-        if (isPathAlias(specifier)) continue; // @/utils, ~/components, etc.
+        if (isPathAlias(specifier, repoAliasPrefixes)) continue; // @/utils, ~/components, repo tsconfig paths
         const pkg = barePackage(specifier);
         if (BUILT_IN_MODULES.has(stripNodePrefix(pkg)) || BUILT_IN_MODULES.has(stripNodePrefix(specifier))) continue;
         if (knownDeps.has(pkg)) continue;

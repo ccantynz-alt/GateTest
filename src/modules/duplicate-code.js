@@ -124,6 +124,17 @@ class DuplicateCode extends BaseModule {
         const unique = new Set(window).size;
         if (unique < 3) continue;
 
+        // Skip windows that are DATA, not code. String/number collapsing
+        // exists to survive renames, but it also makes any two data tables
+        // identical: `{ name: "Alice", age: 30 }` and `{ name: "Bob",
+        // age: 41 }` both normalise to the same line, so locale files and
+        // config lists reported as "duplicated code" (2026-08-18 audit
+        // residue: string-collapse reporting). Require at least two lines
+        // of actual logic in the window.
+        const CODE_LINE_RE = /\b(?:if|else|for|while|switch|return|function|def|class|import|export|const|let|var|await|async|try|catch|throw|new)\b|=>|[A-Za-z_$][\w$]*\s*\(/;
+        const codeLines = window.filter(l => CODE_LINE_RE.test(l)).length;
+        if (codeLines < 2) continue;
+
         const hash = hashWindow(window);
         if (!hashMap.has(hash)) hashMap.set(hash, []);
 
@@ -150,6 +161,36 @@ class DuplicateCode extends BaseModule {
         crossFileDupes.push(locs);
       }
     }
+
+    // Coalesce overlapping groups. A 20-line duplicated region matches at
+    // every window offset, so it used to surface as ~14 separate findings —
+    // one per offset (2026-08-18 audit residue). Groups over the same file
+    // set whose ranges overlap are ONE duplicated region: keep the first,
+    // extend its endLine.
+    crossFileDupes.sort((a, b) =>
+      a[0].relFile.localeCompare(b[0].relFile) || (a[0].startLine - b[0].startLine));
+    const coalesced = [];
+    for (const locs of crossFileDupes) {
+      const sig = [...new Set(locs.map(l => l.relFile))].sort().join('|');
+      const prev = coalesced.find(g =>
+        g.sig === sig &&
+        locs.every(l => g.locs.some(gl =>
+          gl.relFile === l.relFile &&
+          l.startLine <= gl.endLine + 1 &&
+          l.endLine >= gl.startLine - 1)));
+      if (prev) {
+        for (const l of locs) {
+          const gl = prev.locs.find(x =>
+            x.relFile === l.relFile &&
+            l.startLine <= x.endLine + 1 && l.endLine >= x.startLine - 1);
+          if (gl) gl.endLine = Math.max(gl.endLine, l.endLine);
+        }
+        continue;
+      }
+      coalesced.push({ sig, locs });
+    }
+    crossFileDupes.length = 0;
+    crossFileDupes.push(...coalesced.map(g => g.locs));
 
     if (crossFileDupes.length === 0) {
       result.addCheck('duplicate-code:clean', true, {

@@ -388,7 +388,34 @@ function extractPyExports(content) {
     const line = lines[i];
     let m = line.match(/^(?:async\s+)?def\s+([A-Za-z_][\w]*)\s*\(/);
     if (m) {
-      if (!m[1].startsWith('_')) out.push({ name: m[1], line: i + 1 });
+      // A decorated def is REGISTERED by its decorator — route handlers
+      // (@app.get), fixtures (@pytest.fixture), CLI commands (@cli.command),
+      // celery tasks. Zero in-file references and zero imports is its normal,
+      // healthy state, so it can never be a dead-code signal. Walk up through
+      // the decorator block: blank lines, stacked decorators, and the
+      // argument/continuation lines of a multi-line decorator call (tracked
+      // by unbalanced parens on the walk up — a line that closes more parens
+      // than it opens is the tail of a call started above it).
+      let decorated = false;
+      let openDebt = 0; // parens the lines below still owe to lines above
+      for (let j = i - 1; j >= 0; j -= 1) {
+        const t = lines[j].trim();
+        const opens = (t.match(/\(/g) || []).length;
+        const closes = (t.match(/\)/g) || []).length;
+        if (t === '') continue;
+        if (/^@/.test(t)) {
+          if (closes + openDebt <= opens) { decorated = true; break; }
+          openDebt -= (opens - closes);
+          continue; // a stacked decorator above may still open the debt
+        }
+        if (closes > opens || openDebt > 0) {
+          // continuation/tail of a multi-line call — keep walking up
+          openDebt += (closes - opens);
+          continue;
+        }
+        break; // an ordinary statement — no decorator block here
+      }
+      if (!m[1].startsWith('_') && !decorated) out.push({ name: m[1], line: i + 1 });
       continue;
     }
     m = line.match(/^class\s+([A-Za-z_][\w]*)/);
@@ -417,7 +444,16 @@ function extractPyExports(content) {
 function extractPyImports(content) {
   const names = new Set();
   const paths = new Set();
-  const lines = content.split(/\r?\n/);
+  // Join the two Python statement-continuation forms into single logical
+  // lines BEFORE the per-line regexes run. Without this, every name after
+  // the `(` in `from x import (\n  a,\n  b,\n)` was invisible, so the
+  // exporting module's `a` and `b` were reported as dead (2026-08-18 audit
+  // residue: python deadCode multi-line imports).
+  const joined = content
+    .replace(/\\\r?\n/g, ' ') // backslash continuation
+    .replace(/^([ \t]*(?:from[ \t]+[.\w]+[ \t]+)?import[ \t][^\n(]*)\(([^)]*)\)/gm,
+      (whole, head, body) => head + body.replace(/#[^\r\n]*/g, '').replace(/[\r\n]+/g, ' '));
+  const lines = joined.split(/\r?\n/);
   for (const line of lines) {
     let m = line.match(/^\s*from\s+([.\w]+)\s+import\s+(.+?)(?:\s*#.*)?$/);
     if (m) {

@@ -144,7 +144,25 @@ const LANGUAGE_SPECS = {
         suggestion: 'Refactor to call the target method directly; never eval user-controlled strings.' },
       { name: 'system-interp', pattern: /(system|`|exec)\s*\(?\s*["'][^"']*#\{/, severity: 'error',
         message: 'Shell command with string interpolation — command injection risk',
-        suggestion: 'Use the array form: system("cmd", arg1, arg2) to avoid shell parsing.' },
+        suggestion: 'Use the array form: system("cmd", arg1, arg2) to avoid shell parsing.',
+        // `system "kill -9 #{pid}"` where pid came from `fork` cannot inject
+        // anything — an Integer has no shell metacharacters. When EVERY
+        // interpolation on the line is provably numeric ($$, Process.pid,
+        // .to_i/.size/.length/.count, Integer(...), a digit literal, or an
+        // identifier the file assigns from fork/Process.*/an integer), keep
+        // the finding visible but below the block threshold. 2026-08-18
+        // audit residue (sinatra, "debatable").
+        downgrade(line, content) {
+          const interps = [...line.matchAll(/#\{([^}]*)\}/g)].map((m) => m[1].trim());
+          if (interps.length === 0) return null;
+          const NUMERIC_RE = /^(?:\$\$|\d+|Process\.pid|Integer\([^)]*\)|[\w.@$\[\]]+\.(?:to_i|size|length|count))$/;
+          const numericById = (id) => new RegExp(
+            `^\\s*${id}\\s*=\\s*(?:fork\\b|Process\\.(?:fork|spawn|pid)\\b|\\d+\\s*$|[^\\n]*\\.to_i\\s*$)`, 'm'
+          ).test(content);
+          const allNumeric = interps.every((expr) =>
+            NUMERIC_RE.test(expr) || (/^[a-z_][\w]*$/.test(expr) && numericById(expr)));
+          return allNumeric ? 'every interpolated value is a provable integer (pid/count), which cannot carry shell metacharacters' : null;
+        } },
       { name: 'rescue-all', pattern: /^\s*rescue\s*(=>|\n|$)/, severity: 'warning',
         message: 'rescue without a class catches StandardError silently',
         suggestion: 'Rescue a specific exception, e.g. `rescue ArgumentError => e`.' },
@@ -294,13 +312,23 @@ function runLanguageChecks(lang, projectRoot, result, options = {}) {
         if (isTest && severity !== 'error') severity = 'info';
         if (!p.pattern.test(line)) continue;
 
+        // A pattern may prove a matched line is materially safer than the
+        // rule's headline case (e.g. shell interpolation of a provable
+        // integer). It returns a reason string; the finding stays visible
+        // but drops below the block threshold instead of gating the build.
+        let downgradeNote = '';
+        if (severity === 'error' && typeof p.downgrade === 'function') {
+          const reason = p.downgrade(line, content);
+          if (reason) { severity = 'warning'; downgradeNote = ` — ${reason}`; }
+        }
+
         const relPath = path.relative(projectRoot, file);
         const passed = severity === 'info';
         result.addCheck(`${lang}:${p.name}:${relPath}:${i + 1}`, passed, {
           severity,
           file: relPath,
           line: i + 1,
-          message: `[${spec.displayName}] ${p.message}`,
+          message: `[${spec.displayName}] ${p.message}${downgradeNote}`,
           suggestion: p.suggestion,
         });
         if (!passed) issuesFound += 1;

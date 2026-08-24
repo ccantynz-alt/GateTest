@@ -121,6 +121,15 @@ function isExampleDataFile(filePath) {
   if (/(?:^|\/)docs?\//i.test(p) && !SOURCE_EXT_RE.test(p)) {
     return { multiplier: 0.4, reason: 'example data' };
   }
+  // `docs_src/` (and `doc_src/`, `docs-src/`) is a SAMPLES directory — source
+  // files whose entire purpose is to be pasted into documentation (fastapi
+  // keeps 3,000+ tutorial snippets there, complete with fake secrets). Unlike
+  // the `docs/` clause above this applies to source extensions too: nothing
+  // under docs_src ships. 2026-08-18 audit residue — docs_src secrets were
+  // blocking at confidence 1.
+  if (/(?:^|\/)docs?[_-]src\//i.test(p)) {
+    return { multiplier: 0.4, reason: 'example data' };
+  }
   // Directory-style match: examples/, samples/, demos/
   if (/(?:^|\/)(?:example|sample|demo)s?\//i.test(p)) {
     return { multiplier: 0.4, reason: 'example data' };
