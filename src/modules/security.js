@@ -191,6 +191,15 @@ class SecurityModule extends BaseModule {
       // 10/10 sampled hits in the 2026-08-18 audit were that kind.
       { regex: /(?:token|secret|nonce|otp|password|passcode|session|salt|apiKey|api_key|csrf|verification|reset|invite|code|id|uuid|key)\w*\s*[:=]\s*[^;\n]*Math\.random\s*\(|Math\.random\s*\([^;\n]*(?:toString\(36\)|toString\(16\))[^;\n]*(?:token|secret|nonce|otp|password|session|salt|key|id)/gi, name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)', severity: 'moderate' },
       { regex: /disable.*csrf|csrf.*disable/gi, name: 'CSRF protection disabled', severity: 'critical' },
+      // NoSQL injection: a $where clause built from dynamic input executes
+      // attacker-controlled JavaScript on the MongoDB server (NodeGoat A1;
+      // 2026-08-18 audit advancement #6 — this class was a recall miss).
+      // A STATIC $where string is not flagged.
+      { regex: /\$where\s*[:=]\s*`[^`\n]*\$\{/g, name: 'NoSQL injection ($where with interpolated input)', severity: 'critical' },
+      { regex: /\$where\s*[:=]\s*['"][^'"\n]*['"]\s*\+/g, name: 'NoSQL injection ($where with concatenated input)', severity: 'critical' },
+      // Template auto-escaping disabled (swig/nunjucks/twig-style config):
+      // every variable rendered anywhere in the app becomes an XSS sink.
+      { regex: /autoescape\s*:\s*false/g, name: 'template auto-escaping disabled (XSS)', severity: 'critical' },
     ];
 
     // Files that LEGITIMATELY contain these patterns as STRINGS / REGEX they
@@ -207,6 +216,13 @@ class SecurityModule extends BaseModule {
     // website/app/components/LiveScanTerminal — Math.random for animation timing
     const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|website\/app\/lib\/scan-modules|website\/app\/components\/howitworks|website\/app\/for|website\/app\/api\/admin\/auth|website\/app\/api\/scan|website\/app\/components\/LiveScanTerminal|tests|integrations\/infra)\//;
 
+    // Project-level middleware posture (2026-08-18 audit advancement #6:
+    // helmet + CSRF were recall misses). Signals are collected from
+    // COMMENT-STRIPPED content — NodeGoat's planted vulnerability is
+    // exactly `app.use(helmet…)` / `app.use(csrf())` sitting inside a
+    // /* block comment */, which a naive grep counts as protection.
+    const posture = { express: false, sessionMw: false, mutatingRoute: false, csrf: false, helmet: false };
+
     for (const file of files) {
       const relPath = path.relative(projectRoot, file);
       // Normalise to forward slashes for cross-platform regex match.
@@ -214,6 +230,25 @@ class SecurityModule extends BaseModule {
       if (SCANNER_PATH_RE.test(normalisedPath)) continue;
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);
+
+      // Test files don't wire the app — and their fixtures legitimately
+      // contain the keywords (a ZAP test with `_csrf` URL-encoded in a
+      // payload string must not count as CSRF protection). Example/demo
+      // directories are excluded in BOTH directions: a library repo whose
+      // only session()+POST usage is its examples (expressjs/express) is
+      // not "an app missing CSRF protection".
+      if (!/(^|\/)(tests?|spec|__tests__|examples?|samples?|demos?)\//.test(normalisedPath)) {
+        const live = content
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^[ \t]*\/\/[^\n]*/gm, '');
+        if (/require\s*\(\s*['"]express['"]\s*\)|from\s+['"]express['"]/.test(live)) posture.express = true;
+        if (/require\s*\(\s*['"](?:express-session|cookie-session)['"]\s*\)/.test(live)) posture.sessionMw = true;
+        if (/\.(post|put|delete|patch)\s*\(\s*['"`]/.test(live)) posture.mutatingRoute = true;
+        // Middleware SHAPES, not substrings: require of a CSRF package, a
+        // csrf() mount, or a csrfToken() call in live code.
+        if (/require\s*\(\s*['"](?:csurf|lusca|tiny-csrf|csrf-csrf|@fastify\/csrf-protection)['"]\s*\)|\bcsrf\s*\(\s*\)|\.csrfToken\s*\(|\bcsrfProtection\b/.test(live)) posture.csrf = true;
+        if (/require\s*\(\s*['"]helmet['"]\s*\)|from\s+['"]helmet['"]/.test(live)) posture.helmet = true;
+      }
 
       for (const pattern of dangerousPatterns) {
         for (let i = 0; i < lines.length; i++) {
@@ -260,6 +295,25 @@ class SecurityModule extends BaseModule {
 
     if (files.length > 0) {
       result.addCheck('security:source-scan', true, { message: `Scanned ${files.length} source files` });
+    }
+
+    // Posture findings are WARNINGS, not errors: an Express app behind a
+    // header-setting proxy, or an API with token auth instead of cookies,
+    // is a legitimate reason for either to be absent — surface it, don't
+    // block on it (Forbidden #25).
+    if (posture.express && !posture.helmet) {
+      result.addCheck('security:no-helmet', false, {
+        severity: 'warning',
+        message: 'Express app without a security-header middleware — no active helmet require found (commented-out helmet does not count)',
+        suggestion: 'npm i helmet, then `app.use(helmet())` before the routes; or set the headers at your proxy and document where.',
+      });
+    }
+    if (posture.sessionMw && posture.mutatingRoute && !posture.csrf) {
+      result.addCheck('security:no-csrf-protection', false, {
+        severity: 'warning',
+        message: 'Cookie-session app with state-changing routes and no CSRF protection — no active csurf/lusca/csrf reference found',
+        suggestion: 'Add CSRF middleware (e.g. csurf) to every state-changing route, or move to token auth where CSRF does not apply.',
+      });
     }
   }
 

@@ -226,6 +226,12 @@ class AuthBypassDetector extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
+      // IDOR / identity-shadowing runs on EVERY file that touches
+      // req.session — the vulnerable handler is often in a module the
+      // route regexes don't recognise (NodeGoat exports a function that
+      // receives `app`).
+      this._checkSessionIdentityShadowing(rel, content, result);
+
       // Skip files with no route definitions
       const hasRoutes = (
         EXPRESS_ROUTE_RE.test(content) ||
@@ -295,6 +301,73 @@ class AuthBypassDetector extends BaseModule {
         message: `All ${routeFiles} route file(s) have authentication`,
       });
     }
+  }
+
+  /**
+   * IDOR by identity shadowing (2026-08-18 audit advancement #6 — the
+   * NodeGoat A4 plant): a handler reads an identity value from the
+   * session, then re-reads THE SAME NAME from req.params/query/body,
+   * silently replacing the authenticated identity with a client-supplied
+   * one:
+   *     const { userId } = req.session;
+   *     const { userId } = req.params;   // ← any user can pass any id
+   *
+   * Precision comes from requiring the SAME identifier on both sides and
+   * the client read to come AFTER the session read within a 40-line
+   * window (same handler in practice). Suppress with `// idor-ok`.
+   */
+  _checkSessionIdentityShadowing(rel, content, result) {
+    const lines = content.split(/\r?\n/);
+    const sessionReads = new Map(); // name → first line (1-indexed)
+    const SESSION_DESTRUCTURE = /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*req\.session\b/;
+    const SESSION_ASSIGN = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*req\.session\.([A-Za-z_$][\w$]*)/;
+    let flagged = 0;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (/^\s*(?:\/\/|\*)/.test(line)) continue;
+      let m = line.match(SESSION_DESTRUCTURE);
+      if (m) {
+        for (const raw of m[1].split(',')) {
+          const name = raw.split(':')[0].trim();
+          if (/^[A-Za-z_$][\w$]*$/.test(name) && !sessionReads.has(name)) sessionReads.set(name, i + 1);
+        }
+      }
+      m = line.match(SESSION_ASSIGN);
+      if (m && !sessionReads.has(m[1])) sessionReads.set(m[1], i + 1);
+    }
+    if (sessionReads.size === 0) return 0;
+
+    for (const [name, sessionLine] of sessionReads) {
+      // The destructure regularly spans lines —
+      //     const {
+      //         userId
+      //     } = req.params;
+      // — so the client-read is matched against a joined 40-line WINDOW
+      // ([^}]* crosses newlines), and the finding line is recovered from
+      // the match offset.
+      const windowEnd = Math.min(lines.length, sessionLine + 40);
+      const windowText = lines.slice(sessionLine, windowEnd).join('\n');
+      const clientRe = new RegExp(
+        `(?:const|let|var)\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*=\\s*req\\.(?:params|query|body)\\b` +
+        `|\\b${name}\\s*=\\s*req\\.(?:params|query|body)\\.`);
+      const m = windowText.match(clientRe);
+      if (!m) continue;
+      const matchedUpTo = windowText.slice(0, m.index + m[0].length);
+      const lineIdx = sessionLine + matchedUpTo.split('\n').length - 1; // 0-indexed into lines
+      const line = lines[lineIdx] || '';
+      if (/^\s*(?:\/\/|\*)/.test(line)) continue;
+      if (/\bidor-ok\b/.test(line) || (lineIdx > 0 && /\bidor-ok\b/.test(lines[lineIdx - 1]))) continue;
+      result.addCheck(`auth-bypass:idor-shadow:${rel}:${lineIdx + 1}`, false, {
+        severity: 'error',
+        message: `\`${name}\` from the session (line ${sessionLine}) is overridden by client-controlled \`req.params/query/body\` at line ${lineIdx + 1} — any caller can act as any ${name} (IDOR)`,
+        file: rel,
+        line: lineIdx + 1,
+        fix: `Use the session-derived \`${name}\` for authorization; if the client may pass one, verify it matches the session identity (or the caller's permissions) before use. Mark a reviewed exception with \`// idor-ok\`.`,
+      });
+      flagged += 1;
+    }
+    return flagged;
   }
 
   _findUnauthenticatedRoutes(file, rel, content, lines) {

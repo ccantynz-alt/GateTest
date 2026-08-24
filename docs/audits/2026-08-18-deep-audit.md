@@ -66,7 +66,7 @@ Recall on NodeGoat unchanged at ~6/13 planted classes — the recall gap is adva
 | 3 | Precision as a product: measured FP cuts → per-rule precision shown to users, auto-demotion, "noisiest 10 rules" panel | first pass shipped | complaint #1 |
 | 4 | Finding registry: one defect = one finding, mandatory file:line, cross-module dedupe | **shipped** (99c59379) | eval ×3, secrets ×4, `file:null` |
 | 5 | The 5-comment PR: budgeted, ranked, evidence-attached, never repeated | budget + ranking shipped (99c59379); evidence gate for AI findings queued | complaints #3/#9/#22 |
-| 6 | Recall on the vulns buyers benchmark (NoSQLi, template XSS, cookie flags, IDOR, CSRF, helmet) + published benchmarks with misses | queued | 6/13 on NodeGoat |
+| 6 | Recall on the vulns buyers benchmark (NoSQLi, template XSS, cookie flags, IDOR, CSRF, helmet) + published benchmarks with misses | **detection shipped 2026-08-25** (all six fire on a live NodeGoat clone at the planted locations; express control clean; see docs/benchmarks/2026-08-25-nodegoat-recall.md); 13-class re-enumeration + public benchmarks page still queued | 6/13 on NodeGoat |
 | 7 | Fix PRs with proof: originating module re-run, TS syntax gate, fail-closed scanner gate, tests executed, injection guard, path allow-list; CLI orchestrator tests the hypothesis | queued | audit #7/#8/#9; complaint #19 |
 | 8 | Reachability-gated dependency alerts | **shipped** (af22bc79) | complaint #2 |
 | 9 | Isolation you can read: no customer code on the box (skip list shipped) → sandbox + published model + on-box option | partial | complaint #13 |

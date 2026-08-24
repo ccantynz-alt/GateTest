@@ -143,6 +143,7 @@ class CookieSecurityModule extends BaseModule {
       const ext = path.extname(abs).toLowerCase();
       if (JS_EXTS.has(ext)) {
         issues += this._scanJs(rel, text, result);
+        issues += this._checkSessionCookieConfig(rel, text, result);
       } else if (PY_EXTS.has(ext)) {
         issues += this._scanPy(rel, text, result);
       }
@@ -179,6 +180,54 @@ class CookieSecurityModule extends BaseModule {
     };
     walk(root);
     return out;
+  }
+
+  /**
+   * The ABSENT flag, not just the false one. `session({ cookie: { … } })`
+   * that never says `secure: true` ships the session id over plain HTTP —
+   * express-session's default is secure:false, and the classic planted
+   * form is `// secure: true` left commented out (NodeGoat A5; 2026-08-18
+   * audit advancement #6 — "cookie flags" was a recall miss because the
+   * line rules only fire on an explicit `secure: false`).
+   *
+   * Comments are blanked (newlines preserved, so line numbers hold) before
+   * the check — a commented-out flag is an absent flag.
+   */
+  _checkSessionCookieConfig(rel, text, result) {
+    if (!/require\s*\(\s*['"](?:express-session|cookie-session)['"]\s*\)/.test(text)) return 0;
+    const live = text
+      .replace(/\/\*[\s\S]*?\*\//g, (s) => s.replace(/[^\n]/g, ' '))
+      .replace(/\/\/[^\n]*/g, ' ');
+    const m = live.match(/\bsession\s*\(\s*\{/);
+    if (!m) return 0;
+    const start = live.indexOf('{', m.index);
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < Math.min(live.length, start + 8000); i += 1) {
+      const c = live[i];
+      if (c === '{') depth += 1;
+      else if (c === '}') { depth -= 1; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) return 0;
+    const block = live.slice(start, end + 1);
+    // An explicit `secure: false` is the existing js-secure-false line
+    // rule's job; `secure: true` (or the express-session 'auto' mode) is
+    // configured. Only the ABSENT case is ours.
+    if (/secure\s*:/.test(block)) return 0;
+    const line = live.slice(0, m.index).split(/\r?\n/).length;
+    // Example/demo apps teach the shape, they don't ship it — info, so a
+    // library repo's examples/ dir (expressjs/express has four) doesn't
+    // read as four security warnings.
+    const isExample = /(^|\/)(examples?|samples?|demos?)\//.test(rel);
+    const warnSev = this._isTestPath(rel) || isExample ? 'info' : 'warning';
+    result.addCheck(`cookie-sec:js-session-secure-absent:${rel}:${line}`, false, {
+      severity: warnSev,
+      message: 'session cookie config never sets `secure: true` — the session id will be sent over plain HTTP (a commented-out flag is an absent flag)',
+      file: rel,
+      line,
+      fix: 'Set `cookie: { secure: true }` (behind a proxy also set `app.set("trust proxy", 1)`), or `secure: "auto"`.',
+    });
+    return 1;
   }
 
   _scanJs(rel, text, result) {
