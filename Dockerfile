@@ -16,6 +16,14 @@ COPY website ./website
 COPY src ./src
 COPY bin ./bin
 COPY package.json ./
+# The website's npm `prebuild` hook runs ../scripts/generate-build-info.js,
+# which also reads ../CLAUDE.md for the version. Without both, `npm run build`
+# exits 1 (MODULE_NOT_FOUND) before next build ever starts.
+COPY scripts ./scripts
+COPY CLAUDE.md ./
+# website/tsconfig.json maps "@lib/*" to the repo-root lib/ — next build cannot
+# resolve those imports without it.
+COPY lib ./lib
 WORKDIR /app/website
 RUN npm run build
 
