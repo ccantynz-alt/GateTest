@@ -21,7 +21,7 @@
  *   - `fetchImpl` override allows unit testing without real HTTP calls.
  */
 
-const { siteUrl, resolveSiteUrl } = require('./site-url');
+const { siteUrl, resolveSiteUrl, SUPPORT_EMAIL } = require('./site-url');
 
 const GITHUB_API = 'https://api.github.com';
 const STATUS_CONTEXT = 'gatetest / scan';
@@ -374,7 +374,11 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
 
   lines.push('');
   lines.push('---');
-  lines.push(`*Posted by [GateTest](${siteUrl()}) — unified code quality*`);
+  // Feedback affordance (launch checklist §4): the earliest users tell us
+  // what is wrong exactly here, in the PR, or not at all. One line, two
+  // channels — the in-thread suppression command for "this finding is
+  // noise", email for everything else.
+  lines.push(`*Posted by [GateTest](${siteUrl()}) — unified code quality · wrong or unhelpful result? reply \`@gatetest ignore <module:rule>\` or tell us: ${SUPPORT_EMAIL}*`);
   // Idempotency marker — postPrComment looks for this string to find a
   // prior bot comment and PATCH it in place instead of stacking duplicates
   // on every push (Known Issue #23). Hidden HTML comment, customer-invisible.

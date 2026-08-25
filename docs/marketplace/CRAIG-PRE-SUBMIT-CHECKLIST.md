@@ -40,7 +40,18 @@ It failed exactly where the credential audit predicted: `fetchTree` → 401,
 because every GitHub token on the box is dead (item 0b). So the pipeline is
 proven from the public edge to the GitHub API call, and blocked there by a
 missing credential only Craig can place. **After 0 + 0b, a real push should
-flow through with no further code changes.** Verify with:
+flow through with no further code changes.**
+
+**That whole drill is now ONE COMMAND (added 2026-08-26).** On the box,
+immediately after items 0 + 0b:
+
+```bash
+node scripts/ops/fire-test-webhook.js --repo octocat/Hello-World
+```
+
+It signs and fires the push, then watches both observable surfaces — the
+`/api/status` queue counts and the commit-status the customer would see —
+and exits 0 the moment a job completes end to end. Fallback detail:
 `journalctl -u gatetest-tick.service -f` and
 `SELECT status, last_error FROM scan_queue ORDER BY id DESC LIMIT 3;`
 

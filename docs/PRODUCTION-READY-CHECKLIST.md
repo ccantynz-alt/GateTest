@@ -75,6 +75,17 @@ see CLAUDE.md → THE DOMAIN).
 - [ ] Failure-mode messaging sweep: every paid-path error a customer can see
       tells them what happened and how to reach support (Forbidden #16 — this
       matters most to the person who just paid $399).
+- [x] Feedback affordances shipped (2026-08-26): PR comment footer carries the
+      `@gatetest ignore` command AND the support email; the free-preview API
+      returns a `feedback` block; the scan status page's failure path already
+      had a session-carrying support mailto.
+- [x] Launch metrics shipped (2026-08-26): `GET /api/admin/metrics/launch`
+      (admin-auth) — pipeline movement by day, push-to-result latency
+      (avg/p95), last dead letters (terminal vs exhausted), suppression
+      counts by rule. Watch this daily during soft launch.
+- [x] First-real-push drill is one command (2026-08-26):
+      `node scripts/ops/fire-test-webhook.js` on the box, right after the
+      credentials land — exits 0 when a job completes end to end.
 
 ## 4. Legal — hard launch blocker
 

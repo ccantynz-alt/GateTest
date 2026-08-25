@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 import { loadRepoFiles, resolveRepoAuth } from "@/app/lib/gluecron-client";
+import { SUPPORT_EMAIL } from "@/app/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -263,6 +264,12 @@ export async function POST(req: NextRequest) {
           ? `Showing top ${TOP_FINDINGS} of ${scanResult.totalIssues}. Upgrade to Quick ($29) to see them all + tighter scan limits.`
           : "Upgrade to Full ($99) to scan all 121 modules + auto-fix.",
       checkoutHint: `POST /api/checkout { tier, repoUrl } to start checkout`,
+    },
+    // Launch feedback channel: the first strangers hit exactly this
+    // endpoint. Wrong or missing finding → we want the report, not the churn.
+    feedback: {
+      email: SUPPORT_EMAIL,
+      hint: "Wrong result, missing finding, or anything confusing — email us and include the repo URL.",
     },
   });
 }
