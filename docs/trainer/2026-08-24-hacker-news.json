@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-08-24T03:54:53.859Z",
+  "windowHours": 24,
+  "summary": {
+    "totalUniqueHits": 3,
+    "gatetestMentions": 0,
+    "competitorMentions": {
+      "Snyk": 2,
+      "SonarQube": 0,
+      "Semgrep": 1,
+      "CodeQL": 0,
+      "DeepSource": 0,
+      "Codacy": 0,
+      "Veracode": 0,
+      "Checkmarx": 0
+    },
+    "painPointsFound": 0
+  },
+  "gatetestMentions": [],
+  "competitorMentions": {
+    "Snyk": [
+      {
+        "objectId": "49409447",
+        "author": "ashqwt",
+        "type": "comment",
+        "title": null,
+        "text": "The initial sections are a bit dry, yes. I would suggest skipping to \"Deference to Authority\" and \"2012 Pycon Code of Conduct\" and \"2012 Pycon: Steve Holden's One Eyed Snake\".Zed Shaw accurately predicted the cancellation excesses of 2020 up to at least 2024 using basic reasoning about group dynamics and a concrete example from 2012. The inner circle is always protected and can do whatever it likes. He was wrong about all core devs being protected. The inner circle is very much a subset.",
+        "url": "https://news.ycombinator.com/item?id=49409447",
+        "points": null,
+        "numComments": null,
+        "storyId": 49409184,
+        "createdAt": "2026-08-23T15:10:20Z",
+        "createdAtUnix": 1787497820,
+        "intent": "neutral"
+      },
+      {
+        "objectId": "49407769",
+        "author": "ButlerianJihad",
+        "type": "comment",
+        "title": null,
+        "text": "A few years ago, for some reason my ISP began to screw up my WiFi. Tech support could not help; I had at least two devices showing the same symptoms; at one point I even shut down my home connection out of frustration. I could only think of two possibilities: that there had been some kind of security event that tripped their security AI and was blocking my WiFi (and inexplicably leaving all Ethernet connections unhindered.) Second possibility: they were deliberately (but deniably) messing with my WiFi access at home so that I would use more mobile data. In fact a salesman told me that would be a logical move. Except it was affecting my Chromebook too.So my only choice was to purchase a third-party router&#x2F;WiFi. I did not want to make the network more complex, but if my ISP router couldn't provide WiFi, it would need to happen.So now I have a working WiFi 7 router, and my ISP's device is permanently in Bridge Mode. I went to the hardware store and purchased a bunch of little cable staples, and I nailed up an Ethernet cable from the router to the bedroom. There are 3 desk positions in here that can be reached by Ethernet cable.Unfortunately, if I am out on the balcony, I normally need to use WiFi, because I can't fully shut the door when a cable is snaking out of it. Also, I picked up a little USB-C-Ethernet dongle for my phone, if worse comes to worst. The bandwidth is great; besides, my downstream is only 100Mbps, so who needs overpowered LAN bandwidth?",
+        "url": "https://news.ycombinator.com/item?id=49407769",
+        "points": null,
+        "numComments": null,
+        "storyId": 49406539,
+        "createdAt": "2026-08-23T10:50:43Z",
+        "createdAtUnix": 1787482243,
+        "intent": "neutral"
+      }
+    ],
+    "SonarQube": [],
+    "Semgrep": [
+      {
+        "objectId": "49407171",
+        "author": "taubek",
+        "type": "story",
+        "title": "Fraud Is a Relationship Problem, Not a Data Volume Problem",
+        "text": "Fraud Is a Relationship Problem, Not a Data Volume Problem",
+        "url": "https://memgraph.com/blog/fraud-is-a-relationship-problem",
+        "points": 1,
+        "numComments": 0,
+        "storyId": 49407171,
+        "createdAt": "2026-08-23T08:54:39Z",
+        "createdAtUnix": 1787475279,
+        "intent": "neutral"
+      }
+    ],
+    "CodeQL": [],
+    "DeepSource": [],
+    "Codacy": [],
+    "Veracode": [],
+    "Checkmarx": []
+  },
+  "painPoints": [],
+  "actionItems": []
+}
