@@ -661,6 +661,30 @@ const DEFAULT_CONFIG = {
   },
 };
 
+/**
+ * Top-level `.gatetest.json` keys the product actually consumes.
+ *
+ * `_deepMerge` accepts ANY key, so an unrecognised one lands in the config
+ * object and is then read by nobody — configuration that looks live and is
+ * decorative. Found 2026-08-26 on a protected platform whose config pinned
+ * `aiReview.model` at the ROOT: the key had been inert since it was written,
+ * because module config lives under `modules.<name>`. Same failure shape as a
+ * CI workflow that can never fire — it looks configured, it is not
+ * (Forbidden #16: never silently fail).
+ *
+ * Not every key here is read by THIS process, and that is deliberate:
+ * `owner` / `admin` / `mode` are consumed by the husky pre-push hook (shell,
+ * greps the raw file) and by the website's repo-mode detection; `telemetry`
+ * by scan-telemetry.js. They are legitimate, so they must not warn.
+ */
+const KNOWN_ROOT_KEYS = new Set([
+  ...Object.keys(DEFAULT_CONFIG),
+  // Read outside this process — see the doc block above.
+  'owner', 'admin', 'mode', 'telemetry',
+  // Descriptive / provenance only; deliberately no-ops.
+  '$schema', 'version', 'name', 'description', 'notes', 'gatetest_source',
+]);
+
 class GateTestConfig {
   constructor(projectRoot) {
     this.projectRoot = projectRoot || process.cwd();
@@ -670,6 +694,7 @@ class GateTestConfig {
 
   _loadConfig() {
     let fileConfig = {};
+    let sourcePath = null;
 
     // Priority 1: .gatetest.json at project root (user-facing config)
     const rootConfigPath = path.join(this.projectRoot, '.gatetest.json');
@@ -677,6 +702,7 @@ class GateTestConfig {
       try {
         const raw = fs.readFileSync(rootConfigPath, 'utf-8');
         fileConfig = JSON.parse(raw);
+        sourcePath = rootConfigPath;
       } catch (err) { // error-ok — malformed config warns and falls back to defaults
         console.error(`[GateTest] Warning: Failed to parse ${rootConfigPath}: ${err.message}`);
       }
@@ -686,12 +712,49 @@ class GateTestConfig {
       try {
         const raw = fs.readFileSync(this.configPath, 'utf-8');
         fileConfig = JSON.parse(raw);
+        sourcePath = this.configPath;
       } catch (err) { // error-ok — malformed config warns and falls back to defaults
         console.error(`[GateTest] Warning: Failed to parse ${this.configPath}: ${err.message}`);
       }
     }
 
+    this.unknownKeys = sourcePath ? this._reportUnknownKeys(fileConfig, sourcePath) : [];
+
     return this._deepMerge(DEFAULT_CONFIG, fileConfig);
+  }
+
+  /**
+   * Report `.gatetest.json` keys nothing will ever read. Warns, never throws —
+   * a stale key must not break a customer's scan.
+   *
+   * The module-name hint is the whole value here: a root-level `aiReview` is
+   * one word away from `modules.aiReview`, and today the difference between
+   * the two is completely silent. Returns the offending keys so callers (and
+   * tests) can assert on them without capturing stderr.
+   */
+  _reportUnknownKeys(fileConfig, sourcePath) {
+    if (!fileConfig || typeof fileConfig !== 'object' || Array.isArray(fileConfig)) return [];
+    const unknown = Object.keys(fileConfig).filter((key) => !KNOWN_ROOT_KEYS.has(key));
+    if (unknown.length === 0) return [];
+
+    let moduleNames;
+    try {
+      moduleNames = new Set(Object.keys(require('./registry').BUILT_IN_MODULES));
+    } catch (err) { // error-ok — the "did you mean" hint is a nicety; the warning ships without it
+      moduleNames = new Set();
+    }
+
+    const described = unknown.map((key) => (
+      moduleNames.has(key)
+        ? `${key} (module config belongs under "modules.${key}")`
+        : key
+    ));
+
+    console.error(
+      `[GateTest] Warning: ${sourcePath} sets ${unknown.length} key(s) GateTest does not read: `
+      + `${described.join(', ')}. They have no effect on this scan.`
+    );
+    return unknown;
   }
 
   _deepMerge(target, source) {
