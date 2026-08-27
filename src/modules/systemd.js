@@ -6,6 +6,7 @@
  *   3. User=X + ProtectHome=true combination that blocks ~/.bun, ~/.nvm, ~/.cargo, etc.
  *   4. Missing Restart= directive (no restart policy = single crash = downtime)
  *   5. Missing StandardOutput/StandardError logging config
+ *   6. EnvironmentFile=- on a scheduled job — a green signal that cannot turn red
  */
 
 const BaseModule = require('./base-module');
@@ -54,12 +55,20 @@ class SystemdModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf8'); } catch { return; }
 
     const lines = content.split(/\r?\n/);
-    const get = (key) => {
+    // A unit may repeat a directive (EnvironmentFile= especially), so collect
+    // every occurrence; `get` keeps the original first-match semantics.
+    const getAll = (key) => {
+      const out = [];
+      const re = new RegExp(`^${key}\\s*=\\s*(.+)$`);
       for (const line of lines) {
-        const m = line.match(new RegExp(`^${key}\\s*=\\s*(.+)$`));
-        if (m) return m[1].trim();
+        const m = line.match(re);
+        if (m) out.push(m[1].trim());
       }
-      return null;
+      return out;
+    };
+    const get = (key) => {
+      const all = getAll(key);
+      return all.length > 0 ? all[0] : null;
     };
 
     const execStart    = get('ExecStart');
@@ -126,6 +135,46 @@ class SystemdModule extends BaseModule {
         file,
         fix: `${rel}: No StandardOutput/StandardError configured. Add:\n  StandardOutput=journal\n  StandardError=journal\nfor reliable log capture via journalctl.`,
       });
+    }
+
+    // 6. A green signal that is structurally incapable of turning red.
+    //
+    // `EnvironmentFile=-/path` — the leading `-` tells systemd to carry on if
+    // the file is missing. On a long-running service that is usually harmless:
+    // the process starts unconfigured, falls over, and the failure is loud.
+    //
+    // On a oneshot or timer-driven job it inverts. The job wakes, finds no
+    // credentials, exits 0 because it had nothing to do, and systemd records
+    // Result=success / ExecMainStatus=0. Unit green, timer green, work never
+    // happened. Nothing watching the unit can tell the difference between
+    // "ran and succeeded" and "ran and did nothing" — the only output the
+    // check can produce is "fine".
+    //
+    // Found 2026-08-26 on a protected platform: a nightly backup had been
+    // reporting success while backing up nothing. A sweep moved the
+    // EnvironmentFile out from under it, the `-` made the absence invisible,
+    // and the job's own "nothing to do" path exited 0. No restorable database
+    // backup existed for as long as that had been true.
+    //
+    // Warning, not error: a file missing on a deploy server is not provable
+    // from the repo, and blocking a build on an unprovable claim makes us the
+    // bottleneck (Forbidden #25). Loud enough to go and check the box.
+    const optionalEnvFiles = getAll('EnvironmentFile').filter(v => v.startsWith('-'));
+    if (optionalEnvFiles.length > 0) {
+      const isOneshot = (get('Type') || '').toLowerCase() === 'oneshot';
+      const timerFile = file.replace(/\.service$/, '.timer');
+      const hasTimer = fs.existsSync(timerFile);
+      if (isOneshot || hasTimer) {
+        const paths = optionalEnvFiles.map(v => v.slice(1)).join(', ');
+        const trigger = isOneshot ? 'Type=oneshot' : `a sibling ${path.basename(timerFile)}`;
+        result.addCheck(`systemd:silent-success:${rel}`, false, {
+          severity: 'warning',
+          file,
+          fix: `${rel}: EnvironmentFile is optional (leading "-") on a scheduled job (${trigger}): ${paths}.\n`
+            + `If that file goes missing, systemd starts the job anyway, the job finds nothing configured, exits 0, and the unit reports success having done no work. The timer stays green forever.\n`
+            + `Fix: drop the leading "-" so a missing env file fails the unit loudly, or make the job exit non-zero when it finds nothing to do. A scheduled job that cannot report failure is not a check.`,
+        });
+      }
     }
 
     // All checks pass for this unit

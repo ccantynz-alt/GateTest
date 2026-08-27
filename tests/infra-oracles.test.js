@@ -214,6 +214,116 @@ WantedBy=multi-user.target
     fs.rmSync(tmp, { recursive: true });
   });
 
+  // ── silent-success: EnvironmentFile=- on a scheduled job ────────────────────
+  //
+  // The mechanism, found 2026-08-26 on a protected platform: a nightly backup
+  // unit reported Result=success for as long as its EnvironmentFile had been
+  // missing, because the leading "-" made the absence invisible and the job
+  // exited 0 on its own "nothing to do" path. No restorable backup existed.
+  //
+  // The negative controls carry as much weight as the positives. The "-" is a
+  // common, legitimate idiom on long-running services; firing there would make
+  // the rule noise, and noise gets suppressed, and a suppressed rule protects
+  // nobody.
+  const backupUnit = (opts) => `[Unit]
+Description=Nightly backup
+[Service]
+Type=${opts.type}
+EnvironmentFile=${opts.envFile}
+ExecStart=/usr/bin/node backup.js
+Restart=no
+StandardOutput=journal
+StandardError=journal
+`;
+
+  test('flags an optional EnvironmentFile on a oneshot job', async () => {
+    const tmp = makeTmp();
+    fs.mkdirSync(path.join(tmp, 'infra'));
+    fs.writeFileSync(
+      path.join(tmp, 'infra', 'backup.service'),
+      backupUnit({ type: 'oneshot', envFile: '-/opt/vapron/.backup.env' })
+    );
+    const r = makeResult();
+    await new Systemd().run(r, { projectRoot: tmp });
+    const hit = r.checks.find(c => !c.passed && c.name.includes('silent-success'));
+    assert(hit, 'oneshot + EnvironmentFile=- should flag');
+    assert.equal(hit.severity, 'warning', 'unprovable from the repo — must not block a build');
+    assert(hit.fix.includes('/opt/vapron/.backup.env'), 'names the env file');
+    assert(hit.fix.includes('Type=oneshot'), 'names what made it scheduled');
+    fs.rmSync(tmp, { recursive: true });
+  });
+
+  test('flags an optional EnvironmentFile on a timer-driven job', async () => {
+    // Same danger, arrived at a different way: Type is unset, but a sibling
+    // .timer means the unit runs to completion on a schedule.
+    const tmp = makeTmp();
+    fs.mkdirSync(path.join(tmp, 'infra'));
+    fs.writeFileSync(
+      path.join(tmp, 'infra', 'backup.service'),
+      backupUnit({ type: 'simple', envFile: '-/etc/backup.env' })
+    );
+    fs.writeFileSync(path.join(tmp, 'infra', 'backup.timer'), '[Timer]\nOnCalendar=daily\n');
+    const r = makeResult();
+    await new Systemd().run(r, { projectRoot: tmp });
+    const hit = r.checks.find(c => !c.passed && c.name.includes('silent-success'));
+    assert(hit, 'sibling .timer + EnvironmentFile=- should flag');
+    assert(hit.fix.includes('backup.timer'), 'names the timer that schedules it');
+    fs.rmSync(tmp, { recursive: true });
+  });
+
+  test('NEGATIVE: does not flag an optional EnvironmentFile on a long-running service', async () => {
+    // No timer, not oneshot. If the env file vanishes, the process starts
+    // unconfigured and falls over — loudly. That is not a silent green.
+    const tmp = makeTmp();
+    fs.mkdirSync(path.join(tmp, 'infra'));
+    fs.writeFileSync(
+      path.join(tmp, 'infra', 'web.service'),
+      backupUnit({ type: 'simple', envFile: '-/etc/web.env' })
+    );
+    const r = makeResult();
+    await new Systemd().run(r, { projectRoot: tmp });
+    assert(!r.checks.some(c => c.name.includes('silent-success')), 'must stay quiet on a plain service');
+    fs.rmSync(tmp, { recursive: true });
+  });
+
+  test('NEGATIVE: does not flag a REQUIRED EnvironmentFile on a oneshot job', async () => {
+    // No leading "-": systemd refuses to start the unit if the file is gone.
+    // The failure is already loud, which is exactly what we are asking for.
+    const tmp = makeTmp();
+    fs.mkdirSync(path.join(tmp, 'infra'));
+    fs.writeFileSync(
+      path.join(tmp, 'infra', 'backup.service'),
+      backupUnit({ type: 'oneshot', envFile: '/opt/vapron/.backup.env' })
+    );
+    const r = makeResult();
+    await new Systemd().run(r, { projectRoot: tmp });
+    assert(!r.checks.some(c => c.name.includes('silent-success')), 'a required EnvironmentFile is the fix, not the bug');
+    fs.rmSync(tmp, { recursive: true });
+  });
+
+  test('reports only the optional entries when a unit mixes both', async () => {
+    const tmp = makeTmp();
+    fs.mkdirSync(path.join(tmp, 'infra'));
+    fs.writeFileSync(path.join(tmp, 'infra', 'backup.service'), `[Unit]
+Description=Nightly backup
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/required.env
+EnvironmentFile=-/etc/optional.env
+ExecStart=/usr/bin/node backup.js
+Restart=no
+StandardOutput=journal
+StandardError=journal
+`);
+    const r = makeResult();
+    await new Systemd().run(r, { projectRoot: tmp });
+    const hit = r.checks.find(c => !c.passed && c.name.includes('silent-success'));
+    assert(hit, 'the optional entry still creates the hole');
+    assert(hit.fix.includes('/etc/optional.env'), 'names the optional one');
+    assert(!hit.fix.includes('/etc/required.env'), 'must not blame the required one');
+    fs.rmSync(tmp, { recursive: true });
+  });
+
   test('flags ProtectHome=true blocking bun binary', async () => {
     const tmp = makeTmp();
     fs.mkdirSync(path.join(tmp, 'infra'));
