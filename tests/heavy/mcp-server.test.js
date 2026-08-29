@@ -242,7 +242,15 @@ describeOrSkip('MCP server — scan_local', () => {
     const res = await callMcp(
       'tools/call',
       { name: 'scan_local', arguments: { path: TINY_SCAN_PATH, suite: 'quick' } },
-      30000
+      // 60s (the helper default), not 30s — same rationale as the two gating
+      // tests below, which this call was inconsistent with. Measured
+      // 2026-08-29 on a cold spawn: initialize round-trip 12.8s (Node start
+      // + module registry load), the scan itself only 2.9s, 15.7s total.
+      // Solo that fits in 30s; under the parallel heavy suite the cold start
+      // alone approaches it, and this test failed on 2 of 3 sweeps while the
+      // scan was never the slow part. The assertion is about RESPONSE SHAPE,
+      // not latency — engine throughput is benchmarked in docs/benchmarks/.
+      60000
     );
     assert.ok(res.result, `expected result: ${JSON.stringify(res).slice(0, 200)}`);
     const text = res.result.content[0].text;
