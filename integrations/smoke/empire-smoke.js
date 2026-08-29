@@ -1,16 +1,52 @@
 /**
  * Empire Smoke Scanner
  *
- * Runs a battery of fast smoke probes against the Crontech/Gluecron empire:
- *   - crontech.ai homepage (HTTP/2 + body keyword)
- *   - api.crontech.ai /api/health (JSON ok:true)
- *   - gluecron.crontech.ai homepage (soft-fail on 502)
- *   - gluecron.com DNS resolution (soft: NXDOMAIN -> info)
- *   - crontech.ai:443 TLS certificate expiry (warn <14d)
+ * Fast cross-product smoke probes over Craig's three live deployments:
+ *   - vapron.ai homepage            (200 + body keyword)
+ *   - api.vapron.ai /api/health     (status:"ok")
+ *   - crontech.ai -> vapron.ai      (the rename redirect still stands)
+ *   - gluecron.com apex             (soft-skip on NXDOMAIN)
+ *   - gluecron.com platform-status  (healthy:true)
+ *   - gatetest platform-status      (healthy:true AND a real commit)
+ *   - vapron.ai:443 TLS expiry      (warn <14d)
  *
- * All probes run in parallel with per-probe 5s timeouts. The module exports a
- * single entry point, `runEmpireSmoke`, returning a structured SmokeReport
- * suitable for dashboards, alerts, or the GateTest continuous scanner.
+ * TARGETS CORRECTED 2026-08-29. Crontech was renamed Vapron on 2026-06-12 and
+ * this file was never updated, so three of its five probes could not have
+ * passed. Measured before rewriting, not assumed:
+ *
+ *     https://crontech.ai/              -> 301 to https://vapron.ai/
+ *     https://api.crontech.ai/api/health -> 000 (host does not resolve)
+ *     https://gluecron.crontech.ai/      -> 000 (host does not resolve)
+ *     https://vapron.ai/                 -> 200, body says "Vapron"
+ *     https://api.vapron.ai/api/health   -> 200
+ *
+ * Two failures were baked in beyond the hostnames:
+ *   1. The homepage probe required the body to contain "Crontech". vapron.ai
+ *      serves "Vapron", so it would have failed on a perfectly healthy site.
+ *   2. The health probe required `ok: true`, but Vapron answers
+ *      `{"status":"ok","checks":[...]}`. Correct host, still red.
+ * Both are why a probe nobody runs is worse than no probe: it rots silently
+ * and you only discover it the day you need it.
+ *
+ * The `crontech-redirect` probe exists because the redirect is load-bearing —
+ * every link, bookmark and doc written before the rename depends on it, and
+ * nothing else in the estate would notice if it broke.
+ *
+ * `gatetest-status` additionally asserts the reported commit is not
+ * "unknown"/empty: a deployment serving an unidentifiable build is the
+ * KI #79 class (production silently stale) and a green homepage hides it.
+ *
+ * KNOWN GAP, deliberately not faked: vapron.ai has no /api/platform-status
+ * (404 as of 2026-08-29), so it is probed via its homepage + api health
+ * instead. Gluecron answers the contract but reports version "dev" /
+ * commit "unknown" — that is KI #81, tracked there, and NOT asserted here
+ * because a probe that fails on a known-open issue is just noise.
+ *
+ * All probes run in parallel. A probe answering in over SLOW_MS (5s) is
+ * downgraded to a warning; one that has not answered by DEFAULT_TIMEOUT_MS
+ * (20s) is treated as down. "Up but slow" and "down" are different
+ * operational facts and deliberately do not share a colour.
+ * `runEmpireSmoke` returns a structured SmokeReport for dashboards or alerts.
  *
  * The `fetch` and DNS/TLS primitives are all injectable so tests can exercise
  * the aggregation logic without touching the network.
@@ -18,16 +54,32 @@
 
 const dnsPromises = require('dns').promises;
 const tls = require('tls');
+const { siteUrl } = require('../../src/core/site-url.js');
 
-const DEFAULT_TIMEOUT_MS = 5000;
+// A probe that has not answered in 20s is treated as DOWN. This is a hard
+// ceiling, not a latency budget — see SLOW_MS.
+const DEFAULT_TIMEOUT_MS = 20000;
+
+// Above this, a probe that SUCCEEDED is downgraded to a warning. "Up but
+// slow" and "down" are different operational facts and must not share a
+// colour. Measured 2026-08-29: vapron.ai's homepage served 365KB in
+// 3.7s / 19.0s / 11.1s across three consecutive requests, so a 5s hard
+// timeout would have painted a live site red on most runs — a monitor that
+// cries wolf gets muted, and then it protects nobody.
+const SLOW_MS = 5000;
+
 const CERT_WARN_DAYS = 14;
 
 const DEFAULT_URLS = {
-  crontechHome: 'https://crontech.ai/',
-  apiHealth: 'https://api.crontech.ai/api/health',
-  gluecronSub: 'https://gluecron.crontech.ai/',
+  vapronHome: 'https://vapron.ai/',
+  vapronApiHealth: 'https://api.vapron.ai/api/health',
+  // The rename redirect. Must keep answering 3xx -> vapron.ai.
+  crontechRedirect: 'https://crontech.ai/',
   gluecronApex: 'https://gluecron.com/',
-  certHost: 'crontech.ai',
+  gluecronStatus: 'https://gluecron.com/api/platform-status',
+  // Never a literal — the domain lives in exactly one place (Bible: THE DOMAIN).
+  gatetestStatus: siteUrl('/api/platform-status'),
+  certHost: 'vapron.ai',
   certPort: 443,
 };
 
@@ -65,14 +117,26 @@ function withTimeout(label, fn, timeoutMs) {
  * Wrap a probe so it always resolves to a probe result object (pass/warn/fail
  * /skip) and records latency, regardless of how the underlying work settled.
  */
-async function runProbe(name, fn, timeoutMs) {
+async function runProbe(name, fn, timeoutMs, slowMs = SLOW_MS) {
   const started = Date.now();
   try {
     const result = await withTimeout(name, fn, timeoutMs);
+    const latency = Date.now() - started;
+
+    // Up but slow is a warning, never a pass and never a failure.
+    if (result.status === 'pass' && latency > slowMs) {
+      return {
+        name,
+        status: 'warn',
+        latency_ms: latency,
+        detail: `${result.detail} (slow: ${latency}ms > ${slowMs}ms)`,
+      };
+    }
+
     return {
       name,
       status: result.status,
-      latency_ms: Date.now() - started,
+      latency_ms: latency,
       detail: result.detail,
     };
   } catch (err) {
@@ -86,9 +150,12 @@ async function runProbe(name, fn, timeoutMs) {
 }
 
 /**
- * Probe: crontech.ai homepage. Expect 200, HTTP/2, body contains "Crontech".
+ * Probe: the Vapron homepage. Expect 200, HTTP/2, body mentioning Vapron.
+ *
+ * The keyword is the point: a 200 from a parked page, a stray Caddy default,
+ * or a misrouted vhost all look identical to a status-code-only check.
  */
-async function probeCrontechHome(fetchFn, url) {
+async function probeVapronHome(fetchFn, url) {
   const res = await fetchFn(url, { method: 'GET', redirect: 'follow' });
   if (!res || res.status !== 200) {
     return { status: 'fail', detail: `expected 200, got ${res && res.status}` };
@@ -104,8 +171,8 @@ async function probeCrontechHome(fetchFn, url) {
     warnings.push(`http version ${httpVersion} (expected h2/h3)`);
   }
 
-  if (!body || !/crontech/i.test(body)) {
-    return { status: 'fail', detail: 'body missing "Crontech" keyword' };
+  if (!body || !/vapron/i.test(body)) {
+    return { status: 'fail', detail: 'body missing "Vapron" keyword' };
   }
 
   if (warnings.length > 0) {
@@ -115,7 +182,15 @@ async function probeCrontechHome(fetchFn, url) {
 }
 
 /**
- * Probe: api.crontech.ai /api/health. Expect 200 JSON with ok:true.
+ * Probe: an API health endpoint.
+ *
+ * Accepts BOTH shapes in use across the estate — Vapron answers
+ * `{"status":"ok","checks":[...]}` while others answer `{"ok":true}`. The
+ * previous version demanded `ok:true` only, which would have failed Vapron
+ * even once pointed at the right host.
+ *
+ * When a `checks` array is present, a single failing check degrades to warn:
+ * the service is answering, but something behind it is not.
  */
 async function probeApiHealth(fetchFn, url) {
   const res = await fetchFn(url, { method: 'GET' });
@@ -128,28 +203,55 @@ async function probeApiHealth(fetchFn, url) {
   } catch (err) {
     return { status: 'fail', detail: `invalid JSON: ${err.message}` };
   }
-  if (!payload || payload.ok !== true) {
-    return { status: 'fail', detail: 'health payload missing ok:true' };
+  if (!payload) {
+    return { status: 'fail', detail: 'empty health payload' };
   }
-  return { status: 'pass', detail: 'health ok:true' };
+
+  const healthy = payload.ok === true || payload.status === 'ok' || payload.healthy === true;
+  if (!healthy) {
+    return { status: 'fail', detail: 'health payload not ok' };
+  }
+
+  if (Array.isArray(payload.checks)) {
+    const failed = payload.checks.filter((c) => c && c.ok === false).map((c) => c.name || '?');
+    if (failed.length > 0) {
+      return { status: 'warn', detail: `subcheck(s) failing: ${failed.join(', ')}` };
+    }
+  }
+  return { status: 'pass', detail: 'health ok' };
 }
 
 /**
- * Probe: gluecron.crontech.ai. 200 = pass, 502 = warn (Caddy up but service
- * unhealthy), anything else = fail.
+ * Probe: a permanent redirect still points where it should.
+ *
+ * Guards the Crontech -> Vapron rename. Every pre-rename link, bookmark and
+ * doc depends on this hop, and nothing else in the estate would notice if it
+ * quietly stopped resolving.
  */
-async function probeGluecronSub(fetchFn, url) {
-  const res = await fetchFn(url, { method: 'GET', redirect: 'follow' });
+async function probeRedirect(fetchFn, url, expectedHost) {
+  const res = await fetchFn(url, { method: 'GET', redirect: 'manual' });
   if (!res) {
     return { status: 'fail', detail: 'no response' };
   }
-  if (res.status === 200) {
-    return { status: 'pass', detail: 'subdomain 200' };
+  if (res.status < 300 || res.status > 399) {
+    return { status: 'fail', detail: `expected a 3xx redirect, got ${res.status}` };
   }
-  if (res.status === 502) {
-    return { status: 'warn', detail: 'service down but Caddy up' };
+  const location = res.headers && typeof res.headers.get === 'function'
+    ? res.headers.get('location')
+    : null;
+  if (!location) {
+    return { status: 'fail', detail: `${res.status} with no Location header` };
   }
-  return { status: 'fail', detail: `unexpected status ${res.status}` };
+  let host;
+  try {
+    host = new URL(location, url).hostname;
+  } catch {
+    return { status: 'fail', detail: `unparseable Location: ${location}` };
+  }
+  if (host !== expectedHost) {
+    return { status: 'fail', detail: `redirects to ${host}, expected ${expectedHost}` };
+  }
+  return { status: 'pass', detail: `${res.status} -> ${host}` };
 }
 
 /**
@@ -178,6 +280,41 @@ async function probeGluecronApex(fetchFn, resolveFn, url) {
     return { status: 'pass', detail: 'apex 200' };
   }
   return { status: 'fail', detail: `apex status ${res && res.status}` };
+}
+
+/**
+ * Probe: the shared /api/platform-status contract (docs/PLATFORM_STATUS.md).
+ *
+ * `requireCommit` additionally asserts the build identifies itself. A
+ * deployment reporting commit "unknown" is the KI #79 failure — production
+ * silently running something nobody can name — and a green homepage hides it
+ * completely. Only asked of products known to populate the field.
+ */
+async function probePlatformStatus(fetchFn, url, { requireCommit = false } = {}) {
+  const res = await fetchFn(url, { method: 'GET' });
+  if (!res || res.status !== 200) {
+    return { status: 'fail', detail: `expected 200, got ${res && res.status}` };
+  }
+  let payload;
+  try {
+    payload = typeof res.json === 'function' ? await res.json() : null;
+  } catch (err) {
+    return { status: 'fail', detail: `invalid JSON: ${err.message}` };
+  }
+  if (!payload) {
+    return { status: 'fail', detail: 'empty status payload' };
+  }
+  if (payload.healthy !== true) {
+    return { status: 'fail', detail: `healthy=${payload.healthy}` };
+  }
+  if (requireCommit) {
+    const commit = String(payload.commit || '').trim();
+    if (!commit || commit === 'unknown') {
+      return { status: 'warn', detail: 'healthy but commit is "unknown" — cannot tell what is deployed' };
+    }
+    return { status: 'pass', detail: `healthy @ ${commit.slice(0, 8)}` };
+  }
+  return { status: 'pass', detail: 'healthy' };
 }
 
 /**
@@ -268,6 +405,7 @@ async function runEmpireSmoke(opts = {}) {
   const resolveFn = opts.resolve || ((host) => dnsPromises.resolve(host));
   const tlsConnectFn = opts.tlsConnect || defaultTlsConnect;
   const timeoutMs = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
+  const slowMs = typeof opts.slowMs === 'number' ? opts.slowMs : SLOW_MS;
 
   if (!fetchFn) {
     throw new Error('runEmpireSmoke: no fetch implementation available (Node <18?). Pass opts.fetch.');
@@ -276,12 +414,15 @@ async function runEmpireSmoke(opts = {}) {
   const timestamp = new Date().toISOString();
 
   const probes = await Promise.all([
-    runProbe('crontech-home', () => probeCrontechHome(fetchFn, urls.crontechHome), timeoutMs),
-    runProbe('api-health', () => probeApiHealth(fetchFn, urls.apiHealth), timeoutMs),
-    runProbe('gluecron-sub', () => probeGluecronSub(fetchFn, urls.gluecronSub), timeoutMs),
-    runProbe('gluecron-apex', () => probeGluecronApex(fetchFn, resolveFn, urls.gluecronApex), timeoutMs),
-    runProbe('cert-crontech', () => probeCert(tlsConnectFn, urls.certHost, urls.certPort), timeoutMs),
+    runProbe('vapron-home', () => probeVapronHome(fetchFn, urls.vapronHome), timeoutMs, slowMs),
+    runProbe('vapron-api-health', () => probeApiHealth(fetchFn, urls.vapronApiHealth), timeoutMs, slowMs),
+    runProbe('crontech-redirect', () => probeRedirect(fetchFn, urls.crontechRedirect, 'vapron.ai'), timeoutMs, slowMs),
+    runProbe('gluecron-apex', () => probeGluecronApex(fetchFn, resolveFn, urls.gluecronApex), timeoutMs, slowMs),
+    runProbe('gluecron-status', () => probePlatformStatus(fetchFn, urls.gluecronStatus), timeoutMs, slowMs),
+    runProbe('gatetest-status', () => probePlatformStatus(fetchFn, urls.gatetestStatus, { requireCommit: true }), timeoutMs, slowMs),
+    runProbe('cert-vapron', () => probeCert(tlsConnectFn, urls.certHost, urls.certPort), timeoutMs, slowMs),
   ]);
+
 
   const status = rollup(probes);
   const markdown = renderMarkdown(status, timestamp, probes);
@@ -289,15 +430,52 @@ async function runEmpireSmoke(opts = {}) {
   return { status, timestamp, probes, markdown };
 }
 
+/* ------------------------------------------------------------------ */
+/* CLI                                                                  */
+/*                                                                      */
+/* Invoked by .github/workflows/empire-smoke.yml. Exit codes are the    */
+/* alert channel:                                                       */
+/*                                                                      */
+/*   0  green, or yellow (a warning is surfaced, not paged)             */
+/*   1  red — a probe failed, or the runner itself blew up              */
+/*                                                                      */
+/* Yellow exits 0 on purpose. A cert 13 days from expiry is real and    */
+/* worth seeing, but failing every run for 13 consecutive days trains   */
+/* everyone to ignore the job — and a monitor people ignore is worse    */
+/* than no monitor. Pass --fail-on-warn when you want strictness.       */
+/* ------------------------------------------------------------------ */
+
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  const asJson = argv.includes('--json');
+  const failOnWarn = argv.includes('--fail-on-warn');
+
+  runEmpireSmoke()
+    .then((report) => {
+      process.stdout.write(
+        (asJson ? JSON.stringify(report, null, 2) : report.markdown) + '\n'
+      );
+      const bad = report.status === 'red' || (failOnWarn && report.status === 'yellow');
+      process.exit(bad ? 1 : 0);
+    })
+    .catch((err) => {
+      process.stderr.write(`empire-smoke: ${(err && err.message) || 'unknown error'}\n`);
+      process.exit(1);
+    });
+}
+
 module.exports = {
   runEmpireSmoke,
+  SLOW_MS,
+  DEFAULT_TIMEOUT_MS,
   // exported for tests / downstream composition
   DEFAULT_URLS,
   rollup,
   renderMarkdown,
-  probeCrontechHome,
+  probeVapronHome,
   probeApiHealth,
-  probeGluecronSub,
+  probeRedirect,
   probeGluecronApex,
+  probePlatformStatus,
   probeCert,
 };

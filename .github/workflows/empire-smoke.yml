@@ -1,0 +1,105 @@
+name: Empire Smoke (cross-product)
+
+# Cross-product uptime probe over Craig's three live deployments: Vapron,
+# Gluecron and GateTest.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `.gatetest.json` carried a `triggers.schedule` entry declaring that
+# `empire-smoke` should run every 5 minutes. Nothing reads `triggers` — the
+# key was decorative — so the probe had NEVER RUN, from the day it was
+# written until 2026-08-29. That was Known Issue #102.
+#
+# It had rotted accordingly. Crontech was renamed Vapron on 2026-06-12 and
+# three of its five probes could not have passed: api.crontech.ai and
+# gluecron.crontech.ai no longer resolve, the homepage probe demanded the
+# body say "Crontech" when vapron.ai serves "Vapron", and the health probe
+# demanded `ok:true` when Vapron answers `{"status":"ok"}`. All fixed and
+# verified green against the live estate before this workflow was added — a
+# monitor whose first run is red teaches everyone to ignore it.
+#
+# WHAT IT COVERS THAT readiness-probe.yml DOES NOT
+# ------------------------------------------------
+# readiness-probe.yml asks "is GateTest production ready?" every 30 minutes.
+# This asks "is the estate up?" — Vapron and Gluecron are not covered by
+# anything else, and the crontech.ai -> vapron.ai redirect is load-bearing
+# for every pre-rename link while being invisible to every other check.
+#
+# Needs no secrets: every probe is a GET, a DNS lookup or a TLS handshake
+# against a public endpoint. A monitor that needs credentials tends not to
+# get set up, and one that holds them is a liability on a public repo.
+
+on:
+  schedule:
+    # Every 5 minutes, matching the cadence the original .gatetest.json
+    # declared. This repo is public, so Actions minutes are free and the
+    # cadence costs nothing.
+    #
+    # Honest caveat: GitHub schedules are BEST EFFORT. 5 minutes is the
+    # documented floor and runs are routinely delayed, or skipped entirely,
+    # under platform load. Treat this as "checks often", not as an SLA — if
+    # true uptime monitoring is ever needed, it belongs on a service built
+    # for it, not on CI.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One at a time. At a 5-minute cadence a delayed run can otherwise overlap
+# its successor and double the noise for a single outage.
+concurrency:
+  group: empire-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Retry once before going red. A single dropped packet on a public
+      # runner is not an outage, and at 288 runs a day a zero-tolerance
+      # probe would page on noise until everyone muted it. Two consecutive
+      # failures 30s apart is a real signal.
+      #
+      # Exit codes from empire-smoke.js: 0 = green or yellow, 1 = red.
+      # Yellow ("up but slow", or a cert inside its 14-day window) is
+      # surfaced in the summary WITHOUT failing the job — see the CLI block
+      # in integrations/smoke/empire-smoke.js for why.
+      - name: Probe the estate
+        id: probe
+        run: |
+          set +e
+          node integrations/smoke/empire-smoke.js > smoke.md
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "First attempt failed; retrying once in 30s before alerting."
+            sleep 30
+            node integrations/smoke/empire-smoke.js > smoke.md
+            code=$?
+          fi
+          cat smoke.md
+          cat smoke.md >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      # Always keep the machine-readable report, including on failure, so a
+      # red run can be diagnosed without re-running it by hand.
+      - name: JSON report
+        if: always()
+        run: node integrations/smoke/empire-smoke.js --json > smoke.json || true
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: empire-smoke-report
+          path: |
+            smoke.md
+            smoke.json
+          retention-days: 7
