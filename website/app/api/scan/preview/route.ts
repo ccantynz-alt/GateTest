@@ -1,9 +1,9 @@
 ﻿/**
  * POST /api/scan/preview
  *
- * Free, no-auth, deliberately limited preview scan. Runs the three fastest
- * modules (syntax / lint / secrets) against a public repo and returns the
- * top 5 findings. Designed to be invoked by Claude (or any MCP client) on
+ * Free, no-auth, deliberately limited preview scan. Runs the quick tier
+ * (syntax / lint / secrets / codeQuality) against a public repo and returns
+ * the top 5 findings. Designed to be invoked by Claude (or any MCP client) on
  * behalf of a user inside a chat — the result feeds the upgrade pitch:
  *
  *   "Found 47 errors. Here's a sample of 5. Want me to fix all 47?
@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runTier, type RepoFile } from "@/app/lib/scan-modules";
 import { loadRepoFiles, resolveRepoAuth } from "@/app/lib/gluecron-client";
+import { parseDetail, type PreviewFinding } from "@/app/lib/preview-finding";
 import { SUPPORT_EMAIL } from "@/app/lib/site-url";
 
 export const runtime = "nodejs";
@@ -55,47 +56,6 @@ function tooSoon(ip: string): boolean {
   return false;
 }
 
-interface PreviewFinding {
-  module: string;
-  severity: "error" | "warning" | "info";
-  file: string | null;
-  line: number | null;
-  message: string;
-}
-
-function classifySeverity(raw: string): PreviewFinding["severity"] {
-  if (typeof raw !== "string") return "warning";
-  if (/^(error|err|critical|high)\b[:]/i.test(raw)) return "error";
-  if (/^(warning|warn|medium)\b[:]/i.test(raw)) return "warning";
-  if (/^(info|note|low|summary)\b[:]/i.test(raw)) return "info";
-  if (/\b(error|fail|vulnerab|exploit|injection|secret|credential|api[_\- ]?key|hardcoded)\b/i.test(raw))
-    return "error";
-  return "warning";
-}
-
-function parseDetail(raw: string, moduleName: string): PreviewFinding {
-  const safeRaw = typeof raw === "string" ? raw : String(raw ?? "");
-  let rest = safeRaw
-    .replace(/^(?:\[[^\]]+\]\s*|(?:error|warn(?:ing)?|info|note|summary)\s*:\s*)/i, "")
-    .trim();
-  let file: string | null = null;
-  let line: number | null = null;
-  const m = rest.match(
-    /^([A-Za-z0-9_./\-@+]+?\.[A-Za-z0-9]{1,8}):(\d+)(?::\d+)?(?:\s*[-—:]\s*|\s+)(.+)$/
-  );
-  if (m) {
-    file = m[1];
-    line = Number(m[2]);
-    rest = m[3];
-  }
-  return {
-    module: moduleName,
-    severity: classifySeverity(safeRaw),
-    file,
-    line,
-    message: rest.trim(),
-  };
-}
 
 export async function POST(req: NextRequest) {
   // Per-IP throttle — best effort.
@@ -239,9 +199,18 @@ export async function POST(req: NextRequest) {
     for (const d of m.details) findings.push(parseDetail(d, m.name));
   }
 
-  // Sort: errors first, then warnings, then info; within each, file/line.
+  // Sort: errors first, then warnings, then info; within each, file then line.
+  // The secondary key is what makes the top-5 selection deterministic — module
+  // completion order varies run to run, so without it the same repo can show a
+  // different sample each time and look flaky to a customer evaluating us.
   const severityRank = { error: 0, warning: 1, info: 2 } as const;
-  findings.sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+  findings.sort((a, b) => {
+    const bySeverity = severityRank[a.severity] - severityRank[b.severity];
+    if (bySeverity !== 0) return bySeverity;
+    const byFile = (a.file || "").localeCompare(b.file || "");
+    if (byFile !== 0) return byFile;
+    return (a.line ?? 0) - (b.line ?? 0);
+  });
   const top = findings.slice(0, TOP_FINDINGS);
 
   return NextResponse.json({
