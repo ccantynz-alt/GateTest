@@ -31,15 +31,21 @@ name: Empire Smoke (cross-product)
 
 on:
   schedule:
-    # Every 5 minutes, matching the cadence the original .gatetest.json
-    # declared. This repo is public, so Actions minutes are free and the
-    # cadence costs nothing.
+    # DO NOT read this as "runs every 5 minutes". It does not, and the
+    # evidence is in this repo: readiness-probe.yml is configured `*/30`, and
+    # on 2026-08-29 its actual scheduled runs landed at 01:29, 08:16, 13:57,
+    # 17:38 and 20:32 UTC — gaps of three to SEVEN HOURS against a
+    # thirty-minute cron. GitHub schedules are best-effort and are throttled
+    # hard on public repos; the declared interval is a request, not a promise.
     #
-    # Honest caveat: GitHub schedules are BEST EFFORT. 5 minutes is the
-    # documented floor and runs are routinely delayed, or skipped entirely,
-    # under platform load. Treat this as "checks often", not as an SLA — if
-    # true uptime monitoring is ever needed, it belongs on a service built
-    # for it, not on CI.
+    # The real 5-minute cadence therefore lives on the production box, as a
+    # systemd timer (scripts/deploy/systemd/gatetest-empire-smoke.timer) —
+    # the same conclusion scripts/deploy/systemd/README.md reached for the
+    # queue drain, and the same Forbidden #3 argument.
+    #
+    # This workflow is kept for what Actions IS good at and the box is not:
+    # alerting on a red run (email + an archived report artifact), from
+    # outside our own network, so it still sees us when the box does not.
     - cron: '*/5 * * * *'
   workflow_dispatch:
 

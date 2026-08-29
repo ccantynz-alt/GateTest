@@ -1,0 +1,18 @@
+[Unit]
+Description=GateTest cross-product smoke probe (Vapron / Gluecron / GateTest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Invoked through bash rather than exec'd directly, so the timer does not
+# depend on the file's executable bit surviving a deploy — this repo is
+# authored on Windows where core.filemode is off, and `git reset --hard`
+# restores the mode from the index. Same reasoning as gatetest-tick.service.
+ExecStart=/bin/bash /opt/gatetest/scripts/deploy/empire-smoke.sh
+
+# Deliberately NO EnvironmentFile. Every probe is a public GET, DNS lookup or
+# TLS handshake, so this unit needs no secrets — and an `EnvironmentFile=-`
+# line is exactly the "green that cannot turn red" pattern src/modules/systemd.js
+# flags: the `-` makes a missing file non-fatal, so the job keeps reporting
+# success while running without the config it was supposed to have.
