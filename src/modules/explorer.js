@@ -49,14 +49,29 @@ class ExplorerModule extends BaseModule {
       return;
     }
 
-    // Check if Playwright is available
+    // Check if Playwright is available.
+    //
+    // A missing browser is a fact about the MACHINE RUNNING THE SCAN, not a
+    // defect in the site being scanned — so it is reported as an unavailable
+    // capability, never as a failing check. Recording it as a failure made
+    // `addCheck(..., false)` default to ERROR severity, which put
+    // "Playwright not installed" in the customer's results as a top,
+    // gate-blocking finding about THEIR website. On the hosted scan (where
+    // Chromium typically cannot launch inside the function at all) that was
+    // the first thing a visitor saw on the homepage: our own missing
+    // dependency, dressed up as their problem. Verified live 2026-08-29.
+    //
+    // Same shape as the `!baseUrl` branch above: capability unavailable is
+    // INFO, not a finding.
     let playwright;
     try {
       playwright = require('playwright');
     } catch {
-      result.addCheck('explorer:playwright', false, {
-        message: 'Playwright not installed — required for autonomous exploration',
-        suggestion: 'Run: npm install playwright && npx playwright install chromium',
+      result.addCheck('explorer:playwright-unavailable', true, {
+        message:
+          'Skipped autonomous exploration — this scanner has no browser installed. ' +
+          'Nothing was checked, and this says nothing about the target site.',
+        suggestion: 'To enable it locally: npm install playwright && npx playwright install chromium',
       });
       return;
     }

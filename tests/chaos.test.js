@@ -97,7 +97,7 @@ test('run — chaos.url takes precedence over explorer.url and liveCrawler.url',
 
   // Hijack require('playwright') to throw — ensures we exit before
   // any browser launch. The module's catch block records the
-  // chaos:playwright check.
+  // chaos:playwright-unavailable check.
   const pwPath = require.resolve('module');
   const Module = require(pwPath);
   const origResolve = Module._resolveFilename;
@@ -112,11 +112,16 @@ test('run — chaos.url takes precedence over explorer.url and liveCrawler.url',
     Module._resolveFilename = origResolve;
   }
 
-  // Should have recorded a "playwright not installed" check
-  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright');
-  assert.ok(pwCheck, 'expected chaos:playwright check to fire');
-  assert.equal(pwCheck.passed, false);
-  assert.match(pwCheck.meta.message, /Playwright not installed/);
+  // Should have recorded the capability as UNAVAILABLE — not as a failure.
+  // A missing browser on this machine says nothing about the target site, and
+  // addCheck(..., false) would default it to ERROR severity and report it to
+  // the customer as a defect in their site. This assertion used to pin
+  // `passed === false`, i.e. it pinned the bug.
+  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright-unavailable');
+  assert.ok(pwCheck, 'expected chaos:playwright-unavailable check to fire');
+  assert.equal(pwCheck.passed, true, 'a missing local browser is not a finding about the target');
+  assert.match(pwCheck.meta.message, /Skipped chaos testing/);
+  assert.match(pwCheck.meta.message, /says nothing about the target site/);
   assert.match(pwCheck.meta.suggestion, /npm install playwright/);
 });
 
@@ -141,7 +146,7 @@ test('run — falls back to liveCrawler.url when no chaos.url configured', async
 
   // URL fallback worked → we got past the no-URL early return →
   // hit the playwright-missing branch (which is what we want to assert).
-  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright');
+  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright-unavailable');
   assert.ok(pwCheck, 'expected to reach the Playwright-load step');
 });
 

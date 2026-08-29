@@ -40,13 +40,20 @@ class ChaosModule extends BaseModule {
       return;
     }
 
+    // A missing browser describes the machine running the scan, not the site
+    // under test, so it is an unavailable capability — never a failing check.
+    // `addCheck(..., false)` defaults to ERROR severity, which would report
+    // our own missing dependency to the customer as a defect in their site.
+    // See the matching branch in explorer.js.
     let playwright;
     try {
       playwright = require('playwright');
     } catch {
-      result.addCheck('chaos:playwright', false, {
-        message: 'Playwright not installed — required for chaos testing',
-        suggestion: 'Run: npm install playwright && npx playwright install chromium',
+      result.addCheck('chaos:playwright-unavailable', true, {
+        message:
+          'Skipped chaos testing — this scanner has no browser installed. ' +
+          'Nothing was checked, and this says nothing about the target site.',
+        suggestion: 'To enable it locally: npm install playwright && npx playwright install chromium',
       });
       return;
     }

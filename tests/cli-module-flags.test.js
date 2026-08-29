@@ -118,9 +118,10 @@ test('--module chaos: GATETEST_CHAOS_URL env var overrides config URL (Action wi
   // If GATETEST_CHAOS_URL were ignored, we'd see the chaos:config "no URL"
   // info finding instead. Getting past it to the playwright-missing
   // branch proves the env var was read.
-  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright');
+  const pwCheck = result.calls.find((c) => c.name === 'chaos:playwright-unavailable');
   assert.ok(pwCheck, 'expected to advance past URL resolution into the playwright check');
-  assert.equal(pwCheck.passed, false);
+  // Passing, not failing: an absent browser is our environment, not their bug.
+  assert.equal(pwCheck.passed, true);
 });
 
 // ── --module mutation contract ─────────────────────────────────────────────
