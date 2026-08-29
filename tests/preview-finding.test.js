@@ -227,6 +227,112 @@ test('classifySeverity reads the RAW string, before prefixes are stripped', () =
 });
 
 // ---------------------------------------------------------------------------
+// SEVERITY — the file path must never decide it, and the module must.
+//
+// Measured on 2026-08-29: the keyword heuristic ran against the raw string,
+// which starts with the path, so `examples/error/index.js` was escalated to
+// error while the identical finding in `examples/auth/index.js` was a
+// warning. Errors sort first, so the inflated ones led the free preview.
+// ---------------------------------------------------------------------------
+
+test('the SAME finding gets the SAME severity regardless of its file path', () => {
+  const rule = "uses legacy 'var' declaration";
+  const paths = [
+    'examples/error/index.js', // the express path that exposed this
+    'examples/auth/index.js',
+    'src/fail/retry.js',
+    'lib/secret.js',
+    'app/credential.ts',
+    'src/hardcoded.js',
+    'src/ordinary.js',
+  ];
+  const severities = new Set(
+    paths.map((p) => parseDetail(`${p}: ${rule}`, 'codeQuality').severity)
+  );
+  assert.equal(
+    severities.size,
+    1,
+    `path changed the severity of an identical finding: ${JSON.stringify(
+      paths.map((p) => [p, parseDetail(`${p}: ${rule}`, 'codeQuality').severity])
+    )}`
+  );
+  assert.equal([...severities][0], 'warning');
+});
+
+test('every finding the secrets module can emit is an error', () => {
+  // The full SECRET_PATTERNS name list from scan-modules/security-data.ts,
+  // plus the committed-sensitive-file shape. All are leaked credentials.
+  const secretFindings = [
+    'Stripe live key',
+    'Stripe test key',
+    'GitHub personal access token',
+    'AWS access key id',
+    'AWS secret access key',
+    'OpenAI key',
+    'Anthropic key',
+    'Google API key',
+    'Slack token',
+    'Private key block',
+    'Hardcoded password',
+    'DB connection string with inline credentials',
+  ];
+  for (const name of secretFindings) {
+    const r = parseDetail(`src/config.ts: ${name}`, 'secrets');
+    assert.equal(
+      r.severity,
+      'error',
+      `leaked credential shown as ${r.severity}: ${name}`
+    );
+  }
+  const sensitiveFile = parseDetail(
+    'config/prod.pem: committed sensitive file (prod.pem)',
+    'secrets'
+  );
+  assert.equal(sensitiveFile.severity, 'error');
+});
+
+test('syntax findings are errors — the file does not parse', () => {
+  for (const d of [
+    'src/a.ts: brace imbalance (3 open vs 1 close)',
+    'src/b.ts: unterminated template literal (5 backticks)',
+    'package.json: invalid JSON (Unexpected token })',
+  ]) {
+    assert.equal(parseDetail(d, 'syntax').severity, 'error', d);
+  }
+});
+
+test('an explicit severity prefix still overrides the module', () => {
+  // A module in the always-error set may still downgrade a specific finding
+  // by saying so — the explicit marker is the most authoritative signal.
+  assert.equal(parseDetail('info: src/x.ts: fyi', 'secrets').severity, 'info');
+  assert.equal(parseDetail('warning: src/x.ts: meh', 'syntax').severity, 'warning');
+});
+
+test('ordinary style findings are not escalated to error', () => {
+  for (const d of [
+    'src/a.ts: 520 lines (>500)',
+    'src/b.ts: 3 lines with trailing whitespace',
+    'src/c.ts: contains TODO/FIXME/HACK/XXX marker',
+    'src/d.ts: uses loose equality (== or !=) instead of === / !==',
+  ]) {
+    assert.equal(parseDetail(d, 'codeQuality').severity, 'warning', d);
+  }
+});
+
+test('a genuine keyword in the MESSAGE still escalates', () => {
+  // The heuristic must keep working where it is actually justified.
+  assert.equal(parseDetail('src/api.ts: hardcoded API key', 'lint').severity, 'error');
+  assert.equal(
+    parseDetail('src/db.ts: SQL injection risk in raw query', 'lint').severity,
+    'error'
+  );
+  assert.equal(
+    parseDetail('src/x.ts: known vulnerability in transitive dep', 'lint').severity,
+    'error'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // RATCHET — file attribution has exactly ONE definition in the codebase.
 // This is the guard that would have caught the original drift.
 // ---------------------------------------------------------------------------

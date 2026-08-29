@@ -45,19 +45,79 @@ export interface PreviewFinding {
 }
 
 /**
- * Classify a raw detail string into a display severity.
+ * Modules whose every finding is an error by construction. Verified against
+ * the module sources, not assumed:
  *
- * Deliberately reads the RAW string, before any prefix is stripped — the
- * leading `error:` / `warning:` marker some modules emit is the strongest
- * signal available, and stripping it first would throw that away.
+ *   - `secrets` (scan-modules/security-data.ts) emits exactly two shapes, and
+ *     both are leaked credentials: `path: <SECRET_PATTERNS name>` (Stripe live
+ *     key, GitHub PAT, AWS keys, private key block, hardcoded password, DB
+ *     connection string with inline credentials, …) and
+ *     `path: committed sensitive file (…)`.
+ *   - `syntax` (scan-modules/static-quality.ts) emits only genuine parse
+ *     breakage — brace/paren/bracket imbalance measured AFTER strings and
+ *     comments are stripped, unterminated template literals, invalid JSON.
+ *
+ * If either module grows a lower-severity check, take it out of this set.
  */
-export function classifySeverity(raw: string): PreviewFinding["severity"] {
+const ALWAYS_ERROR_MODULES = new Set(["secrets", "syntax"]);
+
+/**
+ * Classify a finding into a display severity.
+ *
+ * THE BUG THIS FIXES (measured 2026-08-29, both directions):
+ *
+ *   The keyword heuristic used to run against the RAW string — which begins
+ *   with the FILE PATH. So the path decided the severity:
+ *
+ *     examples/error/index.js: uses legacy 'var' declaration   → error
+ *     examples/auth/index.js:  uses legacy 'var' declaration   → warning
+ *
+ *   Identical rule, identical finding, different severity, purely because
+ *   express really does have an `examples/error/` directory. Any repo with a
+ *   `error/`, `fail/`, or `secret.js` path got its ordinary lint findings
+ *   escalated — and errors sort first, so they led the free preview.
+ *
+ *   The same heuristic under-called the findings that actually matter:
+ *   10 of the 13 shapes the `secrets` module can emit — including a live
+ *   Stripe key, a GitHub personal access token and a private key block —
+ *   came out as `warning`, because "Stripe live key" contains none of the
+ *   keywords. A leaked credential presented as a warning is the
+ *   false-NEGATIVE direction, on the highest-severity module we run, in the
+ *   top of the funnel.
+ *
+ * The order below reflects how much each signal is worth:
+ *   1. An explicit `error:` / `warning:` / `info:` prefix — the module said
+ *      what it meant, so believe it. Read from the RAW string, before any
+ *      stripping, which is why this function takes the raw form.
+ *   2. The module that produced the finding — structural, not textual.
+ *   3. Keyword match on the MESSAGE ONLY. Never the path: a filename is not
+ *      evidence about severity.
+ */
+export function classifySeverity(
+  raw: string,
+  moduleName?: string,
+  message?: string
+): PreviewFinding["severity"] {
   if (typeof raw !== "string") return "warning";
+
+  // 1. Explicit marker wins.
   if (/^(error|err|critical|high)\b[:]/i.test(raw)) return "error";
   if (/^(warning|warn|medium)\b[:]/i.test(raw)) return "warning";
   if (/^(info|note|low|summary)\b[:]/i.test(raw)) return "info";
-  if (/\b(error|fail|vulnerab|exploit|injection|secret|credential|api[_\- ]?key|hardcoded)\b/i.test(raw))
+
+  // 2. The emitting module.
+  if (moduleName && ALWAYS_ERROR_MODULES.has(moduleName)) return "error";
+
+  // 3. Keywords, against the message with the path already removed. Falls
+  //    back to the raw string only when no parsed message was supplied.
+  const body = typeof message === "string" ? message : raw;
+  if (
+    /\b(?:error|fail(?:ure|ed|s)?|vulnerab\w*|exploit\w*|injection|secrets?|credentials?|api[_\- ]?keys?|hardcoded)\b/i.test(
+      body
+    )
+  )
     return "error";
+
   return "warning";
 }
 
@@ -93,11 +153,15 @@ export function parseDetail(raw: string, moduleName: string): PreviewFinding {
     if (issue) message = issue;
   }
 
+  const finalMessage = message.trim();
+
   return {
     module: moduleName,
-    severity: classifySeverity(safeRaw),
+    // Severity is classified from the raw string (for an explicit prefix), the
+    // emitting module, and the path-stripped message — in that order.
+    severity: classifySeverity(safeRaw, moduleName, finalMessage),
     file,
     line,
-    message: message.trim(),
+    message: finalMessage,
   };
 }
