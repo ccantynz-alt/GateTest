@@ -64,7 +64,7 @@ describe('config: unrecognised .gatetest.json keys', () => {
 
   test('names the right home when the key is a module name', () => {
     // The exact bug: `aiReview` at the root instead of `modules.aiReview`.
-    const dir = projectWith({ aiReview: { model: 'claude-opus-4-6' } }, 'module-at-root');
+    const dir = projectWith({ aiReview: { model: 'claude-sonnet-5' } }, 'module-at-root');
     const { cfg, stderr } = loadQuietly(dir);
 
     assert.deepStrictEqual(cfg.unknownKeys, ['aiReview']);
@@ -107,7 +107,7 @@ describe('config: unrecognised .gatetest.json keys', () => {
   test('warning is advisory — the rest of the config still loads', () => {
     // A stale key must never cost a customer their scan.
     const dir = projectWith({
-      aiReview: { model: 'claude-opus-4-6' },
+      aiReview: { model: 'claude-sonnet-5' },
       thresholds: { maxFileLength: 800 },
     }, 'still-loads');
     const { cfg } = loadQuietly(dir);
