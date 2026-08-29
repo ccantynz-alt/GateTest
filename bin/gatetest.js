@@ -18,6 +18,11 @@
 const path = require('path');
 const fs = require('fs');
 const { GateTest } = require('../src/index');
+// Argument parsing lives in src/core so it can be unit-tested — this file
+// runs main() at import time and exports nothing, so anything defined here
+// is unreachable from a test. See the module header for the silent
+// unknown-flag bug that survived because of exactly that.
+const { parseArgs, describeArgProblems } = require('../src/core/cli-args');
 
 const HELP = `
   GateTest - Advanced QA Gate System
@@ -77,6 +82,10 @@ const HELP = `
                        been auto-softened. Silence noise via .gatetestignore.
     --list             List all available test modules
     --init             Initialize GateTest in the current project
+    --init-claude-md   Generate CLAUDE.md for this project, install the Claude
+                       hooks (.claude/settings.json) and write gatetest-scan.js
+    --health           Check the GitHub API connection (reachability, latency,
+                       rate-limit budget) without running a scan
     --parallel         Run modules in parallel
     --stop-first       Stop on first module failure
     --fix              Auto-fix safe issues (formatting, imports, etc.)
@@ -252,6 +261,12 @@ async function main() {
   // 'scan' is an explicit alias for the default behavior. Consume it.
   const effectiveArgv = first === 'scan' ? rawArgs.slice(1) : rawArgs;
   const args = parseArgs(effectiveArgv);
+  // Anything the parser could not use is reported before the scan starts.
+  // Advisory, never fatal — a stray argument from a wrapper script must not
+  // cost someone their scan (Forbidden #25). But it must not be SILENT
+  // either: an ignored `--report-only` blocks a build nobody meant to gate,
+  // and an ignored `--strict` is a green that cannot turn red.
+  for (const line of describeArgProblems(args)) console.error(line);
   // Ignore stale "scan" token if it somehow re-appears later.
   if (args._subcommand === 'scan') delete args._subcommand;
   // (KNOWN_SUBCOMMANDS export only used to keep the route table in one place.)
@@ -1003,68 +1018,6 @@ ${Object.entries(ALLOWED_FIX_MODELS)
   console.log(`\n  \x1b[32m[GateTest fix]\x1b[0m Applied ${accepted.length} fix(es) to disk.`);
   console.log('  Run \x1b[1mgit diff\x1b[0m to review, then commit.\n');
   return 0;
-}
-
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--help' || arg === '-h') args.help = true;
-    else if (arg === '--version' || arg === '-v') args.version = true;
-    else if (arg === '--validate') args.validate = true;
-    else if (arg === '--list') args.list = true;
-    else if (arg === '--report') args.report = true;
-    else if (arg === '--noise') args.noise = true;
-    else if (arg === '--all') args.all = true;
-    else if (arg === '--init') args.init = true;
-    else if (arg === '--init-claude-md') args.initClaudeMd = true;
-    else if (arg === '--health') args.health = true;
-    else if (arg === '--doctor') args.doctor = true;
-    else if (arg === '--doctor-quick') { args.doctor = true; args.doctorQuick = true; }
-    else if (arg === '--parallel') args.parallel = true;
-    else if (arg === '--github-annotations') args.githubAnnotations = true;
-    else if (arg === '--stop-first') args['stop-first'] = true;
-    else if (arg === '--fix') args.fix = true;
-    else if (arg === '--auto-pr') args.autoPr = true;
-    else if (arg === '--auto-pr-base' && argv[i + 1]) args.autoPrBase = argv[++i];
-    else if (arg === '--auto-pr-branch' && argv[i + 1]) args.autoPrBranch = argv[++i];
-    else if (arg === '--model' && argv[i + 1]) args.model = argv[++i];
-    else if (arg === '--since' && argv[i + 1]) args.since = argv[++i];
-    else if (arg === '--pr') args.pr = true;
-    else if (arg === '--diff') args.diff = true;
-    else if (arg === '--report-only') args.reportOnly = true;
-    else if (arg === '--strict') args.strict = true;
-    else if (arg === '--baseline') args.baseline = true;
-    else if (arg === '--watch') args.watch = true;
-    else if (arg === '--sarif') args.sarif = true;
-    else if (arg === '--junit') args.junit = true;
-    else if (arg === '--ci-init' && argv[i + 1]) args.ciInit = argv[++i];
-    else if (arg === '--confidence-threshold' && argv[i + 1]) {
-      const v = parseFloat(argv[++i]);
-      if (!Number.isNaN(v) && v >= 0 && v <= 1) args.confidenceThreshold = v;
-    }
-    else if (arg === '--suite' && argv[i + 1]) args.suite = argv[++i];
-    else if (arg === '--module' && argv[i + 1]) args.module = argv[++i];
-    else if (arg === '--skip-module' && argv[i + 1]) {
-      args.skipModules = args.skipModules || [];
-      args.skipModules.push(argv[++i]);
-    }
-    else if (arg === '--project' && argv[i + 1]) args.project = argv[++i];
-    else if (arg === '--server' && argv[i + 1]) args.server = argv[++i];
-    else if (arg === '--crawl' && argv[i + 1]) args.crawl = argv[++i];
-    else if (arg === '--crawl-loop' && argv[i + 1]) args.crawlLoop = argv[++i];
-    else if (arg === '--crawl-max' && argv[i + 1]) args.crawlMax = parseInt(argv[++i]);
-    else if (arg === '--crawl-header' && argv[i + 1]) (args.crawlHeaders = args.crawlHeaders || []).push(argv[++i]);
-    else if (arg === '--crawl-cookie' && argv[i + 1]) args.crawlCookie = argv[++i];
-    else if (arg === '--crawl-storage-state' && argv[i + 1]) args.crawlStorageState = argv[++i];
-    else if (arg === '--feedback') args.feedback = true;
-    else if (arg === '--diagnose' && argv[i + 1]) args.diagnose = argv[++i];
-    else if (arg === '--monitor' && argv[i + 1]) args.monitor = argv[++i];
-    else if (arg === '--monitor-interval' && argv[i + 1]) args.monitorInterval = parseInt(argv[++i]);
-    else if (arg === '--monitor-heal') args.monitorHeal = true;
-    else if (arg === '--flush' && argv[i + 1]) args.flush = argv[++i];
-  }
-  return args;
 }
 
 function initProject(projectRoot) {
