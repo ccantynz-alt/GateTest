@@ -62,10 +62,18 @@ const DEFAULT_TIMEOUT_MS = 20000;
 
 // Above this, a probe that SUCCEEDED is downgraded to a warning. "Up but
 // slow" and "down" are different operational facts and must not share a
-// colour. Measured 2026-08-29: vapron.ai's homepage served 365KB in
-// 3.7s / 19.0s / 11.1s across three consecutive requests, so a 5s hard
-// timeout would have painted a live site red on most runs — a monitor that
-// cries wolf gets muted, and then it protects nobody.
+// colour.
+//
+// Measured 2026-08-29, and the spread is the whole argument: vapron.ai's
+// 365KB homepage took 1.5s / 9.2s / 19.8s from a New Zealand dev box, and
+// ~300ms from a GitHub runner — the SAME page, the same minute. TTFB was
+// 0.5-3.7s in both cases, so the server answers promptly and it is bulk
+// transfer over one network path that drags.
+//
+// A 5s hard timeout therefore reported a perfectly healthy site as DOWN,
+// depending only on where you probed from. Latency is a property of the
+// path as much as the server, so it cannot be allowed to mean "outage" —
+// and a monitor that cries wolf gets muted, after which it protects nobody.
 const SLOW_MS = 5000;
 
 const CERT_WARN_DAYS = 14;

@@ -195,11 +195,15 @@ test('markdown report shape includes table header and all probes', async () => {
 // ---------------------------------------------------------------------------
 // SLOW IS NOT DOWN
 //
-// Measured 2026-08-29: vapron.ai served its 365KB homepage in 3.7s / 19.0s /
-// 11.1s across three consecutive requests. Under the original 5s hard timeout
-// that live, working site read as FAIL on most runs. A monitor that cries
-// wolf gets muted, and a muted monitor protects nobody — so "up but slow" and
-// "down" get different colours.
+// Measured 2026-08-29: vapron.ai's 365KB homepage took 1.5s / 9.2s / 19.8s
+// from a New Zealand dev box and ~300ms from a GitHub runner — the same page,
+// the same minute, with TTFB fast (0.5-3.7s) in both. The server answers
+// promptly; bulk transfer over one network path drags.
+//
+// So under the original 5s hard timeout, a perfectly healthy site read as
+// FAIL depending only on WHERE you probed from. Latency belongs to the path
+// as much as the server and must not mean "outage" — a monitor that cries
+// wolf gets muted, and a muted monitor protects nobody.
 // ---------------------------------------------------------------------------
 
 test('a successful but slow probe warns instead of passing', async () => {
