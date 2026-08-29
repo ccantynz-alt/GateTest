@@ -52,11 +52,19 @@ const IMPORTANT: Array<{ name: string; why: string }> = [
   { name: "VAPRON_API_TOKEN", why: "pairs with VAPRON_BASE_URL — Vapron rejects unauthenticated dispatch" },
   { name: "VAPRON_DISPATCH_SECRET", why: "pairs with VAPRON_BASE_URL — signs outbound jobs and verifies Vapron's result callbacks (CRONTECH_DISPATCH_SECRET is the legacy alias)" },
   { name: "GATETEST_RECIPE_STORE_TOKEN", why: "fix-recipe WRITES (PUT /api/recipes) are refused with 503 until set — the flywheel cannot learn from CLI fixes; must equal the token CLI users set as GATETEST_RECIPE_STORE_TOKEN" },
+  // ── Gluecron: the PREFERRED git host (Craig 2026-08-29 — customers may use
+  // GitHub, but we steer them to Gluecron). These were classified "purely
+  // optional" while GitHub was the only door, which is no longer true: this
+  // is now the host we actively want customers on, so its ingress going dark
+  // has to be visible here. Confirmed dead in production on 2026-08-29 —
+  // POST /api/events/push returned 503 and nothing in this probe said so.
+  { name: "GLUECRON_EMITTER_SECRET", why: "the Gluecron push ingress (POST /api/events/push) fails closed with 503 — every push from our PREFERRED git host is rejected, so no scan is ever queued for a Gluecron customer" },
+  { name: "GLUECRON_BASE_URL", why: "Gluecron API base URL (defaults to https://gluecron.com) — set it explicitly when pointing at a non-default deployment" },
+  { name: "GLUECRON_API_TOKEN", why: "no Gluecron PAT means repo reads fall back to a GitHub token, and private Gluecron repos cannot be scanned at all" },
 ];
 
 // Purely optional integrations.
 const OPTIONAL = [
-  "GLUECRON_BASE_URL", "GLUECRON_API_TOKEN",
   "SLACK_WEBHOOK_URL",
   "GITLAB_CLIENT_ID", "GITLAB_CLIENT_SECRET",
   "SENTRY_AUTH_TOKEN", "DATADOG_API_KEY", "ROLLBAR_READ_TOKEN",
