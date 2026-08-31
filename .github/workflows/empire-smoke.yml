@@ -98,7 +98,20 @@ jobs:
       # red run can be diagnosed without re-running it by hand.
       - name: JSON report
         if: always()
-        run: node integrations/smoke/empire-smoke.js --json > smoke.json || true
+        run: |
+          # The probe exits 1 when the estate is red. That is EXPECTED here —
+          # the blocking "Probe the estate" step above already owns the job's
+          # verdict, and this step only has to leave a machine-readable report
+          # behind. What is NOT expected is the probe failing to produce a
+          # report at all: a crashed probe and a green estate both used to look
+          # like an empty artifact under a blanket `|| true`. So tolerate the
+          # exit code, then assert the artifact is real.
+          rc=0
+          node integrations/smoke/empire-smoke.js --json > smoke.json || rc=$?
+          if ! jq -e 'has("status")' smoke.json > /dev/null; then
+            echo "empire-smoke --json produced no usable report (exit $rc)" >&2
+            exit 1
+          fi
 
       - name: Upload report
         if: always()

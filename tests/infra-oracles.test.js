@@ -90,6 +90,195 @@ describe('bashSafety module', () => {
   });
 });
 
+// ── bashSafety: swallow vs. tolerant exit (2026-08-31) ────────────────────────
+//
+// The module used to flag every `|| true` and every `set +e` identically. On
+// this repo that was 12 blocking findings, 4 of them false positives on
+// commands whose non-zero exit is an ANSWER (`command -v`, `head`, `grep`) or
+// on a `set +e` whose exit code is captured and re-raised two lines later.
+//
+// Every negative control below is paired with a positive control, because
+// "quieter" and "broken" are indistinguishable without one: a rule that stops
+// flagging `command -v node || true` must still flag `node deploy.js || true`
+// in the production deploy path, which is the swallow that let /opt/gatetest
+// sit 60 commits stale for six days.
+
+describe('bashSafety — tolerant exits vs. real swallows', () => {
+  const BashSafety = require('../src/modules/bash-safety');
+
+  async function scanShell(body, rel = 'deploy.sh') {
+    const tmp = makeTmp();
+    const file = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, body);
+    const r = makeResult();
+    await new BashSafety().run(r, { projectRoot: tmp });
+    fs.rmSync(tmp, { recursive: true, force: true });
+    return r.checks.filter(c => !c.passed && c.severity === 'error');
+  }
+
+  async function scanYaml(body, rel = '.github/workflows/w.yml') {
+    return scanShell(body, rel);
+  }
+
+  // ── negative controls: these must stay SILENT ──────────────────────────────
+
+  const TOLERANT = [
+    ['command -v', '#!/bin/bash\nset -e\nNODE_BIN="$(command -v node || true)"\n'],
+    ['head on an optional file', '#!/bin/bash\nset -e\nBODY="$(head -c 500 /tmp/body || true)"\n'],
+    ['grep that may not match', '#!/bin/bash\nset -e\nN=$(grep -c "^not ok" log.txt || true)\n'],
+    ['git diff as a question', '#!/bin/bash\nset -e\ngit diff --quiet -- src/ || true\n'],
+    ['diff exit 1 means "differs"', '#!/bin/bash\nset -e\ndiff a.txt b.txt || true\n'],
+    ['pgrep finding nothing', '#!/bin/bash\nset -e\npgrep -f gatetest || true\n'],
+  ];
+  for (const [label, body] of TOLERANT) {
+    test(`negative control: ${label} is not a swallowed error`, async () => {
+      const errors = await scanShell(body);
+      assert.equal(errors.length, 0,
+        `${label} should not fire; got: ${errors.map(e => e.name).join(', ')}`);
+    });
+  }
+
+  test('negative control: a jq program containing "|" does not confuse the splitter', async () => {
+    const errors = await scanShell(
+      '#!/bin/bash\nset -e\n' +
+      'jq -r \'.checks // [] | length as $n | "\\($n) checks"\' report.json >> out.md 2>/dev/null || true\n'
+    );
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  test('negative control: "|| true" inside a comment is documentation', async () => {
+    const errors = await scanShell(
+      '#!/bin/bash\nset -e\n' +
+      '# `|| true` (not `|| echo 0`): grep -c prints 0 and exits 1 on no match.\n' +
+      'make build\n'
+    );
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  test('negative control: "|| true" inside a quoted string is not code', async () => {
+    const errors = await scanShell('#!/bin/bash\nset -e\necho "never write || true here"\n');
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  test('negative control: set +e with the exit code captured and re-raised', async () => {
+    const errors = await scanShell(
+      '#!/bin/bash\nset +e\nnode probe.js > out.md\ncode=$?\ncat out.md\nexit $code\n'
+    );
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  test('negative control: set +e restored by a later set -e', async () => {
+    const errors = await scanShell('#!/bin/bash\nset +e\nnode probe.js\nset -e\necho done\n');
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  test('negative control: YAML step that writes $? to GITHUB_OUTPUT', async () => {
+    const errors = await scanYaml([
+      'jobs:',
+      '  gate:',
+      '    steps:',
+      '      - name: GateTest',
+      '        id: gate',
+      '        run: |',
+      '          set +e',
+      '          node bin/gatetest.js --suite web',
+      '          echo "exit_code=$?" >> "$GITHUB_OUTPUT"',
+      '          set -e',
+      '',
+    ].join('\n'));
+    assert.equal(errors.length, 0, `got: ${errors.map(e => e.name).join(', ')}`);
+  });
+
+  // ── positive controls: these must STILL FIRE ──────────────────────────────
+
+  const SWALLOWS = [
+    ['a program in the deploy path', 'scripts/deploy/deploy-on-box.sh',
+      '#!/bin/bash\nset -e\nnode scripts/migrate.js || true\n'],
+    ['systemctl probe hiding stderr and exit code', 'scripts/deploy/deploy-on-box.sh',
+      '#!/bin/bash\nset -e\nU="$(systemctl list-unit-files --no-legend 2>/dev/null || true)"\n'],
+    ['npm ci', 'ci.sh', '#!/bin/bash\nset -e\nnpm ci --ignore-scripts || true\n'],
+    ['git push', 'release.sh', '#!/bin/bash\nset -e\ngit push origin main || true\n'],
+    ['a build step', 'build.sh', '#!/bin/bash\nset -e\ntar -czf app.tar.gz dist/ || true\n'],
+    ['rm hiding both stderr and status', 'clean.sh',
+      '#!/bin/bash\nset -e\nrm -rf /tmp/old 2>/dev/null || true\n'],
+  ];
+  for (const [label, rel, body] of SWALLOWS) {
+    test(`positive control: ${label} still fires`, async () => {
+      const errors = await scanShell(body, rel);
+      assert.ok(errors.length >= 1, `${label} must still be reported as a swallowed error`);
+      assert.ok(errors.every(e => typeof e.message === 'string' && e.message.length > 0),
+        'every finding must carry a message');
+    });
+  }
+
+  test('positive control: set +e with nothing downstream still fires', async () => {
+    const errors = await scanShell('#!/bin/bash\nset +e\nnpm run build\necho done\n');
+    assert.ok(errors.some(e => e.name.includes('set-e-disabled')),
+      'an unrestored set +e is a real swallow');
+  });
+
+  test('positive control: $? in a LATER YAML step does not excuse set +e', async () => {
+    // The exemption must not leak across step boundaries — a different step's
+    // exit-code handling says nothing about this one.
+    const errors = await scanYaml([
+      'jobs:',
+      '  j:',
+      '    steps:',
+      '      - name: Notify',
+      '        run: |',
+      '          set +e',
+      '          gh issue create --title x',
+      '      - name: Other',
+      '        run: |',
+      '          node probe.js',
+      '          echo "code=$?"',
+      '',
+    ].join('\n'));
+    assert.ok(errors.some(e => e.name.includes('set-e-disabled')),
+      'set +e in the Notify step must still be reported');
+  });
+
+  test('positive control: swallow-ok still requires a written reason to suppress', async () => {
+    const suppressed = await scanShell(
+      '#!/bin/bash\nset -e\n# gatetest:swallow-ok reason="artifact is best-effort"\nnode report.js || true\n'
+    );
+    assert.equal(suppressed.length, 0, 'an explicit justification suppresses the finding');
+    const unsuppressed = await scanShell('#!/bin/bash\nset -e\nnode report.js || true\n');
+    assert.ok(unsuppressed.length >= 1, 'without the justification it fires');
+  });
+});
+
+// ── bashSafety: the files fixed on 2026-08-31 stay fixed ──────────────────────
+
+describe('bashSafety — real repo paths stay free of swallowed errors', () => {
+  const BashSafety = require('../src/modules/bash-safety');
+  const REPO = path.resolve(__dirname, '..');
+
+  // Only the files audited and fixed on 2026-08-31. Scoped deliberately: a new
+  // finding elsewhere is a new decision, not a regression of this one.
+  const GUARDED = [
+    'scripts/deploy/deploy-on-box.sh',
+    'scripts/deploy/empire-smoke.sh',
+    'scripts/deploy/tick.sh',
+    '.github/workflows/empire-smoke.yml',
+    '.github/workflows/readiness-probe.yml',
+    '.github/workflows/trainer-nightly.yml',
+    'integrations/github-actions/gatetest-deploy-gate.yml',
+  ];
+
+  test('no blocking bash-safety findings in the audited deploy/CI paths', async () => {
+    const r = makeResult();
+    await new BashSafety().run(r, { projectRoot: REPO });
+    const offenders = r.checks.filter((c) => {
+      if (c.passed || c.severity !== 'error' || !c.file) return false;
+      return GUARDED.includes(c.file.replace(/\\/g, '/'));
+    });
+    assert.equal(offenders.length, 0,
+      `swallowed errors reintroduced:\n${offenders.map(o => `  ${o.name}`).join('\n')}`);
+  });
+});
+
 // ── envIntegrity ──────────────────────────────────────────────────────────────
 
 describe('envIntegrity module', () => {

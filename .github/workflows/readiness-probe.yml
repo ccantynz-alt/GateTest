@@ -81,7 +81,18 @@ jobs:
         if: always()
         env:
           BASE_URL: ${{ github.event.inputs.base_url || 'https://gatetest.io' }}
-        run: node scripts/ops/readiness-probe.js --base "$BASE_URL" --json > readiness.json || true
+        run: |
+          # readiness-probe.js exit codes: 0 = ready, 1 = NOT ready, 2 = the
+          # probe itself could not run. 1 is expected here — the blocking step
+          # above already decided the job — but 2 means we are uploading an
+          # artifact that says nothing, which is how a dead probe passes for a
+          # healthy site. Tolerate 1; surface 2.
+          rc=0
+          node scripts/ops/readiness-probe.js --base "$BASE_URL" --json > readiness.json || rc=$?
+          if [ "$rc" -gt 1 ]; then
+            echo "readiness probe could not run (exit $rc) — see stderr above" >&2
+            exit "$rc"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()

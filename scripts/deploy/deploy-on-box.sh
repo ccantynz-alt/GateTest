@@ -82,7 +82,21 @@ else
   # `grep -q '^gatetest\.service'` never fired either — the bug was never really
   # the unit name, it was the pipeline. Verified on the box 2026-08-05:
   # the same grep prints MATCH interactively and fails inside this script.
-  UNIT_FILES="$(systemctl list-unit-files --no-legend 2>/dev/null || true)"
+  #
+  # `|| true` used to hide BOTH cases here: systemd absent, and systemd present
+  # but list-unit-files failing. Those are not the same event. The first is a
+  # non-systemd box, which the warning below already covers; the second means we
+  # cannot tell whether the unit exists, and a deploy that cannot find out
+  # whether it restarted anything must not report success. This is the same
+  # class of swallow that let /opt/gatetest sit 60 commits stale for six days.
+  UNIT_FILES=""
+  if command -v systemctl >/dev/null 2>&1; then
+    if ! UNIT_FILES="$(systemctl list-unit-files --no-legend)"; then
+      echo "[deploy] ERROR: 'systemctl list-unit-files' failed — cannot determine the restart unit." >&2
+      echo "[deploy]        The new build is in place but the OLD process may still be serving." >&2
+      exit 1
+    fi
+  fi
   RESTART_UNIT=""
   for unit in gatetest-web gatetest; do
     case "$UNIT_FILES" in

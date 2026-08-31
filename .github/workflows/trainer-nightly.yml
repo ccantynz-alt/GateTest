@@ -113,7 +113,13 @@ jobs:
         # commits) — never auto-applies rules. Fails silently when corpus
         # is thin (e.g. first run): no proposals → no pending files.
         run: |
-          node website/app/lib/trainers/recipe-auto-promoter.js > .gatetest-train/recipe-auto-promoter.md || true
+          # No `|| true`: a thin corpus is already a clean exit 0 inside the
+          # trainer (verified 2026-08-31 on an empty corpus). A non-zero exit
+          # therefore means the trainer CRASHED, and four of the eight trainers
+          # in this job have always been allowed to fail the run for exactly
+          # that reason. A trainer that dies every night while the job stays
+          # green is a flywheel that has quietly stopped turning.
+          node website/app/lib/trainers/recipe-auto-promoter.js > .gatetest-train/recipe-auto-promoter.md
           if [ -f "$HOME/.gatetest/trainers/recipe-auto-promoter-latest.json" ]; then
             cp "$HOME/.gatetest/trainers/recipe-auto-promoter-latest.json" .gatetest-train/recipe-auto-promoter.json
           fi
@@ -124,7 +130,9 @@ jobs:
         # No-op when corpus is empty. SOC2-safe: customer strings never
         # leave the local store.
         run: |
-          node website/app/lib/trainers/cross-repo-promoter.js > .gatetest-train/cross-repo-promoter.md || true
+          # No `|| true` — see the recipe-auto-promoter step above. An empty
+          # corpus is a no-op exit 0; anything else is a crash worth seeing.
+          node website/app/lib/trainers/cross-repo-promoter.js > .gatetest-train/cross-repo-promoter.md
           if [ -f "$HOME/.gatetest/trainers/cross-repo-promoter-latest.json" ]; then
             cp "$HOME/.gatetest/trainers/cross-repo-promoter-latest.json" .gatetest-train/cross-repo-promoter.json
           fi
@@ -135,7 +143,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          node website/app/lib/trainers/confidence-calibrator.js > .gatetest-train/confidence-calibrator.md || true
+          # No `|| true` — the trainer already degrades gracefully when
+          # DATABASE_URL is unset (exit 0, empty report); a non-zero exit is a
+          # crash, not a missing secret.
+          node website/app/lib/trainers/confidence-calibrator.js > .gatetest-train/confidence-calibrator.md
           if [ -f "$HOME/.gatetest/trainers/confidence-calibrator-latest.json" ]; then
             cp "$HOME/.gatetest/trainers/confidence-calibrator-latest.json" .gatetest-train/confidence-calibrator.json
           fi
@@ -145,7 +156,11 @@ jobs:
         # competitor pain-points, draft replies marked FOR CRAIG REVIEW.
         # Never posts anywhere. Authorized by Craig 2026-06-12 (Boss Rule #7).
         run: |
-          node website/app/lib/trainers/hacker-news-monitor.js > .gatetest-train/hacker-news.md || true
+          # No `|| true`: hacker-news-monitor.js already catches its own fatal
+          # errors and exits 0 (see its `require.main` block), so the guard was
+          # pure noise — it could only ever have hidden a Node-level crash,
+          # which is precisely what we want to see.
+          node website/app/lib/trainers/hacker-news-monitor.js > .gatetest-train/hacker-news.md
           if [ -f "$HOME/.gatetest/trainers/hacker-news-latest.json" ]; then
             cp "$HOME/.gatetest/trainers/hacker-news-latest.json" .gatetest-train/hacker-news.json
           fi

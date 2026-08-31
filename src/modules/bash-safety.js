@@ -11,17 +11,42 @@ const path = require('path');
 
 const SWALLOW_OK = /gatetest:swallow-ok/;
 
+/**
+ * Commands that use a NON-ZERO EXIT AS AN ANSWER, not as a failure report.
+ * `grep` exiting 1 means "no match"; `command -v` exiting 1 means "not
+ * installed"; `diff` exiting 1 means "they differ". Under `set -e` every one of
+ * these NEEDS `|| true` (or an `if`) to keep the script alive, so flagging them
+ * is this module's single largest source of false positives.
+ *
+ * The list is deliberately short and every entry has that same justification.
+ * Anything NOT on it keeps firing at error severity: `node deploy.js || true`
+ * is a swallowed error no matter which directory it lives in, and that is the
+ * failure this module exists to catch (a swallowed error in
+ * scripts/deploy/deploy-on-box.sh let production sit 60 commits stale for six
+ * days — see .github/workflows/deploy-box.yml).
+ */
+const TOLERANT_EXIT = new Set([
+  'grep', 'egrep', 'fgrep', 'rg', 'ag',
+  'command', 'which', 'type', 'hash',
+  'pgrep', 'diff', 'cmp', 'test', '[',
+  'jq', 'yq', 'head', 'tail', 'read',
+  'git diff', 'git grep', 'git check-ignore', 'git ls-files', 'git show-ref',
+  'npm ls', 'docker inspect', 'docker ps',
+]);
+
 const RULES = [
   {
     code: 'pipe-true',
     pattern: /\|\|\s*true\b/,
     severity: 'error',
+    swallowGuard: true,
     message: (line) => `"|| true" swallows errors — failures are silently ignored: ${line.trim()}`,
   },
   {
     code: 'devnull-swallow',
     pattern: /2>\/dev\/null\s*\|\|\s*true\b/,
     severity: 'error',
+    swallowGuard: true,
     message: (line) => `"2>/dev/null || true" hides stderr AND swallows exit code — undetectable failure: ${line.trim()}`,
   },
   {
@@ -49,6 +74,77 @@ const RULES = [
     message: (line) => `"ignore_errors: yes" (Ansible) swallows task failures: ${line.trim()}`,
   },
 ];
+
+/**
+ * Blank out the CONTENTS of quoted strings and of trailing `#` comments while
+ * preserving length, so every pattern below matches shell CODE only.
+ *
+ * `$( ... )` re-enters code even inside double quotes, because it is code —
+ * `NODE_BIN="$(command -v node || true)"` must still be analysed.
+ *
+ * Without this: a comment explaining why a `|| true` is safe was itself a
+ * finding, `echo "|| true"` was a finding, and a jq program containing a
+ * literal `|` broke the pipeline splitter below.
+ */
+function maskNonCode(raw) {
+  const stack = [];
+  let out = '';
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    const ctx = stack[stack.length - 1];
+    if (ctx === 'sq') {                       // single quotes: nothing expands
+      out += c === "'" ? (stack.pop(), c) : ' ';
+      continue;
+    }
+    if (ctx === 'dq') {                       // double quotes: only $( ) is code
+      if (c === '\\' && i + 1 < raw.length) { out += '  '; i++; continue; }
+      if (c === '"') { stack.pop(); out += c; continue; }
+      if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
+      out += ' ';
+      continue;
+    }
+    if (c === "'") { stack.push('sq'); out += c; continue; }
+    if (c === '"') { stack.push('dq'); out += c; continue; }
+    if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
+    if (c === ')' && ctx === 'cmd') { stack.pop(); out += c; continue; }
+    if (c === '#' && stack.length === 0 && (i === 0 || /[\s;&|(]/.test(raw[i - 1]))) {
+      out += ' '.repeat(raw.length - i);
+      break;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * The head command of the pipeline that `|| true` actually guards — i.e. whose
+ * exit status is being replaced. Returns null when it cannot be determined,
+ * which is treated as "not tolerant" (fail closed: we would rather report a
+ * questionable swallow than miss a real one).
+ */
+function guardedCommandHead(masked) {
+  const at = masked.search(/\|\|\s*true\b/);
+  if (at < 0) return null;
+  let seg = masked.slice(0, at)
+    .replace(/(^|\s)\d*(>>?|<)\s*\S+/g, ' ')  // drop redirections: > f, 2>/dev/null, 2>&1
+    .replace(/[)"']+\s*$/, '');               // drop a closing $( ) / quote
+  const parts = seg.split(/\|\||&&|\$\(|[|;&(`]/);
+  let last = (parts[parts.length - 1] || '').trim();
+  last = last.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '');  // FOO=bar cmd
+  last = last.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=)/, '');         // VAR=$(cmd
+  last = last.replace(/^(?:sudo|env|nice|time|exec|eval|builtin)\s+/, '');
+  if (!last) return null;
+  const words = last.split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const two = `${words[0]} ${words[1] || ''}`.trim();
+  if (TOLERANT_EXIT.has(two)) return two;
+  return words[0];
+}
+
+function isTolerantSwallow(rawLine) {
+  const head = guardedCommandHead(maskNonCode(rawLine));
+  return head !== null && TOLERANT_EXIT.has(head);
+}
 
 class BashSafetyModule extends BaseModule {
   constructor() { super('bashSafety', 'Bash / Shell Error-Swallow Detector'); }
@@ -92,20 +188,26 @@ class BashSafetyModule extends BaseModule {
       // For YAML, only scan inside run: blocks
       if (mode === 'yaml' && !this._isInRunBlock(lines, idx)) return;
 
+      // Match against CODE only — a comment or a quoted string that happens to
+      // contain "|| true" is documentation, not a swallowed error.
+      const codeLine = maskNonCode(rawLine);
+
       for (const rule of RULES) {
-        if (rule.pattern.test(rawLine)) {
-          // `message` + rel path + line are what the finding registry, the
-          // confidence scorer and the PR comment consume — this module used
-          // to emit only `fix` with an absolute path, which surfaced as
-          // `message: null` findings (2026-08-18 audit residue).
-          result.addCheck(`bash-safety:${rule.code}:${rel}:${lineNum}`, false, {
-            severity: rule.severity,
-            file: rel,
-            line: lineNum,
-            message: rule.message(rawLine),
-            fix: `${rel}:${lineNum} — ${rule.message(rawLine)}\nFix: handle the error explicitly or add "# gatetest:swallow-ok reason=\\"<reason>\\"" if intentional.`,
-          });
-        }
+        if (!rule.pattern.test(codeLine)) continue;
+        if (rule.swallowGuard && isTolerantSwallow(rawLine)) continue;
+        if (rule.code === 'set-e-disabled' && this._errexitHandled(lines, idx, mode)) continue;
+
+        // `message` + rel path + line are what the finding registry, the
+        // confidence scorer and the PR comment consume — this module used
+        // to emit only `fix` with an absolute path, which surfaced as
+        // `message: null` findings (2026-08-18 audit residue).
+        result.addCheck(`bash-safety:${rule.code}:${rel}:${lineNum}`, false, {
+          severity: rule.severity,
+          file: rel,
+          line: lineNum,
+          message: rule.message(rawLine),
+          fix: `${rel}:${lineNum} — ${rule.message(rawLine)}\nFix: handle the error explicitly or add "# gatetest:swallow-ok reason=\\"<reason>\\"" if intentional.`,
+        });
       }
     });
   }
@@ -118,7 +220,8 @@ class BashSafetyModule extends BaseModule {
     for (const [name, cmd] of Object.entries(scripts)) {
       if (typeof cmd !== 'string') continue;
       for (const rule of RULES) {
-        if (rule.pattern.test(cmd)) {
+        if (rule.pattern.test(maskNonCode(cmd))) {
+          if (rule.swallowGuard && isTolerantSwallow(cmd)) continue;
           result.addCheck(`bash-safety:${rule.code}:package.json:${name}`, false, {
             severity: rule.severity,
             file: 'package.json',
@@ -128,6 +231,28 @@ class BashSafetyModule extends BaseModule {
         }
       }
     }
+  }
+
+  /**
+   * `set +e` is only a swallow when nothing downstream looks at the exit code.
+   * The legitimate pattern — used by every retry/report step in this repo —
+   * is: disable errexit, run, capture `$?`, then re-raise it (`exit $code`,
+   * `echo "exit_code=$?" >> $GITHUB_OUTPUT`) or restore `set -e`.
+   *
+   * `$?` is matched against the RAW line because it is usually inside double
+   * quotes; `set -e` is matched against masked code so that a COMMENT saying
+   * "remember to set -e" cannot buy an exemption.
+   */
+  _errexitHandled(lines, idx, mode) {
+    const limit = Math.min(lines.length, idx + 60);
+    for (let i = idx + 1; i < limit; i++) {
+      const raw = lines[i];
+      // Stop at the next YAML step — a later step's `$?` proves nothing here.
+      if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(raw)) break;
+      if (/\$\?/.test(raw)) return true;
+      if (/\bset\s+-[a-zA-Z]*e/.test(maskNonCode(raw))) return true;
+    }
+    return false;
   }
 
   _isInRunBlock(lines, idx) {
