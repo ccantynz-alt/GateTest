@@ -121,3 +121,91 @@ describe('data-integrity — SQL injection: strings vs code, single vs multi-lin
     assert.deepStrictEqual(found.map((f) => f.name), []);
   });
 });
+
+/**
+ * PII — "Sensitive data serialized": where the bytes GO decides it.
+ *
+ * `JSON.stringify(...)` containing the word token/password/secret was a
+ * blocking error wherever it appeared. That flags the shape of every login form
+ * and every "save my API key" form ever written, including this repo's own
+ * admin PAT form (website/app/admin/tabs/AccountsTab.tsx:49), which POSTs the
+ * token to our own API so it can be stored — the whole point of the feature.
+ * Nothing is logged, put in a URL, or written to localStorage there, and the
+ * matching read path returns only the last four characters of the token.
+ *
+ * The rule's real targets are serialization to somewhere OBSERVABLE or
+ * PERSISTENT. Only the `body:`/`body =` position is exempt; every one of those
+ * targets must keep firing, which is what the POSITIVE cases below pin.
+ */
+describe('data-integrity — PII: a request body is not a leak, a log is', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-di-pii-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function scan(rel, source) {
+    const abs = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, source);
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    const result = makeResult();
+    await new DataIntegrityModule().run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && c.name.startsWith('data:pii'));
+  }
+
+  it('NEGATIVE: a token serialized as a fetch request body is the credential doing its job', async () => {
+    const found = await scan('app/AccountsTab.tsx', [
+      'export async function addProfile(ghLabel, ghToken, orgs) {',
+      '  const res = await fetch("/api/admin/github-profiles", {',
+      '    method: "POST",',
+      '    headers: { "Content-Type": "application/json" },',
+      '    body: JSON.stringify({ label: ghLabel, token: ghToken, orgs }),',
+      '  });',
+      '  return res.json();',
+      '}',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('POSITIVE: the same payload written to a LOG still fires', async () => {
+    const found = await scan('app/log.js', [
+      'function save(user) {',
+      '  console.log("saving", JSON.stringify({ password: user.password }));',
+      '}',
+      'module.exports = { save };',
+    ].join('\n'));
+    assert.ok(found.length > 0, 'a serialized password in a log is a real leak');
+    assert.ok(found.some((f) => f.line === 2), JSON.stringify(found));
+  });
+
+  it('POSITIVE: the same payload written to localStorage still fires', async () => {
+    const found = await scan('app/store.js', [
+      'function persist(session) {',
+      '  localStorage.setItem("session", JSON.stringify({ token: session.token }));',
+      '}',
+      'module.exports = { persist };',
+    ].join('\n'));
+    assert.ok(found.length > 0, 'a serialized token in localStorage is a real leak');
+  });
+
+  it('POSITIVE: a bare serialization not bound to a request body still fires', async () => {
+    const found = await scan('app/dump.js', [
+      'function dump(cfg) {',
+      '  const blob = JSON.stringify({ secret: cfg.secret });',
+      '  return blob;',
+      '}',
+      'module.exports = { dump };',
+    ].join('\n'));
+    assert.ok(found.length > 0, 'only the body: position is exempt, not stringify in general');
+  });
+
+  it('the exemption is positional: "somebody:" or a trailing comment must not spell "body:"', async () => {
+    const found = await scan('app/tricky.js', [
+      'function leak(u) {',
+      '  const nobody = JSON.stringify({ token: u.token });',
+      '  return nobody;',
+      '}',
+      'module.exports = { leak };',
+    ].join('\n'));
+    assert.ok(found.length > 0, '`nobody =` must not be read as `body =`');
+  });
+});

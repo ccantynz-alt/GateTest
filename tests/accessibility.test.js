@@ -61,6 +61,75 @@ describe('AccessibilityModule — fragment / primitive / AAA precision (2026-08-
     assert.ok(!f.some((c) => c.name.startsWith('a11y:input-label:')), JSON.stringify(f.map((c) => c.name)));
   });
 
+  // ── img-alt: a JSX tag split across expression boundaries ───────────────
+  //
+  // `<img\b([^>]*?)>` stops at the first `>`, which is not always the img's own.
+  // The badge page renders a copy-paste HTML snippet whose <img> is broken over
+  // three JSX children, so the first `>` reached belongs to the <span> in the
+  // middle and the alt (present, one line further down) was never seen.
+  // The module must not report an alt it never got to look at.
+
+  it('NEGATIVE: an <img> split across JSX expressions (alt on a later line) does not fire', async () => {
+    w('app/badge/page.tsx', [
+      'export default function P() {',
+      '  return (',
+      '    <code>',
+      '      {`<a href="https://gatetest.io/playground"><img src="https://gatetest.io/api/badge?repo=`}',
+      '      <span className="text-emerald-400">owner/repo</span>',
+      '      {`" alt="GateTest"></a>`}',
+      '    </code>',
+      '  );',
+      '}',
+    ].join('\n'));
+    const f = await run();
+    assert.ok(!f.some((c) => c.name.startsWith('a11y:img-alt:')), JSON.stringify(f.map((c) => c.name)));
+  });
+
+  it('POSITIVE: a genuinely alt-less <img> still fires — in HTML and in JSX', async () => {
+    w('bare.html', '<html lang="en"><head><title>t</title></head><body><main><img src="hero.png"></main></body></html>');
+    w('app/card.tsx', 'export const C = () => <div><img src="/logo.png" width={40} /></div>;');
+    const f = await run();
+    const names = f.map((c) => c.name);
+    assert.ok(names.includes('a11y:img-alt:bare.html'), JSON.stringify(names));
+    assert.ok(names.some((n) => n.startsWith('a11y:img-alt:') && n.includes('card.tsx')), JSON.stringify(names));
+  });
+
+  it('POSITIVE: an alt-less <img> immediately followed by another tag still fires', async () => {
+    // Guards the fix itself: the skip must trigger only when the `<` lands
+    // INSIDE the attributes (an unterminated tag), never when the img closes
+    // normally and a sibling element follows.
+    w('sibling.html', '<html lang="en"><head><title>t</title></head><body><main><img src="a.png"><span>caption</span></main></body></html>');
+    const f = await run();
+    assert.ok(f.some((c) => c.name === 'a11y:img-alt:sibling.html'), JSON.stringify(f.map((c) => c.name)));
+  });
+
+  // ── input-label: the playground search box ──────────────────────────────
+
+  it('POSITIVE: a placeholder-only <input> is unlabelled; NEGATIVE: an sr-only <label htmlFor> labels it', async () => {
+    w('app/before.tsx', [
+      'export const F = () => (',
+      '  <form>',
+      '    <input type="url" value={url} onChange={(e) => setUrl(e.target.value)}',
+      '      placeholder="https://github.com/owner/repo" className="flex-1" />',
+      '  </form>',
+      ');',
+    ].join('\n'));
+    w('app/after.tsx', [
+      'export const F = () => (',
+      '  <form>',
+      '    <label className="sr-only" htmlFor="playground-repo-url">GitHub repository URL to scan</label>',
+      '    <input id="playground-repo-url" type="url" value={url}',
+      '      onChange={(e) => setUrl(e.target.value)}',
+      '      placeholder="https://github.com/owner/repo" className="flex-1" />',
+      '  </form>',
+      ');',
+    ].join('\n'));
+    const f = await run();
+    const names = f.map((c) => c.name);
+    assert.ok(names.some((n) => n.startsWith('a11y:input-label:') && n.includes('before.tsx')), JSON.stringify(names));
+    assert.ok(!names.some((n) => n.startsWith('a11y:input-label:') && n.includes('after.tsx')), JSON.stringify(names));
+  });
+
   it('a 4.5–7:1 contrast (passes AA, fails AAA) is a warning; below 4.5:1 stays an error', async () => {
     w('styles/a.css', '.aa { color: #767676; background-color: #ffffff; }\n.bad { color: #aaaaaa; background-color: #ffffff; }');
     const f = await run();

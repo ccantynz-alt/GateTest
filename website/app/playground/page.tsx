@@ -464,7 +464,15 @@ export default function PlaygroundPage() {
         {/* ── URL Input ── */}
         <div className="space-y-4">
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+            {/* The field has no visible label by design (hero search box), so the
+                accessible name comes from a real associated <label>. A placeholder
+                is not a label — it disappears on first keystroke and several
+                screen readers never announce it. */}
+            <label className="sr-only" htmlFor="playground-repo-url">
+              GitHub repository or website URL to scan
+            </label>
             <input
+              id="playground-repo-url"
               type="url"
               value={url}
               onChange={(e) => { setUrl(e.target.value); setError(""); }}

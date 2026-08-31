@@ -181,7 +181,25 @@ class DataIntegrityModule extends BaseModule {
 
     const piiPatterns = [
       { regex: /console\.(log|info|debug)\s*\(.*(?:email|password|ssn|credit.?card|phone)/gi, type: 'PII in logs' },
-      { regex: /JSON\.stringify\s*\(.*(?:password|secret|token)/gi, type: 'Sensitive data serialized' },
+      {
+        regex: /JSON\.stringify\s*\(.*(?:password|secret|token)/gi,
+        type: 'Sensitive data serialized',
+        // A credential serialized as an HTTP REQUEST BODY is the credential
+        // doing its job, not leaking. `body: JSON.stringify({ token })` is the
+        // shape of every login form and every "save my API key" form ever
+        // written — including this repo's own admin PAT form
+        // (website/app/admin/tabs/AccountsTab.tsx:49), which POSTs the token to
+        // our own API so it can be stored. Nothing is written to a log, a
+        // URL, or localStorage; the matching read path already returns only
+        // the last four characters.
+        //
+        // What this rule is actually for is serialization to somewhere
+        // OBSERVABLE or PERSISTENT — console.log(JSON.stringify({password})),
+        // localStorage.setItem(k, JSON.stringify({token})), an error string, a
+        // query param. Those all still fire, because only the `body:`/`body =`
+        // position is exempt.
+        exempt: (line, index) => /\bbody\s*[:=]\s*$/.test(line.slice(0, index)),
+      },
       { regex: /localStorage\.setItem\s*\(.*(?:token|password|secret)/gi, type: 'Sensitive data in localStorage' },
       { regex: /document\.cookie\s*=.*(?:token|password|auth)/gi, type: 'Sensitive data in cookies' },
     ];
@@ -200,7 +218,7 @@ class DataIntegrityModule extends BaseModule {
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);
 
-      for (const { regex, type } of piiPatterns) {
+      for (const { regex, type, exempt } of piiPatterns) {
         regex.lastIndex = 0;
         // Check each line individually so suppression comments can work.
         // Also skip if the ENTIRE file has a file-level suppression.
@@ -226,6 +244,7 @@ class DataIntegrityModule extends BaseModule {
           const m = regex.exec(line);
           if (!m) continue;
           if (this._isInsideStringLiteral(line, m.index)) continue;
+          if (exempt && exempt(line, m.index)) continue;
           hit = { line: i + 1, column: m.index + 1 };
         }
         if (hit) {

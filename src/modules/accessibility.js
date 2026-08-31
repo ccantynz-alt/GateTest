@@ -89,6 +89,22 @@ class AccessibilityModule extends BaseModule {
     let match;
     while ((match = imgRegex.exec(content)) !== null) {
       const attrs = match[1];
+      // The `[^>]*?` stops at the FIRST `>`, which is not always this tag's own.
+      // In JSX a tag can be split across expression boundaries — the badge page
+      // renders a copy-paste HTML snippet as
+      //
+      //   {`<a ...><img src="https://…/api/badge?repo=`}
+      //   <span className="text-emerald-400">owner/repo</span>
+      //   {`" alt="GateTest"></a>`}
+      //
+      // so the first `>` we reach belongs to the <span>, the captured "attrs"
+      // swallow `<span className="…"`, and the alt (which IS there, one line
+      // further down) is never seen. A `<` inside the attributes means we never
+      // found this tag's closing bracket — we have not observed whether alt is
+      // present, so we must not claim it is missing. Reporting our own parse
+      // overrun as a defect in the customer's page is the bug e530232d fixed
+      // for the live-browser checks; this is the static-parse version of it.
+      if (attrs.includes('<')) continue;
       if (!/\balt\s*=/i.test(attrs)) {
         result.addCheck(`a11y:img-alt:${relPath}`, false, {
           ...(FRAGMENT_PATH_RE.test(relPath.replace(/\\/g, '/')) ? { severity: 'warning' } : {}),

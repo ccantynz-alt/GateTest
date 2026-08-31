@@ -125,8 +125,22 @@ class VisualModule extends BaseModule {
   }
 
   _checkPrintStyles(relPath, content, result) {
-    if (content.includes('@media') && content.includes('screen') && !content.includes('print')) {
-      // Has media queries but no print styles
+    // The premise of this rule is "you targeted the `screen` media type, so you
+    // owe the `print` one". That has to be read off the @media PRELUDES.
+    //
+    // The old form was three raw substring tests over the whole file, and every
+    // one of them is wrong in the same way: `includes('screen')` matches the
+    // word "screenshot" in a comment (exactly how it fired on this repo's own
+    // website/app/globals.css — a file with no `screen` media query at all),
+    // and `includes('print')` would be satisfied by "sprint", "footprint" or
+    // "preprint". So the rule could both invent a defect and be silenced by a
+    // word that has nothing to do with printing.
+    const stripped = content.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const preludes = [...stripped.matchAll(/@media\b([^{]*)\{/g)].map((m) => m[1]);
+    if (preludes.length === 0) return;
+    const hasScreen = preludes.some((p) => /\bscreen\b/i.test(p));
+    const hasPrint = preludes.some((p) => /\bprint\b/i.test(p)) || /@page\b/.test(stripped);
+    if (hasScreen && !hasPrint) {
       result.addCheck(`visual:print-styles:${relPath}`, false, {
         file: relPath,
         message: 'Media queries found but no print stylesheet',

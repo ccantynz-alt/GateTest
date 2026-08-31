@@ -202,8 +202,10 @@ class PerformanceModule extends BaseModule {
       if (SCANNER_PATH_RE.test('/' + normalised)) continue;
       const content = fs.readFileSync(file, 'utf-8');
 
-      // Check for addEventListener without removeEventListener
-      const addCount = (content.match(/addEventListener\s*\(/g) || []).length;
+      // Check for addEventListener without removeEventListener.
+      // Only listeners that can ACTUALLY outlive their scope are counted — see
+      // _leakyListenerCount.
+      const addCount = this._leakyListenerCount(content);
       const removeCount = (content.match(/removeEventListener\s*\(/g) || []).length;
 
       if (addCount > 0 && removeCount === 0 && addCount > 2) {
@@ -226,6 +228,73 @@ class PerformanceModule extends BaseModule {
         });
       }
     }
+  }
+
+  /**
+   * How many addEventListener calls in this file could actually leak?
+   *
+   * `removeEventListener` is not the only correct cleanup, and counting raw
+   * addEventListener occurrences reported a leak that does not exist in
+   * website/app/admin/pipeline-trace/LiveScanFeed.tsx: three listeners on a
+   * `const es = new EventSource(...)` created inside the effect and `es.close()`d
+   * in the effect's return. Once the source is closed and the local binding goes
+   * out of scope the whole object — listeners included — is garbage. There is
+   * nothing left to remove listeners FROM.
+   *
+   * A listener leaks when its TARGET outlives the code that registered it. So
+   * two registrations are exempt:
+   *
+   *   1. `{ signal }` — the AbortController pattern, which is the modern
+   *      recommended teardown and removes listeners wholesale on abort.
+   *   2. a receiver this file both constructs (`new EventSource/WebSocket/…`)
+   *      and disposes (`.close()`/`.terminate()`/`.abort()`/`.disconnect()`).
+   *      BOTH halves are required — a source that is opened and never closed is
+   *      a genuine leak and still counts.
+   *
+   * Everything else — `window`, `document`, a ref'd node, an unknown receiver —
+   * is still counted, so the rule keeps its teeth on the case it was written for.
+   */
+  /** Text between `(` at `openIdx` and its matching `)` (capped, so a stray
+   *  unbalanced paren in a template literal cannot walk the whole file). */
+  _callArgs(content, openIdx, cap = 600) {
+    let depth = 0;
+    const end = Math.min(content.length, openIdx + cap);
+    for (let i = openIdx; i < end; i++) {
+      const ch = content[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') { depth--; if (depth === 0) return content.slice(openIdx + 1, i); }
+    }
+    return content.slice(openIdx + 1, end);
+  }
+
+  _leakyListenerCount(content) {
+    const CTORS = 'EventSource|WebSocket|Worker|SharedWorker|BroadcastChannel|MessageChannel|RTCPeerConnection|AbortController|EventTarget|Audio';
+    const DISPOSERS = 'close|terminate|abort|disconnect|destroy|unsubscribe';
+    const disposableCache = new Map();
+    const isDisposable = (name) => {
+      if (!name) return false;
+      if (disposableCache.has(name)) return disposableCache.get(name);
+      const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const constructed = new RegExp(`\\b(?:const|let|var)\\s+${n}\\s*=\\s*(?:await\\s+)?new\\s+(?:${CTORS})\\b`).test(content)
+        || new RegExp(`\\b${n}\\s*=\\s*(?:await\\s+)?new\\s+(?:${CTORS})\\b`).test(content);
+      const disposed = new RegExp(`\\b${n}\\s*\\.\\s*(?:${DISPOSERS})\\s*\\(`).test(content);
+      const verdict = constructed && disposed;
+      disposableCache.set(name, verdict);
+      return verdict;
+    };
+
+    let count = 0;
+    const re = /(?:([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\.\s*)?addEventListener\s*\(/g;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      // `{ signal }` / `{ signal: c.signal }` in THIS call's argument list —
+      // scanned to the matching `)` so a `signal` belonging to some later call
+      // cannot exempt this one.
+      if (/\bsignal\b/.test(this._callArgs(content, re.lastIndex - 1))) continue;
+      if (isDisposable(m[1])) continue;
+      count++;
+    }
+    return count;
   }
 
   _runLighthouse(projectRoot, thresholds, result) {

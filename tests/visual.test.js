@@ -84,3 +84,45 @@ describe('VisualModule — duplicate design tokens', () => {
     assert.equal(hit.meta.severity, 'info');
   });
 });
+
+// ── print-styles ──────────────────────────────────────────────────────────
+//
+// The rule means "you targeted the `screen` media type, so you owe the `print`
+// one". It was implemented as three raw substring tests over the whole file,
+// and fired on this repo's own website/app/globals.css — a file whose ONLY
+// occurrence of "screen" is the word "screenshot" inside a CSS comment, and
+// which has no `@media screen` query at all. The same naive matching meant the
+// word "sprint" anywhere in a file would silence the rule for real.
+describe('VisualModule — print styles', () => {
+  it('NEGATIVE: the word "screenshot" in a comment is not a `screen` media query', async () => {
+    const css = [
+      '/* Browser-window frame for the product screenshot — a captured screenshot. */',
+      '@media (max-width: 767px) { .hero { font-size: 2rem; } }',
+      '@media (prefers-reduced-motion: reduce) { * { animation: none; } }',
+    ].join('\n');
+    const f = await scan({ 'app/globals.css': css });
+    assert.ok(!ids(f).includes('visual:print-styles:app/globals.css'.replace(/\//g, path.sep)), ids(f).join());
+    assert.ok(!ids(f).some((i) => i.startsWith('visual:print-styles:')), ids(f).join());
+  });
+
+  it('POSITIVE: a real `@media screen` query with no print stylesheet still fires', async () => {
+    const css = '@media screen and (min-width: 900px) { .grid { display: grid; } }';
+    const f = await scan({ 'src/layout.css': css });
+    assert.ok(ids(f).some((i) => i.startsWith('visual:print-styles:')), ids(f).join());
+  });
+
+  it('NEGATIVE: `@media screen` alongside `@media print` (or an @page rule) is satisfied', async () => {
+    const withPrint = '@media screen { .a { color: red; } }\n@media print { .nav { display: none; } }';
+    assert.ok(!ids(await scan({ 'src/a.css': withPrint })).some((i) => i.startsWith('visual:print-styles:')));
+    const withPage = '@media screen { .a { color: red; } }\n@page { margin: 1cm; }';
+    assert.ok(!ids(await scan({ 'src/b.css': withPage })).some((i) => i.startsWith('visual:print-styles:')));
+  });
+
+  it('POSITIVE: the word "print" outside a media prelude does NOT silence the rule', async () => {
+    // "sprint"/"footprint" in a comment or a class name used to satisfy
+    // `content.includes('print')` and suppress a genuine finding.
+    const css = '/* sprint-2 layout, small footprint */\n.blueprint { color: #000; }\n@media screen { .a { color: red; } }';
+    const f = await scan({ 'src/c.css': css });
+    assert.ok(ids(f).some((i) => i.startsWith('visual:print-styles:')), ids(f).join());
+  });
+});

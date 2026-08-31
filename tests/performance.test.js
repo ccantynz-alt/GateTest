@@ -13,3 +13,92 @@ describe('PerformanceModule — baseline shape', () => {
     assert.strictEqual(typeof mod.run, 'function');
   });
 });
+
+// ── event-cleanup: what actually leaks ────────────────────────────────────
+//
+// The rule counted raw `addEventListener` occurrences and accepted only
+// `removeEventListener` as cleanup. That reported a leak that does not exist in
+// website/app/admin/pipeline-trace/LiveScanFeed.tsx: three listeners on a
+// `const es = new EventSource(...)` created inside a useEffect and `es.close()`d
+// in the effect's return. Once the source is closed and the local binding is out
+// of scope, the object AND its listeners are garbage — there is nothing left to
+// remove listeners from.
+//
+// A listener leaks when its TARGET outlives the registering code. These tests
+// pin both directions: the exemptions, and the cases that must keep firing.
+describe('PerformanceModule — event-cleanup counts only listeners that can outlive their scope', () => {
+  const mod = () => new PerformanceModule();
+
+  const LIVE_SCAN_FEED = [
+    'useEffect(() => {',
+    '  const es = new EventSource("/api/admin/pipeline-trace/stream", { withCredentials: true });',
+    '  es.onopen = () => setConnected(true);',
+    '  es.addEventListener("scan", (e) => { setEvents((p) => [...p, JSON.parse(e.data)]); });',
+    '  es.addEventListener("error", (e) => { console.error(e); });',
+    '  es.addEventListener("close", () => { es.close(); setConnected(false); });',
+    '  es.onerror = () => setConnected(false);',
+    '  return () => { es.close(); };',
+    '}, []);',
+  ].join('\n');
+
+  it('NEGATIVE: listeners on a locally-created EventSource that is closed in cleanup do not count', () => {
+    assert.strictEqual(mod()._leakyListenerCount(LIVE_SCAN_FEED), 0);
+  });
+
+  it('POSITIVE: the SAME file with the close() calls removed is a real leak and still counts', () => {
+    // The discriminator is disposal, not the constructor. Without this control,
+    // "quieter" and "broken" would be indistinguishable.
+    const neverClosed = LIVE_SCAN_FEED.replace(/es\.close\(\);?/g, '');
+    assert.strictEqual(mod()._leakyListenerCount(neverClosed), 3);
+  });
+
+  it('POSITIVE: listeners on long-lived globals (window/document) still count', () => {
+    const src = [
+      'window.addEventListener("resize", onResize);',
+      'document.addEventListener("keydown", onKey);',
+      'window.addEventListener("scroll", onScroll);',
+    ].join('\n');
+    assert.strictEqual(mod()._leakyListenerCount(src), 3);
+  });
+
+  it('NEGATIVE: the AbortController { signal } pattern is real cleanup', () => {
+    const src = [
+      'const c = new AbortController();',
+      'window.addEventListener("resize", onResize, { signal: c.signal });',
+      'document.addEventListener("keydown", onKey, { signal: c.signal });',
+      'window.addEventListener("scroll", onScroll, { signal: c.signal });',
+      'return () => c.abort();',
+    ].join('\n');
+    assert.strictEqual(mod()._leakyListenerCount(src), 0);
+  });
+
+  it('a { signal } on ONE call does not exempt the others (args are read to the matching paren)', () => {
+    const src = [
+      'window.addEventListener("resize", onResize, { signal: c.signal });',
+      'window.addEventListener("keydown", onKey);',
+      'window.addEventListener("scroll", onScroll);',
+      'document.addEventListener("click", onClick);',
+    ].join('\n');
+    assert.strictEqual(mod()._leakyListenerCount(src), 3);
+  });
+
+  it('END-TO-END: the LiveScanFeed shape produces no perf:event-cleanup check; the leaky one does', () => {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+    const run = (content) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-perf-'));
+      try {
+        fs.mkdirSync(path.join(root, 'app'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'app', 'Feed.tsx'), content);
+        const checks = [];
+        const result = { addCheck(name, passed, details = {}) { checks.push({ name, passed, ...details }); } };
+        mod()._checkMemoryLeakPatterns(root, result);
+        return checks.filter((c) => !c.passed).map((c) => c.name);
+      } finally { fs.rmSync(root, { recursive: true, force: true }); }
+    };
+    assert.ok(!run(LIVE_SCAN_FEED).some((n) => n.startsWith('perf:event-cleanup:')));
+    const leaky = 'useEffect(() => {\n  window.addEventListener("a", f);\n  window.addEventListener("b", g);\n  document.addEventListener("c", h);\n}, []);';
+    assert.ok(run(leaky).some((n) => n.startsWith('perf:event-cleanup:')), run(leaky).join());
+  });
+});
