@@ -76,6 +76,9 @@ const fsSync = require('fs');
 const nodePath = require('path');
 const os = require('os');
 const { GateTest, GateTestConfig } = require('../src/index.js');
+// One definition of "what is a finding" — the same registry the PR comment and
+// the hosted result use. This surface used to re-derive its own, worse.
+const { normalizeFindings } = require('../src/core/finding-registry.js');
 const { aiFix } = require('../src/core/ai-fix-engine.js');
 const { MemoryStore } = require('../src/core/memory.js');
 const { computeSmartSuite } = require('../src/core/smart-suite-selector.js');
@@ -852,26 +855,63 @@ function formatScanResult(result) {
     return lines.join('\n');
   }
 
-  const withIssues = allResults.filter(r => (r.errors || 0) > 0 || (r.warnings || 0) > 0);
-  const passed = allResults.filter(r => (r.errors || 0) === 0 && (r.warnings || 0) === 0);
+  // The consumer of this text is another dev agent, not a human reading a
+  // terminal. Three things follow from that, and this function used to get
+  // all three wrong:
+  //
+  //  1. NEVER silently truncate a blocking finding. The old code sliced each
+  //     module to 5 and appended "…and N more". An agent acts on what it is
+  //     given and reports done — so a truncated list is not a shorter answer,
+  //     it is a WRONG one. Every blocking finding is listed now, always.
+  //  2. Carry confidence. The engine computes it and the old formatter threw
+  //     it away, leaving the agent no way to tell a certain defect from a
+  //     guess — which matters enormously, because on this very repo 26 of 33
+  //     blocking findings were our own false positives. An agent that cannot
+  //     distrust a finding will happily "fix" working code.
+  //  3. Carry a stable id, so a fix can be attributed to a finding across
+  //     calls and a re-scan can prove it resolved.
+  //
+  // All of that already existed in src/core/finding-registry.js — ranked,
+  // deduped, confidence-scored — and was used for PR comments and hosted
+  // results while this surface re-derived a worse version from raw modules.
+  const findings = normalizeFindings(allResults);
+  const blockingFindings = findings.filter(f => f.blocking);
+  const nonBlocking = findings.filter(f => !f.blocking && f.severity !== 'info');
 
-  if (withIssues.length > 0) {
-    lines.push('### Issues found');
+  const render = (f) => {
+    const loc = f.file ? ` — \`${f.file}${f.line ? `:${f.line}` : ''}\`` : '';
+    const conf = f.confidence < 1 ? ` _(confidence ${f.confidence.toFixed(2)})_` : '';
+    const dup = f.duplicateOf ? ` _(duplicate of ${f.duplicateOf})_` : '';
+    const fix = f.suggestion ? `\n    ↳ ${f.suggestion}` : '';
+    return `  - \`${f.id}\` [${f.severity}]${conf}${dup} ${f.message}${loc}${fix}`;
+  };
+
+  if (blockingFindings.length > 0) {
+    lines.push(`### Blocking (${blockingFindings.length}) — complete list, nothing omitted`);
     lines.push('');
-    for (const mod of withIssues) {
-      const modName = mod.module || mod.name || 'unknown';
-      const issueCount = (mod.errors || 0) + (mod.warnings || 0);
-      lines.push(`**\`${modName}\`** — ${issueCount} issue${issueCount === 1 ? '' : 's'} (${mod.errors || 0} errors, ${mod.warnings || 0} warnings)`);
-      const flaggedChecks = (mod.checks || []).filter(c => c.severity === 'error' || c.severity === 'warning');
-      for (const check of flaggedChecks.slice(0, 5)) {
-        const loc = check.file ? ` (${check.file}${check.line ? `:${check.line}` : ''})` : '';
-        lines.push(`  - [${check.severity}] ${check.message}${loc}`);
-      }
-      if (flaggedChecks.length > 5) {
-        lines.push(`  - …and ${flaggedChecks.length - 5} more`);
-      }
+    for (const f of blockingFindings) lines.push(render(f));
+    lines.push('');
+  }
+
+  if (nonBlocking.length > 0) {
+    // Non-blocking findings ARE capped, because an agent's context is finite
+    // and 900 warnings would crowd out the work. The cap is stated with the
+    // exact call that returns the rest, so the agent knows the list is partial
+    // and how to complete it — the failure mode is silent truncation, not
+    // truncation itself.
+    const CAP = 40;
+    const shown = nonBlocking.slice(0, CAP);
+    lines.push(`### Non-blocking (${nonBlocking.length})`);
+    lines.push('');
+    for (const f of shown) lines.push(render(f));
+    if (nonBlocking.length > CAP) {
       lines.push('');
+      lines.push(
+        `  _${nonBlocking.length - CAP} further non-blocking finding(s) not listed here. `
+        + 'Call `get_report` for the complete structured result — no blocking finding was omitted above._',
+      );
     }
+    lines.push('');
   }
 
   if (passed.length > 0) {
