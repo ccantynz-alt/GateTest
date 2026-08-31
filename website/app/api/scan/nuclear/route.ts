@@ -162,6 +162,9 @@ async function traceRedirects(url: string, maxHops = 5): Promise<string[]> {
   return chain;
 }
 
+// auth-public — same shape as /api/scan/server: DNS/TLS/header/redirect probes of
+// a caller-supplied PUBLIC url. Not the paid Forensic engine (that runs through
+// /api/scan/run behind Stripe). SSRF-guarded and rate limited.
 export async function POST(req: NextRequest) {
   let body: { url?: string };
   try { body = await req.json(); } catch {

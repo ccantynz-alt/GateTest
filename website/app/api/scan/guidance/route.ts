@@ -251,6 +251,15 @@ Rules:
   }
 }
 
+// auth-public — reached credential-free ON PURPOSE: the hosted MCP core
+// (app/lib/mcp-remote-core.cjs) proxies explain_finding here server-to-server and
+// forwards no caller key, and the admin panels call it from the browser. The
+// deliberate control for the Claude spend is _guidanceLimiter above (chosen over
+// auth in the 2026-08-18 audit, asserted by tests/api-hardening-2026-08-18.test.js).
+// KNOWN GAP, escalated to Craig 2026-08-31: because the paid MCP gate sits in the
+// MCP layer and not here, calling this route directly bypasses the $29/mo tier.
+// Closing it means threading an internal service token through mcp-remote-core —
+// a paid-tier change, so Boss Rule, not a unilateral fix.
 export async function POST(req: NextRequest) {
   let body: { issues?: IssueInput[] };
   try { body = await req.json(); } catch {

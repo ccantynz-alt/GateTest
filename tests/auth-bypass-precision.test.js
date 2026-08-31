@@ -139,3 +139,172 @@ router.post('/reports', (req, res) => res.json(create(req.body)));
     assert.doesNotMatch(nextMsg, /website\/app\/api\/things`/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2026-08-31 audit — the four false-positive classes behind GateTest's own 16
+// blocking authBypass findings. Each module change gets a NEGATIVE control (the
+// false positive goes quiet) AND a POSITIVE control (a genuinely unauthenticated
+// sensitive route still fires), because "quieter" and "broken" are otherwise
+// indistinguishable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('authBypass — 405 method-not-allowed stubs are not endpoints', () => {
+  it('NEGATIVE: a handler whose only behaviour is returning 405 is silent', async () => {
+    const r = await scan({ 'website/app/api/admin/recipes/route.ts': `
+export async function POST() {
+  return Response.json({ ok: false, reason: "method-not-allowed", hint: "Use PUT" }, { status: 405 });
+}
+export async function DELETE() {
+  return Response.json({ ok: false, reason: "method-not-allowed" }, { status: 405 });
+}
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('POSITIVE: a handler that does real work before returning 405 still fires', async () => {
+    const r = await scan({ 'website/app/api/admin/purge/route.ts': `
+export async function DELETE() {
+  await db.reports.deleteMany();
+  return Response.json({ ok: true }, { status: 405 });
+}
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+    assert.match(r.errors[0].meta.message, /DELETE \/api\/admin\/purge/);
+  });
+
+  it('POSITIVE: a handler with a non-405 branch is a real endpoint and still fires', async () => {
+    const r = await scan({ 'website/app/api/admin/keys/route.ts': `
+export async function POST(req) {
+  if (!req) return Response.json({ error: "bad" }, { status: 500 });
+  return Response.json({ key: mintKey() }, { status: 405 });
+}
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+});
+
+describe('authBypass — auth one hop away in the same file', () => {
+  it('NEGATIVE: a GET that forwards to an authenticated POST inherits its check', async () => {
+    const r = await scan({ 'website/app/api/worker/tick/route.ts': `
+import { isAdminRequest } from "@/app/lib/admin-auth";
+export async function POST(req) {
+  if (!isAdminRequest(req)) return Response.json({ error: "unauthorised" }, { status: 401 });
+  return Response.json(await runTick());
+}
+export async function GET(req) { return POST(req); }
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('NEGATIVE: a thin export delegating to a private _postImpl in the same file', async () => {
+    const r = await scan({ 'website/app/api/scan/run/route.ts': `
+import { isAdminRequest } from "@/app/lib/admin-auth";
+export async function POST(req) {
+  try { return await _postImpl(req); }
+  catch (e) { return Response.json({ status: "failed" }, { status: 500 }); }
+}
+async function _postImpl(req) {
+  const isAdmin = isAdminRequest(req);
+  return Response.json({ isAdmin });
+}
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('POSITIVE: delegation to an UNAUTHENTICATED sibling flags both methods', async () => {
+    const r = await scan({ 'website/app/api/admin/purge/route.ts': `
+export async function POST(req) { await db.purge(req); return Response.json({ ok: true }); }
+export async function GET(req) { return POST(req); }
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+    assert.equal(r.errors[0].meta.details.length, 2, 'both POST and GET are reported');
+  });
+
+  it('POSITIVE: a local helper that never receives the request confers no auth', async () => {
+    // `render(body)` is not `render(req)` — the handler is not delegating, and
+    // must not borrow the helper's "Unauthorized" vocabulary.
+    const r = await scan({ 'website/app/api/admin/notes/route.ts': `
+export async function POST(req) {
+  const body = await req.json();
+  return Response.json(render(body));
+}
+function render(data) {
+  if (!data) return { error: "Unauthorized" };
+  return data;
+}
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+    assert.match(r.errors[0].meta.message, /POST \/api\/admin\/notes/);
+  });
+});
+
+describe('authBypass — vendor-shaped signature headers are auth', () => {
+  it('NEGATIVE: an HMAC receiver reading x-signal-signature is protected', async () => {
+    const r = await scan({ 'website/app/api/events/ingest/route.ts': `
+export async function POST(req) {
+  const rawBody = await req.text();
+  const signatureHeader = req.headers.get("x-signal-signature");
+  return Response.json(verifyAndStore({ rawBody, signatureHeader, env: process.env }));
+}
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('NEGATIVE: x-internal-signature too — the list must not be three vendors long', async () => {
+    const r = await scan({ 'website/app/api/internal/publish/route.ts': `
+export async function POST(req) {
+  const rawBody = await req.text();
+  const sig = req.headers.get("x-internal-signature");
+  return Response.json(store({ rawBody, sig }));
+}
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('POSITIVE: the same ingest route WITHOUT a signature read still fires', async () => {
+    const r = await scan({ 'website/app/api/events/ingest/route.ts': `
+export async function POST(req) {
+  const rawBody = await req.text();
+  return Response.json(store({ rawBody }));
+}
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+    assert.match(r.errors[0].meta.message, /POST \/api\/events\/ingest/);
+  });
+});
+
+describe('authBypass — auth-public is read from the attached comment block', () => {
+  it('NEGATIVE: a marker that explains itself over 8 lines still suppresses', async () => {
+    const r = await scan({ 'website/app/api/scan/guidance/route.ts': `
+// auth-public — reached credential-free on purpose: the hosted MCP core proxies
+// here server-to-server and forwards no caller key, and the admin panels call it
+// from the browser. The deliberate control for the Claude spend is the rate
+// limiter above, chosen over auth in the 2026-08-18 audit.
+// KNOWN GAP: the paid MCP gate sits in the MCP layer, not here.
+// Closing it means threading an internal service token through the MCP core —
+// a paid-tier change, so Boss Rule, not a unilateral fix.
+export async function POST(req) { return Response.json(await guide(req)); }
+` });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings.map((e) => e.meta.message)));
+  });
+
+  it('POSITIVE: the marker does NOT leak onto the next handler in the file', async () => {
+    const r = await scan({ 'website/app/api/admin/reports/route.ts': `
+// auth-public — public aggregate counts, no per-customer data.
+// (filler so the block is longer than the old five-line window)
+// (filler)
+// (filler)
+// (filler)
+// (filler)
+export async function GET() { return Response.json(publicStats()); }
+
+export async function DELETE() {
+  await db.reports.deleteMany();
+  return Response.json({ ok: true });
+}
+` });
+    assert.equal(r.errors.length, 1, JSON.stringify(r.findings.map((e) => e.meta.message)));
+    assert.equal(r.errors[0].meta.details.length, 1, 'only the unmarked DELETE is reported');
+    assert.equal(r.errors[0].meta.details[0].method, 'DELETE');
+  });
+});

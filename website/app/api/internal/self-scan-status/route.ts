@@ -42,6 +42,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   return NextResponse.json(result.body, { status: result.status });
 }
 
+// auth-public — the badge feed. components/SelfScanBadge.tsx, HomeSelfScan.tsx and
+// /trust poll it from unauthenticated visitors. The WRITE side (POST above) is
+// HMAC-signed; only the read is open, and it publishes our own pass/fail counts.
 export async function GET(): Promise<NextResponse> {
   let payload = selfScanStatus.getLatestStatus();
 

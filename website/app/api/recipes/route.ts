@@ -115,6 +115,9 @@ function getIp(req: NextRequest): string {
 // All params are optional because the customer-side `recipe-store-remote`
 // does a single GET and filters client-side. Server-side filtering is
 // just a performance optimisation.
+// auth-public — the public high-confidence fix-recipe feed. Customer CLIs
+// (recipe-store-remote) and the /trust page read it with no credential; it serves
+// aggregate community recipes, never per-customer data. Rate limited above.
 export async function GET(req: NextRequest) {
   const ip = getIp(req);
   if (!checkRate(ip, "GET")) {

@@ -27,6 +27,9 @@ const _urlScanLimiter = createLimiter(PRESETS.webScan);
 
 export const maxDuration = 30;
 
+// auth-public — THE free scan funnel (app/scan/url/page.tsx). "No GitHub account,
+// no payment required" is the product promise; adding auth closes the top of the
+// funnel. Bounded by the SSRF guard below and the per-IP rate limiter above.
 export async function POST(req: NextRequest) {
   let url: string;
   try {

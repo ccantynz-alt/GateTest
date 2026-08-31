@@ -37,6 +37,8 @@ function parseUrl(input: string): URL | null {
   } catch { return null; }
 }
 
+// auth-public — pre-scan stack detection behind the homepage Hero and /web, /wp.
+// It runs before the visitor has any account or payment, which is the point.
 export async function POST(req: NextRequest) {
   let body: RecommendRequest;
   try { body = await req.json(); } catch {

@@ -40,6 +40,9 @@ const _notifyLimiter = createLimiter(PRESETS.notify);
 
 export const runtime = "nodejs";
 
+// auth-public — "email me when it launches" signup, rendered by the public
+// components/NotifySignup.tsx. Requiring an account to ask for an announcement
+// is the funnel it exists to open.
 export async function POST(req: NextRequest) {
   const _rl = await _notifyLimiter.guard(req);
   if (!_rl.allowed) {

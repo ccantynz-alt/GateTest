@@ -18,6 +18,9 @@ const selfScanStatus = require("@/app/lib/self-scan-status");
 
 export const dynamic = "force-dynamic";
 
+// auth-public — publishes GateTest's OWN gate history for the public trend chart.
+// Writes are the signed POST on /api/internal/self-scan-status; this read is the
+// same data the badge already shows anonymously.
 export async function GET(): Promise<NextResponse> {
   const history = selfScanStatus.getHistory();
   return NextResponse.json(

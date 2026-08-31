@@ -52,6 +52,11 @@ export async function GET() {
   );
 }
 
+// auth-public — the hosted MCP transport is deliberately reachable without a key:
+// free tools (check_health, list_modules, get_badge, scan_url, scan_repo,
+// scan_local) need none. Per-tool authorization happens INSIDE handleRpc —
+// mcp-remote-core.cjs extractKey() + GATED_TOOLS check the Bearer gtmcp_ key —
+// which is why no check is visible in this handler.
 export async function POST(req: NextRequest) {
   let body: unknown;
   try {

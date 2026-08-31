@@ -61,6 +61,12 @@ const AUTH_READS = [
   'authenticateApiKey', 'apiKey', 'API_KEY', 'CRON_SECRET', 'SIGNING_SECRET',
   'WEBHOOK_SECRET', 'verifySignature', 'verifyHmac', 'x-hub-signature',
   'stripe-signature', 'x-signature', 'checkPwCookie', 'requireSession',
+  // Any vendor-shaped signature header, not just the three we happened to
+  // hardcode. GateTest's own Signal Bus receiver reads `x-signal-signature`
+  // and the CI status publisher reads `x-internal-signature`; both HMAC-verify
+  // the raw body, and both were reported "unprotected" because the literal
+  // `x-signature` never matched them (2026-08-31 audit).
+  'x-[a-z0-9]+(?:-[a-z0-9]+)*-signature', '\\bsignatureHeader\\b', '\\bsigHeader\\b',
 ];
 
 // Naming-convention signal: any identifier shaped like an auth guard
@@ -187,6 +193,121 @@ function extractHandlerBody(content, matchIndex) {
     }
   }
   return content.slice(matchIndex, matchIndex + 300);
+}
+
+/**
+ * A handler whose ENTIRE behaviour is "return 405 Method Not Allowed" is the
+ * absence of an endpoint, not an unauthenticated one — there is nothing behind
+ * it to authenticate. Next.js already 405s an unexported method; teams export
+ * these stubs only to return a JSON body the client can distinguish from a
+ * transient error.
+ *
+ * Deliberately tight so a handler that does real work and 405s on one branch
+ * still counts as a route: exactly one `return`, no `await`, and every status
+ * literal in the body is 405. (2026-08-31 audit — five of GateTest's sixteen
+ * blocking findings were 405 stubs: `GET /api/mcp`, `GET /api/billing/portal`,
+ * `GET /api/scan/recommend`, `POST` + `DELETE /api/recipes`.)
+ */
+function isMethodNotAllowedStub(body) {
+  if (/\bawait\b/.test(body)) return false;
+  const statuses = body.match(/status\s*:\s*(\d{3})/g) || [];
+  if (statuses.length === 0) return false;
+  if (!statuses.every((s) => /405/.test(s))) return false;
+  return (body.match(/\breturn\b/g) || []).length === 1;
+}
+
+/**
+ * The comment block ATTACHED to a declaration — every contiguous comment line
+ * immediately above it, however long, terminating at the first line that is not
+ * a comment.
+ *
+ * The suppression window used to be a flat 5 lines, which meant a marker that
+ * actually justified itself scrolled out of its own window: the `// auth-public`
+ * on `POST /api/scan/guidance` sat 9 lines above the handler, explaining exactly
+ * why the route is reachable credential-free, and was not seen. A rule that only
+ * accepts unexplained suppressions is backwards. Attachment (not a line count) is
+ * the right boundary — a contiguous block cannot leak onto a different handler.
+ */
+function precedingCommentBlock(lines, lineNo) {
+  const out = [];
+  for (let i = lineNo - 2; i >= 0; i--) {
+    const t = lines[i].trim();
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) { out.push(lines[i]); continue; }
+    break;
+  }
+  return out.join('\n');
+}
+
+/** Parameter list source of a function declaration starting at `idx`. */
+function paramListAt(content, idx) {
+  const open = content.indexOf('(', idx);
+  if (open === -1) return '';
+  let depth = 0;
+  for (let i = open; i < content.length; i++) {
+    if (content[i] === '(') depth++;
+    else if (content[i] === ')') {
+      depth--;
+      if (depth === 0) return content.slice(open + 1, i);
+    }
+  }
+  return '';
+}
+
+/** First identifier in a parameter list — the request object, by convention. */
+function firstParamName(params) {
+  const m = params.match(/^\s*([A-Za-z_$][\w$]*)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Index every function DEFINED in this file, name → body, so a handler that
+ * merely forwards the request can be judged by what actually runs.
+ */
+function sameFileFunctionBodies(content) {
+  const bodies = new Map();
+  const re = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(|(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/g;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1] || m[2];
+    if (bodies.has(name)) continue;
+    // Keep the DEFINITION offset: the body string starts at `{`, so re-finding
+    // it in `content` would resolve the wrong parentheses when recursing.
+    bodies.set(name, {
+      body: extractHandlerBody(content, m.index),
+      param: firstParamName(paramListAt(content, m.index)),
+    });
+  }
+  return bodies;
+}
+
+/**
+ * Follow request-forwarding delegation before calling a handler unprotected.
+ *
+ * `export async function GET(req) { return POST(req); }` and
+ * `export async function POST(req) { return await _postImpl(req); }` carry no
+ * auth signal of their own — the check lives one hop away, in the same file.
+ * Judging the wrapper alone reported `GET /api/scan/worker/tick` as having no
+ * authentication when it 401s in production (verified 2026-08-31), and
+ * `POST /api/scan/run` likewise, whose `_postImpl` calls `isAdminRequest`.
+ *
+ * Precision comes from requiring the callee to RECEIVE THE REQUEST OBJECT —
+ * `helper(req)`, not any local call — so a handler that merely formats output
+ * with a local helper does not inherit that helper's vocabulary. Two hops max;
+ * a name is never re-entered, so mutual recursion terminates.
+ */
+function delegatedAuth(content, body, paramName, bodies, seen = new Set(), depth = 0) {
+  if (!paramName || depth >= 2) return false;
+  const callRe = new RegExp(`\\b([A-Za-z_$][\\w$]*)\\s*\\(\\s*${paramName}\\b`, 'g');
+  let m;
+  while ((m = callRe.exec(body)) !== null) {
+    const callee = m[1];
+    if (seen.has(callee) || !bodies.has(callee)) continue;
+    seen.add(callee);
+    const { body: calleeBody, param: calleeParam } = bodies.get(callee);
+    if (AUTH_SIGNAL_RE.test(calleeBody)) return true;
+    if (delegatedAuth(content, calleeBody, calleeParam || paramName, bodies, seen, depth + 1)) return true;
+  }
+  return false;
 }
 
 /**
@@ -376,6 +497,8 @@ class AuthBypassDetector extends BaseModule {
     // Check Next.js App Router exports first (method-level granularity)
     if (file.includes('/api/') || file.endsWith('route.ts') || file.endsWith('route.js')) {
       let m;
+      // Built once per file, lazily — most route files never need it.
+      let fnBodies = null;
       NEXTJS_EXPORT_RE.lastIndex = 0;
       while ((m = NEXTJS_EXPORT_RE.exec(content)) !== null) {
         const method = m[1];
@@ -385,12 +508,20 @@ class AuthBypassDetector extends BaseModule {
 
         if (lineText.includes('// auth-public') || lineText.includes('// no-auth')) continue;
 
-        // Check previous 5 lines for suppression
-        const context5 = lines.slice(Math.max(0, lineNo - 6), lineNo).join('\n');
-        if (context5.includes('// auth-public') || context5.includes('// no-auth')) continue;
+        // Suppression may be anywhere in the comment block attached above.
+        const context = precedingCommentBlock(lines, lineNo);
+        if (context.includes('// auth-public') || context.includes('// no-auth')) continue;
 
         const body = extractHandlerBody(content, matchIdx);
         if (AUTH_SIGNAL_RE.test(body)) continue;
+
+        // A method stub that only 405s is not an endpoint.
+        if (isMethodNotAllowedStub(body)) continue;
+
+        // The check may live one hop away: `GET(req) { return POST(req); }`.
+        if (fnBodies === null) fnBodies = sameFileFunctionBodies(content);
+        const paramName = firstParamName(paramListAt(content, matchIdx));
+        if (delegatedAuth(content, body, paramName, fnBodies, new Set([method]))) continue;
 
         // Derive route from file path. The app dir may be nested
         // (`website/app/api/...`), so strip everything up to and including

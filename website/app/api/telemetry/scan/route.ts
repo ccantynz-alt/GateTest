@@ -31,6 +31,9 @@ const _telemetryLimiter = createLimiter(PRESETS.telemetry);
 
 export const runtime = "nodejs";
 
+// auth-public — anonymous flywheel ingest from CLI/MCP machines, which hold no
+// credential by design. Body is module names + integer counts only (sanitizeRecord
+// REJECTS path/content/message-shaped keys); rate limited above.
 export async function POST(req: NextRequest) {
   const _rl = await _telemetryLimiter.guard(req);
   if (!_rl.allowed) {

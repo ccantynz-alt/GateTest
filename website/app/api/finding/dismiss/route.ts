@@ -33,6 +33,9 @@ const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
 
 const _dismissLimiter = createLimiter(PRESETS.dismiss);
 
+// auth-public — customer feedback ingest. Customers dismiss a noisy finding
+// without an account (CLI, MCP and the free funnel all have no session); the
+// endpoint returns nobody's data and is per-IP rate limited above.
 export async function POST(req: NextRequest) {
   const _rl = await _dismissLimiter.guard(req);
   if (!_rl.allowed) {
