@@ -93,6 +93,54 @@ class SecretsModule extends BaseModule {
     );
   }
 
+  /**
+   * Detect a hardcoded credential used as the FALLBACK on an env-var read:
+   *
+   *     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'layova-admin';
+   *     SECRET = os.environ.get('AUTH_SECRET', 'dev-secret-change-me')
+   *
+   * This is not a hypothetical. It is the credential that authenticates
+   * every request in any environment where the var is unset, it is committed
+   * in plain text, and it survives to production far more often than a
+   * directly-assigned secret because the code "looks like" it uses env vars.
+   *
+   * Narrow on purpose, so the blanket-skip this replaces keeps protecting
+   * against its original false positive:
+   *   - the NAME must read as a credential (a `process.env.PORT ?? '3000'`
+   *     fallback is configuration, not a secret);
+   *   - a bare read with no literal fallback returns null;
+   *   - the literal runs through the same placeholder / prose / reference
+   *     suppressions as every other value, so `?? 'changeme'` stays quiet.
+   *
+   * @param {string} line - the source line, known to contain `process.env`
+   * @returns {string|null} the offending literal, or null
+   */
+  _envFallbackSecret(line) {
+    // The name may sit on either side: the assigned identifier, or the env
+    // key itself. Either reading as credential-shaped is enough.
+    const NAME = /(?:secret|password|passwd|pwd|token|api[_-]?key|apikey|credential|passphrase|private[_-]?key|auth)/i;
+    const assigned = line.match(/(?:const|let|var|final|static)?\s*([A-Za-z_$][\w$]*)\s*[:=]\s*(?![=])/);
+    const envKey = line.match(/process\.env(?:\.([A-Za-z_$][\w$]*)|\[\s*['"]([^'"]+)['"]\s*\])/);
+    const names = [assigned && assigned[1], envKey && (envKey[1] || envKey[2])].filter(Boolean);
+    if (!names.some((n) => NAME.test(n))) return null;
+
+    // `||` / `??` fallback, or a template-literal default. Require 6+ chars:
+    // shorter values are flags and sentinels, not credentials.
+    const fb = line.match(/(?:\|\||\?\?)\s*(['"])([^'"]{6,})\1/);
+    if (!fb) return null;
+    const value = fb[2];
+
+    // Reuse the module's own suppressions. They take the full regex-match
+    // shape (identifier through value), so hand them a synthetic one rather
+    // than duplicating the placeholder list — one definition, one behaviour.
+    const synthetic = `${names[0]}="${value}`;
+    if (/(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo)/i.test(value)) return null;
+    if (this._looksLikeProse(synthetic)) return null;
+    if (this._looksLikeReference(synthetic)) return null;
+
+    return value;
+  }
+
   _looksLikeProse(match) {
     const q = match.match(/['"]([^'"]*)$/);
     if (!q) return false;
@@ -146,8 +194,25 @@ class SecretsModule extends BaseModule {
         // Skip comparison/sentinel context — `if (password === 'REJECTED_VALUE')` is not a secret assignment
         if (/===|!==/.test(line)) continue;
 
-        // Skip env-var fallback pattern — `secret = process.env.X || 'default'`
-        if (/process\.env\b/.test(line)) continue;
+        // Env-var lines are handled on their own terms and never reach the
+        // generic patterns below. A bare read (`password = process.env.PW`)
+        // holds no secret and must not fire. But a LITERAL FALLBACK
+        // (`process.env.ADMIN_PASSWORD ?? 'layova-admin'`) is a real shipped
+        // credential: it is what authenticates every request in any
+        // environment where the var is unset — which is precisely the
+        // environment nobody checked. This branch used to be a blanket
+        // `continue`, so that entire class was unreachable by design.
+        if (/process\.env\b/.test(line)) {
+          const fallback = this._envFallbackSecret(line);
+          if (fallback) {
+            found.push({
+              type: 'Fallback Secret',
+              line: i + 1,
+              preview: line.substring(0, 80).trim() + (line.length > 80 ? '...' : ''),
+            });
+          }
+          continue;
+        }
 
         // Skip comment lines
         const trimmed = line.trimStart();
