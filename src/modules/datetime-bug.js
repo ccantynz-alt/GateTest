@@ -256,8 +256,15 @@ class DatetimeBugModule extends BaseModule {
 
       // Rule 5: moment() without .tz
       if (MOMENT_CALL_RE.test(line) && !MOMENT_TZ_RE.test(line)) {
-        // Skip if it's `import moment from` / `require('moment')`
-        if (/\b(?:import|require)\b/.test(line)) continue;
+        // NO import/require skip here, deliberately. A whole-line skip on any
+        // line containing the words import or require used to sit here, to
+        // avoid firing on `import moment from 'moment'` — but MOMENT_CALL_RE is
+        // /\bmoment\s*\(/ and an import specifier never contains `moment(`,
+        // so it guarded nothing. What it DID do was silence real findings:
+        // measured on a fixture, `const h = require('./h'); const t = moment();`
+        // was skipped purely because the line mentions require.
+        // Verified before removal: import/require statements still produce no
+        // finding, and that line now does. See tests/datetime-bug-import-skip.test.js.
         // Skip comments / type annotations
         if (/^\s*\*/.test(line)) continue;
         result.addCheck(`datetime-bug:moment-no-tz:${rel}:${i + 1}`, false, {
