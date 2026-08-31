@@ -23,7 +23,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { findPlaceholders } = require("@/app/lib/env-placeholder");
+const { findPlaceholders, inspectEnvValue } = require("@/app/lib/env-placeholder");
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,6 +61,14 @@ const IMPORTANT: Array<{ name: string; why: string }> = [
   { name: "GLUECRON_EMITTER_SECRET", why: "the Gluecron push ingress (POST /api/events/push) fails closed with 503 — every push from our PREFERRED git host is rejected, so no scan is ever queued for a Gluecron customer" },
   { name: "GLUECRON_BASE_URL", why: "Gluecron API base URL (defaults to https://gluecron.com) — set it explicitly when pointing at a non-default deployment" },
   { name: "GLUECRON_API_TOKEN", why: "no Gluecron PAT means repo reads fall back to a GitHub token, and private Gluecron repos cannot be scanned at all" },
+  // ── The GitHub App credentials. Previously listed ONLY in the extras array
+  // handed to findPlaceholders, so they could be reported as fake while no
+  // classified list contained them — nothing could act on the finding.
+  // IMPORTANT, not REQUIRED, and deliberately so: a Gluecron-only deployment
+  // legitimately has no GitHub App, and flipping `ready` false there would be
+  // the same over-correction this file just fixed in the other direction.
+  { name: "GATETEST_APP_ID", why: "GitHub App JWT cannot be minted — commit statuses, PR comments, and the App-installed fix path all fail" },
+  { name: "GATETEST_PRIVATE_KEY", why: "pairs with GATETEST_APP_ID. Confirmed dead in production 2026-08-31: the pasted documentation example was still in place, GitHub returned 401 Bad credentials, and EVERY private-repo scan 502'd on both hosts" },
 ];
 
 // Purely optional integrations.
@@ -81,11 +89,21 @@ const ALIASES: Record<string, string[]> = {
   VAPRON_DISPATCH_SECRET: ["CRONTECH_DISPATCH_SECRET"],
 };
 
+// A variable holding documentation filler is NOT set. It is worse than unset:
+// unset fails loudly at the first call, filler sails past every presence check
+// and fails at the credential exchange, where nothing is watching.
+//
+// This probe already DETECTED the fake GATETEST_PRIVATE_KEY and listed it under
+// invalid_placeholders — and then computed `ready` from presence alone, so it
+// answered `ready: true` / HTTP 200 for weeks while GitHub App auth returned
+// 401 and every private-repo scan 502'd. The detection was never wired to the
+// verdict. Fixing the verdict, not adding another field nobody reads.
 function isSet(name: string): boolean {
   const candidates = [name, ...(ALIASES[name] ?? [])];
   return candidates.some((n) => {
     const v = process.env[n];
-    return typeof v === "string" && v.trim().length > 0;
+    if (typeof v !== "string" || v.trim().length === 0) return false;
+    return inspectEnvValue(n, v).ok;
   });
 }
 
