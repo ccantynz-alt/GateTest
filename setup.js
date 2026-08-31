@@ -90,7 +90,12 @@ const runScript = `#!/usr/bin/env node
  * Run GateTest against the live site.
  * Usage: node gatetest-scan.js
  */
-const { execSync } = require('child_process');
+// execFileSync + an argv array: no shell, so neither the site URL (taken from
+// this machine's argv at setup time) nor the install path can be read as shell
+// syntax. It also fixes the plain bug the string form had — a GateTest
+// checkout under a path containing a space ("/Users/x/My Projects/...", or a
+// Windows home directory with a space) produced a command the shell split in two.
+const { execFileSync } = require('child_process');
 const path = require('path');
 
 const gateTestPath = ${JSON.stringify(gateTestRoot)};
@@ -99,7 +104,7 @@ const siteUrl = ${JSON.stringify(siteUrl || 'https://your-site.com')};
 console.log('\\n[GateTest] Scanning ' + siteUrl + '...\\n');
 
 try {
-  execSync(\`node \${path.join(gateTestPath, 'src/ai-loop.js')} \${siteUrl}\`, {
+  execFileSync(process.execPath, [path.join(gateTestPath, 'src/ai-loop.js'), siteUrl], {
     stdio: 'inherit',
     cwd: process.cwd(),
   });

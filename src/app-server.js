@@ -26,7 +26,10 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { siteUrl } = require('./core/site-url');
-const { execSync, execFileSync } = require('child_process');
+// execFileSync only — this file must never build a shell command string out
+// of webhook-supplied owner/repo/branch text. Deliberately not importing
+// execSync, so reaching for it is a visible change rather than a one-liner.
+const { execFileSync } = require('child_process');
 
 const PORT = process.env.PORT || 3333;
 const APP_ID = process.env.GATETEST_APP_ID;
@@ -256,8 +259,13 @@ async function cloneAndScan(owner, name, branch, token) {
     // Run GateTest
     let output = '';
     try {
-      output = execSync(
-        `node ${path.join(GATETEST_DIR, 'bin/gatetest.js')} --suite standard --project ${tmpDir}`,
+      // Array-args execFileSync, same reasoning as the clone above: `tmpDir`
+      // embeds the webhook-supplied owner and repo name, so the string form
+      // put attacker-influenced text through a shell. GATETEST_DIR is also
+      // deployment-controlled and may contain spaces.
+      output = execFileSync(
+        process.execPath,
+        [path.join(GATETEST_DIR, 'bin/gatetest.js'), '--suite', 'standard', '--project', tmpDir],
         { stdio: 'pipe', timeout: 120000, encoding: 'utf-8' }
       );
     } catch (e) {
@@ -307,7 +315,11 @@ async function cloneAndScan(owner, name, branch, token) {
 
   } finally {
     // Cleanup
-    try { execSync(`rm -rf ${tmpDir}`, { stdio: 'pipe' }); } catch {} // error-ok — cleanup in finally; failure is harmless
+    // fs.rmSync, not `rm -rf ${tmpDir}` through a shell. `tmpDir` is built
+    // from the webhook's owner/repo names, and `rm -rf` is the worst possible
+    // sink to interpolate untrusted text into. It is also no longer
+    // POSIX-only, and no longer silently a no-op on Windows.
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} // error-ok — cleanup in finally; failure is harmless
   }
 }
 

@@ -2,19 +2,27 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Same ${VAR:-default} expansions the app/worker DATABASE_URLs use. They
+    # were previously literals here, so setting POSTGRES_PASSWORD in the
+    # environment moved the app's connection string but NOT the database that
+    # was actually created — the stack simply failed to connect. The defaults
+    # stay for a zero-config `docker compose up`.
     environment:
-      POSTGRES_USER: gatetest
-      POSTGRES_PASSWORD: gatetest
-      POSTGRES_DB: gatetest
+      POSTGRES_USER: ${POSTGRES_USER:-gatetest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gatetest}
+      POSTGRES_DB: ${POSTGRES_DB:-gatetest}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gatetest"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gatetest}"]
       interval: 5s
       timeout: 5s
       retries: 10
     ports:
-      - "5432:5432"
+      # Bound to loopback. The default password is a dev convenience; publishing
+      # it on 0.0.0.0 would expose a `gatetest`/`gatetest` database to the LAN
+      # (and to the internet on a public box). Local psql still works.
+      - "127.0.0.1:5432:5432"
 
   app:
     build:

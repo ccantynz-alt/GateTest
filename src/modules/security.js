@@ -25,6 +25,65 @@ const SQL_SINK_RE = /\.\s*(?:query|execute|raw|run|all)\s*\(/;
 const SQL_ASSIGN_RE = /^\s*(?:const|let|var)\s+(\w+)\s*=/;
 const SQL_INJECTION_LOOKAHEAD = 15;
 
+// ---------------------------------------------------------------------------
+// Variable expansions are references, not committed credentials.
+//
+// docker-compose.yml carried
+//     DATABASE_URL: postgresql://${POSTGRES_USER:-gatetest}:${POSTGRES_PASSWORD:-gatetest}@postgres:5432/…
+// and the connection-string rule reported it as a hardcoded credential —
+// twice, blocking the gate. There is no secret on that line: every credential
+// component is a `${VAR:-default}` expansion. Commit ac138e92 had already
+// tried to fix this by switching to that very syntax ("breaks the
+// credential-URL regex", it said) — it did not, because the existing
+// placeholder allow-list only recognises the bare `${VAR}` form. A mitigation
+// that was never measured.
+//
+// The masks are LENGTH-PRESERVING so `match.index` still addresses the real
+// line, and masking is applied to the line rather than skipping it, so a
+// literal secret that merely shares a line with an expansion still fires.
+// The final `\$NAME` alternative carries `\b(?!\s*=)` so it masks a bare
+// expansion USED as a value (`DB_URL=$SECRET`, `redis://$USER:$PASS@h`) but
+// not an identifier being ASSIGNED to (`$apiKey = "…"` — a `$`-prefixed
+// variable name is a JS/Svelte convention, and masking it would hide the
+// keyword the generic key/password rules match on).
+//
+// The `\b` is load-bearing, not decoration. With `(?!\s*=)` alone the engine
+// simply backtracks: `$apiKey` fails the lookahead, so it retries `$apiKe`,
+// which is followed by `y` and passes — masking six of the seven characters
+// and hiding the keyword anyway. `\b` forces a whole identifier, so the
+// alternative either matches all of it or none of it.
+const INTERPOLATION_RE = /\$\{[^}\n]*\}|\{\{[^}\n]*\}\}|\$\([^)\n]*\)|%[A-Za-z_][A-Za-z0-9_]*%|\$[A-Za-z_][A-Za-z0-9_]*\b(?!\s*=)/g;
+// U+0001 is not in any secret pattern's value character class, so a masked
+// expansion cannot itself look like a key, token or quoted password. Only the
+// connection-string rule's `[^:\s]+`/`[^@\s]+` userinfo classes admit it, and
+// `credentialIsFullyExpanded` handles that case.
+const INTERPOLATION_MASK = '\u0001';
+
+function maskInterpolations(line) {
+  return line.replace(INTERPOLATION_RE, (m) => INTERPOLATION_MASK.repeat(m.length));
+}
+
+/**
+ * True when a matched `scheme://user:pass@host` has NOTHING literal in the
+ * password position — i.e. the password is entirely a masked expansion.
+ *
+ * `postgresql://${U}:${P}@host`  → expanded, not a secret.
+ * `postgresql://${U}:hunter2@host` → password is literal, still a secret.
+ */
+function credentialIsFullyExpanded(matchedText) {
+  const schemeEnd = matchedText.indexOf('://');
+  if (schemeEnd === -1) return false;
+  // Userinfo cannot contain `@` (the pattern's own class forbids it), so the
+  // FIRST `@` is the boundary — `lastIndexOf` would over-reach into a path.
+  const at = matchedText.indexOf('@', schemeEnd + 3);
+  if (at === -1) return false;
+  const userinfo = matchedText.slice(schemeEnd + 3, at);
+  const colon = userinfo.lastIndexOf(':');
+  if (colon === -1) return false;
+  const password = userinfo.slice(colon + 1);
+  return password.length > 0 && !password.split('').some((c) => c !== INTERPOLATION_MASK);
+}
+
 class SecurityModule extends BaseModule {
   constructor() {
     super('security', 'Security Analysis');
@@ -163,7 +222,17 @@ class SecurityModule extends BaseModule {
   _checkSourcePatterns(projectRoot, result) {
     const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
     const dangerousPatterns = [
-      { regex: /eval\s*\(/g, name: 'eval()', severity: 'critical' },
+      // `eval` must be its own identifier, not the tail of a longer one.
+      // Without the lookbehind, Playwright's `page.$$eval(...)` / `$eval(...)`
+      // — a static arrow function serialised into the page, no dynamic code
+      // anywhere — reported as CRITICAL eval(), 3 blocking errors on a single
+      // ops script (2026-08-31 self-scan). `$` is in the class because that is
+      // the character the Playwright locator APIs put immediately before
+      // `eval`; `\w` covers `myeval(` / `_eval(`.
+      //
+      // A leading `.` is deliberately NOT excluded, so genuine indirect calls
+      // (`window.eval(...)`, `globalThis.eval(...)`) still fire.
+      { regex: /(?<![\w$])eval\s*\(/g, name: 'eval()', severity: 'critical' },
       { regex: /new\s+Function\s*\(/g, name: 'Function constructor', severity: 'critical' },
       { regex: /\.innerHTML\s*=(?!=)/g, name: 'innerHTML assignment', severity: 'high' },
       { regex: /document\.write\s*\(/g, name: 'document.write()', severity: 'high' },
@@ -256,6 +325,13 @@ class SecurityModule extends BaseModule {
           // Skip lines that explicitly annotate themselves as scanner patterns,
           // or that look like regex-definition lines (literal `/.../` followed
           // by a flag, sitting inside an array of pattern objects).
+          //
+          // This is an AUTHOR OPT-OUT MARKER, not a heuristic: it silences a
+          // line only because someone deliberately typed the marker on it.
+          // It still needs a control, because a future widening of the marker
+          // regex would turn a deliberate escape hatch into a blanket mute,
+          // and nothing else would notice.
+          // suppression-control: tests/security-inert-patterns.test.js
           const line = lines[i];
           if (/gatetest-self-pattern|gatetest-pattern-ok/.test(line)) continue;
           // Prose about eval() is not a call to eval(). Without these two
@@ -364,16 +440,43 @@ class SecurityModule extends BaseModule {
       }
     }
 
-    if (totalFindings === 0) {
+    const reported = this._liveFindingCount(result, 'security:sql-injection:', totalFindings);
+    if (reported === 0) {
       result.addCheck('security:sql-injection-scan', true, {
         message: `Scanned ${files.length} source files for SQL injection — none found`,
       });
     } else {
       result.addCheck('security:sql-injection-scan', false, {
-        message: `Found ${totalFindings} potential SQL injection pattern(s)`,
+        message: `Found ${reported} potential SQL injection pattern(s)`,
         suggestion: 'Use parameterised queries (placeholders + a values array) or a tagged-template SQL builder instead of concatenating/interpolating identifiers into SQL text',
       });
     }
+  }
+
+  /**
+   * How many findings of a family are STILL LIVE after the runner's
+   * suppression passes (.gatetestignore, baseline).
+   *
+   * The pathless rollup checks (`security:secrets-scan`,
+   * `security:sql-injection-scan`) used to report a raw in-module counter.
+   * That counter includes findings the user deliberately silenced — so this
+   * repo's own `.gatetestignore` entries for `reliability-corpus/**` and
+   * `benchmarks/bench-target/**` (the intentional known-bad corpora) silenced
+   * every per-file finding and the gate still went BLOCKED on
+   * "Found 4 potential SQL injection pattern(s)" with nothing left to fix.
+   * A rollup has no file path, so `.gatetestignore` cannot even target it
+   * without also hiding real findings — the user had no way out. That is the
+   * bottleneck failure mode of Forbidden #25.
+   *
+   * `fallback` is used when the caller passes a bare result stub (unit tests
+   * build one with no suppression machinery), so behaviour is unchanged there.
+   */
+  _liveFindingCount(result, prefix, fallback) {
+    if (!result || !Array.isArray(result.checks)) return fallback;
+    return result.checks.filter(
+      (c) => c && c.passed === false && !c.suppressed
+        && typeof c.name === 'string' && c.name.startsWith(prefix),
+    ).length;
   }
 
   _reportSqlInjection(result, relPath, lineNo) {
@@ -740,20 +843,48 @@ class SecurityModule extends BaseModule {
           continue;
         }
         // Obvious placeholders are not secrets: CHANGEME, your-key-here,
-        // xxxx, <insert>, ${VAR}, process.env lookups on the same line.
-        if (/CHANGE_?ME|YOUR[_-]?[A-Z_]*(KEY|SECRET|TOKEN)|<[^>]*(key|secret|token|password)[^>]*>|x{6,}|\$\{[A-Z_]+\}|process\.env\.|os\.environ|getenv\(|placeholder|REPLACE_?ME|insert[_-]?(key|token)/i.test(line)) {
+        // xxxx, <insert>, process.env lookups on the same line.
+        //
+        // `\$\{[A-Z_]+\}` used to be in this list and was REMOVED. The list
+        // carries an /i flag, so that alternative matched any `${ident}` in
+        // any case and discarded the WHOLE line — which meant
+        //     postgresql://admin:hunter2@${dbHost}/prod
+        // (a real committed password) was invisible, while
+        //     postgresql://${POSTGRES_USER:-gatetest}:${POSTGRES_PASSWORD:-gatetest}@…
+        // (no secret at all) still fired, because `:-default` is not
+        // `[A-Z_]+`. It muted the case it should have caught and missed the
+        // case it was written for. Expansions are now masked positionally by
+        // `maskInterpolations` below, which handles both correctly.
+        // Measured by tests/secrets-interpolated-credentials.test.js.
+        if (/CHANGE_?ME|YOUR[_-]?[A-Z_]*(KEY|SECRET|TOKEN)|<[^>]*(key|secret|token|password)[^>]*>|x{6,}|process\.env\.|os\.environ|getenv\(|placeholder|REPLACE_?ME|insert[_-]?(key|token)/i.test(line)) {
           continue;
         }
+
+        // A credential built out of variable EXPANSIONS is a reference, not a
+        // committed secret. Matching runs against a length-preserving mask so
+        // an expansion cannot supply the characters a credential is made of,
+        // while `match.index` still points at the real line.
+        //
+        // Deliberately NOT a whole-line skip: masking removes only the
+        // expansion, so a literal secret sharing the line — or sitting in the
+        // password position beside an expanded username — still matches. See
+        // tests/secrets-interpolated-credentials.test.js.
+        const maskedLine = maskInterpolations(line);
 
         let matchedThisLine = false;
         for (const pattern of secretPatterns) {
           if (matchedThisLine) break; // one line = one secret, not one per overlapping pattern
           pattern.regex.lastIndex = 0;
-          const match = pattern.regex.exec(line);
+          const match = pattern.regex.exec(maskedLine);
           if (match) {
+            // The permissive userinfo classes of the connection-string rule
+            // are the one place a mask can still satisfy the pattern, so the
+            // password position is checked explicitly.
+            if (credentialIsFullyExpanded(match[0])) continue;
             matchedThisLine = true;
-            // Build a redacted preview
-            const matchedText = match[0];
+            // Preview comes from the ORIGINAL line — the mask is
+            // length-preserving, so the offsets carry over.
+            const matchedText = line.slice(match.index, match.index + match[0].length);
             const redacted = matchedText.length > 10
               ? matchedText.slice(0, 6) + '***REDACTED***' + matchedText.slice(-2)
               : '***REDACTED***';
@@ -772,13 +903,14 @@ class SecurityModule extends BaseModule {
       }
     }
 
-    if (totalFindings === 0) {
+    const reported = this._liveFindingCount(result, 'security:secret:', totalFindings);
+    if (reported === 0) {
       result.addCheck('security:secrets-scan', true, {
         message: `Scanned ${files.length} files for hardcoded secrets — none found`,
       });
     } else {
       result.addCheck('security:secrets-scan', false, {
-        message: `Found ${totalFindings} potential secret(s) across scanned files`,
+        message: `Found ${reported} potential secret(s) across scanned files`,
         suggestion: 'Review all findings and move secrets to environment variables or a secrets manager',
       });
     }

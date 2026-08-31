@@ -605,3 +605,120 @@ describe('security — secrets in comments / placeholders / overlapping patterns
     assert.strictEqual(hits.length, 1, JSON.stringify(hits.map((h) => h.name)));
   });
 });
+
+// =============================================================================
+// FALSE POSITIVE: `eval` as the tail of a longer identifier
+// =============================================================================
+// The rule was /eval\s*\(/ with no boundary, so Playwright's locator API —
+//     const links = await page.$$eval('a', els => els.map(...))
+// — reported as CRITICAL eval(). Three blocking errors on one ops script in
+// the 2026-08-31 self-scan, on code that evaluates nothing dynamic: the arrow
+// function is static source serialised into the page.
+// =============================================================================
+
+describe('security — $$eval / $eval are Playwright, not eval()', () => {
+  it('page.$$eval and page.$eval are not reported', async () => {
+    const found = await scan([
+      "const { chromium } = require('playwright');",
+      'async function audit(page) {',
+      "  const links = await page.$$eval('a', els => els.map(el => el.href));",
+      "  const title = await page.$eval('h1', el => el.textContent);",
+      '  return { links, title };',
+      '}',
+      'module.exports = { audit };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('an identifier merely ending in eval is not reported', async () => {
+    const found = await scan('function r(x) {\n  return myeval(x) + _eval(x);\n}\nmodule.exports = { r };\n');
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('POSITIVE CONTROL: bare eval() and window.eval() must still be caught', async () => {
+    // The boundary excludes word chars and `$` — NOT a leading dot, so the
+    // indirect global forms stay detected. If this ever goes quiet, the
+    // lookbehind has been widened into a blanket mute.
+    const bare = await scan('function r(u) {\n  eval(u);\n}\nmodule.exports = { r };\n');
+    assert.ok(bare.some((n) => n.includes('eval()')), `bare eval must fire, got ${JSON.stringify(bare)}`);
+
+    const indirect = await scan('function r(u) {\n  window.eval(u);\n}\nmodule.exports = { r };\n');
+    assert.ok(indirect.some((n) => n.includes('eval()')), `window.eval must fire, got ${JSON.stringify(indirect)}`);
+
+    const global = await scan('function r(u) {\n  globalThis.eval(u);\n}\nmodule.exports = { r };\n');
+    assert.ok(global.some((n) => n.includes('eval()')), `globalThis.eval must fire, got ${JSON.stringify(global)}`);
+  });
+});
+
+// =============================================================================
+// THE AUTHOR OPT-OUT MARKER — controls for src/modules/security.js:~260
+// =============================================================================
+// `if (/gatetest-self-pattern|gatetest-pattern-ok/.test(line)) continue;` is a
+// whole-line skip, the shape tests/suppression-controls.test.js hunts. It is
+// legitimate — it silences a line only because a human deliberately typed the
+// marker there — but a marker-based escape hatch can rot into a blanket mute
+// if the marker regex is ever widened. These are the controls that would catch
+// that: the marker works, and nothing WITHOUT the marker is silenced.
+// =============================================================================
+
+describe('security — the self-pattern marker is an opt-out, not a mute', () => {
+  it('a marked line is not reported', async () => {
+    const found = await scan([
+      'const PATTERNS = [',
+      "  { rule: 'no-eval', match: (s) => s.includes('eval(') }, // gatetest-self-pattern",
+      '];',
+      'module.exports = { PATTERNS };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('the second marker spelling works too', async () => {
+    const found = await scan([
+      'function r(u) {',
+      '  return eval(u); // gatetest-pattern-ok',
+      '}',
+      'module.exports = { r };',
+    ].join('\n'));
+    assert.deepStrictEqual(found, []);
+  });
+
+  it('POSITIVE CONTROL: an unmarked line beside a marked one still fires', async () => {
+    // The skip is per line, so it must not spill onto its neighbours. If the
+    // marker regex is widened until this goes quiet, the escape hatch has
+    // become a mute and this assertion is what says so.
+    const found = await scan([
+      'function r(u) {',
+      '  const a = eval(u); // gatetest-self-pattern',
+      '  const b = eval(u);',
+      '  return a + b;',
+      '}',
+      'module.exports = { r };',
+    ].join('\n'));
+    assert.strictEqual(found.length, 1, `only line 3 may fire, got ${JSON.stringify(found)}`);
+    assert.ok(found[0].endsWith(':3'), `expected the UNMARKED line 3, got ${found[0]}`);
+  });
+
+  it('POSITIVE CONTROL: a mistyped or paraphrased marker does not silence anything', async () => {
+    // The marker is matched as a substring, so `gatetest-self-pattern-x`
+    // legitimately still opts out — the author typed the token. What must NOT
+    // work is a marker someone only THINKS they wrote. If a future widening
+    // (say, matching on "gatetest" alone) made any of these silence a real
+    // eval(), the escape hatch would have become a mute; this is the assertion
+    // that says so.
+    for (const comment of [
+      '// gatetest-self-patern',        // typo
+      '// gatetest self pattern',       // spaces, not hyphens
+      '// gatetest pattern is ok here', // paraphrase
+      '// gatetest scanner regex below',
+    ]) {
+      const found = await scan([
+        'function r(u) {',
+        `  return eval(u); ${comment}`,
+        '}',
+        'module.exports = { r };',
+      ].join('\n'));
+      assert.ok(found.some((n) => n.includes('eval()')),
+        `only the real marker may silence a line — "${comment}" must not, got ${JSON.stringify(found)}`);
+    }
+  });
+});
