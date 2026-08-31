@@ -92,6 +92,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     status:          result.status,
+    // scan-executor computes a precise reason on failure ("... not found (404)
+    // — the repository is private, does not exist, or the ref is wrong") and
+    // this route used to drop it, answering HTTP 200 / grade "F" / no
+    // explanation. A typo'd repo was told it scored F rather than that it was
+    // never found — a silent failure (Forbidden #16) and a false finding.
+    // The streaming sibling route already forwards this; now both agree.
+    ...(result.error ? { error: result.error } : {}),
     repo_url:        repoUrl,
     tier:            "quick",
     modules:         result.modules,

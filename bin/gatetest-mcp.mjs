@@ -1019,7 +1019,12 @@ async function handleCheckHealth() {
           `→ \`get_production_errors\` → \`scan_local\` → \`fix_issue\` → \`verify_fix\` → \`capture_screenshot\`\n\n` +
           `**Debug protocol (zero-limitation loop):**\n` +
           `→ \`scan_local\` → \`explain_finding\` → \`fix_issue\` → \`run_tests\` → \`verify_fix\`\n\n` +
-          `**New debug tools (require GATETEST_API_KEY):**\n` +
+          // FREE, and the server must say so. GATED_TOOLS is empty (KI #39,
+          // Craig 2026-07-23: free where it runs on your machine, paid where
+          // it runs on ours) — this local stdio server gates nothing. Telling
+          // users to buy a key for tools they already have is the same defect
+          // class as a scanner reporting a finding that isn't there.
+          `**Debug tools (free — this local server runs on your machine):**\n` +
           `→ \`run_tests\` — run the project's test suite, get structured pass/fail per test\n` +
           `→ \`stream_logs\` — tail a running process or log file for N seconds\n` +
           `→ \`query_db\` — read-only SQL/document queries (INSERT/DROP blocked hard)\n` +
