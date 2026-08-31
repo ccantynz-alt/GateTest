@@ -155,7 +155,7 @@ const LANGUAGE_SPECS = {
         downgrade(line, content) {
           const interps = [...line.matchAll(/#\{([^}]*)\}/g)].map((m) => m[1].trim());
           if (interps.length === 0) return null;
-          const NUMERIC_RE = /^(?:\$\$|\d+|Process\.pid|Integer\([^)]*\)|[\w.@$\[\]]+\.(?:to_i|size|length|count))$/;
+          const NUMERIC_RE = /^(?:\$\$|\d+|Process\.pid|Integer\([^)]*\)|[\w.@$[\]]+\.(?:to_i|size|length|count))$/;
           const numericById = (id) => new RegExp(
             `^\\s*${id}\\s*=\\s*(?:fork\\b|Process\\.(?:fork|spawn|pid)\\b|\\d+\\s*$|[^\\n]*\\.to_i\\s*$)`, 'm'
           ).test(content);
