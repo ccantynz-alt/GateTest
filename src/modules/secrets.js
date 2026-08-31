@@ -94,6 +94,29 @@ class SecretsModule extends BaseModule {
   }
 
   /**
+   * Blank out string literals that are OPERANDS of a comparison, leaving the
+   * rest of the line intact.
+   *
+   * `if (password === 'REJECTED_VALUE')` compares against a sentinel and is
+   * not a secret. The module used to express that by skipping any line
+   * containing `===`, which also silenced every real credential sharing a
+   * line with a comparison — a hardcoded `sk_live_` key in a ternary was
+   * invisible despite the module having an explicit pattern for it.
+   *
+   * Removing just the operand keeps the sentinel quiet AND keeps the
+   * assignment's own literal visible, so one rule no longer trades away the
+   * other. Handles both operand orders and loose (`==`) comparisons.
+   *
+   * @param {string} line
+   * @returns {string} the line with comparison operands neutralised
+   */
+  _stripComparisonLiterals(line) {
+    return line
+      .replace(/(?:[!=]==?)\s*(['"])(?:(?!\1).)*\1/g, '== 0')
+      .replace(/(['"])(?:(?!\1).)*\1\s*(?:[!=]==?)/g, '0 ==');
+  }
+
+  /**
    * Detect a hardcoded credential used as the FALLBACK on an env-var read:
    *
    *     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'layova-admin';
@@ -191,8 +214,14 @@ class SecretsModule extends BaseModule {
         const prevLine = i > 0 ? lines[i - 1] : '';
         if (/\bsecrets-ok\b/.test(line) || /\bsecrets-ok\b/.test(prevLine)) continue;
 
-        // Skip comparison/sentinel context — `if (password === 'REJECTED_VALUE')` is not a secret assignment
-        if (/===|!==/.test(line)) continue;
+        // Comparison operands are removed, not used to skip the whole line.
+        // `if (password === 'REJECTED_VALUE')` really is a sentinel and must
+        // stay quiet — but a blanket skip on `===` also hid every credential
+        // that merely SHARES a line with a comparison, e.g.
+        //   const K = process.env.NODE_ENV === 'production' ? 'sk_live_…' : …
+        // which is a live key the module has an explicit pattern for.
+        // Strip the operands; whatever literal is left is still a literal.
+        let scanLine = this._stripComparisonLiterals(line);
 
         // Env-var lines are handled on their own terms and never reach the
         // generic patterns below. A bare read (`password = process.env.PW`)
@@ -211,7 +240,22 @@ class SecretsModule extends BaseModule {
               preview: line.substring(0, 80).trim() + (line.length > 80 ? '...' : ''),
             });
           }
-          continue;
+          // Neutralise the env READ and carry on into the generic patterns
+          // rather than skipping the line. `password = process.env.PW` becomes
+          // `password = 0` and correctly matches nothing — but a real
+          // credential elsewhere on the line is still seen, e.g.
+          //   headers: { authorization: 'sk_live_…', region: process.env.AWS_REGION }
+          // (that example deliberately avoids the literal Anthropic auth
+          // header — tests/helpers/ai-module-names.js derives "is this an AI
+          // module" by grepping module source for it, and a comment carrying
+          // it would classify secrets as AI, which would make the
+          // deterministic every-push tier SKIP secret detection entirely.)
+          // An early `continue` here would have rebuilt the exact blanket skip
+          // this commit exists to remove.
+          scanLine = scanLine.replace(
+            /process\.env(?:\.[A-Za-z_$][\w$]*|\[\s*(['"])[^'"]*\1\s*\])?/g,
+            '0',
+          );
         }
 
         // Skip comment lines
@@ -221,7 +265,7 @@ class SecretsModule extends BaseModule {
         for (const pattern of this.patterns) {
           // Reset regex lastIndex for global regexes
           pattern.regex.lastIndex = 0;
-          if (pattern.regex.test(line)) {
+          if (pattern.regex.test(scanLine)) {
             // Re-anchor before exec. `test()` above ADVANCED lastIndex on
             // these /g regexes, so the exec used to resume past the match it
             // had just found and return null — which silently disabled every
@@ -229,7 +273,7 @@ class SecretsModule extends BaseModule {
             // long as this module has shipped. Reset, exec, reset again.
             pattern.regex.lastIndex = 0;
             // Skip known placeholder / sentinel values that are intentionally visible
-            const m = pattern.regex.exec(line);
+            const m = pattern.regex.exec(scanLine);
             pattern.regex.lastIndex = 0;
             if (m) {
               const val = m[0].toLowerCase();
