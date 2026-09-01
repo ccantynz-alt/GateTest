@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { innerHtmlAssignmentIsSafe } = require('./inner-html-safety');
 
 const DEFAULT_CONFIG = {
   // Quality thresholds (from CLAUDE.md)
@@ -588,7 +589,16 @@ const DEFAULT_CONFIG = {
         { pattern: /\/\/\s*(TODO|FIXME|HACK|XXX)/gi, message: 'Unresolved TODO/FIXME/HACK/XXX comment' },
         { pattern: /(?<![\w.$])eval\s*\(/g, message: 'eval() usage detected' },
         { pattern: /new\s+Function\s*\(/g, message: 'Function constructor usage detected' },
-        { pattern: /\.innerHTML\s*=/g, message: 'innerHTML assignment detected — use textContent or sanitize' },
+        // safeIf shares ONE predicate with the security module's innerHTML
+        // rule (src/core/inner-html-safety.js). Without it this rule failed
+        // the gate on `el.innerHTML = ''` and on correctly-escaped output —
+        // measured 2026-09-01, after the security module had already been
+        // guarded and this second copy went on reporting the same line.
+        {
+          pattern: /\.innerHTML\s*=/g,
+          message: 'innerHTML assignment detected — use textContent or sanitize',
+          safeIf: innerHtmlAssignmentIsSafe,
+        },
       ],
     },
   },

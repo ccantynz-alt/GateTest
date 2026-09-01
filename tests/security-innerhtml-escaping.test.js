@@ -21,8 +21,12 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 
 const SecurityModule = require('../src/modules/security');
+const { innerHtmlAssignmentIsSafe } = require('../src/core/inner-html-safety');
+const { DEFAULT_CONFIG } = require('../src/core/config');
 
 const mod = new SecurityModule();
 const isSafe = (line) => mod._innerHtmlAssignmentIsSafe(line);
@@ -95,5 +99,49 @@ describe('security — declines to judge what it cannot parse', () => {
     assert.strictEqual(mod._splitTopLevel('"unclosed + x', '+'), null);
     assert.deepStrictEqual(mod._splitTopLevel('"a" + b', '+'), ['"a"', 'b']);
     assert.deepStrictEqual(mod._splitTopLevel('f(a + b) + c', '+'), ['f(a + b)', 'c']);
+  });
+});
+
+describe('security — ONE predicate, both innerHTML rules', () => {
+  // The engine carries two independent innerHTML rules: this module's, and
+  // the forbidden-pattern entry in src/core/config.js that codeQuality runs.
+  // Guarding only the first one still failed the gate on escaped output,
+  // because the second kept reporting the same line. Two rules for one
+  // concept means fixing the concept once is not enough.
+  it('the security module delegates rather than keeping a copy', () => {
+    const line = `el.innerHTML = "<div>" + escapeHtml(n) + "</div>";`;
+    assert.strictEqual(mod._innerHtmlAssignmentIsSafe(line), innerHtmlAssignmentIsSafe(line));
+    assert.strictEqual(mod._innerHtmlAssignmentIsSafe(line), true);
+  });
+
+  it("codeQuality's innerHTML pattern carries the same guard", () => {
+    const patterns = DEFAULT_CONFIG.modules.codeQuality.forbiddenPatterns;
+    const rule = patterns.find((p) => /innerHTML/.test(p.pattern.source));
+    assert.ok(rule, 'codeQuality no longer has an innerHTML forbidden pattern');
+    assert.strictEqual(
+      rule.safeIf,
+      innerHtmlAssignmentIsSafe,
+      'codeQuality must share the security module predicate, not its own copy',
+    );
+  });
+
+  it('no module re-implements the predicate inline', () => {
+    // The whole point is one home. If a second definition appears, this fails.
+    const roots = ['src/modules', 'src/core'];
+    const offenders = [];
+    for (const rel of roots) {
+      const dir = path.join(__dirname, '..', rel);
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.js') || f === 'inner-html-safety.js') continue;
+        const src = fs.readFileSync(path.join(dir, f), 'utf8');
+        // A local copy would need its own escaper allow-list.
+        if (/escapeHtml\|escapeHTML\|htmlEscape/.test(src)) offenders.push(`${rel}/${f}`);
+      }
+    }
+    assert.deepStrictEqual(
+      offenders, [],
+      `these files carry their own escaper allow-list — import it from ` +
+      `src/core/inner-html-safety.js instead:\n  ${offenders.join('\n  ')}`,
+    );
   });
 });

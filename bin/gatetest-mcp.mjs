@@ -877,6 +877,12 @@ function formatScanResult(result) {
   const findings = normalizeFindings(allResults);
   const blockingFindings = findings.filter(f => f.blocking);
   const nonBlocking = findings.filter(f => !f.blocking && f.severity !== 'info');
+  // Modules that came back clean. This is derived from allResults, NOT from
+  // `findings` — a passing module contributes no findings by definition, so
+  // it is invisible in the normalized list. Losing this line while its three
+  // usages stayed made every MCP scan throw "passed is not defined"; see
+  // tests/heavy/mcp-scan-local.test.js.
+  const passed = allResults.filter(r => (r.errors || 0) === 0 && (r.warnings || 0) === 0);
 
   const render = (f) => {
     const loc = f.file ? ` — \`${f.file}${f.line ? `:${f.line}` : ''}\`` : '';

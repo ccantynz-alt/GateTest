@@ -344,7 +344,7 @@ class CodeQualityModule extends BaseModule {
   _checkForbiddenPatterns(absPath, relPath, content, lines, neutralisedLines, moduleConfig, result, projectRoot) {
     const patterns = moduleConfig.forbiddenPatterns || [];
     const relFwd = relPath.replace(/\\/g, '/');
-    for (const { pattern, message } of patterns) {
+    for (const { pattern, message, safeIf } of patterns) {
       const regex = new RegExp(pattern.source, pattern.flags);
       for (let i = 0; i < lines.length; i++) {
         // Suppressor: `// code-quality-ok` on the same line or the previous line
@@ -361,6 +361,12 @@ class CodeQualityModule extends BaseModule {
         const neutralised = neutralisedLines[i] ?? this._stripContextFromLine(lines[i]);
         regex.lastIndex = 0;
         if (regex.test(neutralised)) {
+          // Per-pattern proof that this particular occurrence cannot do the
+          // thing the rule looks for. Deliberately fed the RAW line, not the
+          // neutralised one: neutralising blanks string literals, so the
+          // right-hand side a predicate needs to inspect would already be
+          // gone and every assignment would look unparseable.
+          if (safeIf && safeIf(line)) continue;
           const lineNum = i;
           const severity = this._severityForForbidden(pattern.source, relFwd, line, projectRoot);
           result.addCheck(`quality:${message}:${relPath}:${i + 1}`, false, {
