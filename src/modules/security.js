@@ -219,6 +219,114 @@ class SecurityModule extends BaseModule {
     }
   }
 
+  /**
+   * Split `expr` on a separator that appears at bracket depth 0 and outside
+   * any string literal. Returns null when the expression is unbalanced or a
+   * quote never closes — the caller must then decline to judge it rather
+   * than work from a bad parse.
+   */
+  _splitTopLevel(expr, sep) {
+    const parts = [];
+    let buf = '';
+    let depth = 0;
+    let quote = null;
+
+    for (let i = 0; i < expr.length; i++) {
+      const ch = expr[i];
+
+      if (quote) {
+        buf += ch;
+        if (ch === '\\') { buf += expr[++i] ?? ''; continue; }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') { quote = ch; buf += ch; continue; }
+      if (ch === '(' || ch === '[' || ch === '{') { depth++; buf += ch; continue; }
+      if (ch === ')' || ch === ']' || ch === '}') { depth--; buf += ch; continue; }
+      if (ch === sep && depth === 0) { parts.push(buf.trim()); buf = ''; continue; }
+      buf += ch;
+    }
+
+    if (quote || depth !== 0) return null;
+    parts.push(buf.trim());
+    return parts.filter(Boolean);
+  }
+
+  /**
+   * True when an `.innerHTML = …` assignment provably cannot inject markup.
+   *
+   * Two safe shapes, and only two:
+   *   1. The right-hand side is a single static literal — `''` (clearing a
+   *      node) or `"<hr>"`. No user input can reach it.
+   *   2. Every DYNAMIC segment is wrapped in a recognised escaper. Segments
+   *      are the `${…}` holes of a template literal, or the non-literal
+   *      operands of a `+` chain. One unescaped segment and the whole
+   *      assignment stays a finding — `escapeHtml(a) + b` is not safe.
+   *
+   * Anything it cannot parse confidently (a multi-line assignment, an
+   * unbalanced expression) returns false and the finding stands. A rule that
+   * guesses "safe" when unsure is worse than one that over-reports, because
+   * silence is invisible.
+   */
+  _innerHtmlAssignmentIsSafe(line) {
+    const sink = line.indexOf('.innerHTML');
+    if (sink === -1) return false;
+    const eq = line.indexOf('=', sink);
+    if (eq === -1) return false;
+
+    const rhs = line.slice(eq + 1).replace(/;\s*$/, '').trim();
+    // Assignment continues on another line — we only see part of it, so we
+    // cannot claim it is safe.
+    if (!rhs) return false;
+
+    // Shape 1: one whole static literal, no interpolation.
+    const STATIC_LITERAL = /^'(?:[^'\\]|\\.)*'$|^"(?:[^"\\]|\\.)*"$|^`(?:[^`\\$]|\\.|\$(?!\{))*`$/;
+    if (STATIC_LITERAL.test(rhs)) return true;
+
+    // Balance gate. `escapeHtml(name` — a truncated or continued expression —
+    // otherwise reached the bare-expression check at the bottom, matched the
+    // escaper regex, and was cleared as safe. Silencing a finding on an
+    // expression we could not even parse is exactly the invisible failure
+    // this guard must not introduce, so refuse to judge unbalanced input.
+    if (this._splitTopLevel(rhs, ' ') === null) return false;
+
+    // Recognised escapers. Deliberately a NAMED list, not a substring test
+    // for "escape" or "clean" — a rule that trusts any function whose name
+    // sounds reassuring is trusting the author's naming, not the code.
+    // encodeURIComponent qualifies: it percent-encodes `<` and `>`, so its
+    // output cannot open a tag.
+    const ESCAPER = /\b(?:escapeHtml|escapeHTML|htmlEscape|escapeHtmlAttr|sanitizeHtml|sanitizeHTML|sanitize|escapeExpression|encodeURIComponent)\s*\(|\bDOMPurify\s*\.\s*sanitize\s*\(|\bpurify\s*\.\s*sanitize\s*\(/;
+
+    // Shape 2a: template literal — inspect each ${…} hole.
+    if (/^`[\s\S]*`$/.test(rhs)) {
+      const holes = rhs.match(/\$\{[^{}]*\}/g);
+      if (!holes) return true; // no interpolation at all
+      // A nested brace defeats this simple extraction; don't guess.
+      if (/\$\{[^{}]*\{/.test(rhs)) return false;
+      return holes.every((h) => ESCAPER.test(h));
+    }
+
+    // Shape 2b: `+` chain — every operand that is not a static literal must
+    // be escaped. A plain rhs.split('+') is wrong twice over: it splits on a
+    // `+` inside a string ("a + b") and on one inside a call argument
+    // (escapeHtml(a + b)). Split on TOP-LEVEL `+` only.
+    if (rhs.includes('+')) {
+      const operands = this._splitTopLevel(rhs, '+');
+      if (!operands) return false;
+      // Two or more operands means it really is a concatenation. A single
+      // operand means every `+` was nested — `escapeHtml(a + b)` — so this
+      // is one expression and the bare-expression check below judges it.
+      if (operands.length >= 2) {
+        return operands.every(
+          (op) => STATIC_LITERAL.test(op) || ESCAPER.test(op),
+        );
+      }
+    }
+
+    // A single bare expression: safe only if it is itself an escaper call.
+    return ESCAPER.test(rhs);
+  }
+
   _checkSourcePatterns(projectRoot, result) {
     const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
     const dangerousPatterns = [
@@ -234,7 +342,24 @@ class SecurityModule extends BaseModule {
       // (`window.eval(...)`, `globalThis.eval(...)`) still fire.
       { regex: /(?<![\w$])eval\s*\(/g, name: 'eval()', severity: 'critical' },
       { regex: /new\s+Function\s*\(/g, name: 'Function constructor', severity: 'critical' },
-      { regex: /\.innerHTML\s*=(?!=)/g, name: 'innerHTML assignment', severity: 'high' },
+      // Fires on the SINK, then clears the ones that provably cannot inject.
+      // As a bare `.innerHTML =` match this reported `el.innerHTML = ''`
+      // (clearing a node) and `innerHTML = "<b>" + escapeHtml(x) + "</b>"`
+      // as blocking errors — correctly-escaped code failing the gate, which
+      // is the worst kind of finding (Forbidden #25: painkiller, not
+      // bottleneck). Measured 2026-09-01 against a positive/negative control
+      // pair: 1 of 2 findings was a false positive on escaped output.
+      //
+      // safeIf only clears an assignment whose EVERY dynamic segment is
+      // wrapped in a recognised escaper — `escapeHtml(a) + b` still fires,
+      // because `b` is unescaped. A static literal cannot carry user input
+      // at all. Everything else still reports.
+      {
+        regex: /\.innerHTML\s*=(?!=)/g,
+        name: 'innerHTML assignment',
+        severity: 'high',
+        safeIf: (line) => this._innerHtmlAssignmentIsSafe(line),
+      },
       { regex: /document\.write\s*\(/g, name: 'document.write()', severity: 'high' },
       { regex: /child_process.*exec\s*\(/g, name: 'shell exec without sanitization', severity: 'high' },
       // The rule above requires `child_process` on the SAME LINE, so it only
@@ -349,6 +474,13 @@ class SecurityModule extends BaseModule {
           pattern.regex.lastIndex = 0;
           if (match) {
             if (this._isInsideStringLiteral(line, match.index)) continue;
+            // Per-pattern proof of safety. Distinct from the opt-out marker
+            // above: that one silences a line because an author asked, this
+            // one silences it because the code on it cannot do the thing the
+            // rule is looking for. Controls live in
+            // tests/security-innerhtml-escaping.test.js — a suppression with
+            // no positive control is indistinguishable from a broken rule.
+            if (pattern.safeIf && pattern.safeIf(line)) continue;
             result.addCheck(`security:${pattern.name}:${relPath}:${i + 1}`, false, {
               file: relPath,
               line: i + 1,
