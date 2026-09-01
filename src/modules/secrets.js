@@ -28,6 +28,31 @@ const path = require('path');
  */
 const PLACEHOLDER_VALUE_RE = /(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo|<[a-z0-9_. -]{2,30}>)/i;
 
+/**
+ * Credential types recognisable from the VALUE alone.
+ *
+ * These carry a vendor prefix or a structural header — `AKIA…`, `sk_live_…`,
+ * `ghp_…`, `-----BEGIN … PRIVATE KEY-----`. Nobody writes one to illustrate a
+ * concept, so finding one in a README means a key is in the README.
+ *
+ * Everything else in `this.patterns` keys off the IDENTIFIER (`password`,
+ * `api_key`, `token`) and matches any 8+ character value after it. That is
+ * exactly what authentication documentation contains, which is why the two
+ * groups have to be told apart rather than treated as one "credential rule"
+ * family. Measured on axios: nine doc false positives, every one from the
+ * identifier-keyed group, none from this one.
+ */
+const VENDOR_SHAPED_TYPES = new Set([
+  'Private Key',
+  'GitHub PAT',
+  'GitHub OAuth Token',
+  'GitHub Fine-Grained Token',
+  'OpenAI/Stripe Key',
+  'Stripe Live Key',
+  'Slack Token',
+  'AWS Access Key ID',
+]);
+
 class SecretsModule extends BaseModule {
   constructor() {
     super('secrets', 'Secret & Credential Detection');
@@ -346,11 +371,35 @@ class SecretsModule extends BaseModule {
       if (found.length > 0) {
         totalSecrets += found.length;
         const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)[\\/]|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
+
+        // PROSE vs CONFIG vs CODE.
+        //
+        // Documentation is read for credentials (a key pasted into a README is
+        // leaked), but documentation is also the one place a generic
+        // `password: "myPassword"` is expected rather than alarming. Measured
+        // on axios @81df7a5: nine findings across its HTTP Basic auth docs in
+        // four languages, all of them the library explaining itself.
+        //
+        // So in prose, only a VENDOR-SHAPED credential is confident enough to
+        // block. Those are unmistakable by their value alone — nobody writes
+        // `AKIA…` or a PEM header to illustrate a concept. Generic
+        // identifier-keyed patterns keep default scoring, which applies the
+        // doc-file discount and leaves them visible but non-blocking.
+        //
+        // Config formats are deliberately NOT prose. A credential in a
+        // `.yaml`, `.toml`, `.ini` or `.env` is real, and that boundary is
+        // the one someone will be tempted to move later.
+        const isProse = /\.(?:md|mdx|markdown|txt|rst|adoc)$/i.test(relUnix);
+        const vendorShaped = found.some((f) => VENDOR_SHAPED_TYPES.has(f.type));
+
         result.addCheck(`secrets:${relPath}`, false, {
           severity: isTest ? 'warning' : 'error',
           file: relPath,
           message: `${found.length} potential secret(s) found`,
           details: found,
+          // An explicit confidence wins over the signal-based score, so this
+          // lifts a vendor-shaped credential back out of the doc discount.
+          ...(isProse && vendorShaped ? { confidence: 1 } : {}),
           suggestion: 'Move secrets to environment variables and add file to .gitignore',
         });
       }
