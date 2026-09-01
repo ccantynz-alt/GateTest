@@ -145,3 +145,47 @@ describe('security — ONE predicate, both innerHTML rules', () => {
     );
   });
 });
+
+describe('security — the assignment expression, not the rest of the line', () => {
+  // Found auditing our OWN side of the cross-engine diff against
+  // ccantynz/Gluecron.com @e168803 (gluecron.com, org ccantynz). A static
+  // literal assignment inside a single-line if-block was reported, because the
+  // right-hand side ran to end-of-line and swallowed `; return; }` — which is
+  // not a static literal, so the safety check failed on code that is provably
+  // safe. src/routes/demo.tsx:181, 182, 187 and 188 are all this shape.
+  const CASES = {
+    'static literal followed by return in a one-line if':
+      `if(!d.items.length){el.innerHTML='<li class="empty">none</li>';return;}`,
+    'static literal followed by another statement':
+      `el.innerHTML = '<hr>'; doSomethingElse();`,
+    'escaped concatenation followed by return':
+      `if(x){el.innerHTML='<b>'+escapeHtml(n)+'</b>';return;}`,
+    'escHtml is a recognised escaper':
+      `d.innerHTML='<span>'+escHtml(u.username)+'</span>';`,
+  };
+
+  for (const [why, line] of Object.entries(CASES)) {
+    it(`safe: ${why}`, () => {
+      assert.strictEqual(isSafe(line), true, `should be safe:\n  ${line}`);
+    });
+  }
+
+  it('a semicolon inside a string does not truncate the expression', () => {
+    // If the split were naive, this would become `el.innerHTML = "a` and fail
+    // to parse — declining to judge rather than clearing it. Still safe here,
+    // but for the right reason.
+    assert.strictEqual(isSafe(`el.innerHTML = "a;b<hr>";`), true);
+  });
+
+  it('an unescaped value after a one-line if STILL fires', () => {
+    // The load-bearing negative for this fix.
+    assert.strictEqual(
+      isSafe(`if(x){el.innerHTML='<b>'+req.query.name+'</b>';return;}`), false,
+    );
+  });
+
+  it('a bare esc() is NOT trusted', () => {
+    // Three letters could be escape, escaped, or nothing to do with HTML.
+    assert.strictEqual(isSafe(`el.innerHTML = '<b>' + esc(x) + '</b>';`), false);
+  });
+});
