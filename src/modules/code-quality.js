@@ -336,7 +336,23 @@ class CodeQualityModule extends BaseModule {
    */
   _severityForForbidden(patternSource, relFwd, rawLine, projectRoot) {
     if (!patternSource.includes('console')) return undefined;
-    if (!this._isLibraryPath(relFwd)) return 'warning';
+    // Non-library path -> INFO, not warning.
+    //
+    // The rule is "no console.log in LIBRARY code" — code a consumer imports,
+    // whose console it pollutes. In a test, an example or a build script,
+    // nothing is being violated, and this function has already decided that
+    // by the time it gets here. Emitting a *warning* asserts a defect the
+    // module itself does not believe in.
+    //
+    // Measured on axios @81df7a5 (org axios): 79 of its 82 codeQuality
+    // warnings were console.log, and ALL 79 were in tests/ (70), sandbox/ (5)
+    // and examples/ (4). Zero in lib/. That is 24% of the repo's whole
+    // warning volume spent asserting a rule that does not apply there.
+    //
+    // Info is still disclosed and still counted — it moves out of the warning
+    // wall, not out of the report. Library paths are untouched: a published
+    // package logging from lib/ is still an error.
+    if (!this._isLibraryPath(relFwd)) return 'info';
     if (this._isDeliberateLogging(rawLine)) return 'warning';
     if (!this._publishesPackage(projectRoot)) return 'warning';
     return undefined;

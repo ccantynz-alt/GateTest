@@ -130,8 +130,11 @@ describe('code-quality — forbidden patterns reach .mjs and .cjs', () => {
 
   it('config still exposes the innerHTML rule it needs', () => {
     // Guards against the extension change quietly disturbing rule wiring.
-    const patterns = new GateTestConfig().config.modules.codeQuality.forbiddenPatterns
-      || require('../src/core/config').DEFAULT_CONFIG.modules.codeQuality.forbiddenPatterns;
+    // DEFAULT_CONFIG, not `new GateTestConfig()` — the latter defaults to
+    // process.cwd() and loads THIS repo's .gatetest.json, so the assertion
+    // would be about our own project settings rather than the shipped default.
+    const { DEFAULT_CONFIG } = require('../src/core/config');
+    const patterns = DEFAULT_CONFIG.modules.codeQuality.forbiddenPatterns;
     assert.ok(patterns.some((p) => /innerHTML/.test(p.pattern.source)));
   });
 });
