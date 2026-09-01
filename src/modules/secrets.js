@@ -7,6 +7,27 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Values that ANNOUNCE they are not credentials.
+ *
+ * This regex existed twice, character-for-character, with a comment above one
+ * copy reading "rather than duplicating the placeholder list — one definition,
+ * one behaviour". The two copies had already diverged: one carried the `i`
+ * flag and one did not, so `CHANGEME` was suppressed on the env-fallback path
+ * and reported on the main scan path. A comment asserting single-sourcing is
+ * not single-sourcing.
+ *
+ * `<...>` was added 2026-09-01 when documentation files were brought into
+ * scope. Angle brackets are THE convention for a fill-this-in slot, and
+ * NodeGoat's README carries the canonical example:
+ *
+ *     mongodb://<username>:<password>@<cluster>/<dbname>?ssl=true
+ *
+ * which the Database-URL rule matched. Without this, switching on docs
+ * scanning traded a false negative for a false positive.
+ */
+const PLACEHOLDER_VALUE_RE = /(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo|<[a-z0-9_. -]{2,30}>)/i;
+
 class SecretsModule extends BaseModule {
   constructor() {
     super('secrets', 'Secret & Credential Detection');
@@ -157,7 +178,7 @@ class SecretsModule extends BaseModule {
     // shape (identifier through value), so hand them a synthetic one rather
     // than duplicating the placeholder list — one definition, one behaviour.
     const synthetic = `${names[0]}="${value}`;
-    if (/(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo)/i.test(value)) return null;
+    if (PLACEHOLDER_VALUE_RE.test(value)) return null;
     if (this._looksLikeProse(synthetic)) return null;
     if (this._looksLikeReference(synthetic)) return null;
 
@@ -185,7 +206,23 @@ class SecretsModule extends BaseModule {
     const projectRoot = config.projectRoot;
     const sourceExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.rb', '.go', '.rs',
       '.java', '.env', '.yml', '.yaml', '.json', '.toml', '.cfg', '.ini', '.conf',
-      '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd'];
+      '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',
+      // Documentation. A live key pasted into a README or a SETUP guide is one
+      // of the most common ways credentials actually get committed, and until
+      // 2026-09-01 this module could not see any of them: a real
+      // `sk_live_…` planted in README.md produced ZERO findings.
+      //
+      // Found while cross-checking against another engine. It had reported a
+      // docs guide as a hardcoded-credential CRITICAL, and I set out to show
+      // ours stayed quiet on the same file. It did — because it never opened
+      // it. Silence from not looking is not precision, and the two are
+      // indistinguishable from the outside unless you plant a positive
+      // control, which is what turned a favourable comparison into a defect.
+      //
+      // The false positives docs invite (`your-api-key-here`, `sk_live_xxxx`,
+      // `<paste-key>`) are already handled by the placeholder allow-list this
+      // module shares between both of its scan paths.
+      '.md', '.mdx', '.txt', '.rst', '.adoc'];
 
     const files = this._collectFiles(projectRoot, sourceExtensions);
     let totalSecrets = 0;
@@ -286,7 +323,7 @@ class SecretsModule extends BaseModule {
               // contains the substring — including AWS's canonical
               // AKIAIOSFODNN7EXAMPLE — and a secrets module must fail
               // toward detection, never toward silence.
-              if (/(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo)/.test(val)) continue;
+              if (PLACEHOLDER_VALUE_RE.test(val)) continue;
               // Skip prose values. `CRON_SECRET: 'the scan queue is never
               // drained'` is a docs/description map keyed by env-var NAME —
               // the name matches the rule, the value is an English sentence.
