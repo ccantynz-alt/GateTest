@@ -55,4 +55,39 @@ function isIllustrationPath(relPath) {
   return ILLUSTRATION_DIR_RE.test(String(relPath).replace(/\\/g, '/'));
 }
 
-module.exports = { isIllustrationPath, ILLUSTRATION_DIR_RE };
+// Test and benchmark HARNESS directories. Separate from illustrations because
+// the two answer different questions: an illustration is not the application,
+// a harness is not a PAGE A USER VISITS. Only the presentation modules
+// (a11y, visual, seo) care about the second distinction — authBypass and
+// hardcoded-url already handle test paths their own way, and secrets/security
+// must keep scanning both.
+const HARNESS_DIR_RE =
+  /(^|\/)(tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?)\//i;
+
+/**
+ * True when `relPath` is a document nobody navigates to as a user: a demo, a
+ * fixture, or a test/benchmark harness page.
+ *
+ * Measured 2026-09-01 on lodash @a666ba5 — 33 of its 47 blocking findings
+ * (70%) were in `test/` and `perf/`. The offenders were `test/index.html`
+ * (titled "lodash Test Suite", loading qunit.css) and `perf/index.html`
+ * ("lodash Performance Suite") being audited for landmark regions, viewport
+ * tags and meta descriptions. A QUnit runner having no `<main>` landmark is
+ * not an accessibility defect; it is not a page.
+ *
+ * Again: SCOPE, NOT SEVERITY. Craig ruled 2026-09-01 that a11y findings
+ * block — "keep the a11y blocking, thats quality" — and they still do, on
+ * every page a user can actually reach.
+ */
+function isNonUserFacingPage(relPath) {
+  if (!relPath) return false;
+  const norm = String(relPath).replace(/\\/g, '/');
+  return isIllustrationPath(norm) || HARNESS_DIR_RE.test(norm);
+}
+
+module.exports = {
+  isIllustrationPath,
+  isNonUserFacingPage,
+  ILLUSTRATION_DIR_RE,
+  HARNESS_DIR_RE,
+};

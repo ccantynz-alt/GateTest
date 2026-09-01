@@ -20,8 +20,11 @@ interface ScoreData {
     tier: string;
     scannedAt: string;
     ageDays: number;
-    errors: number;
-    warnings: number;
+    // `scan_history` records a single issue count and does not split errors
+    // from warnings. The previous `errors`/`warnings` pair came from the
+    // auto-fix log (errors_FIXED, warnings_FIXED) — numbers about fixes
+    // presented as numbers about the scan.
+    issues: number;
   };
   badge?: string;
   readme?: string;
@@ -116,7 +119,7 @@ export default async function ScorePage({
               <div className="flex-1 text-center sm:text-left">
                 <div className="text-2xl font-bold text-white mb-1">{data.label}</div>
                 <div className="text-white/50 mb-4">
-                  {data.lastScan?.errors} errors · {data.lastScan?.warnings} warnings ·{" "}
+                  {data.lastScan?.issues} {data.lastScan?.issues === 1 ? "issue" : "issues"} ·{" "}
                   {data.lastScan?.tier ? tierLabel[data.lastScan.tier] || data.lastScan.tier : ""}
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -162,8 +165,7 @@ export default async function ScorePage({
               <div className="grid sm:grid-cols-3 gap-4 text-sm">
                 {[
                   { label: "Start", value: "100", note: "base score" },
-                  { label: "Errors", value: `−${Math.min(50, (data.lastScan?.errors || 0) * 5)}`, note: `−5 each (max −50)` },
-                  { label: "Warnings", value: `−${Math.min(20, (data.lastScan?.warnings || 0) * 1)}`, note: `−1 each (max −20)` },
+                  { label: "Issues", value: `−${Math.min(50, (data.lastScan?.issues || 0) * 5)}`, note: `−5 each (max −50)` },
                   { label: "Fix tier bonus", value: ["scan_fix", "nuclear"].includes(data.lastScan?.tier || "") ? "+5" : "+0", note: "scan_fix / nuclear" },
                   { label: "Staleness", value: (data.lastScan?.ageDays || 0) > 7 ? `−${Math.floor(((data.lastScan?.ageDays || 0) - 7) / 7) * 5}` : "−0", note: `−5/week after 7d` },
                   { label: "Final score", value: String(data.score), note: data.label || "" },

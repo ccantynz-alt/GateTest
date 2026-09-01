@@ -6,7 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
-const { isIllustrationPath } = require('../core/scan-scope');
+const { isNonUserFacingPage } = require('../core/scan-scope');
 
 // Named CSS colors mapped to RGB values
 const NAMED_COLORS = {
@@ -62,7 +62,7 @@ class AccessibilityModule extends BaseModule {
         // repo — axios @81df7a5 had 23 a11y findings on demo HTML alone.
         // Scope only: a11y stays error-severity in application code
         // (Craig 2026-09-01, "keep the a11y blocking, thats quality").
-        if (isIllustrationPath(normalised)) continue;
+        if (isNonUserFacingPage(normalised)) continue;
         const content = fs.readFileSync(file, 'utf-8');
 
         this._checkImages(relPath, content, result);

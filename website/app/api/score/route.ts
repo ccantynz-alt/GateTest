@@ -4,12 +4,16 @@
  * GET /api/score?owner=acme&repo=payments-api
  * Returns the public GateTest score for a repo based on scan history.
  *
- * Score: 0-100 derived from:
- *   - Error findings (−5 each, up to −50)
- *   - Warning findings (−1 each, up to −20)
- *   - Modules that passed cleanly (+1 each)
- *   - Fix delivery (scan_fix / nuclear tier) → +10 bonus
+ * Score: 0-100 derived from the latest row in `scan_history`:
+ *   - Issues found by the scan (−5 each, up to −50)
+ *   - Share of modules that passed, over that run's real module count (+0-10)
+ *   - Fix delivery (scan_fix / nuclear tier) → +5 bonus
  *   - Recent scan (within 7 days) → no penalty; older → −5/week
+ *
+ * The bonus was documented as +10 and has always been +5 in the code; the
+ * deductions were documented as two terms and are now one, because the source
+ * table records a single issue count. Both corrected here rather than left to
+ * describe a version that never ran.
  *
  * Badge SVG also available: /api/score?owner=X&repo=Y&format=badge
  */
@@ -17,10 +21,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { neon } from "@neondatabase/serverless";
 import { badgeUrl } from "@/app/lib/site-url";
+import { hashRepoUrl } from "@/app/lib/scan-history-store";
 
-function computeScore(scan: {
-  errors: number;
-  warnings: number;
+export function computeScore(scan: {
+  issues: number;
   modulesPassed: number;
   totalModules: number;
   tier: string;
@@ -28,12 +32,15 @@ function computeScore(scan: {
 }): number {
   let score = 100;
 
-  // Deduct for errors (−5 each, cap −50)
-  score -= Math.min(50, scan.errors * 5);
-  // Deduct for warnings (−1 each, cap −20)
-  score -= Math.min(20, scan.warnings * 1);
+  // Deduct for issues found by the scan. `scan_history` records a single
+  // `total_issues` count and does not split errors from warnings, so this is
+  // one deduction rather than two — the previous split was reading
+  // errors_FIXED and warnings_FIXED, which penalised customers for having
+  // their problems fixed. One honest term beats two inverted ones.
+  score -= Math.min(50, scan.issues * 5);
 
-  // Bonus for passing modules
+  // Bonus for modules that actually passed, over the real denominator for
+  // that run. Never a hardcoded module count.
   if (scan.totalModules > 0) {
     const passRate = scan.modulesPassed / scan.totalModules;
     score += Math.round(passRate * 10);
@@ -86,34 +93,71 @@ function buildBadgeSvg(owner: string, repo: string, score: number, grade: string
 </svg>`;
 }
 
+/**
+ * Latest SCAN for a repo, read from `scan_history`.
+ *
+ * This used to read `fixes_log`, which is a log of auto-fix PRs, not scans.
+ * Every input it took was inverted against the name it was given:
+ *
+ *   errors_fixed        AS errors          -> score -= errors * 5
+ *       so the more errors we FIXED for a customer, the WORSE their public
+ *       grade became.
+ *   array_length(modules_fired,1) AS modules_passed -> score += passRate * 10
+ *       `modules_fired` is the modules that found something (and is capped at
+ *       20 on write), presented as modules that PASSED — so the more of our
+ *       modules reported problems, the HIGHER the grade.
+ *   totalModules: 90    hardcoded
+ *       a hand-typed denominator driving a customer-facing letter grade, in
+ *       a repo whose Bible rule is "never hand-write a module count, import
+ *       it". It escaped tests/module-count-sync.test.js only because that
+ *       test matches three-digit claims and 90 has two.
+ *
+ * `scan_history` is the table that actually records scans: real issue counts,
+ * the real `total_modules` for that run, and a per-module summary carrying
+ * each module's status. No denominator is invented here.
+ *
+ * When there is no scan row we return null and the caller answers "No scans
+ * found for this repo". That is the correct answer for a repo we have not
+ * scanned — better than deriving a grade from a fix log that cannot express
+ * pass or fail.
+ */
 async function getLatestScan(owner: string, repo: string) {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) return null;
 
   try {
     const sql = neon(dbUrl);
-    const repoName = `${owner}/${repo}`;
+    // Scans are stored under a hash of the repo URL, never the cleartext URL.
+    const repoHash = hashRepoUrl(`https://github.com/${owner}/${repo}`);
 
     const rows = await sql`
-      SELECT
-        errors_fixed AS errors,
-        warnings_fixed AS warnings,
-        tier,
-        created_at AS "scannedAt",
-        array_length(modules_fired, 1) AS modules_passed
-      FROM fixes_log
-      WHERE repo_name = ${repoName}
-      ORDER BY created_at DESC
+      SELECT tier, total_issues, total_modules, module_summary,
+             scanned_at AS "scannedAt"
+      FROM scan_history
+      WHERE repo_hash = ${repoHash}
+      ORDER BY scanned_at DESC
       LIMIT 1
     `;
 
     if (rows.length === 0) return null;
-    const r = rows[0] as { errors: number; warnings: number; tier: string; scannedAt: string; modules_passed: number };
+    const r = rows[0] as {
+      tier: string;
+      total_issues: number;
+      total_modules: number;
+      module_summary: Array<{ name: string; status: string; issues: number }> | null;
+      scannedAt: string;
+    };
+
+    const summary = Array.isArray(r.module_summary) ? r.module_summary : [];
+    // A module counts as passed only if it says so. An unrecognised status is
+    // NOT counted as a pass — inventing passes is how the previous version
+    // flattered every grade.
+    const modulesPassed = summary.filter((m) => m && m.status === 'pass').length;
+
     return {
-      errors: Number(r.errors) || 0,
-      warnings: Number(r.warnings) || 0,
-      modulesPassed: Number(r.modules_passed) || 0,
-      totalModules: 90,
+      issues: Number(r.total_issues) || 0,
+      modulesPassed,
+      totalModules: Number(r.total_modules) || 0,
       tier: r.tier,
       scannedAt: r.scannedAt,
     };
@@ -167,8 +211,7 @@ export async function GET(req: NextRequest) {
       tier: scan.tier,
       scannedAt: scan.scannedAt,
       ageDays,
-      errors: scan.errors,
-      warnings: scan.warnings,
+      issues: scan.issues,
     },
     badge: badgeUrl(`/api/score?owner=${owner}&repo=${repo}&format=badge`),
     readme: `[![GateTest Score](${badgeUrl(`/api/score?owner=${owner}&repo=${repo}&format=badge`)})](${badgeUrl(`/score/${owner}/${repo}`)})`,
