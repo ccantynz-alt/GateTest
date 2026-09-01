@@ -101,6 +101,49 @@ const MOCK_NETWORK_HINTS = [
   /\bmockFetch\b/i,
   /\bsinon\.(?:stub|spy|fake)\b/,
   /\bfrom ['"]msw['"]/, // import from 'msw'
+
+  // A test that supplies its OWN fetch is mocked without using a mocking
+  // library. This list previously recognised libraries only, so the modern
+  // pattern — define a fetch stub, inject it — read as an unmocked real call.
+  //
+  // Measured on axios @81df7a5 (org axios): flaky-tests produced 264 of the
+  // repo's 487 warnings, 210 of them `real-network`. The sampled case,
+  // tests/smoke/bun/tests/cancel.smoke.test.ts:67, is
+  //
+  //     const fetch = async () => new Response(JSON.stringify({ ok: true }), …)
+  //     …
+  //     const request = axios.get('https://example.com/in-flight', { fetch })
+  //
+  // The URL is never requested. example.com is not even resolved. That is a
+  // fully hermetic test being told it will flake on a DNS hiccup.
+  //
+  // Deliberately narrow: a BINDING named `fetch`, or an assignment to the
+  // global. Not `adapter:` (appears in real-network config too) and not a
+  // bare `new Response(` (a file can construct one and still call out).
+  /\b(?:const|let|var|function)\s+fetch\b/,
+  /\b(?:globalThis|global|window|self)\s*\.\s*fetch\s*=/,
+  /\bnew\s+MockAdapter\s*\(|\baxios-mock-adapter\b/,
+
+  // A file that DECLARES a test double is a file that mocks, whether or not
+  // it reaches for a mocking library. axios's smoke tests build
+  // `createTransportMock()` and pass the result as `transport`, so the
+  // request never touches the network stack:
+  //
+  //     const createTransportMock = (…) => ({ request(options, onResponse) {…} })
+  //     …
+  //     await axios.post('http://example.com/form', form,
+  //                      { adapter: 'http', proxy: false, transport })
+  //
+  // This is file-level, like every other hint here — `jest.mock(` anywhere in
+  // a file already suppresses the whole file, so the granularity is the
+  // list's existing design rather than a new concession.
+  //
+  // The false-negative it admits: a file declaring a data fixture named
+  // `mockUser` that ALSO makes a genuine external call would go unreported.
+  // Accepted knowingly at warning severity, where 80 false warnings cost more
+  // trust than one missed advisory — and recorded here so the trade is
+  // visible rather than discovered later.
+  /\b(?:const|let|var|function)\s+\w*(?:Mock|Stub|Fake)\w*\b/,
 ];
 
 const SELF_ADMIT_TITLE_RE = /\b(?:flak(?:y|iness)|intermittent|sometimes\s+fails?|randomly\s+fails?|eventually\s+works?)\b/i;
@@ -316,7 +359,21 @@ class FlakyTestsModule extends BaseModule {
       const fetchCall = /\bfetch\s*\(\s*['"`]https?:\/\//.test(line);
       const axiosCall = /\baxios\.(?:get|post|put|delete|patch|head)\s*\(\s*['"`]https?:\/\//.test(line);
       const httpCall = /\b(?:https?)\.request\s*\(/.test(line);
-      if ((fetchCall || axiosCall || httpCall) && !hasNetworkMock) {
+      // A LOOPBACK request is not a real-network call. There is no DNS to
+      // hiccup and no third party to return a 5xx — the two failures this
+      // rule's own message names. It is a test talking to a server the test
+      // started, which is the standard way to test an HTTP client.
+      //
+      // Measured on axios @81df7a5 (org axios): 113 of 203 remaining
+      // real-network findings were in tests/unit/adapters/http.test.js alone,
+      // a file that calls http.createServer 14 times and points 96 of its 126
+      // requests at localhost / 127.0.0.1 / [::1].
+      //
+      // Per-line rather than per-file on purpose: the same file also requests
+      // `http://connect-timeout.test/`, and a file-level suppression would
+      // have silenced that too.
+      const loopback = /['"`]https?:\/\/(?:localhost|127\.\d+\.\d+\.\d+|\[::1\]|0\.0\.0\.0)(?::|\/|['"`])/.test(line);
+      if ((fetchCall || axiosCall || httpCall) && !hasNetworkMock && !loopback) {
         issues += this._flag(result, `flaky-tests:real-network:${rel}:${i + 1}`, {
           severity: 'warning',
           file: rel,
