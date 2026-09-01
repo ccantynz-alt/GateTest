@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import buildInfo from "@/app/data/build-info.json";
-import { siteUrl } from "@/app/lib/site-url";
+import { siblingUrlMap } from "@/app/lib/platform-siblings";
 
 // Build-time stamp (website `prebuild` runs scripts/generate-build-info.js).
 // Env still wins if a deploy platform injects its own; otherwise the real git
@@ -11,16 +11,13 @@ const VERSION = process.env.APP_VERSION ?? buildInfo.version ?? "dev";
 const COMMIT = process.env.GIT_COMMIT ?? buildInfo.commit ?? "unknown";
 const BUILT_AT = buildInfo.builtAt ?? null;
 
-// Our own entry is derived, never typed. It was a `https://gatetest.ai`
-// literal, and production still serves that dead domain here — a client
-// discovering GateTest through this map follows it to NXDOMAIN. The other two
-// are different products on domains we do not control from this env var, so
-// they stay explicit.
-const SIBLINGS = {
-  vapron: "https://vapron.ai/api/platform-status",
-  gluecron: "https://gluecron.com/api/platform-status",
-  gatetest: siteUrl("/api/platform-status"),
-} as const;
+// Sibling URLs come from ONE registry shared with the admin health
+// aggregator (app/lib/platform-siblings.js). They used to be written out
+// here as literals; the Vapron entry said `https://vapron.ai/api/platform-status`
+// long after that path was measured at 404 and corrected in the admin copy —
+// this map is how other products discover Vapron, so it was handing them a
+// dead URL. Resolved per-request, not at module load, so a deployment can
+// repoint a sibling with an env var without a rebuild.
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +30,7 @@ export async function GET() {
       builtAt: BUILT_AT,
       healthy: true,
       timestamp: new Date().toISOString(),
-      siblings: SIBLINGS,
+      siblings: siblingUrlMap(),
     },
     {
       headers: {

@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-type SiblingStatus = "up" | "down" | "unreachable";
+type SiblingStatus = "up" | "down" | "unreachable" | "needs_key";
 
 interface SiblingResult {
   id: "vapron" | "gluecron" | "gatetest";
@@ -65,6 +65,16 @@ function statusPalette(status: SiblingStatus) {
         text: "text-amber-300",
         label: "DOWN",
         border: "border-amber-500/20",
+      };
+    // Answered, but key-gated — we were not allowed to observe health. Slate,
+    // not red: this is a gap in our credentials, not an outage to page on.
+    case "needs_key":
+      return {
+        dot: "bg-slate-400",
+        pulse: "bg-slate-400/40",
+        text: "text-slate-300",
+        label: "NEEDS KEY",
+        border: "border-slate-500/20",
       };
     case "unreachable":
     default:

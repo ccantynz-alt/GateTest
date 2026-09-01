@@ -88,13 +88,21 @@ describe('admin — the sibling health widget is no longer dead code', () => {
     assert.match(platformsTabSrc, /<PlatformSiblings \/>/);
   });
 
-  it('the Vapron sibling URL points at the platform API, not the marketing site', () => {
-    // vapron.ai 404s every /api/* path except /api/health, which rendered
-    // Vapron permanently "down" and would now light the tab badge forever.
-    assert.match(siblingsRouteSrc, /api\.vapron\.ai\/api\/platform\/api\/platform-status/);
+  it('the sibling URLs come from the shared registry, not this route', () => {
+    // This test used to pin the literal `api.vapron.ai/api/platform/api/
+    // platform-status` INTO this route file — making it the third hand-written
+    // copy of a URL that already disagreed between two routes, and pinning the
+    // one URL that turned out to be built on a path Vapron never shipped
+    // (`/api/platform-status`: zero hits in their repo). A test that pins a
+    // literal in place is how the drift survived.
+    //
+    // The URL itself is now asserted once, against the registry, in
+    // tests/platform-siblings.test.js. What belongs here is the wiring: this
+    // route must not grow its own copy.
+    assert.match(siblingsRouteSrc, /from "@\/app\/lib\/platform-siblings"/);
     assert.ok(
-      !/"https:\/\/vapron\.ai\/api\/platform-status"/.test(siblingsRouteSrc),
-      'the marketing-site URL must not come back',
+      !/["'`]https?:\/\/[^"'`\s]*vapron\.ai/.test(siblingsRouteSrc),
+      'the sibling route must not hardcode a Vapron URL — import the registry',
     );
   });
 });

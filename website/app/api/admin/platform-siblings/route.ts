@@ -10,11 +10,13 @@
  * than failing the whole response), and an in-memory 30s cache so this
  * endpoint doesn't hammer the siblings if the admin panel re-mounts.
  *
- * URLs are configurable via env vars — defaults mirror the contract in
- * docs/PLATFORM_STATUS.md:
- *   - VAPRON_STATUS_URL  (default https://vapron.ai/api/platform-status)
- *   - GLUECRON_STATUS_URL  (default https://gluecron.com/api/platform-status)
- *   - GATETEST_STATUS_URL  (default https://gatetest.io/api/platform-status)
+ * URLs are configurable via env vars and come from the shared registry in
+ * app/lib/platform-siblings.js — the same one the PUBLIC /api/platform-status
+ * map is built from, so the two can no longer disagree about where a sibling
+ * lives. (They did: this file was corrected to api.vapron.ai in 2026-07 while
+ * the public map kept advertising the 404ing vapron.ai path.) Env var names
+ * and current defaults are documented in that module, next to the
+ * measurements that justify them.
  *
  * Admin-gated: mirrors the same two-method auth as /api/admin/health.
  */
@@ -28,6 +30,7 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/app/lib/admin-session";
 import { ADMIN_COOKIE_NAME } from "@/app/lib/admin-auth";
+import { SIBLING_REGISTRY, resolveSiblingUrl } from "@/app/lib/platform-siblings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -41,7 +44,12 @@ interface SiblingResult {
   id: SiblingId;
   name: string;
   url: string;
-  status: "up" | "down" | "unreachable";
+  // "needs_key" is distinct from "down" on purpose: a sibling whose status API
+  // is key-gated answers 401 to our anonymous poll. Reporting that as DOWN is
+  // claiming an observation we never made — the product is very likely fine,
+  // we just aren't allowed to look. A panel that cries DOWN at a healthy
+  // Vapron on every refresh is a panel Craig learns to ignore.
+  status: "up" | "down" | "unreachable" | "needs_key";
   healthy: boolean;
   latency_ms: number | null;
   version: string | null;
@@ -57,31 +65,14 @@ interface AggregateReport {
   cached: boolean;
 }
 
-const SIBLINGS: Array<{ id: SiblingId; name: string; envVar: string; defaultUrl: string }> = [
-  {
-    id: "vapron",
-    name: "Vapron",
-    envVar: "VAPRON_STATUS_URL",
-    // vapron.ai is the MARKETING site and 404s every /api/* path except
-    // /api/health — pointing here made Vapron render permanently "down".
-    // The platform API lives on api.vapron.ai/api/platform (the same base
-    // VAPRON_BASE_URL uses for job dispatch). Verified 2026-07-27:
-    // vapron.ai/api/platform-status → 404, api.vapron.ai/api/platform/* → 401.
-    defaultUrl: "https://api.vapron.ai/api/platform/api/platform-status",
-  },
-  {
-    id: "gluecron",
-    name: "Gluecron",
-    envVar: "GLUECRON_STATUS_URL",
-    defaultUrl: "https://gluecron.com/api/platform-status",
-  },
-  {
-    id: "gatetest",
-    name: "GateTest",
-    envVar: "GATETEST_STATUS_URL",
-    defaultUrl: "https://gatetest.io/api/platform-status",
-  },
-];
+// Single source of truth, shared with the public /api/platform-status map.
+const SIBLINGS = SIBLING_REGISTRY as ReadonlyArray<{
+  id: SiblingId;
+  name: string;
+  envVar: string;
+  defaultUrl: string | null;
+  requiresAuth: boolean;
+}>;
 
 // In-memory cache — fine on a per-instance basis, and on Vercel each
 // function instance handles ~hundreds of requests before cycling. A
@@ -92,6 +83,7 @@ async function fetchSibling(
   id: SiblingId,
   name: string,
   url: string,
+  requiresAuth = false,
 ): Promise<SiblingResult> {
   const checked_at = new Date().toISOString();
   const controller = new AbortController();
@@ -107,17 +99,25 @@ async function fetchSibling(
     const latency_ms = Date.now() - started;
 
     if (!res.ok) {
+      // A key-gated sibling refusing an anonymous poll tells us nothing about
+      // its health, so don't pretend otherwise. It answered — that alone rules
+      // out "unreachable" — but healthy stays false because we did not observe
+      // health, and the error says what would let us.
+      const keyGated =
+        requiresAuth && (res.status === 401 || res.status === 403);
       return {
         id,
         name,
         url,
-        status: "down",
+        status: keyGated ? "needs_key" : "down",
         healthy: false,
         latency_ms,
         version: null,
         commit: null,
         last_updated: null,
-        error: `HTTP ${res.status}`,
+        error: keyGated
+          ? `HTTP ${res.status} — status API is key-gated; health not observed`
+          : `HTTP ${res.status}`,
         checked_at,
       };
     }
@@ -127,10 +127,22 @@ async function fetchSibling(
       version?: string;
       commit?: string;
       healthy?: boolean;
+      overall?: string;
       timestamp?: string;
     };
 
-    const healthy = body.healthy !== false;
+    // Siblings do not all speak the same dialect. GateTest and Gluecron emit
+    // `healthy: boolean`; Vapron's /api/health/status emits `overall: "ok" |
+    // "degraded" | …` and no `healthy` field at all. Reading only `healthy`
+    // meant `undefined !== false` → true, so a Vapron reporting *degraded*
+    // rendered as a green UP pill. Prefer the explicit boolean, fall back to
+    // `overall`, and only assume health when the body offers neither.
+    const healthy =
+      typeof body.healthy === "boolean"
+        ? body.healthy
+        : typeof body.overall === "string"
+          ? body.overall === "ok"
+          : true;
     return {
       id,
       name,
@@ -204,10 +216,9 @@ export async function GET() {
   }
 
   const results = await Promise.all(
-    SIBLINGS.map((s) => {
-      const url = process.env[s.envVar] || s.defaultUrl;
-      return fetchSibling(s.id, s.name, url);
-    }),
+    SIBLINGS.map((s) =>
+      fetchSibling(s.id, s.name, resolveSiblingUrl(s), s.requiresAuth),
+    ),
   );
 
   const report: AggregateReport = {
