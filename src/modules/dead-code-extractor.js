@@ -45,8 +45,29 @@ function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages 
   const base = importPath.startsWith('/')
     ? path.join(projectRoot, importPath)
     : path.resolve(path.dirname(fromFile), importPath);
+  // TypeScript's NodeNext/ESM convention writes the OUTPUT extension in the
+  // specifier: `import … from "./external.js"` resolves to `external.ts` on
+  // disk. Without this, the candidates for "./external.js" are `external.js`,
+  // `external.js.ts` and `external.js/index.ts` — none of which exist — so
+  // resolution fails on a file that is plainly there.
+  //
+  // Measured on colinhacks/zod @764ac59: its package entry re-exports with
+  // `export * from "./v4/classic/external.js"`, the chain broke at the first
+  // hop, and the package export surface came back with 414 names instead of
+  // the full public API. Every export the surface missed was then reported as
+  // "candidate dead code" — 1806 findings in packages/zod alone, on a library
+  // whose exports exist precisely to be imported from outside the repo.
+  const tsEquivalents = [];
+  const jsToTs = { '.js': ['.ts', '.tsx', '.d.ts'], '.jsx': ['.tsx'], '.mjs': ['.mts'], '.cjs': ['.cts'] };
+  const ext = path.extname(base);
+  if (jsToTs[ext]) {
+    const stem = base.slice(0, -ext.length);
+    for (const e of jsToTs[ext]) tsEquivalents.push(stem + e);
+  }
+
   const candidates = [
     base,
+    ...tsEquivalents,
     ...Array.from(ALL_EXTS).map((e) => base + e),
     ...Array.from(ALL_EXTS).map((e) => path.join(base, 'index' + e)),
     ...Array.from(ALL_EXTS).map((e) => path.join(base, '__init__' + e)),
