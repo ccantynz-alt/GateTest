@@ -44,6 +44,35 @@ const DEFAULT_RULE_OVERRIDES = Object.freeze({
   documentation: { ignoreDocFile: true },
   // links module scans .md files for broken links
   links: { ignoreDocFile: true },
+  // NOT `secrets: { ignoreDocFile: true }` — TRIED AND REVERTED 2026-09-01.
+  //
+  // The argument for it is good: a credential in a README is exactly as leaked
+  // as one in source, and the doc-file multiplier asks "is this shipping
+  // code?", which is the wrong question for a rule reporting that a file
+  // CONTAINS a credential. Without the override, a real AWS key planted in
+  // SECURITY.md scores 0.3 — soft, non-blocking. Found and operationally
+  // ignored.
+  //
+  // It was reverted because the corpus measured the cost. axios @81df7a5 went
+  // from 7 blocking to 8, gaining NINE doc findings: its HTTP Basic auth
+  // documentation, in four languages, containing
+  //     password: "myPassword"      docs/pages/advanced/authentication.md
+  //     password: 's00pers3cret'    README.md
+  // Those are what authentication documentation looks like. Blocking a clean,
+  // widely-used library on its own docs is the failure this whole exercise
+  // exists to prevent.
+  //
+  // The real fix is per-PATTERN specificity, not per-module: a vendor-shaped
+  // credential (AKIA…, sk_live_…, ghp_…, a PEM header) is unambiguous in any
+  // file type and should block anywhere, while the generic
+  // `password|secret|token = "<8+ chars>"` patterns are exactly what docs
+  // contain. The confidence layer keys overrides by module or ruleKey, and
+  // the secrets module emits one check per FILE, so that distinction cannot
+  // be expressed here yet — it needs the module to carry the matched pattern
+  // type into the finding first.
+  //
+  // Until then documentation secrets are DETECTED and non-blocking, which is
+  // strictly better than the pre-2026-09-01 state of not being read at all.
 });
 
 // ─── individual signal functions ─────────────────────────────────────────────

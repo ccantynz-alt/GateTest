@@ -26,6 +26,7 @@
 'use strict';
 
 const BaseModule = require('./base-module');
+const { isBlockingFinding } = require('../core/confidence');
 
 // ─── scoring constants ─────────────────────────────────────────────────────
 
@@ -86,7 +87,19 @@ class DeployReadiness extends BaseModule {
       .filter(r => r.module !== 'deployReadiness')
       .flatMap(r => r.checks || []);
 
-    const errorChecks   = allChecks.filter(c => !c.passed && c.severity === 'error');
+    // Use the SAME predicate the gate uses, not a bare severity test.
+    //
+    // `severity === 'error'` counts findings the gate has already discounted
+    // as low-confidence. Measured 2026-09-01 on axios @81df7a5: nine
+    // `secrets:docs/**` findings from its HTTP Basic auth documentation
+    // (`password: "myPassword"`) scored 0.4 and correctly did NOT block —
+    // while this module listed all nine as `[CRITICAL]` and dragged the
+    // readiness score down with them. One value, two readings: the gate said
+    // "not confident enough to block", the score said "critical".
+    //
+    // A derived score that disagrees with the gate it derives from is worse
+    // than no score, because the customer cannot tell which one to believe.
+    const errorChecks   = allChecks.filter(c => isBlockingFinding(c));
     const warningChecks = allChecks.filter(c => !c.passed && c.severity === 'warning');
     const criticalChecks = errorChecks.filter(c => isCritical(c.name || ''));
 
@@ -120,10 +133,21 @@ class DeployReadiness extends BaseModule {
     );
     score += testPenalty;
 
-    // Bonuses
-    if (errorChecks.length === 0 && warningChecks.length === 0) {
-      score += POINTS.allPassBonus;
-    } else if (errorChecks.length === 0) {
+    // Bonuses.
+    //
+    // This was two branches, and `zeroWarningBonus` was UNREACHABLE in both:
+    //
+    //     if (errors === 0 && warnings === 0)  score += allPassBonus;
+    //     else if (errors === 0) {
+    //       score += allPassBonus;
+    //       if (warnings === 0) score += zeroWarningBonus;   // never true
+    //     }
+    //
+    // The else-if is only entered when the first condition was false, so with
+    // `errors === 0` there it follows that `warnings > 0` — the inner test
+    // could not fire. A "+3 zero warnings" bonus the header documents and no
+    // repo could ever earn. One branch, both bonuses reachable.
+    if (errorChecks.length === 0) {
       score += POINTS.allPassBonus;
       if (warningChecks.length === 0) score += POINTS.zeroWarningBonus;
     }
