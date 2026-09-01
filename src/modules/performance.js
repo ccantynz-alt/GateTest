@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -189,7 +190,7 @@ class PerformanceModule extends BaseModule {
   }
 
   _checkMemoryLeakPatterns(projectRoot, result) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     // Scanner modules / orchestrator libs / marketing-doc pages legitimately
     // contain literal "setInterval(" / "addEventListener(" pattern strings as
     // detection patterns or doc copy — they shouldn't trigger their own check.

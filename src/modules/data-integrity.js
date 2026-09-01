@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 
@@ -148,7 +149,7 @@ class DataIntegrityModule extends BaseModule {
     }
 
     // Mongoose
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX);
     let hasMongoose = false;
     for (const file of jsFiles) {
       const content = fs.readFileSync(file, 'utf-8');
@@ -177,7 +178,7 @@ class DataIntegrityModule extends BaseModule {
   }
 
   _checkPiiHandling(projectRoot, result) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
 
     const piiPatterns = [
       { regex: /console\.(log|info|debug)\s*\(.*(?:email|password|ssn|credit.?card|phone)/gi, type: 'PII in logs' },
@@ -274,7 +275,7 @@ class DataIntegrityModule extends BaseModule {
   }
 
   _checkDataValidation(projectRoot, result) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
 
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
@@ -302,7 +303,7 @@ class DataIntegrityModule extends BaseModule {
   }
 
   _checkSqlInjection(projectRoot, result) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX);
 
     // Scanner modules and our own non-DB source contain string concatenation
     // patterns that look like SQL but aren't. Restrict the check to files
@@ -417,7 +418,7 @@ class DataIntegrityModule extends BaseModule {
       'docker-compose.yml', // Often includes backup volumes
     ];
 
-    const hasDbOps = this._collectFiles(projectRoot, ['.js', '.ts']).some(f => {
+    const hasDbOps = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX).some(f => {
       try {
         const content = fs.readFileSync(f, 'utf-8');
         return content.includes('prisma') || content.includes('mongoose') ||

@@ -5,6 +5,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 
@@ -143,7 +144,7 @@ class IntegrationTestsModule extends BaseModule {
 
   _detectApiEndpoints(projectRoot) {
     const endpoints = [];
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
 
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
@@ -196,7 +197,7 @@ class IntegrationTestsModule extends BaseModule {
 
   _detectDatabaseOperations(projectRoot) {
     const ops = [];
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX);
 
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
@@ -225,7 +226,7 @@ class IntegrationTestsModule extends BaseModule {
 
   _detectExternalServices(projectRoot) {
     const services = new Set();
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
 
     const servicePatterns = [
       { pattern: /stripe/i, name: 'Stripe' },

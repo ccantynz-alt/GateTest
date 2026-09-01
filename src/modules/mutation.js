@@ -9,6 +9,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 // Mutation operators extracted to a testable engine module so they can
@@ -223,7 +224,7 @@ class MutationModule extends BaseModule {
   }
 
   _findSourceFiles(projectRoot) {
-    const sourceFiles = this._collectFiles(projectRoot, ['.js', '.ts'], [
+    const sourceFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX, [
       'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
       '.next', 'website', 'test', 'tests', '__tests__', 'spec',
     ]);

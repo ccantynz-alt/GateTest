@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const { innerHtmlAssignmentIsSafe, splitTopLevel } = require('../core/inner-html-safety');
 const fs = require('fs');
 const path = require('path');
@@ -238,7 +239,7 @@ class SecurityModule extends BaseModule {
   }
 
   _checkSourcePatterns(projectRoot, result) {
-    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const dangerousPatterns = [
       // `eval` must be its own identifier, not the tail of a longer one.
       // Without the lookbehind, Playwright's `page.$$eval(...)` / `$eval(...)`
@@ -436,7 +437,7 @@ class SecurityModule extends BaseModule {
   }
 
   _checkSqlInjectionPatterns(projectRoot, result) {
-    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     // Same exclusion list as _checkSourcePatterns — this scanner's own
     // pattern definitions and marketing copy describing SQL injection
     // legitimately contain the shapes it's designed to detect.
@@ -552,7 +553,7 @@ class SecurityModule extends BaseModule {
    * nothing at all, while every competitor ships this check (KI #89).
    */
   _checkWeakPasswordHashing(projectRoot, result) {
-    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
 
     // A weak, fast digest being constructed.
@@ -631,7 +632,7 @@ class SecurityModule extends BaseModule {
    * engine (KI #89).
    */
   _checkPrototypePollution(projectRoot, result) {
-    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
 
     // `something[req.body…] = ` / `[req.query…]` / `[req.params…]`, also
@@ -699,7 +700,7 @@ class SecurityModule extends BaseModule {
    * guard — treating it as one would be endorsing the bug.
    */
   _checkPathTraversal(projectRoot, result) {
-    const files = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
 
     const FS_SINK_RE =

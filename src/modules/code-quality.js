@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 
@@ -18,7 +19,7 @@ class CodeQualityModule extends BaseModule {
     const thresholds = config.config.thresholds;
     const excludePaths = moduleConfig.excludePaths || [];
 
-    const sourceFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const sourceFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
 
     // Accumulators for grouped findings (file-length, func-length)
     const fileLengthViolations = [];

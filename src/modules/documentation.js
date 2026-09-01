@@ -5,6 +5,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 
@@ -147,7 +148,7 @@ class DocumentationModule extends BaseModule {
     }
 
     // Check for env vars referenced in code but not documented
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const envVarsUsed = new Set();
 
     for (const file of jsFiles) {
@@ -230,7 +231,7 @@ class DocumentationModule extends BaseModule {
   }
 
   _hasApiRoutes(projectRoot) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     for (const file of jsFiles) {
       const content = fs.readFileSync(file, 'utf-8');
       if (content.includes('app.get(') || content.includes('app.post(') ||
@@ -244,7 +245,7 @@ class DocumentationModule extends BaseModule {
   }
 
   _checkJsDocCoverage(projectRoot, result) {
-    const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts']);
+    const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX);
     let totalFunctions = 0;
     let documentedFunctions = 0;
 

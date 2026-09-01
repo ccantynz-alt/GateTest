@@ -10,6 +10,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -471,7 +472,7 @@ ${filesText}`;
         .filter(f => fs.existsSync(f));
     } catch {
       // Not a git repo or no commits — review all source files
-      return this._collectFiles(projectRoot, ['.js', '.ts', '.jsx', '.tsx']).slice(0, MAX_FILES_PER_REVIEW);
+      return this._collectFiles(projectRoot, JS_SOURCE_EXTS).slice(0, MAX_FILES_PER_REVIEW);
     }
   }
 }

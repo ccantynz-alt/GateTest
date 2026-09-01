@@ -131,3 +131,74 @@ describe('flaky-tests — genuine unmocked calls still fire', () => {
     });
   }
 });
+
+describe('flaky-tests — the mock heuristic stays at warning severity', () => {
+  // gluecron-com-78's point, adopted: the "a file declaring a Mock/Stub/Fake
+  // binding is a file that mocks" hint knowingly admits a false negative — a
+  // data fixture named `mockUser` in a file that also calls out for real would
+  // go unreported. That trade is defensible at WARNING severity, where 80
+  // false warnings cost more trust than one missed advisory.
+  //
+  // It is NOT defensible if the same heuristic ever gates something blocking,
+  // or anything a user reads as a security signal. So the severity boundary is
+  // the contract, pinned here, and a future refactor that promotes this module
+  // has to come back and meet the argument rather than inherit the exemption.
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'modules', 'flaky-tests.js'), 'utf8',
+  );
+
+  // My first version of this asserted the whole module was warning-only, and
+  // it failed immediately: `flaky-tests:only-committed` is error severity, and
+  // rightly so — a committed `.only` / `fit(` silently disables the rest of
+  // the suite, so CI reports green having run one test. That rule does not
+  // consult the mock heuristic at all.
+  //
+  // The contract is narrower than "nothing here blocks": what must stay
+  // non-blocking is the rule the heuristic GATES. Writing the broad version
+  // first and being corrected by it is the reason to assert the specific one.
+
+  it('the rule gated by the mock heuristic is warning severity', async () => {
+    // Behavioural, not textual: run the rule and read the severity it emits.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-flaky-sev-'));
+    try {
+      const full = path.join(root, 'tests', 'sev.test.js');
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(
+        full,
+        "test('t', async () => { await axios.get('https://api.example.com/v1/users'); });\n",
+      );
+      const checks = [];
+      const result = {
+        addCheck(id, passed, meta) { checks.push({ id, passed, meta: meta || {} }); },
+        addInfo() {},
+      };
+      await new FlakyTestsModule().run(result, { projectRoot: root });
+      const net = checks.filter((c) => !c.passed && /real-network/.test(c.id));
+      assert.ok(net.length > 0, 'the real-network rule did not fire on a genuine call');
+      for (const f of net) {
+        assert.strictEqual(
+          f.meta.severity, 'warning',
+          'real-network has been promoted to a blocking severity. Its mock-name '
+          + 'heuristic knowingly trades a false negative for quieter warnings, '
+          + 'which is only defensible while it cannot fail a build. Re-argue the '
+          + 'trade before promoting it.',
+        );
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('only-committed stays blocking — it is not gated by the heuristic', () => {
+    // The other half of the boundary: narrowing the contract must not quietly
+    // license softening a rule that should block. A committed `.only` makes a
+    // green CI run meaningless.
+    assert.match(
+      src,
+      /only-committed[\s\S]{0,200}severity:\s*'error'/,
+      'only-committed is no longer blocking — a committed .only makes CI green on one test',
+    );
+  });
+});
