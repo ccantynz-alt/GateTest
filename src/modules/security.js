@@ -286,7 +286,26 @@ class SecurityModule extends BaseModule {
       // through a shell. execFile/spawn take an argv array and are the SAFE
       // alternative — flagging those would punish the correct fix. Requires
       // a `+` or `${` in the argument, so a static command is not flagged.
-      { regex: /\b(?:exec|execSync)\s*\(\s*[^)]*(?:\+|\$\{)/g, name: 'shell exec with interpolated input', severity: 'critical' },
+      // The `(?!\[)` is the whole difference between a shell command and an
+      // argv array. Node's `exec`/`execSync` take a command STRING and hand it
+      // to a shell; neither can accept an array. So a call shaped
+      //
+      //     exec(["git", "show", `${ref}:${path}`], repoDir)
+      //
+      // is a project's own argv-style helper that merely shares the name — no
+      // shell ever parses that interpolation. Reported as critical on
+      // ccantynz/Gluecron.com @e168803 (gluecron.com), returned by that team
+      // as our false positive with the mechanism, and they were right.
+      //
+      // The rule's comment below already had the principle — argv arrays are
+      // the SAFE alternative — but keyed it on the callee's NAME. The safety
+      // property lives in the argument's SHAPE, and a helper named `exec` that
+      // takes argv is the safe form wearing the unsafe name. This class fires
+      // on argv call sites across any Bun/Node codebase, so it is not niche.
+      //
+      // Only an array literal is excluded. `exec(cmd + input)` with no leading
+      // quote still fires, because that one really can reach a shell.
+      { regex: /\b(?:exec|execSync)\s*\(\s*(?!\[)[^)]*(?:\+|\$\{)/g, name: 'shell exec with interpolated input', severity: 'critical' },
       { regex: /\$\{.*req\.(params|query|body)/g, name: 'unsanitized user input in template', severity: 'critical' },
       { regex: /res\.redirect\s*\(\s*req\./g, name: 'open redirect risk', severity: 'high' },
       { regex: /\.createReadStream\s*\(\s*req\./g, name: 'path traversal risk', severity: 'critical' },
