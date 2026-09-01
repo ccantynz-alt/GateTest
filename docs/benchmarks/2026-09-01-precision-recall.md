@@ -108,6 +108,13 @@ Both real defects.
   `alt` attribute may read that as noise. Whether the full suite *should* block
   on accessibility is a product decision for Craig, not a defect to fix
   silently — flagged, not changed.
+
+  > **RULED, Craig 2026-09-01: "keep the a11y blocking, thats quality."**
+  > Accessibility findings block by design. They are not noise to be tuned
+  > away, and no future pass should downgrade their severity or exclude them
+  > from a suite to bring a finding count down. If an a11y rule fires
+  > *wrongly*, fix its precision with a control pair — a true finding that is
+  > inconvenient is the product working as intended.
 - Warnings were not individually audited. 133 non-blocking warnings on express
   is a large number; some fraction are likely false positives that do not block
   but do erode trust. That audit is separate work.

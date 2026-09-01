@@ -7,6 +7,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { stripJsonc, isJsoncPath } = require('../core/jsonc');
 
 class SyntaxModule extends BaseModule {
   constructor() {
@@ -210,6 +211,21 @@ class SyntaxModule extends BaseModule {
       JSON.parse(content);
       result.addCheck(`json:${relPath}`, true);
     } catch (err) {
+      // tsconfig / jsconfig / devcontainer / .vscode files are JSONC by
+      // specification — comments and trailing commas are legal there, and the
+      // tools that own those formats read them without complaint. Retrying is
+      // scoped to those filenames, so a trailing comma in an ordinary
+      // `data/config.json` is still the real error it has always been, and a
+      // genuinely malformed tsconfig still fails the second parse.
+      if (isJsoncPath(relPath)) {
+        try {
+          JSON.parse(stripJsonc(content));
+          result.addCheck(`json:${relPath}`, true, {
+            message: 'Valid JSONC (comments / trailing commas permitted in this file type)',
+          });
+          return;
+        } catch { /* fall through — malformed even as JSONC */ }
+      }
       result.addCheck(`json:${relPath}`, false, {
         file: relPath,
         message: err.message,

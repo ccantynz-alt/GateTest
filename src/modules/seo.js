@@ -6,6 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { isIllustrationPath } = require('../core/scan-scope');
 
 class SeoModule extends BaseModule {
   constructor() {
@@ -36,6 +37,9 @@ class SeoModule extends BaseModule {
       const relPath = path.relative(projectRoot, file);
       const normalised = relPath.replace(/\\/g, '/');
       if (INTERNAL_PATH_RE.test('/' + normalised)) continue;
+      // Library examples/ and sandbox/ are documentation on any repo.
+      // Scope, not severity — see src/core/scan-scope.js.
+      if (isIllustrationPath(normalised)) continue;
       const content = fs.readFileSync(file, 'utf-8');
       if (!SeoModule.isFullDocument(normalised, content)) {
         fragmentsSkipped++;

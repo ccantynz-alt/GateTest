@@ -55,6 +55,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isIllustrationPath } = require('../core/scan-scope');
 const BaseModule = require('./base-module');
 
 const DEFAULT_EXCLUDES = [
@@ -174,7 +175,12 @@ class HardcodedUrlModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const isTestFile = this._isTestPath(rel);
+    // Illustration directories join test files here rather than being skipped:
+    // a `localhost` URL in `examples/server.js` or `sandbox/client.js` is the
+    // demo working as intended, not a production defect. Downgraded to info so
+    // it stays visible without failing anyone's build. Measured on axios
+    // @81df7a5, where 3 of 5 localhost findings were in exactly those dirs.
+    const isTestFile = this._isTestPath(rel) || isIllustrationPath(rel);
     const lines = content.split('\n');
     let issues = 0;
 

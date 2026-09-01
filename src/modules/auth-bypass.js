@@ -31,6 +31,7 @@ const fs   = require('fs');
 const path = require('path');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
+const { isIllustrationPath } = require('../core/scan-scope');
 
 // ─── auth signal patterns ──────────────────────────────────────────────────
 
@@ -127,8 +128,13 @@ function isPublicRoute(routePath) {
   return PUBLIC_ROUTE_KEYWORDS.some(kw => routePath.toLowerCase().includes(kw));
 }
 
+// Illustration directories come from src/core/scan-scope.js — ONE definition
+// shared with a11y, visual and seo, which all had the same false positives on
+// the same third-party repos. Measured 2026-09-01: all 12 of this module's
+// findings on expressjs/express @023767f were inside `examples/`.
 function isPublicFile(relPath) {
   const lower = relPath.toLowerCase();
+  if (isIllustrationPath(lower)) return true;
   return (
     lower.includes('public/') ||
     lower.includes('/health') ||
