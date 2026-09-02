@@ -182,6 +182,23 @@ describe('Gluecron receiver — the legacy gate.ts shape with a bearer is accept
     assert.notStrictEqual(a, b);
   });
 
+  it('derives the SAME id Gluecron\'s emitter does — pinned vectors, confirmed both sides 2026-09-02', () => {
+    // gluecron-com-78 ran these three through gateTestEventId (Gluecron.com
+    // src/lib/gate.ts @ a56fef2) and they matched byte-for-byte; Gluecron pins
+    // the same literals in src/__tests__/gatetest-base-sha.test.ts. If either
+    // side changes the constant, the input order, the "\n" join, or the
+    // lowercasing, a legacy retry stops deduping against a new-emitter id —
+    // and this test is what says so.
+    const base = { repository: 'ccantynz-alt/Gluecron.com', ref: 'refs/heads/main', sha: 'a'.repeat(40) };
+    assert.strictEqual(deriveEventId({ ...base, baseSha: 'b'.repeat(40), mode: 'async' }), 'e55cfa53-e8fc-acba-f076-550ac4536180');
+    assert.strictEqual(deriveEventId({ ...base, mode: 'async' }), 'e3a07149-0dd0-7e8d-a9f6-10c26d507f40');
+    assert.strictEqual(deriveEventId({ ...base, baseSha: 'b'.repeat(40), mode: 'blocking' }), 'ae845bf2-d76c-4e1b-cc2b-81a4023def58');
+    // An uppercase sha in the wire body must land on vector A: the normaliser
+    // lowercases BEFORE hashing, as Gluecron's emitter does.
+    const shouted = normaliseLegacyPayload({ ...base, sha: 'A'.repeat(40), baseSha: 'B'.repeat(40), source: 'gluecron', mode: 'async' });
+    assert.strictEqual(shouted.eventId, 'e55cfa53-e8fc-acba-f076-550ac4536180');
+  });
+
   it('omitted baseSha in the legacy shape lands as NULL', async () => {
     const sql = captureSql();
     const body = JSON.parse(legacyBody()); delete body.baseSha;
