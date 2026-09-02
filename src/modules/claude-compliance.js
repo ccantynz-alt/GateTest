@@ -86,7 +86,15 @@ const MOCK_DATA_PATTERNS = [
 // Not-implemented stub signals.
 const STUB_PATTERNS = [
   { re: /throw\s+new\s+Error\s*\(\s*["'`]\s*(?:not\s*implemented|TODO|unimplemented|stub)\b/i, label: '"not implemented" stub throw' },
-  { re: /raise\s+NotImplementedError\b/, label: 'Python NotImplementedError stub' },
+  // Only a BARE raise. `raise NotImplementedError("Streamed bodies and files
+  // are mutually exclusive.")` is a deliberate API constraint that explains
+  // itself — a stub, by definition, does not. Measured 2026-09-01 on
+  // psf/requests @5460f46, src/requests/models.py:623, where exactly that
+  // line was reported as unfinished work.
+  //
+  // `NotImplementedError()` with empty parens is still a stub candidate: no
+  // message, no explanation, same crash for the caller.
+  { re: /raise\s+NotImplementedError\s*(?:\(\s*\))?\s*(?:#.*)?$/, label: 'Python NotImplementedError stub' },
   { re: /\/\/\s*TODO:?\s*implement\b/i, label: '"TODO: implement" placeholder' },
   { re: /\/\/\s*FIXME:?\s*implement\b/i, label: '"FIXME: implement" placeholder' },
   { re: /#\s*TODO:?\s*implement\b/i, label: '"TODO: implement" placeholder' },
@@ -323,12 +331,42 @@ ClaudeComplianceModule._looksAbstract = function (lines, lineIdx, content) {
   const indent = (l) => (l.match(/^\s*/) || [''])[0].length;
   const myIndent = indent(lines[lineIdx] || '');
   // Find the enclosing `def` (lower indent, walking up).
+  // Count triple-quote delimiters between a candidate line and the raise. An
+  // ODD number means the candidate sits INSIDE a docstring, so it is prose —
+  // not the enclosing signature.
+  //
+  // Flask's `add_url_rule` docstring contains a `.. code-block:: python`
+  // example whose body is `def index():`. Walking up from the
+  // `raise NotImplementedError`, that example matched first, and the method
+  // was judged concrete: a blocking "not-implemented stub" on the correct
+  // Python idiom for "subclasses must override".
+  //
+  // Measured 2026-09-01, the first time the engine was ever run on a Python
+  // repo (pallets/flask @d318b68, src/flask/sansio/scaffold.py:441). The
+  // existing guard already handled the bare case 220 lines earlier in the
+  // same file — it was documentation examples it could not see.
+  //
+  // The lookback is also widened: a 60-line window cannot reach past a long
+  // API docstring to the real `def`, which is exactly where these live.
+  const insideDocstring = (fromIdx) => {
+    let q = 0;
+    for (let k = fromIdx; k < lineIdx; k++) {
+      const m = (lines[k] || '').match(/"""|'''/g);
+      if (m) q += m.length;
+    }
+    return q % 2 === 1;
+  };
+
   let defIdx = -1;
-  for (let k = lineIdx - 1; k >= 0 && k >= lineIdx - 60; k--) {
+  for (let k = lineIdx - 1; k >= 0 && k >= lineIdx - 250; k--) {
     const l = lines[k];
     if (!l.trim()) continue;
-    if (indent(l) < myIndent && /^\s*(async\s+)?def\s+/.test(l)) { defIdx = k; break; }
-    if (indent(l) < myIndent && /^\s*class\s+/.test(l)) break;
+    if (indent(l) < myIndent && /^\s*(async\s+)?def\s+/.test(l)) {
+      if (insideDocstring(k)) continue; // a `def` in a doc example, not ours
+      defIdx = k;
+      break;
+    }
+    if (indent(l) < myIndent && /^\s*class\s+/.test(l) && !insideDocstring(k)) break;
   }
   if (defIdx === -1) return false;
   const deco = lines[defIdx - 1] || '';
