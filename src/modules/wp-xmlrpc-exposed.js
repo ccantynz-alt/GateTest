@@ -64,7 +64,12 @@ class WpXmlrpcExposedModule extends BaseModule {
       return;
     }
 
-    const fetchFn = moduleConfig.fetchFn || this._defaultFetch;
+    // Bound. Extracting the method bare loses `this`, so any `this._x()` inside
+    // it throws — and every probe's catch turns that into a passed check, so
+    // the module reports a clean site having never completed a request.
+    // wpVersionLeak shipped exactly that (2026-09-02). The other WP modules
+    // survived only because their _defaultFetch happened not to call `this`.
+    const fetchFn = moduleConfig.fetchFn || this._defaultFetch.bind(this);
     const timeoutMs = Math.max(1000, Math.min(moduleConfig.timeoutMs || 8000, 30000));
     const xmlrpcUrl = `${normalised}/xmlrpc.php`;
 

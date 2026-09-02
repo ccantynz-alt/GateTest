@@ -80,11 +80,17 @@ class WpVersionLeakModule extends BaseModule {
       return;
     }
 
-    const fetchFn = moduleConfig.fetchFn || this._defaultFetch;
+    // Bound. Extracting the method bare loses `this`, so any `this._x()` inside
+    // it throws — and every probe's catch turns that into a passed check, so
+    // the module reports a clean site having never completed a request.
+    // wpVersionLeak shipped exactly that (2026-09-02). The other WP modules
+    // survived only because their _defaultFetch happened not to call `this`.
+    const fetchFn = moduleConfig.fetchFn || this._defaultFetch.bind(this);
     const timeoutMs = Math.max(1000, Math.min(moduleConfig.timeoutMs || 8000, 30000));
 
     // Pull homepage once — most reliable single-shot version leak signal.
     let detectedVersion = null;
+    let homepageFailed = false;
     try {
       const homepage = await fetchFn(normalised + '/', { timeoutMs });
       if (homepage.status >= 200 && homepage.status < 300 && typeof homepage.body === 'string') {
@@ -100,6 +106,7 @@ class WpVersionLeakModule extends BaseModule {
         }
       }
     } catch (err) {
+      homepageFailed = true;
       result.addCheck('wp-version-leak:homepage-fetch', true, {
         severity: 'info',
         message: `Could not fetch homepage: ${err.message || err}`,
@@ -108,12 +115,17 @@ class WpVersionLeakModule extends BaseModule {
 
     // Now the known per-vector leaks.
     let leakCount = detectedVersion ? 1 : 0;
+    // Probes that could not complete. "We looked and found nothing" and "we
+    // could not look" are different answers, and only one of them is
+    // reassuring — see the summary below.
+    let probeErrors = homepageFailed ? 1 : 0;
     for (const vector of VERSION_LEAK_VECTORS) {
       const url = `${normalised}/${vector.path}`;
       let res;
       try {
         res = await fetchFn(url, { timeoutMs });
       } catch (err) {
+        probeErrors += 1;
         result.addCheck(`wp-version-leak:probe-error:${vector.path}`, true, {
           severity: 'info',
           message: `Could not probe ${vector.path}: ${err.message || err}`,
@@ -142,11 +154,36 @@ class WpVersionLeakModule extends BaseModule {
       });
     }
 
+    // A CLEAN BILL OF HEALTH REQUIRES HAVING LOOKED.
+    //
+    // This module shipped reporting "no version leaks detected across 5 known
+    // vectors. Good." on a site leaking its version four ways, because every
+    // probe threw and each catch emitted a passed check. The customer was told
+    // their site was clean by a scanner that never completed a request.
+    //
+    // The binding bug that caused it is fixed, but the reporting was the more
+    // dangerous half: any unreachable host, timeout or TLS failure would have
+    // produced the same false reassurance. "We looked and found nothing" and
+    // "we could not look" must never render as the same sentence.
+    const totalVectors = VERSION_LEAK_VECTORS.length + 1;
+    const probed = totalVectors - probeErrors;
+    let summary;
+    if (detectedVersion) {
+      summary = `wpVersionLeak: detected WordPress ${detectedVersion} across ${leakCount} leak vector(s). `
+        + "Lock these down so a CVE attacker can't match versions to exploits.";
+    } else if (probeErrors >= totalVectors) {
+      summary = `wpVersionLeak: NOT CHECKED — all ${totalVectors} probes failed to complete. `
+        + 'This is not a clean result; the site could not be reached.';
+    } else if (probeErrors > 0) {
+      summary = `wpVersionLeak: no leaks found in the ${probed} of ${totalVectors} vectors that could be `
+        + `probed. ${probeErrors} probe(s) failed, so this is a partial result.`;
+    } else {
+      summary = `wpVersionLeak: no version leaks detected across ${totalVectors} known vectors. Good.`;
+    }
+
     result.addCheck('wp-version-leak:summary', true, {
       severity: 'info',
-      message: detectedVersion
-        ? `wpVersionLeak: detected WordPress ${detectedVersion} across ${leakCount} leak vector(s). Lock these down so a CVE attacker can't match versions to exploits.`
-        : `wpVersionLeak: no version leaks detected across ${VERSION_LEAK_VECTORS.length + 1} known vectors. Good.`,
+      message: summary,
     });
   }
 
