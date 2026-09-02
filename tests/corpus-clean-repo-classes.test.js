@@ -94,9 +94,14 @@ describe('prSize — a commit already on the base branch is not a pull request',
     git('init -q -b main'); git('add -A'); git('commit -qm one');
     fs.writeFileSync(path.join(root, 'big.js'), Array.from({ length: 1500 }, (_, i) => `const v${i} = ${i};`).join('\n') + '\n');
     git('add -A'); git('commit -qm two');
-    return { root, git };
+    // A remote whose default branch carries these commits — the corpus
+    // shape (pinned checkout of a pushed commit), and any CI scan of main.
+    const remote = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-clean-classes-remote-'));
+    execSync('git init -q --bare -b main', { cwd: remote, stdio: 'pipe' });
+    git(`remote add origin ${remote}`); git('push -q origin main'); git('remote set-head origin main');
+    return { root, git, remote };
   }
-  it('HEAD on main → no PR → no size findings', async () => {
+  it('HEAD already on the remote default branch → no PR → no size findings', async () => {
     const { root } = gitRepo();
     try {
       const r = result();
@@ -104,6 +109,19 @@ describe('prSize — a commit already on the base branch is not a pull request',
       assert.deepStrictEqual(r.checks.filter((c) => !c.passed && /pr-size/.test(c.name)), []);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
+  it('NEGATIVE CONTROL: a local main with no remote still sizes the last commit (pre-push hook)', async () => {
+    const root = repo({ 'a.js': 'x\n' });
+    const git = (c) => execSync(`git ${c}`, { cwd: root, stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+    try {
+      git('init -q -b main'); git('add -A'); git('commit -qm one');
+      fs.writeFileSync(path.join(root, 'big.js'), Array.from({ length: 1500 }, (_, i) => `const v${i} = ${i};`).join('\n') + '\n');
+      git('add -A'); git('commit -qm two');
+      const r = result();
+      await new PrSize().run(r, { projectRoot: root });
+      assert.ok(r.checks.some((c) => !c.passed && /pr-size/.test(c.name)), 'the developer committing to main locally still gets the last commit sized');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
   it('NEGATIVE CONTROL: a branch ahead of main is still sized', async () => {
     const { root, git } = gitRepo();
     try {

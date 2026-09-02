@@ -501,8 +501,14 @@ class PrSizeModule extends BaseModule {
     // commit was BEHIND the base, to whatever git produced. Corpus gate
     // 2026-09-02: axios @81df7a5 reported "366 files changed, 52447 lines —
     // split the PR" at error severity for a repo with no PR at all.
-    const headRes = this._exec('git rev-parse HEAD', { cwd: projectRoot });
-    if (headRes.exitCode === 0 && (headRes.stdout || '').trim() === mergeBase) return NOT_A_PR;
+    // Only a REMOTE base proves it: HEAD sitting on `origin/HEAD` means the
+    // commit is already on the shared branch. A local `main` with no remote
+    // is the developer committing directly and running the pre-push hook —
+    // there the last commit is the thing to size, so fall through.
+    if (base.startsWith('origin/')) {
+      const headRes = this._exec('git rev-parse HEAD', { cwd: projectRoot });
+      if (headRes.exitCode === 0 && (headRes.stdout || '').trim() === mergeBase) return NOT_A_PR;
+    }
 
     const diffRes = this._exec(
       `git diff --numstat -C ${mergeBase}..HEAD`,
