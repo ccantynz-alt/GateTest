@@ -17,7 +17,7 @@
  *   X-Signal-Signature: sha256=<hmac(GLUECRON_EMITTER_SECRET, rawBody)>
  * Body (JSON):
  *   { eventId, eventType:'push.received', repository, sha, ref,
- *     pullRequestNumber, emittedAt }
+ *     pullRequestNumber, baseSha?, emittedAt }
  *
  * Responses:
  *   202 { queued: true, eventId }       — new event enqueued
@@ -108,6 +108,24 @@ function validatePushPayload(parsed) {
     prNum = n;
   }
 
+  // baseSha (optional): the commit this push is compared against —
+  // post-receive's oldSha, or the merge-base for a merge-gate scan. Gluecron
+  // omits it on branch creation. Without it every push is whole-repo
+  // enforced (gate-verdict.js), which is the loud mode; with it only code
+  // this push touched can fail. Anything that isn't a 40-hex sha is
+  // rejected rather than silently dropped — a malformed base that vanished
+  // would look exactly like Gluecron never sending one.
+  let baseSha = null;
+  if (p.baseSha !== null && p.baseSha !== undefined) {
+    if (typeof p.baseSha !== 'string' || !/^[0-9a-f]{40}$/i.test(p.baseSha)) {
+      return { ok: false, error: 'baseSha must be a 40-hex string when present' };
+    }
+    if (/^0{40}$/.test(p.baseSha)) {
+      return { ok: false, error: 'baseSha must be omitted on branch creation, not all-zero' };
+    }
+    baseSha = p.baseSha.toLowerCase();
+  }
+
   return {
     ok: true,
     payload: {
@@ -117,6 +135,7 @@ function validatePushPayload(parsed) {
       sha: p.sha,
       ref: p.ref,
       pullRequestNumber: prNum,
+      baseSha,
       emittedAt: p.emittedAt,
     },
   };
@@ -194,6 +213,7 @@ async function processPushEvent({
       sha: payload.sha,
       ref: payload.ref,
       pullRequestNumber: payload.pullRequestNumber,
+      baseSha: payload.baseSha || null,
       host: 'gluecron',
       sql,
     });

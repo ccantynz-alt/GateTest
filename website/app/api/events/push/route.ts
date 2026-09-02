@@ -16,6 +16,7 @@
  *       sha: "<40-hex>",
  *       ref: "refs/heads/main",
  *       pullRequestNumber: <int|null>,
+ *       baseSha: "<40-hex>",               // optional — oldSha / merge-base; OMIT on branch creation
  *       emittedAt: "<ISO-8601>"
  *     }
  *
