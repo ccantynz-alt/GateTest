@@ -186,6 +186,52 @@ export default function ConfigurationDocs() {
           </p>
         </section>
 
+        {/* PR gate */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-3">
+            What fails a pull request
+          </h2>
+          <p className="text-muted mb-4">
+            The check GateTest posts on a commit is decided by three questions,
+            in this order. A finding has to answer yes to all of them to turn
+            the check red.
+          </p>
+          <ol className="list-decimal pl-6 text-muted text-sm leading-relaxed space-y-2 mb-4">
+            <li>
+              <strong>Is it error severity and confident?</strong> Every finding
+              carries a confidence score. The same pattern inside a docstring, a
+              test fixture, a block comment or a string literal is scored down
+              and shown as <em>held back</em> &mdash; visible in the comment,
+              never enforced. Warnings never fail a check, whatever their count.
+            </li>
+            <li>
+              <strong>Is it in code this change touched?</strong> When the event
+              carried a base commit, findings are attributed to the diff.
+              A blocking finding in a file the pull request never touched is
+              counted and labelled <em>pre-existing</em>, and does not fail the
+              check for the person who did not write it. With no base to compare
+              against (a first push, a force-push) the whole repository is
+              enforced and the comment says so.
+            </li>
+            <li>
+              <strong>Is the repo in strict mode?</strong> Fresh installs run in
+              advisory mode: the check stays green and the comment says what
+              strict mode would have done. Set{" "}
+              <code className="font-mono text-xs">{'{ "mode": "strict" }'}</code>{" "}
+              in <code className="font-mono text-xs">.gatetest.json</code> to
+              enforce.
+            </li>
+          </ol>
+          <p className="text-muted text-sm leading-relaxed">
+            A scan that did not complete is reported as an error in every mode
+            &mdash; that is a GateTest problem, and it is never shown as a green
+            tick. Findings you dismiss with{" "}
+            <code className="font-mono text-xs">.gatetestignore</code> are out of
+            the decision entirely, and cross-module duplicates of the same line
+            count once.
+          </p>
+        </section>
+
         {/* .gatetest.json */}
         <section className="mb-12">
           <h2 className="text-2xl font-bold mb-3">

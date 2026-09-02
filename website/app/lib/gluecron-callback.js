@@ -26,6 +26,8 @@
  *   }
  */
 
+const { computeGateVerdict } = require("./gate-verdict");
+
 /**
  * Build the payload Gluecron expects from a raw scan result.
  *
@@ -42,15 +44,26 @@ function buildGluecronPayload({ repository, sha, ref, scanResult }) {
   const durationMs = typeof result.duration === "number" ? result.duration : 0;
   const moduleCount = Array.isArray(result.modules) ? result.modules.length : 0;
 
+  // The verdict is the same one the GitHub callback posts — see
+  // gate-verdict.js. Gluecron's receiver has no advisory concept (its
+  // gate_runs row IS the gate), so it always gets the enforcing verdict:
+  // blocking findings in this change fail; warnings and low-confidence
+  // errors are reported in `details`, never fail. Before 2026-09-02 this
+  // failed on `totalIssues > 0`, so a single warning failed the push.
+  const verdict = computeGateVerdict(result, "strict");
+  const issuesWord = `${totalIssues} issue${totalIssues === 1 ? "" : "s"} across ${moduleCount} module${moduleCount === 1 ? "" : "s"}`;
   /** @type {"passed"|"failed"|"error"} */
   let status;
   let summary;
-  if (result.error) {
+  if (verdict.state === "error") {
     status = "error";
-    summary = String(result.error).slice(0, 500);
-  } else if (totalIssues > 0) {
+    summary = String(result.error || verdict.reason).slice(0, 500);
+  } else if (verdict.state === "failure") {
     status = "failed";
-    summary = `${totalIssues} issue${totalIssues === 1 ? "" : "s"} across ${moduleCount} module${moduleCount === 1 ? "" : "s"}`;
+    summary = `${verdict.reason} — ${issuesWord}`;
+  } else if (totalIssues > 0) {
+    status = "passed";
+    summary = `${issuesWord}, none blocking${verdict.attributed ? " in this change" : ""} (${verdict.reason})`;
   } else {
     status = "passed";
     summary = `${moduleCount} module${moduleCount === 1 ? "" : "s"} passed, 0 issues`;

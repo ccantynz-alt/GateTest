@@ -22,6 +22,7 @@
  */
 
 const { siteUrl, resolveSiteUrl, SUPPORT_EMAIL } = require('./site-url');
+const { computeGateVerdict } = require('./gate-verdict');
 
 const GITHUB_API = 'https://api.github.com';
 const STATUS_CONTEXT = 'gatetest / scan';
@@ -64,21 +65,18 @@ function resolveGitHubToken(env) {
  * return 'error' regardless of mode — that's a GateTest problem, not a
  * customer-code finding, and the customer needs to know about it.
  *
+ * The decision itself lives in gate-verdict.js (shared with the Gluecron
+ * callback): only CONFIDENT errors fail, and only ones IN THIS CHANGE when
+ * the base commit was known. The previous body of this function read
+ * `module.checks` as an array; the engine emits a number, so strict mode
+ * could never go red (measured 2026-09-02).
+ *
  * @param {object} scanResult
- * @param {'advisory'|'strict'} [mode='advisory']
+ * @param {'advisory'|'strict'|'admin'} [mode='advisory']
  * @returns {'success'|'failure'|'error'}
  */
 function toCommitState(scanResult, mode = 'advisory') {
-  if (!scanResult || scanResult.error) return 'error';
-  if (scanResult.status !== 'complete') return 'error';
-  if (mode !== 'strict' && mode !== 'admin') return 'success';
-  // strict/admin mode — any error-severity issue → failure; warnings alone → success.
-  const modules = Array.isArray(scanResult.modules) ? scanResult.modules : [];
-  const hasErrors = modules.some((m) => {
-    const checks = Array.isArray(m.checks) ? m.checks : [];
-    return checks.some((c) => c.severity === 'error');
-  });
-  return hasErrors ? 'failure' : 'success';
+  return computeGateVerdict(scanResult, mode).state;
 }
 
 /**
@@ -97,6 +95,17 @@ function buildDescription(scanResult, mode = 'advisory') {
   const suffix = (mode === 'strict' || mode === 'admin') ? '' : ' · advisory mode';
   if (totalIssues === 0) {
     return `All ${moduleCount} module${moduleCount === 1 ? '' : 's'} passed — 0 issues found${suffix}`.slice(0, 140);
+  }
+  // A red check names what made it red; a green one with findings names
+  // what was held back. "N issues found" on its own explains neither.
+  const v = computeGateVerdict(scanResult, mode);
+  if (v.state === 'failure') {
+    const scope = v.attributed ? ' in this change' : '';
+    const held = v.blockingPreExisting > 0 ? ` · ${v.blockingPreExisting} pre-existing not enforced` : '';
+    return `${v.blockingInChange} blocking finding${v.blockingInChange === 1 ? '' : 's'}${scope} (${totalIssues} total)${held}`.slice(0, 140);
+  }
+  if (v.enforced && v.blocking > 0) {
+    return `${totalIssues} issue${totalIssues === 1 ? '' : 's'} found — ${v.blocking} blocking, all pre-existing, not enforced on this change`.slice(0, 140);
   }
   return `${totalIssues} issue${totalIssues === 1 ? '' : 's'} found across ${moduleCount} module${moduleCount === 1 ? '' : 's'}${suffix}`.slice(0, 140);
 }
@@ -199,19 +208,26 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
   const ownerRepoParts = String(repository || '').split('/');
   const owner = ownerRepoParts[0] || '';
   const repoName = ownerRepoParts[1] || '';
-  const state = toCommitState(scanResult, mode);
+  const verdict = computeGateVerdict(scanResult, mode);
+  const state = verdict.state;
   const totalIssues = typeof (scanResult && scanResult.totalIssues) === 'number' ? scanResult.totalIssues : 0;
   // Advisory mode with findings: surface them in the comment body, but
   // ICON stays neutral and headline calls it out as advisory.
   const advisoryWithFindings = mode === 'advisory' && totalIssues > 0 && state === 'success';
+  // Enforcing mode, findings present, but none of them blocking in THIS
+  // change — the tick is green and the headline must say why, or the
+  // reader assumes the scanner missed what it actually held back.
+  const heldBack = verdict.enforced && state === 'success' && totalIssues > 0;
   const icon = state === 'error' ? '⚠️' : advisoryWithFindings ? '🟡' : state === 'failure' ? '❌' : '✅';
   const headline = state === 'error'
     ? 'Scan error'
     : advisoryWithFindings
       ? `${totalIssues} finding${totalIssues === 1 ? '' : 's'} (advisory)`
       : state === 'failure'
-        ? 'Issues found'
-        : 'All checks passed';
+        ? `${verdict.blockingInChange} blocking finding${verdict.blockingInChange === 1 ? '' : 's'}${verdict.attributed ? ' in this change' : ''}`
+        : heldBack
+          ? `Passed — ${totalIssues} finding${totalIssues === 1 ? '' : 's'}, none blocking${verdict.attributed ? ' in this change' : ''}`
+          : 'All checks passed';
   const shortSha = sha ? sha.slice(0, 7) : '???????';
 
   const lines = [
@@ -282,6 +298,8 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
       const notes = [];
       if (fsum && fsum.duplicatesCollapsed > 0) notes.push(`${fsum.duplicatesCollapsed} duplicate report${fsum.duplicatesCollapsed === 1 ? '' : 's'} folded (the same line flagged by more than one module counts once)`);
       if (fsum && fsum.hiddenLowConfidence > 0) notes.push(`${fsum.hiddenLowConfidence} low-confidence error${fsum.hiddenLowConfidence === 1 ? '' : 's'} held back from blocking (shown, not enforced)`);
+      if (verdict.blockingPreExisting > 0) notes.push(`${verdict.blockingPreExisting} blocking finding${verdict.blockingPreExisting === 1 ? '' : 's'} pre-date this change and ${verdict.blockingPreExisting === 1 ? 'is' : 'are'} not enforced on it — only code this change touched can fail the check`);
+      if (verdict.source === 'registry' && !verdict.attributed && verdict.blocking > 0) notes.push('base commit unknown, so the whole repository was enforced rather than just this change');
       // Suppression in place (advancement #13): the dismissal affordance
       // lives where the reviewer already is.
       notes.push('disagree with a finding? reply `@gatetest ignore <module:rule>` — it lands in `.gatetestignore` on this branch and tunes GateTest\'s precision');

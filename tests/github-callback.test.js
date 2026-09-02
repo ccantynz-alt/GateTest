@@ -323,10 +323,12 @@ describe('buildMarkdownComment — advisory mode', () => {
     assert.ok(md.includes('"mode": "strict"'), `expected strict-mode upgrade snippet`);
   });
 
-  it('uses ❌ icon and "Issues found" headline in STRICT mode with errors', () => {
+  it('uses ❌ icon and a blocking-count headline in STRICT mode with errors', () => {
     const md = buildMarkdownComment('o/r', 'a'.repeat(40), makeResultWithIssues(), null, 'strict');
     assert.ok(md.includes('❌'), `expected ❌ icon in strict-with-errors`);
-    assert.ok(md.includes('Issues found'), `expected "Issues found" headline`);
+    // The headline names what made the check red, not a generic "Issues
+    // found" — see tests/gate-verdict.test.js for the full contract.
+    assert.match(md, /\d+ blocking finding/);
   });
 
   it('does NOT render the advisory note in strict mode', () => {

@@ -238,7 +238,10 @@ export async function runScan(
   // about quality gates is failing on old code counted as new. When the
   // event carried a base commit, load its tree too (one more archive read)
   // and diff by content; findings in changed files are tagged `inDiff`.
-  // Attribution only — the gate decision is unchanged.
+  // gate-verdict.js enforces on `inDiff` in strict/admin mode: a blocking
+  // finding in a file this change did not touch is reported, not enforced.
+  // With no base (first push, force-push, unreadable base) the whole repo
+  // is enforced and the verdict says so.
   let changedFiles: Set<string> | null = null;
   if (baseRef && engineTier) {
     try {

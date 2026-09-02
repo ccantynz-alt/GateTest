@@ -96,7 +96,11 @@ function normalizeFindings(results, opts = {}) {
   for (const r of results || []) {
     const mod = r.module || r.name || 'unknown';
     for (const c of r.checks || []) {
-      if (!c || c.passed) continue;
+      // Suppressed (.gatetestignore / baseline) checks are out of every
+      // gate count in runner.js; they must be out of the ranked view too,
+      // or the host verdict built on `blocking` re-enforces what the
+      // customer explicitly dismissed.
+      if (!c || c.passed || c.suppressed) continue;
       const severity = (c.severity || 'error').toLowerCase();
       const file = normPath(c.file || c.filePath || (c.details && !Array.isArray(c.details) && c.details.file) || null);
       const line = Number(c.line || (c.details && !Array.isArray(c.details) && c.details.line) || 0) || null;
