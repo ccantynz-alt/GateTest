@@ -9,7 +9,9 @@
 // severities. The engine emits `checks: <number>` (scan-executor.ts:44), so
 // `Array.isArray` gave `[]` and strict mode could never go red. The existing
 // tests handed it arrays, agreed with the hypothesis, and never caught it.
-// gluecron-callback failed on `totalIssues > 0` — a warning failed the push.
+// gluecron-callback.js failed on `totalIssues > 0`; but a sibling .ts shadowed it
+// in every bundle and posted "passed" for any completed scan. Production's Gluecron
+// gate could never go red either (corrected 2026-09-01, .ts deleted).
 //
 // Every fixture below is the REAL envelope: `checks` is a number, blocking /
 // inDiff / duplicateOf live on `findings[]`, `findingSummary` is present.
@@ -195,7 +197,7 @@ describe('gate verdict — what the customer reads', () => {
 });
 
 describe('gate verdict — Gluecron gets the same decision', () => {
-  it('a warning-only result PASSES (it failed the push before)', () => {
+  it('a warning-only result PASSES (the shipped .ts passed everything; the shadowed .js failed on any issue)', () => {
     const p = buildGluecronPayload({ repository: 'o/r', sha: 'a'.repeat(40), scanResult: engineResult([finding({ severity: 'warning', blocking: false })]) });
     assert.strictEqual(p.status, 'passed');
     assert.match(p.summary, /none blocking/);

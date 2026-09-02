@@ -9,8 +9,12 @@
  *   github-callback   read `module.checks` as an array of severities; the
  *                     engine emits `checks: <number>`, so strict mode could
  *                     NEVER go red. A dashboard light.
- *   gluecron-callback failed on `totalIssues > 0` — one warning failed the
- *                     push. A tripwire.
+ *   gluecron-callback the .js failed on `totalIssues > 0`, but a sibling
+ *                     `.ts` shadowed it in every bundle and posted "passed"
+ *                     for any completed scan. In production the Gluecron
+ *                     gate could never go red either. (Corrected
+ *                     2026-09-01; the .ts is gone and
+ *                     tests/lib-basename-collision.test.js guards it.)
  *
  * Neither used what the engine had already worked out: confidence-scored
  * `blocking` (doc/test/fixture/comment/string-literal multipliers against
