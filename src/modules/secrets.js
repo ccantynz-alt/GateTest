@@ -458,14 +458,70 @@ class SecretsModule extends BaseModule {
           cwd: projectRoot,
         });
         if (exitCode === 0) {
+          const verdict = this._trackedFileVerdict(filename, filePath);
+          if (!verdict) continue;
           result.addCheck(`secrets:tracked-${filename}`, false, {
             file: filename,
-            message: `${filename} is tracked by git — this file likely contains secrets`,
+            severity: verdict.severity,
+            message: verdict.message,
             suggestion: `Add "${filename}" to .gitignore and remove from git tracking`,
           });
         }
       }
     }
+  }
+
+  /**
+   * What a TRACKED sensitive-looking file actually holds decides its severity.
+   *
+   * expressjs/express commits a `.npmrc` containing exactly four lines:
+   * `package-lock=false`, `min-release-age=7`, `ignore-scripts=true`,
+   * `allow-git=none`. That is supply-chain hygiene, and the 2026-09-02 corpus
+   * gate found us BLOCKING express for it with "this file likely contains
+   * secrets" at confidence 1.0. The filename is a prior, not evidence; the
+   * content is the evidence.
+   *
+   *   - key material (`key.pem`, `id_rsa`)            -> error, always
+   *   - `.npmrc` with `_authToken` / `_auth` / `_password` -> error
+   *   - `.npmrc` with only config keys                 -> null (no finding)
+   *   - `.env*` with a real-looking value              -> error
+   *   - `.env*` with only blanks / placeholders / refs -> warning (hygiene)
+   *   - `credentials.json` etc. with a credential key  -> error, else warning
+   *
+   * @returns {{severity: string, message: string}|null}
+   */
+  _trackedFileVerdict(filename, filePath) {
+    let content = '';
+    try { content = fs.readFileSync(filePath, 'utf-8'); } catch { /* unreadable: treat as opaque */ }
+    const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith(';'));
+    const tracked = `${filename} is tracked by git`;
+
+    if (/^(?:key\.pem|id_rsa)$/.test(filename)) {
+      return { severity: 'error', message: `${tracked} — private key material must never be committed` };
+    }
+    if (filename === '.npmrc') {
+      if (lines.some((l) => /(?:_authToken|_auth|_password|:username|:email)\s*=/i.test(l))) {
+        return { severity: 'error', message: `${tracked} and carries a registry credential` };
+      }
+      return null; // config-only .npmrc is the recommended way to pin npm behaviour
+    }
+    if (filename.startsWith('.env')) {
+      const live = lines.some((l) => {
+        const m = l.match(/^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.*)$/);
+        if (!m) return false;
+        const v = m[1].replace(/^['"]|['"]$/g, '').trim();
+        if (v.length < 8) return false;
+        if (/^\$\{?[A-Za-z_]/.test(v)) return false;           // ${VAR} / $VAR reference
+        return !PLACEHOLDER_VALUE_RE.test(v);
+      });
+      return live
+        ? { severity: 'error', message: `${tracked} and holds at least one real-looking value` }
+        : { severity: 'warning', message: `${tracked} — it holds only blanks or placeholders today; a real value will be committed the first time someone fills it in` };
+    }
+    if (/"(?:private_key|client_secret|secret|token|password|api_key)"\s*:\s*"[^"]{8,}"/i.test(content)) {
+      return { severity: 'error', message: `${tracked} and contains a credential-shaped value` };
+    }
+    return { severity: 'warning', message: `${tracked} — this filename usually holds credentials; verify it is meant to be public` };
   }
 
   /**
