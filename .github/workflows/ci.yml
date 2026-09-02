@@ -345,7 +345,6 @@ jobs:
           --skip-module mutation --skip-module e2e --skip-module unitTests --skip-module dataIntegrity
         env:
           GATETEST_NO_TELEMETRY: '1'
-        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF to GitHub Security
