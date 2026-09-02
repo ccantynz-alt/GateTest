@@ -13,11 +13,20 @@
  * copy per the HTTP-only coupling rule. Source: Gluecron.com/GATETEST_HOOK.md.
  *
  * POST /api/events/push
- * Headers:
+ * Auth — ONE secret, GLUECRON_EMITTER_SECRET, accepted two ways:
  *   X-Signal-Signature: sha256=<hmac(GLUECRON_EMITTER_SECRET, rawBody)>
- * Body (JSON):
+ *   Authorization: Bearer <GLUECRON_EMITTER_SECRET>
+ * Body (JSON) — Signal Bus shape:
  *   { eventId, eventType:'push.received', repository, sha, ref,
  *     pullRequestNumber, baseSha?, emittedAt }
+ * — or the shape Gluecron's src/lib/gate.ts notifyGateTestOfPush has emitted
+ *   since before the Signal Bus existed (verified by vapron-4f 2026-09-02 on
+ *   gluecron.com main @167ecb8 and gluecron.vapron.ai @07773a0):
+ *   { repository, ref, sha, baseSha?, source:'gluecron', mode:'async'|... }
+ *   It is normalised into the Signal Bus shape (see normaliseLegacyPayload)
+ *   with a DETERMINISTIC eventId, so a retry still hits the duplicate path.
+ *   Both shapes land on one intake so Craig mints one secret and no Gluecron
+ *   deploy is needed for the first push to queue.
  *
  * Responses:
  *   202 { queued: true, eventId }       — new event enqueued
@@ -66,6 +75,56 @@ function verifySignalSignature(rawBody, headerValue, secret) {
     'sha256=' +
     crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
   return safeEqual(expected, headerValue);
+}
+
+/**
+ * Verify `Authorization: Bearer <secret>` against the emitter secret.
+ * Timing-safe; false on anything missing.
+ */
+function verifyBearer(headerValue, secret) {
+  if (!secret || !headerValue || typeof headerValue !== 'string') return false;
+  const m = headerValue.match(/^Bearer\s+(\S+)\s*$/i);
+  if (!m) return false;
+  return safeEqual(m[1], secret);
+}
+
+/**
+ * Deterministic eventId for a body that did not carry one: a UUID-shaped
+ * digest over what identifies the event, so a retried notify dedupes as
+ * 200-duplicate instead of queueing a second scan. Same inputs and order
+ * as Gluecron's own scheme (gluecron-com-78, PR #5624): the version tag,
+ * repository, ref, sha, baseSha-or-empty, mode — joined with a newline.
+ */
+function deriveEventId({ repository, ref, sha, baseSha, mode }) {
+  const h = crypto.createHash('sha256')
+    .update(['gluecron-gatetest-v1', repository, ref || '', sha, baseSha || '', mode || 'async'].join('\n'))
+    .digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
+/**
+ * Gluecron's gate.ts emitter sends { repository, ref, sha, baseSha?, source,
+ * mode } — no eventId, eventType or emittedAt. Rebuild the Signal Bus shape
+ * from it. Anything already carrying eventId + eventType is returned as-is,
+ * so an emitter that has moved to the Signal Bus shape is never touched.
+ */
+function normaliseLegacyPayload(parsed) {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  if (parsed.eventId || parsed.eventType) return parsed;
+  if (typeof parsed.sha !== 'string' || typeof parsed.repository !== 'string') return parsed;
+  const sha = parsed.sha.toLowerCase();
+  const baseSha = typeof parsed.baseSha === 'string' ? parsed.baseSha.toLowerCase() : parsed.baseSha;
+  return {
+    eventId: deriveEventId({ repository: parsed.repository, ref: parsed.ref, sha, baseSha, mode: parsed.mode }),
+    eventType: 'push.received',
+    repository: parsed.repository,
+    sha,
+    ref: parsed.ref,
+    pullRequestNumber: parsed.pullRequestNumber === undefined ? null : parsed.pullRequestNumber,
+    baseSha: baseSha === undefined ? null : baseSha,
+    emittedAt: parsed.emittedAt || new Date().toISOString(),
+    legacyShape: true,
+  };
 }
 
 /**
@@ -158,6 +217,7 @@ function validatePushPayload(parsed) {
 async function processPushEvent({
   rawBody,
   signatureHeader,
+  authorizationHeader,
   env,
   sql,
   queueStore,
@@ -172,7 +232,13 @@ async function processPushEvent({
     };
   }
 
-  if (!verifySignalSignature(rawBody, signatureHeader, secret)) {
+  // HMAC when the header is present; bearer otherwise. A body that carries
+  // a signature is judged on the signature alone — a valid bearer must not
+  // rescue a bad signature.
+  const authed = signatureHeader
+    ? verifySignalSignature(rawBody, signatureHeader, secret)
+    : verifyBearer(authorizationHeader, secret);
+  if (!authed) {
     return { status: 401, body: { error: 'invalid signature' } };
   }
 
@@ -183,7 +249,7 @@ async function processPushEvent({
     return { status: 400, body: { error: 'malformed: invalid JSON' } };
   }
 
-  const validation = validatePushPayload(parsed);
+  const validation = validatePushPayload(normaliseLegacyPayload(parsed));
   if (!validation.ok) {
     return { status: 400, body: { error: `malformed: ${validation.error}` } };
   }
@@ -266,6 +332,9 @@ async function processPushEvent({
 }
 
 module.exports = {
+  verifyBearer,
+  deriveEventId,
+  normaliseLegacyPayload,
   QUEUE_FULL_THRESHOLD,
   RETRY_AFTER_SECONDS,
   verifySignalSignature,

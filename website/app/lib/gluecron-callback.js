@@ -10,9 +10,25 @@
  * still happens; this callback fires on the side, and its failure MUST NOT
  * break the sync response.
  *
- * Env vars:
- *   GLUECRON_CALLBACK_URL     — e.g. https://gluecron.com/api/hooks/gatetest
+ * Env vars (two spellings each — see resolveCallbackTarget for why):
+ *   GLUECRON_CALLBACK_URL     — e.g. https://gluecron.vapron.ai/api/hooks/gatetest
+ *     or GLUECRON_URL         — the host's origin; /api/hooks/gatetest is appended
  *   GLUECRON_CALLBACK_SECRET  — bearer token Gluecron expects
+ *     or GATETEST_CALLBACK_SECRET
+ *   GATETEST_HMAC_SECRET      — alternative to the bearer: X-GateTest-Signature
+ *                               sha256=<hmac(rawBody)> (GATETEST_HOOK.md)
+ *
+ * ONE implementation. Until 2026-09-02 a sibling gluecron-callback.ts also
+ * existed, and `import ... from "@/app/lib/gluecron-callback"` resolved to
+ * IT — so the worker and /api/scan/run shipped the .ts, whose status was
+ * `scanResult.error ? failed : status === "complete" ? passed : failed`. A
+ * completed scan with ten blocking findings posted "passed". Every test,
+ * and the 2026-09-02 verdict fix, exercised this .js, which the bundle did
+ * not contain. The .ts also read GLUECRON_URL / GATETEST_CALLBACK_SECRET
+ * while /api/scan/run gated the call on GLUECRON_CALLBACK_URL /
+ * GLUECRON_CALLBACK_SECRET, so whichever pair an operator set, one half
+ * stayed silent. tests/lib-basename-collision.test.js now fails the suite
+ * if two lib files share a basename.
  *
  * Payload shape matches Gluecron's receiver verbatim:
  *   {
@@ -97,10 +113,8 @@ function buildGluecronPayload({ repository, sha, ref, scanResult }) {
  */
 async function sendGluecronCallback(opts) {
   const env = opts.env || process.env;
-  const url = env.GLUECRON_CALLBACK_URL;
-  const secret = env.GLUECRON_CALLBACK_SECRET;
-
-  if (!url || !secret) {
+  const target = resolveCallbackTarget(env);
+  if (!target) {
     return { sent: false, reason: "missing-config" };
   }
 
@@ -112,21 +126,60 @@ async function sendGluecronCallback(opts) {
     return { sent: false, reason: "payload-error" };
   }
 
+  return postGluecronPayload(payload, { target, fetchImpl: opts.fetchImpl });
+}
+
+/**
+ * Where and how to POST. Accepts both env spellings so the operator cannot
+ * set a pair that half the code ignores. Bearer wins over HMAC when both
+ * are set. Returns null when there is no URL or no credential.
+ *
+ * @returns {{ url: string, bearer: string|null, hmacKey: string|null }|null}
+ */
+function resolveCallbackTarget(env) {
+  let url = (env.GLUECRON_CALLBACK_URL || "").trim();
+  if (!url && env.GLUECRON_URL) {
+    try {
+      url = new URL("/api/hooks/gatetest", env.GLUECRON_URL.trim()).toString();
+    } catch {
+      url = "";
+    }
+  }
+  const bearer = (env.GLUECRON_CALLBACK_SECRET || env.GATETEST_CALLBACK_SECRET || "").trim() || null;
+  const hmacKey = (env.GATETEST_HMAC_SECRET || "").trim() || null;
+  if (!url || (!bearer && !hmacKey)) return null;
+  return { url, bearer, hmacKey };
+}
+
+/**
+ * POST an already-built payload. Never throws.
+ * @param {object} payload
+ * @param {{ target?: object, env?: object, fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ sent: boolean, reason?: string, status?: number }>}
+ */
+async function postGluecronPayload(payload, opts = {}) {
+  const target = opts.target || resolveCallbackTarget(opts.env || process.env);
+  if (!target) return { sent: false, reason: "missing-config" };
+
   const body = JSON.stringify(payload);
   const doFetch = opts.fetchImpl || fetch;
+  const headers = { "Content-Type": "application/json" };
+  if (target.bearer) {
+    headers.Authorization = `Bearer ${target.bearer}`;
+  } else {
+    const sig = require("crypto").createHmac("sha256", target.hmacKey).update(body).digest("hex");
+    headers["X-GateTest-Signature"] = `sha256=${sig}`;
+  }
 
   try {
-    const res = await doFetch(url, {
+    const res = await doFetch(target.url, {
       method: "POST",
       // Per-fetch timeout (advancement #11): a hung callback must not hold
       // the worker tick hostage. Guarded for test fetch doubles.
       signal: (typeof AbortSignal !== "undefined" && AbortSignal.timeout)
         ? AbortSignal.timeout(10_000)
         : undefined,
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body,
     });
     if (!res || !res.ok) {
@@ -144,4 +197,6 @@ async function sendGluecronCallback(opts) {
 module.exports = {
   buildGluecronPayload,
   sendGluecronCallback,
+  postGluecronPayload,
+  resolveCallbackTarget,
 };

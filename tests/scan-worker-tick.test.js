@@ -252,7 +252,18 @@ describe('runWorkerTick — job success', () => {
     assert.strictEqual(callbackCalls[0].ref, 'refs/heads/main');
     assert.ok(callbackCalls[0].scanResult);
 
-    // Repo URL reconstruction
+    // Repo URL reconstruction carries the HOST. A job without a host column
+    // is a Gluecron job (the queue's default) — until 2026-09-02 it was
+    // labelled github.com, which is where findActiveByRepo then looked for
+    // the org's Continuous subscription.
+    assert.strictEqual(scanArgs.repoUrl, 'https://gluecron.com/alice/webapp');
+  });
+
+  it('labels a GitHub-host job with github.com so the subscription lookup hits the right host', async () => {
+    const qs = makeQueueStore({ nextJob: makeJob({ host: 'github' }) });
+    let scanArgs = null;
+    const runScan = async (repoUrl, tier, opts) => { scanArgs = { repoUrl, tier, opts }; return { status: 'complete', totalIssues: 0, modules: [] }; };
+    await runWorkerTick({ sql: SQL, queueStore: qs, runScan, sendCallback: async () => ({ sent: true }) });
     assert.strictEqual(scanArgs.repoUrl, 'https://github.com/alice/webapp');
   });
 

@@ -28,6 +28,9 @@ import { runScan } from "@/app/lib/scan-executor";
 import { sendGluecronCallback } from "@/app/lib/gluecron-callback";
 import { sendGithubCallback } from "@/app/lib/github-callback";
 import { getAdminOrgs } from "@/app/lib/admin-platforms";
+import { postStatus as postGluecronStatus } from "@/app/lib/gluecron-client";
+import { computeGateVerdict } from "@/app/lib/gate-verdict";
+import { siteUrl } from "@/app/lib/site-url";
 
 // CommonJS interop.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -82,12 +85,35 @@ async function dispatchCallback(args: CallbackArgs): Promise<void> {
       ...(appToken ? { token: appToken } : {}),
     });
   } else {
+    // JSDoc types the .js helpers' scanResult as `object`; a null result is
+    // handled inside (it becomes status 'error'), so hand it an empty object.
+    const scanResult = (args.scanResult ?? {}) as object;
     await sendGluecronCallback({
       repository: args.repository,
       sha: args.sha,
       ref: args.ref ?? undefined,
-      scanResult: args.scanResult as { error?: string; totalIssues?: number; status?: string } | null,
+      scanResult,
     });
+    // Host parity (vapron-4f, 2026-09-02): GitHub jobs got a commit status
+    // AND a PR comment; Gluecron jobs got only the gate_runs hook. Post the
+    // same verdict as a commit status so the commit itself shows it. Best
+    // effort — the hook is the gate; a 404 from an instance without the
+    // statuses endpoint is logged, never fatal.
+    const parts = args.repository.split("/");
+    if (parts.length === 2) {
+      try {
+        const verdict = computeGateVerdict(scanResult, "strict");
+        const res = await postGluecronStatus(
+          parts[0], parts[1], args.sha, verdict.state, "gatetest / scan",
+          String(verdict.reason || "").slice(0, 140), "", `${siteUrl()}/scan/status`,
+        );
+        if (res.status < 200 || res.status >= 300) {
+          console.warn(`[worker-tick] Gluecron commit status for ${args.repository}@${args.sha.slice(0, 7)} → ${res.status}`);
+        }
+      } catch (err) { // error-ok — the gate_runs hook already carried the verdict
+        console.warn("[worker-tick] Gluecron commit status failed:", err instanceof Error ? err.message : String(err));
+      }
+    }
   }
 }
 

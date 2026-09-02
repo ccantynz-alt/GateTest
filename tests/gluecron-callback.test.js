@@ -225,3 +225,46 @@ describe('sendGluecronCallback — error swallowing', () => {
     }
   });
 });
+
+// -----------------------------------------------------------------------------
+// Both env spellings must work. The deleted gluecron-callback.ts read
+// GLUECRON_URL + GATETEST_CALLBACK_SECRET; this file read GLUECRON_CALLBACK_URL
+// + GLUECRON_CALLBACK_SECRET; /api/scan/run gated on the latter and then called
+// the former. Whichever pair an operator set, half the code stayed silent.
+// -----------------------------------------------------------------------------
+describe('sendGluecronCallback — env spellings', () => {
+  const { resolveCallbackTarget } = require(path.resolve(__dirname, '..', 'website', 'app', 'lib', 'gluecron-callback.js'));
+  const result = { status: 'complete', totalIssues: 0, modules: [] };
+
+  it('GLUECRON_URL + GATETEST_CALLBACK_SECRET (the .ts pair) posts to /api/hooks/gatetest', async () => {
+    const calls = [];
+    const r = await sendGluecronCallback({
+      repository: 'o/r', sha: 'a'.repeat(40), scanResult: result,
+      env: { GLUECRON_URL: 'https://gluecron.vapron.ai/', GATETEST_CALLBACK_SECRET: 's3' },
+      fetchImpl: async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200 }; },
+    });
+    assert.strictEqual(r.sent, true);
+    assert.strictEqual(calls[0].url, 'https://gluecron.vapron.ai/api/hooks/gatetest');
+    assert.strictEqual(calls[0].init.headers.Authorization, 'Bearer s3');
+  });
+
+  it('GATETEST_HMAC_SECRET alone signs the body with X-GateTest-Signature', async () => {
+    const crypto = require('crypto');
+    const calls = [];
+    const r = await sendGluecronCallback({
+      repository: 'o/r', sha: 'a'.repeat(40), scanResult: result,
+      env: { GLUECRON_CALLBACK_URL: 'https://g/api/hooks/gatetest', GATETEST_HMAC_SECRET: 'k' },
+      fetchImpl: async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200 }; },
+    });
+    assert.strictEqual(r.sent, true);
+    const expected = 'sha256=' + crypto.createHmac('sha256', 'k').update(calls[0].init.body).digest('hex');
+    assert.strictEqual(calls[0].init.headers['X-GateTest-Signature'], expected);
+    assert.strictEqual(calls[0].init.headers.Authorization, undefined);
+  });
+
+  it('a URL with no credential, or a credential with no URL, is missing-config', () => {
+    assert.strictEqual(resolveCallbackTarget({ GLUECRON_URL: 'https://g' }), null);
+    assert.strictEqual(resolveCallbackTarget({ GLUECRON_CALLBACK_SECRET: 'x' }), null);
+    assert.strictEqual(resolveCallbackTarget({ GLUECRON_URL: 'not a url', GLUECRON_CALLBACK_SECRET: 'x' }), null);
+  });
+});

@@ -151,8 +151,14 @@ async function runWorkerTick({
   }
 
   const repository = job.repository;
+  // The URL carries the HOST. scan-executor only needs owner/repo from it,
+  // but findActiveByRepo keys Continuous subscriptions on host/owner — so a
+  // Gluecron job labelled github.com looked up the wrong host's subscription
+  // and ran a paying org's pushes at the deterministic tier with their AI
+  // allowance untouched. Until 2026-09-02 every job was labelled github.com.
+  const hostDomain = job.host === 'github' ? 'github.com' : 'gluecron.com';
   const repoUrl = repository && repository.includes('/')
-    ? `https://github.com/${repository}`
+    ? `https://${hostDomain}/${repository}`
     : repository;
 
   // Continuous ($49/mo) budget gate (Known Issue #34). Deterministic scans

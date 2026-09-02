@@ -5,10 +5,13 @@
  * HTTP-only coupling rule):
  *
  *   POST /api/events/push
- *   Headers:
+ *   Headers (one secret, either form):
  *     X-Signal-Signature: sha256=<hmac(GLUECRON_EMITTER_SECRET, rawBody)>
+ *     Authorization: Bearer <GLUECRON_EMITTER_SECRET>
  *     Content-Type: application/json
- *   Body:
+ *   Body — Signal Bus shape, OR Gluecron gate.ts's legacy
+ *     { repository, ref, sha, baseSha?, source:"gluecron", mode } which is
+ *     normalised with a deterministic eventId (events-push.js):
  *     {
  *       eventId: "<uuid-v4>",              // idempotency key
  *       eventType: "push.received",
@@ -63,6 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   const signatureHeader = req.headers.get("x-signal-signature");
+  const authorizationHeader = req.headers.get("authorization");
 
   let sql;
   try {
@@ -79,6 +83,7 @@ export async function POST(req: NextRequest) {
   const result = await eventsPush.processPushEvent({
     rawBody,
     signatureHeader,
+    authorizationHeader,
     env: process.env,
     sql,
     queueStore,

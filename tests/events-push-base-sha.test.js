@@ -118,3 +118,110 @@ describe('Gluecron receiver — baseSha lands in scan_queue.base_sha', () => {
     assert.match(v.error, /branch creation/);
   });
 });
+
+// -----------------------------------------------------------------------------
+// The shape Gluecron ACTUALLY emits. vapron-4f read src/lib/gate.ts
+// notifyGateTestOfPush on gluecron.com main @167ecb8 and gluecron.vapron.ai
+// @07773a0 (2026-09-02): { repository, ref, sha, baseSha?, source, mode } with
+// `Authorization: Bearer $GATETEST_API_KEY` — no eventId, no eventType, no
+// HMAC. A receiver that only spoke Signal Bus would 401/400 every real push
+// the moment the secrets were set: a push that fires and is rejected, the same
+// class as the gate that could never go red. One intake, one secret.
+// -----------------------------------------------------------------------------
+
+const { deriveEventId, normaliseLegacyPayload } = require(path.resolve(__dirname, '..', 'website', 'app', 'lib', 'events-push.js'));
+
+function legacyBody(over = {}) {
+  return JSON.stringify({
+    repository: 'ccantynz-alt/Vapron',
+    ref: 'refs/heads/main',
+    sha: 'c'.repeat(40),
+    baseSha: 'd'.repeat(40),
+    source: 'gluecron',
+    mode: 'async',
+    ...over,
+  });
+}
+
+async function receiveBearer(body, sql, token = SECRET) {
+  return processPushEvent({
+    rawBody: body,
+    signatureHeader: null,
+    authorizationHeader: `Bearer ${token}`,
+    env: { GLUECRON_EMITTER_SECRET: SECRET },
+    sql,
+    queueStore,
+    fetchImpl: async () => ({ ok: true, status: 200 }),
+  });
+}
+
+describe('Gluecron receiver — the legacy gate.ts shape with a bearer is accepted', () => {
+  it('queues the push, with sha and baseSha in the right columns', async () => {
+    const sql = captureSql();
+    const res = await receiveBearer(legacyBody(), sql);
+    assert.strictEqual(res.status, 202, JSON.stringify(res.body));
+    assert.strictEqual(insertedColumn(sql, 'sha'), 'c'.repeat(40));
+    assert.strictEqual(insertedColumn(sql, 'base_sha'), 'd'.repeat(40));
+    assert.strictEqual(insertedColumn(sql, 'repository'), 'ccantynz-alt/Vapron');
+    assert.strictEqual(insertedColumn(sql, 'host'), 'gluecron');
+  });
+
+  it('the derived eventId is UUID-shaped, deterministic, and echoed back', async () => {
+    const sql = captureSql();
+    const res = await receiveBearer(legacyBody(), sql);
+    assert.match(res.body.eventId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.strictEqual(insertedColumn(sql, 'event_id'), res.body.eventId);
+    // A retry of the same push must reach the ON CONFLICT path, not a second scan.
+    const again = await receiveBearer(legacyBody(), captureSql());
+    assert.strictEqual(again.body.eventId, res.body.eventId);
+  });
+
+  it('a merge-gate scan of the same sha is a different event from the async push', () => {
+    const a = deriveEventId({ repository: 'o/r', ref: 'refs/heads/main', sha: 'c'.repeat(40), mode: 'async' });
+    const b = deriveEventId({ repository: 'o/r', ref: 'refs/heads/main', sha: 'c'.repeat(40), mode: 'blocking' });
+    assert.notStrictEqual(a, b);
+  });
+
+  it('omitted baseSha in the legacy shape lands as NULL', async () => {
+    const sql = captureSql();
+    const body = JSON.parse(legacyBody()); delete body.baseSha;
+    const res = await receiveBearer(JSON.stringify(body), sql);
+    assert.strictEqual(res.status, 202);
+    assert.strictEqual(insertedColumn(sql, 'base_sha'), null);
+  });
+
+  it('a Signal Bus body is never rewritten by the normaliser', () => {
+    const sb = payload({ baseSha: 'b'.repeat(40) });
+    assert.strictEqual(normaliseLegacyPayload(sb), sb);
+  });
+
+  it('wrong bearer → 401, nothing queued', async () => {
+    const sql = captureSql();
+    const res = await receiveBearer(legacyBody(), sql, 'not-the-secret');
+    assert.strictEqual(res.status, 401);
+    assert.ok(!sql.calls.some((c) => /INSERT/i.test(c.text)));
+  });
+
+  it('a valid bearer does not rescue a bad HMAC', async () => {
+    // If the body carries a signature it is judged on the signature alone.
+    const sql = captureSql();
+    const res = await processPushEvent({
+      rawBody: legacyBody(),
+      signatureHeader: 'sha256=' + 'f'.repeat(64),
+      authorizationHeader: `Bearer ${SECRET}`,
+      env: { GLUECRON_EMITTER_SECRET: SECRET },
+      sql, queueStore,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    });
+    assert.strictEqual(res.status, 401);
+  });
+
+  it('no auth at all → 401', async () => {
+    const res = await processPushEvent({
+      rawBody: legacyBody(), signatureHeader: null, authorizationHeader: null,
+      env: { GLUECRON_EMITTER_SECRET: SECRET }, sql: captureSql(), queueStore,
+      fetchImpl: async () => ({ ok: true, status: 200 }),
+    });
+    assert.strictEqual(res.status, 401);
+  });
+});
