@@ -492,7 +492,11 @@ class SecretsModule extends BaseModule {
    */
   _trackedFileVerdict(filename, filePath) {
     let content = '';
-    try { content = fs.readFileSync(filePath, 'utf-8'); } catch { /* unreadable: treat as opaque */ }
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch (err) {
+      return { severity: 'warning', message: `${filename} is tracked by git but could not be read (${err.message}) — verify it holds no credential` };
+    }
     const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith(';'));
     const tracked = `${filename} is tracked by git`;
 

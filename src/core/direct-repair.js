@@ -428,8 +428,15 @@ class DirectRepair {
    */
   async _verifyOrRevert(workspace, report) {
     const revert = (fix, reason) => {
-      try { fs.writeFileSync(path.join(workspace, fix.finding.file), fix.before, 'utf8'); } catch { /* best effort */ }
-      report.skipped.push({ finding: fix.finding, reason });
+      let outcome = reason;
+      try {
+        fs.writeFileSync(path.join(workspace, fix.finding.file), fix.before, 'utf8');
+      } catch (err) {
+        // The patched file is still on disk; it is excluded from the commit
+        // (only report.fixes files are staged) but the operator must know.
+        outcome = `${reason} (revert failed: ${err.message})`;
+      }
+      report.skipped.push({ finding: fix.finding, reason: outcome });
     };
 
     // 1. Syntax — cheap, per fix, before any module runs.

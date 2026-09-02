@@ -310,7 +310,12 @@ class CodeQualityModule extends BaseModule {
       try {
         const json = JSON.parse(fs.readFileSync(path.join(projectRoot, dir, 'package.json'), 'utf-8'));
         entry = { dir, json };
-      } catch { /* no package.json at this level */ }
+      } catch (err) {
+        // ENOENT: no package.json at this level, keep walking up. Anything
+        // else (malformed JSON) still OWNS the file — with no `main` or
+        // `files` it reads as an application, which is the safe direction.
+        entry = err && err.code === 'ENOENT' ? null : { dir, json: {}, error: err.message };
+      }
       this._pkgCache.byDir.set(dir, entry);
       if (entry) return entry;
     }

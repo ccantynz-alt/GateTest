@@ -218,7 +218,7 @@ function main() {
   process.exit(failed ? 1 : 0);
 }
 
-module.exports = { signature, classOf, measure, compare, WARNING_GROWTH, WARNING_SLACK, RECALL_FLOOR };
+module.exports = { signature, classOf, measure, compare };
 
 if (require.main === module) {
   try { main(); } catch (err) {

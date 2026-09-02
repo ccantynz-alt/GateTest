@@ -9,8 +9,8 @@ import siteStats from "../data/site-stats.json";
 // Suite sizes come from the engine via scripts/generate-site-stats.js —
 // the quick-suite size was hand-typed here one below the engine's (2026-09-02).
 const SUITES = siteStats.suites as Record<string, number>;
-export const QUICK_SUITE_MODULES = SUITES.quick;
-export const STANDARD_SUITE_MODULES = SUITES.standard;
+const QUICK_SUITE_MODULES = SUITES.quick;
+const STANDARD_SUITE_MODULES = SUITES.standard;
 export const FULL_SUITE_MODULES = SUITES.full;
 
 export const ALL_TOOLS = [
@@ -48,6 +48,11 @@ export const ALL_TOOLS = [
 export const TOOL_COUNT = new Set(ALL_TOOLS.map((t) => t.name.split(" ")[0])).size;
 
 // The server's own count (bin/gatetest-mcp.mjs, measured by generate-site-stats).
-// tests/website-claims-sync.test.js fails the build if this catalogue and the
-// server disagree — a tool added to the server must be listed here.
-export const SERVER_TOOL_COUNT: number = siteStats.mcpTools.count;
+// A tool added to the server must be listed here: the build fails, not just
+// tests/website-claims-sync.test.js, when the catalogue and server disagree.
+const SERVER_TOOL_COUNT: number = siteStats.mcpTools.count;
+if (TOOL_COUNT !== SERVER_TOOL_COUNT) {
+  throw new Error(
+    `website/app/mcp/tools-data.ts lists ${TOOL_COUNT} tools but bin/gatetest-mcp.mjs registers ${SERVER_TOOL_COUNT} — update the catalogue (and run scripts/generate-site-stats.js --no-tests)`,
+  );
+}
