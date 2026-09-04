@@ -420,9 +420,23 @@ class SecretsModule extends BaseModule {
     const dangerousFiles = ['.env', '.env.local', '.env.production', 'credentials.json',
       'service-account.json', 'key.pem', 'id_rsa', '.npmrc'];
 
+    // `.npmrc` is the one file on this list that is routinely and correctly
+    // committed: it carries registry config, and `ignore-scripts=true` in a
+    // tracked .npmrc is a supply-chain BEST practice. expressjs/express,
+    // fastify, got and zod all ship one and all four were reported at
+    // CRITICAL for it. Only an .npmrc carrying an actual credential is a
+    // finding — which is what security.js:_checkNpmrc already tests for.
+    const NEEDS_CREDENTIAL = new Set(['.npmrc']);
+    const CREDENTIAL_RE = /(?:^|\n)\s*(?:\/\/[^\n]*:)?_(?:auth|authToken|password)\s*=\s*\S/i;
+
     for (const filename of dangerousFiles) {
       const filePath = path.join(projectRoot, filename);
       if (fs.existsSync(filePath)) {
+        if (NEEDS_CREDENTIAL.has(filename)) {
+          let body = '';
+          try { body = fs.readFileSync(filePath, 'utf-8'); } catch { body = ''; }
+          if (!CREDENTIAL_RE.test(body)) continue;
+        }
         // Check if it's tracked by git
         const { exitCode } = this._exec(`git ls-files --error-unmatch "${filename}" 2>/dev/null`, {
           cwd: projectRoot,
