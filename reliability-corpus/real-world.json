@@ -46,21 +46,21 @@
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
       "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
-      "maxBlocking": 16
+      "maxBlocking": 15
     },
     {
       "name": "hono",
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
       "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
-      "maxBlocking": 37
+      "maxBlocking": 33
     },
     {
       "name": "zod",
       "url": "https://github.com/colinhacks/zod.git",
       "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
-      "why": "monorepo with a docs site and benchmarks; the current worst case at 50",
-      "maxBlocking": 50
+      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
+      "maxBlocking": 20
     },
     {
       "name": "NodeGoat",
