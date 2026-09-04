@@ -612,6 +612,93 @@ number.
 were on 120 modules; rewriting the label falsifies evidence instead of updating
 a claim.
 
+### v1.61.1 (2026-09-04) — the gate can fail again
+
+**The single most important fact in this file changed: GateTest now ENFORCES
+for customers. It did not before.**
+
+Both shipped enforcement surfaces were advisory for everyone except us:
+
+| Surface | Customer behaviour before |
+|---|---|
+| `integrations/github-actions/gatetest-gate.yml` | `--report-only` on both PR and push |
+| `action.yml` (the Marketplace action) | `block` input defaulted to `'false'` → `--report-only` |
+
+`--report-only`'s own `--help` text is *"Report findings but NEVER fail the
+gate."* Admin repos (`GATETEST_ADMIN`, `crclabs-hq`) got `--fix` and real
+enforcement; every paying customer got a report that could not fail their
+build. **A gate that cannot say no is a linter with better marketing.**
+
+The justification written into both files was real — a mature repo should not
+eat years of backlog on day one — but *never fail* is a permanent answer to a
+first-run problem. The fix is scoping, which both files already had and were
+not relying on:
+
+- **PR runs enforce**, scoped by `--diff` / `--pr`, so an author is only ever
+  blocked on code they just wrote. Existing debt lives in files the diff never
+  opens.
+- **Full-repo runs enforce against `.gatetest/baseline.json`** — the "clean as
+  you code" machinery from KI #66, built long ago and never wired into the
+  shipped gate. First run grandfathers what is already there and passes; every
+  run after fails on NEW findings only.
+- `action.yml` `block` now defaults to `true`. Setting it `false` still works
+  and emits a `::warning` saying the gate cannot fail.
+
+Measured end to end on `colinhacks/zod` @ HEAD:
+
+```
+no baseline              50 blocking   exit 1
+gatetest --baseline     554 grandfathered
+re-scan                   0 blocking   exit 0   "Nothing NEW is blocking"
++ planted danger.js       5 blocking   exit 1
+```
+
+That last run caught a command injection (`exec` with interpolated
+`req.query`), a hardcoded `sk_live` key, and an unauthenticated `/admin/run`
+route — **through a 554-finding baseline.** Adoptable and still able to fail.
+
+`tests/integrations.test.js` gains the tripwire: no gate invocation may carry
+`--report-only`, and the full-scan path must keep a baseline ramp. Turning
+enforcement on without a ramp only moves the failure from "never blocks" to
+"blocks everyone on day one", and that gets uninstalled faster.
+
+**Precision work that made enforcement defensible.** Six third-party repos
+cloned fresh and scanned (`--suite full`); every one was blocked beforehand:
+
+| Repo | Before | After |
+|---|---|---|
+| express | 2 | **0** |
+| flask | 2 | 2 |
+| fastify | 6 | 5 |
+| got | 20 | 16 |
+| zod | 51 | 50 |
+| hono | 55 | 37 |
+
+OWASP/NodeGoat still blocks with 60, so recall is intact. Twelve defects, all
+failing toward silence or toward blocking clean code — among them
+`Promise.all()` counting as a SQL sink, `RegExp.prototype.exec()` as a
+command-execution sink, `.github/` excluded by a `.git` substring match,
+`server/api/` invisible to `authBypass`, and `.npmrc` reported CRITICAL merely
+for being tracked. See `docs/HISTORY.md` and PR #419 for the full list.
+
+**Two things every future session should carry from this:**
+
+1. **The recurring bug shape is a substring test where a segment test was
+   meant.** `includes('.git')` matches `.github`; `includes('test')` matches
+   `src/latest/` and `attestation.js`. `tests/test-path-canonical.test.js` now
+   forbids the shape across all 121 modules — it found five more the moment it
+   ran.
+2. **Precision is measured on third-party repos, never on this one.** Every
+   rule here was tuned against this repo, which is why they looked clean here
+   and blocked express. Clone real repos and scan them before believing any
+   precision claim.
+
+**Known gaps, measured and open:** a full self-scan does not finish (`timeout
+1200`, exit 124, still inside `mutation`, against the §9 bar of 60s);
+`checkTsSyntax` cannot verify when `typescript` is absent and now says so
+rather than reporting "all clean"; `npm run lint` is red on main with 7
+pre-existing errors.
+
 ### THE DOMAIN — gatetest.io (moved 2026-07-30)
 
 **The canonical domain is `gatetest.io`. It was `gatetest.ai`.** Craig decided to
