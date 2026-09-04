@@ -481,8 +481,14 @@ class FakeFixDetectorModule extends BaseModule {
       //     literals, test fixtures need them verbatim.
       //   - src/modules/ai-hallucination.js + its test — same self-reference.
       const isDemo = /(?:^|\/)(?:website\/app\/(?:for|glossary|blog|use-cases)|corpus)\//.test(hunk.file)
-        || /(?:^|\/)src\/modules\/(?:fake-fix-detector|claude-compliance|ai-hallucination)\.js$/.test(hunk.file)
-        || /(?:^|\/)tests\/(?:fake-fix-detector|claude-compliance|ai-hallucination)\.test\.js$/.test(hunk.file);
+        || /(?:^|\/)src\/modules\/(?:fake-fix-detector|claude-compliance|ai-hallucination|error-swallow)\.js$/.test(hunk.file)
+        // A module that DETECTS empty catches necessarily contains empty
+        // catches — as fixtures in its own doc comments and as the shapes it
+        // matches. src/core/guarded-catch.js carries six, and this rule
+        // reported all six as symptom patches on the commit that added it.
+        // Same reason fake-fix-detector already exempts itself.
+        || /(?:^|\/)src\/core\/guarded-catch\.js$/.test(hunk.file)
+        || /(?:^|\/)tests\/(?:fake-fix-detector|claude-compliance|ai-hallucination|guarded-catch|error-swallow)\.test\.js$/.test(hunk.file);
 
       // Walk added / removed lines
       for (const line of hunk.lines) {
