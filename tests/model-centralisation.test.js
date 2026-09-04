@@ -89,7 +89,12 @@ describe('KI #78 — FALLBACK_MODEL is documented as unwired, not as a safety ne
     const users = [];
     const walk = (dir) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (e.name === 'node_modules' || e.name === '.next' || e.name === '.git') continue;
+        // `.claude` holds tooling state, including git worktrees created by
+        // agents — scanning it makes this suite fail on a normal parallel
+        // workflow by finding copies of its own test files. Every scanner
+        // module in src/ already excludes it; this walk did not.
+        if (e.name === 'node_modules' || e.name === '.next' || e.name === '.git'
+          || e.name === '.claude' || e.name === 'dist') continue;
         const p = path.join(dir, e.name);
         if (e.isDirectory()) { walk(p); continue; }
         if (!/\.(js|ts|tsx|mjs|cjs)$/.test(e.name)) continue;

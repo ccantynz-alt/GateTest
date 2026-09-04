@@ -28,8 +28,17 @@ class DocumentationModule extends BaseModule {
   }
 
   _checkReadme(projectRoot, result) {
-    const readmePath = path.join(projectRoot, 'README.md');
-    if (!fs.existsSync(readmePath)) {
+    // Case-sensitively `README.md` only. expressjs/express ships `Readme.md`
+    // and got ships `readme.md` — both were reported as "no README", a
+    // blocking error, on repos that plainly have one. GitHub, npm and every
+    // other consumer of this file match it case-insensitively; so do we.
+    const README_RE = /^readme(?:\.(?:md|markdown|rst|txt))?$/i;
+    let readmeName = null;
+    try {
+      readmeName = fs.readdirSync(projectRoot).find((f) => README_RE.test(f)) || null;
+    } catch { readmeName = null; }
+    const readmePath = path.join(projectRoot, readmeName || 'README.md');
+    if (!readmeName || !fs.existsSync(readmePath)) {
       result.addCheck('docs:readme', false, {
         message: 'No README.md found',
         suggestion: 'Create a README.md with project description, setup, and usage instructions',
@@ -252,7 +261,7 @@ class DocumentationModule extends BaseModule {
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
       // Skip test files and generated files
-      if (relPath.includes('test') || relPath.includes('.min.')) continue;
+      if (this._isTestPath(relPath) || relPath.includes('.min.')) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);

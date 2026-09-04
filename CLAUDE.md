@@ -612,6 +612,145 @@ number.
 were on 120 modules; rewriting the label falsifies evidence instead of updating
 a claim.
 
+### v1.61.1 (2026-09-04) — the gate can fail again
+
+**The single most important fact in this file changed: GateTest now ENFORCES
+for customers. It did not before.**
+
+Both shipped enforcement surfaces were advisory for everyone except us:
+
+| Surface | Customer behaviour before |
+|---|---|
+| `integrations/github-actions/gatetest-gate.yml` | `--report-only` on both PR and push |
+| `action.yml` (the Marketplace action) | `block` input defaulted to `'false'` → `--report-only` |
+
+`--report-only`'s own `--help` text is *"Report findings but NEVER fail the
+gate."* Admin repos (`GATETEST_ADMIN`, `crclabs-hq`) got `--fix` and real
+enforcement; every paying customer got a report that could not fail their
+build. **A gate that cannot say no is a linter with better marketing.**
+
+The justification written into both files was real — a mature repo should not
+eat years of backlog on day one — but *never fail* is a permanent answer to a
+first-run problem. The fix is scoping, which both files already had and were
+not relying on:
+
+- **PR runs enforce**, scoped by `--diff` / `--pr`, so an author is only ever
+  blocked on code they just wrote. Existing debt lives in files the diff never
+  opens.
+- **Full-repo runs enforce against `.gatetest/baseline.json`** — the "clean as
+  you code" machinery from KI #66, built long ago and never wired into the
+  shipped gate. First run grandfathers what is already there and passes; every
+  run after fails on NEW findings only.
+- `action.yml` `block` now defaults to `true`. Setting it `false` still works
+  and emits a `::warning` saying the gate cannot fail.
+
+Measured end to end on `colinhacks/zod` @ HEAD:
+
+```
+no baseline              50 blocking   exit 1
+gatetest --baseline     554 grandfathered
+re-scan                   0 blocking   exit 0   "Nothing NEW is blocking"
++ planted danger.js       5 blocking   exit 1
+```
+
+That last run caught a command injection (`exec` with interpolated
+`req.query`), a hardcoded `sk_live` key, and an unauthenticated `/admin/run`
+route — **through a 554-finding baseline.** Adoptable and still able to fail.
+
+`tests/integrations.test.js` gains the tripwire: no gate invocation may carry
+`--report-only`, and the full-scan path must keep a baseline ramp. Turning
+enforcement on without a ramp only moves the failure from "never blocks" to
+"blocks everyone on day one", and that gets uninstalled faster.
+
+**Precision work that made enforcement defensible.** Six third-party repos
+cloned fresh and scanned (`--suite full`); every one was blocked beforehand:
+
+| Repo | Before | After |
+|---|---|---|
+| express | 2 | **0** |
+| flask | 2 | 2 |
+| fastify | 6 | 5 |
+| got | 20 | 16 |
+| zod | 51 | 50 |
+| hono | 55 | 37 |
+
+OWASP/NodeGoat still blocks with 60, so recall is intact. Twelve defects, all
+failing toward silence or toward blocking clean code — among them
+`Promise.all()` counting as a SQL sink, `RegExp.prototype.exec()` as a
+command-execution sink, `.github/` excluded by a `.git` substring match,
+`server/api/` invisible to `authBypass`, and `.npmrc` reported CRITICAL merely
+for being tracked. See `docs/HISTORY.md` and PR #419 for the full list.
+
+**Two things every future session should carry from this:**
+
+1. **The recurring bug shape is a substring test where a segment test was
+   meant.** `includes('.git')` matches `.github`; `includes('test')` matches
+   `src/latest/` and `attestation.js`. `tests/test-path-canonical.test.js` now
+   forbids the shape across all 121 modules — it found five more the moment it
+   ran.
+2. **Precision is measured on third-party repos, never on this one.** Every
+   rule here was tuned against this repo, which is why they looked clean here
+   and blocked express. Clone real repos and scan them before believing any
+   precision claim.
+
+**Known gaps, measured and open:** a full self-scan does not finish (`timeout
+1200`, exit 124, still inside `mutation`, against the §9 bar of 60s);
+`checkTsSyntax` cannot verify when `typescript` is absent and now says so
+rather than reporting "all clean"; `npm run lint` is red on main with 7
+pre-existing errors.
+
+### errorSwallow precision, 2026-09-04 — measured on zod, not on us
+
+The worst repo in the corpus was `colinhacks/zod` @7a002366: **50 blocking, 33
+of them from one module.** Two separate causes, and fixing either alone would
+have hidden the other:
+
+| | zod | got | hono |
+|---|---|---|---|
+| before | 50 | 16 | 37 |
+| after | **20** | **15** | **33** |
+
+express 0, flask 2, fastify 5 unchanged; **OWASP/NodeGoat still blocks with
+60**, so this is precision, not silence. Ceilings in
+`reliability-corpus/real-world.json` ratcheted down to match.
+
+1. **Scope.** 23 of the 33 were benchmark harnesses — `packages/zod/src/v3/
+   benchmarks/` times the *throw* path, and was told 22 times it had erased an
+   error. The module already treated a test file as harness code; a benchmark
+   is the same kind of code. It now asks `HARNESS_DIR_RE` from
+   `src/core/scan-scope.js` instead of knowing only about tests. Reduced
+   severity, not removal — exactly what the module already did for tests.
+
+2. **Rule precision.** 7 were in shipped source, and all 7 were the parsing
+   idiom, not a swallow:
+   `if (def.coerce) try { payload.value = Number(payload.value); } catch {}`
+   followed by `if (typeof input === "number") return payload;`. The
+   discriminator is **not** "is this a parser" but *can the code around the
+   catch observe the failure* — `src/core/guarded-catch.js` recognises two
+   shapes (the try exits on success and an alternative follows; or the try
+   only assigns a target the following code TESTS). A target that is merely
+   *read* afterwards still blocks, because `try { user = await find(id) }
+   catch {} return user` cannot tell "no user" from "database down".
+
+**Do not widen this into an exclusion.** Both fixes ship with control pairs in
+`tests/guarded-catch.test.js` and `tests/error-swallow.test.js`: every negative
+control (the idiom stays quiet) is paired with a positive control (the swallow
+it resembles still blocks). Two zod findings deliberately still block —
+`scripts/compile-fuzz.ts` builds a debug string with a `""` default that
+nothing ever checks — and that is the rule working, not a gap.
+
+Third defect, found by self-scan in the same pass: the module reported the
+examples in its own documentation. A `catch {}` inside a `/** ... */` block was
+executable code as far as it was concerned, at ERROR severity. `_isExecutableAt`
+now answers that from the masked copy the guard analysis already builds.
+
+Fourth defect, caught by a control test before it shipped and the reason to
+write the masker's tests in both directions: a regex literal carrying a quote
+(`/["']/`) desynced `maskNonCode`, blanking the rest of the file — after which
+every finding below it read as prose and was **dropped**. Precision work fails
+toward silence far more quietly than it fails toward noise, so every masking
+change needs a test that a real finding survives it.
+
 ### THE DOMAIN — gatetest.io (moved 2026-07-30)
 
 **The canonical domain is `gatetest.io`. It was `gatetest.ai`.** Craig decided to

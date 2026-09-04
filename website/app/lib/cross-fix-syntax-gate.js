@@ -90,7 +90,16 @@ function checkTsSyntax(source, fileName) {
     return { ok: false, reason: 'empty source' };
   }
   const ts = loadTypescript();
-  if (!ts) return { ok: true }; // typescript unavailable — pass through (old behavior)
+  if (!ts) {
+    // typescript unavailable — we cannot validate, so we must not claim we
+    // did. Still a pass (failing closed here would break every TS fix on a
+    // box where the compiler is simply absent), but flagged `unverified` so
+    // the summary and the PR body say so. It is a devDependency of the
+    // website, and a production install that omits dev deps would land
+    // exactly here — on the PAID fix path, silently reporting "all clean"
+    // over fixes nothing had parsed.
+    return { ok: true, unverified: true, reason: 'typescript unavailable — fix not syntax-checked' };
+  }
   try {
     // createSourceFile + parseDiagnostics, not transpileModule: the
     // transpiler is deliberately error-tolerant and emits through many
@@ -199,7 +208,11 @@ function validateFixesSyntax(opts) {
 
     const result = checker(fix.fixed);
     if (result.ok) {
-      accepted.push({ ...fix, language });
+      accepted.push({
+        ...fix,
+        language,
+        ...(result.unverified ? { unverified: true, unverifiedReason: result.reason } : {}),
+      });
     } else {
       rejected.push({ ...fix, reason: result.reason, language });
     }
@@ -216,9 +229,25 @@ function summariseSyntaxGate(result) {
   const { accepted = [], rejected = [] } = result;
   const total = accepted.length + rejected.length;
   if (total === 0) return 'syntax gate: 0 fixes';
-  if (rejected.length === 0) return `syntax gate: ${total} fix${total > 1 ? 'es' : ''} validated, all clean`;
+
+  // "validated, all clean" must mean something was actually parsed. When the
+  // TS compiler is missing every .ts/.tsx fix passes unchecked, and saying
+  // "all clean" over those is a claim we have not earned.
+  const unverified = accepted.filter((a) => a && a.unverified);
+  const unverifiedNote = unverified.length
+    ? ` — ${unverified.length} NOT syntax-checked (${unverified[0].unverifiedReason || 'checker unavailable'}): ${unverified.map((u) => u.file).join(', ')}`
+    : '';
+
+  if (rejected.length === 0) {
+    if (unverified.length === 0) {
+      return `syntax gate: ${total} fix${total > 1 ? 'es' : ''} validated, all clean`;
+    }
+    const checked = total - unverified.length;
+    if (checked === 0) return `syntax gate: ${total} fix${total > 1 ? 'es' : ''} accepted but NONE verified${unverifiedNote}`;
+    return `syntax gate: ${checked}/${total} validated, all clean${unverifiedNote}`;
+  }
   const failedFiles = rejected.map((r) => r.file).join(', ');
-  return `syntax gate: ${accepted.length}/${total} clean, ${rejected.length} rejected (${failedFiles})`;
+  return `syntax gate: ${accepted.length}/${total} clean, ${rejected.length} rejected (${failedFiles})${unverifiedNote}`;
 }
 
 module.exports = {

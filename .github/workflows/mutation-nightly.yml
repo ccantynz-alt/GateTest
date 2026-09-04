@@ -1,0 +1,150 @@
+name: Mutation Testing — Nightly
+
+# WHY THIS EXISTS
+#
+# Mutation testing re-runs the ENTIRE test suite once per mutant. Measured on
+# this repo 2026-09-04: the suite is 7559 tests / ~70s, so `--suite full` spent
+# 58.7s inside the mutation module and produced ONE line of output. It cannot
+# fit the 60s interactive bar in CLAUDE.md §9 at any budget, and truncating it
+# to a handful of mutants turns a measurement into a coin toss.
+#
+# So `mutation` left the `full` suite (src/core/config.js → SUITE_DEFERRALS,
+# disclosed in every scan's "Deferred:" line) and runs HERE instead, nightly,
+# with no mutant cap and timeouts sized to the real suite. That matches what
+# the README has always promised the $99 Full Scan is: "88 modules; mutation +
+# chaos run via the GitHub Action instead — they need a CI runner".
+#
+# GATE RULES #5 ("TEST THE TESTS: mutation testing validates tests catch bugs")
+# is satisfied by this workflow, not by the interactive scan.
+
+on:
+  schedule:
+    # 04:15 UTC — after trainer-nightly (03:00) and dogfood-nightly (03:15),
+    # so a red suite is already visible before this spends an hour on it.
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+    inputs:
+      max-mutants:
+        description: 'Mutant cap for this run (blank = the uncapped nightly default)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  mutation:
+    name: Full mutation pass
+    runs-on: ubuntu-latest
+    # A full pass is baseline + (mutants x suite runtime). At ~70s/run and 300
+    # mutants that is hours, so the job is allowed to run long and the step
+    # below caps the mutant count rather than letting the runner kill us
+    # mid-measurement (a killed run reports nothing at all).
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Mutation needs an INSTALLED, GREEN suite or it correctly refuses to
+      # measure. website/node_modules matters too: without it the TS-parsing
+      # tests fail and the whole baseline goes red (verified 2026-09-04).
+      - name: Install all workspaces
+        run: bash scripts/install-workspaces.sh
+
+      - name: Configure the uncapped nightly budget
+        # The engine's interactive defaults (50 mutants) exist to bound a
+        # developer's terminal. Nothing here is interactive, so raise the cap
+        # and let the module derive per-mutant timeouts from the measured
+        # baseline. Written to .gatetest.json's modules.mutation block, which
+        # is exactly where getModuleConfig('mutation') reads from.
+        env:
+          MAX_MUTANTS: ${{ inputs.max-mutants }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = ".gatetest.json";
+            const cfg = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : {};
+            cfg.modules = cfg.modules || {};
+            cfg.modules.mutation = Object.assign({}, cfg.modules.mutation, {
+              maxMutants: Number(process.env.MAX_MUTANTS) || 300,
+              baselineTimeoutMs: 900000,
+            });
+            fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+            console.log("mutation budget:", JSON.stringify(cfg.modules.mutation));
+          '
+
+      - name: Run mutation testing
+        id: mutation
+        # Never blocks anything — this workflow reports, it does not gate.
+        # (The CI gate itself is in ci.yml and is NOT soft-failed; Forbidden
+        # #24 is about the gate step, not a reporting nightly.)
+        run: |
+          # gatetest:swallow-ok reason="the mutation module exits non-zero when the score is below threshold; this reporting job must still write its summary and artifacts, and the $? below is captured, not discarded"
+          set +e
+          GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --module mutation --json \
+            > mutation-run.json 2> mutation-run.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -40 mutation-run.log || true
+
+      - name: Summarise
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = ".gatetest/reports/mutation-report.json";
+            if (!fs.existsSync(p)) {
+              const msg = "No mutation report was produced — the module skipped (suite red, deps missing, or no verdict). See mutation-run.log.";
+              console.log(msg);
+              fs.writeFileSync("mutation-summary.md", "## Mutation testing\n\n" + msg + "\n");
+              process.exit(0);
+            }
+            const r = JSON.parse(fs.readFileSync(p, "utf8"));
+            const m = r.mutants || {};
+            const lines = [
+              "## Mutation testing",
+              "",
+              "- Score: **" + r.score + "%** (threshold " + r.threshold + "%)",
+              "- Killed: " + m.killed + " / " + (m.measured != null ? m.measured : m.total) + " mutants that returned a verdict",
+              "- Survived: " + m.survived,
+              "- Inconclusive (timed out, excluded from the score): " + (m.inconclusive || 0),
+              "- Generated: " + m.total,
+            ];
+            fs.writeFileSync("mutation-summary.md", lines.join("\n") + "\n");
+            console.log(lines.join("\n"));
+          '
+          cat mutation-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload mutation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-${{ github.run_id }}
+          path: |
+            mutation-run.json
+            mutation-run.log
+            mutation-summary.md
+            .gatetest/reports/mutation-report.json
+          retention-days: 60
+          if-no-files-found: warn
+
+      - name: Open an issue when the score is below threshold
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # gatetest:swallow-ok reason="jq exits non-zero when the report is absent (the module skipped); absence is an expected answer here and is handled by the -z check below"
+          set +e
+          SCORE=$(jq -r '.score // empty' .gatetest/reports/mutation-report.json 2>/dev/null)
+          THRESH=$(jq -r '.threshold // empty' .gatetest/reports/mutation-report.json 2>/dev/null)
+          [ -z "$SCORE" ] && echo "no score to report" && exit 0
+          if [ "$SCORE" -lt "$THRESH" ]; then
+            TITLE="Mutation score ${SCORE}% is below ${THRESH}% ($(date -u +%Y-%m-%d))"
+            gh issue list --label mutation --search "$TITLE in:title" --limit 1 --state open --json title \
+              | jq -e 'length == 0' && gh issue create \
+                --title "$TITLE" --body-file mutation-summary.md --label mutation,dogfood \
+              || echo "issue exists or gh unavailable — skipping"
+          fi

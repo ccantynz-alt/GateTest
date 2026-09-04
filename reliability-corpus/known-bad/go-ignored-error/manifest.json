@@ -1,0 +1,19 @@
+{
+  "name": "go-ignored-error",
+  "category": "known-bad",
+  "target": "code",
+  "tier": "full",
+  "description": "The canonical Go ignored-error idiom (`f, _ := os.Open(path)`) plus a panic inside a guard. Both were SILENT until 2026-09-04: `ignored-error` matched only `_, _ =` (both values discarded, at line start), which is the rarest form, and `panic-in-lib` was line-anchored so it never saw `if err != nil { panic(err) }`. The module claimed 'ignored errors, panics, goroutine hygiene' and detected almost none of it. Found by planting what the description promised rather than by reading the patterns, which looked plausible.",
+  "expected": {
+    "warnings": {
+      "go": { "atLeast": 3 }
+    }
+  },
+  "budgets": {
+    "maxDurationMs": 15000,
+    "deterministic": true
+  },
+  "labels": ["go", "ignored-error", "panic", "recall"],
+  "source": "hand-crafted",
+  "createdAt": "2026-09-04T00:00:00Z"
+}

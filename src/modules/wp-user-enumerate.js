@@ -66,8 +66,16 @@ class WpUserEnumerateModule extends BaseModule {
     const fetchFn = moduleConfig.fetchFn || this._defaultFetch.bind(this);
     const timeoutMs = Math.max(1000, Math.min(moduleConfig.timeoutMs || 8000, 30000));
 
+    // Probes that could not complete. "We looked and found nothing" and "we
+    // could not look" are different answers and only one is reassuring — see
+    // the summary. (Same defect as wpVersionLeak 2026-09-02; the binding half
+    // of that fix landed on nine modules, the REPORTING half only on one.)
+    let probeErrors = 0;
+    let totalProbes = 0;
+
     // ── Vector 1: /?author=1 redirect ─────────────────────────────────────
     let authorRedirectUsername = null;
+    totalProbes += 1;
     try {
       const res = await fetchFn(`${normalised}/?author=1`, { timeoutMs, redirect: 'manual' });
       if (res.status >= 300 && res.status < 400 && res.location) {
@@ -80,6 +88,7 @@ class WpUserEnumerateModule extends BaseModule {
         if (m) authorRedirectUsername = m[1];
       }
     } catch (err) {
+      probeErrors += 1;
       result.addCheck('wp-user-enum:author-probe-error', true, {
         severity: 'info',
         message: `Could not probe /?author=1: ${err.message || err}`,
@@ -98,6 +107,7 @@ class WpUserEnumerateModule extends BaseModule {
     }
 
     // ── Vector 2: /wp-json/wp/v2/users REST API ───────────────────────────
+    totalProbes += 1;
     try {
       const res = await fetchFn(`${normalised}/wp-json/wp/v2/users`, { timeoutMs });
       if (res.status >= 200 && res.status < 300 && typeof res.body === 'string') {
@@ -121,6 +131,7 @@ class WpUserEnumerateModule extends BaseModule {
         }
       }
     } catch (err) {
+      probeErrors += 1;
       result.addCheck('wp-user-enum:rest-probe-error', true, {
         severity: 'info',
         message: `Could not probe /wp-json/wp/v2/users: ${err.message || err}`,
@@ -133,13 +144,15 @@ class WpUserEnumerateModule extends BaseModule {
       : ['admin', 'administrator', 'webmaster'];
     const foundUsers = [];
     for (const name of commonUsernames) {
+      totalProbes += 1;
       try {
         const res = await fetchFn(`${normalised}/author/${encodeURIComponent(name)}/`, { timeoutMs });
         if (res.status >= 200 && res.status < 300) {
           foundUsers.push(name);
         }
       } catch {
-        // Per-probe error is fine; skip
+        // Not "this username does not exist" — we never got an answer.
+        probeErrors += 1;
       }
     }
     if (foundUsers.length > 0) {
@@ -160,13 +173,27 @@ class WpUserEnumerateModule extends BaseModule {
     const restLeak = result.checks.some((c) => c.name === 'wp-user-enum:rest-api');
     const allLeaks = totalLeaks + (restLeak ? 1 : 0);
 
-    result.addCheck('wp-user-enum:summary', true, {
-      severity: 'info',
-      message:
-        allLeaks === 0
-          ? `wpUserEnumerate: no username leaks detected via the 3 known vectors. Good.`
-          : `wpUserEnumerate: ${allLeaks} username-leak vector(s) active. Lock these down to make brute-force attacks materially harder.`,
-    });
+    // A CLEAN BILL OF HEALTH REQUIRES HAVING LOOKED.
+    //
+    // Measured 2026-09-04 against an unreachable host: every probe threw, each
+    // catch emitted a passed check, and this module told the site owner
+    // "no username leaks detected via the 3 known vectors. Good."
+    // Any DNS failure, timeout, TLS error or WAF block produced that sentence.
+    let summary;
+    if (allLeaks > 0) {
+      summary = `wpUserEnumerate: ${allLeaks} username-leak vector(s) active. `
+        + 'Lock these down to make brute-force attacks materially harder.';
+    } else if (probeErrors >= totalProbes) {
+      summary = `wpUserEnumerate: NOT CHECKED — all ${totalProbes} probes failed to complete. `
+        + 'This is not a clean result; the site could not be reached.';
+    } else if (probeErrors > 0) {
+      summary = `wpUserEnumerate: no username leaks found in the ${totalProbes - probeErrors} of `
+        + `${totalProbes} probes that completed. ${probeErrors} probe(s) failed, so this is a partial result.`;
+    } else {
+      summary = 'wpUserEnumerate: no username leaks detected via the 3 known vectors. Good.';
+    }
+
+    result.addCheck('wp-user-enum:summary', true, { severity: 'info', message: summary });
   }
 
   _normaliseBaseUrl(input) {

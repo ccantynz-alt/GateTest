@@ -196,6 +196,16 @@ function readPkgDeps(pkgPath) {
   return names;
 }
 
+
+/**
+ * Is `name` a whole path SEGMENT of `rel`? `rel.includes('node_modules')`
+ * is a substring test — it also matches a directory merely CONTAINING the
+ * word. Same mistake as `.includes('.git')` matching `.github`.
+ */
+function hasSegment(rel, name) {
+  return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
+}
+
 class AiHallucinationDetector extends BaseModule {
   constructor() {
     super('aiHallucination', 'AI Hallucination Detector — fake imports, invented APIs, non-existent methods');
@@ -285,7 +295,7 @@ class AiHallucinationDetector extends BaseModule {
 
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
-      if (rel.includes('node_modules') || rel.includes('.next')) continue;
+      if (hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')) continue;
 
       // Nearest-manifest resolution, so a nested package's own dependencies count.
       const knownDeps = this._depsForDir(path.dirname(file), projectRoot, depsCache, rootDeps);

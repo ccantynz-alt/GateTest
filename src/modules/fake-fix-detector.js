@@ -136,6 +136,17 @@ function resetCostReport(scanId) {
  * Pattern rules. Each rule inspects an ADDED or REMOVED line from the diff.
  * Severity: error = almost certainly a fake fix. warning = suspicious.
  */
+
+/**
+ * Is this source line entirely a comment? `//`, `#`, `*` continuation, or a
+ * `/* … *\/` on one line. Used only by rules flagged `codeOnly`.
+ */
+function isWholeLineComment(sourceLine) {
+  const t = String(sourceLine || '').trim();
+  return t.startsWith('//') || t.startsWith('*') || t.startsWith('#')
+    || (t.startsWith('/*') && t.endsWith('*/')) || t.startsWith('/*');
+}
+
 const PATTERN_RULES = [
   // --- Test disabling (high confidence) ---
   {
@@ -272,6 +283,18 @@ const PATTERN_RULES = [
   {
     id: 'any-cast-added',
     direction: 'added',
+    // `codeOnly` because this rule's pattern is ordinary English. It fired on
+    // this repo's own PR against the comment line
+    //   " * scrutiny as any other regression."
+    // in scripts/real-world-precision.js — a sentence, reported as a
+    // type-safety suppression. Prose describing the thing you detect looks
+    // exactly like the thing you detect; base-module carries the same warning
+    // for retry-hygiene matching `sleep(5)` inside a sentence about sleep(5).
+    //
+    // NOT applied to the whole rule set: `ts-ignore-added` and
+    // `eslint-disable-added` are ABOUT comments, and skipping comment lines
+    // there would disable them.
+    codeOnly: true,
     pattern: /^\+.*\bas\s+any\b/,
     severity: 'warning',
     title: '`as any` cast added',
@@ -282,6 +305,7 @@ const PATTERN_RULES = [
   {
     id: 'threshold-lowered',
     direction: 'added',
+    codeOnly: true,
     pattern: /^\+.*(coverage|threshold|minScore|maxErrors)\s*[:=]\s*\d/i,
     severity: 'info',
     title: 'Threshold value changed',
@@ -457,8 +481,14 @@ class FakeFixDetectorModule extends BaseModule {
       //     literals, test fixtures need them verbatim.
       //   - src/modules/ai-hallucination.js + its test — same self-reference.
       const isDemo = /(?:^|\/)(?:website\/app\/(?:for|glossary|blog|use-cases)|corpus)\//.test(hunk.file)
-        || /(?:^|\/)src\/modules\/(?:fake-fix-detector|claude-compliance|ai-hallucination)\.js$/.test(hunk.file)
-        || /(?:^|\/)tests\/(?:fake-fix-detector|claude-compliance|ai-hallucination)\.test\.js$/.test(hunk.file);
+        || /(?:^|\/)src\/modules\/(?:fake-fix-detector|claude-compliance|ai-hallucination|error-swallow)\.js$/.test(hunk.file)
+        // A module that DETECTS empty catches necessarily contains empty
+        // catches — as fixtures in its own doc comments and as the shapes it
+        // matches. src/core/guarded-catch.js carries six, and this rule
+        // reported all six as symptom patches on the commit that added it.
+        // Same reason fake-fix-detector already exempts itself.
+        || /(?:^|\/)src\/core\/guarded-catch\.js$/.test(hunk.file)
+        || /(?:^|\/)tests\/(?:fake-fix-detector|claude-compliance|ai-hallucination|guarded-catch|error-swallow)\.test\.js$/.test(hunk.file);
 
       // Walk added / removed lines
       for (const line of hunk.lines) {
@@ -468,6 +498,11 @@ class FakeFixDetectorModule extends BaseModule {
           if (rule.direction === 'changed') continue; // handled below
 
           if (isDemo && rule.severity === 'error') continue; // never hard-error on demo pages
+
+          // A rule whose pattern is ordinary code must not match prose. The
+          // `+`/`-` diff marker is stripped first so the comment test sees
+          // the source line as written.
+          if (rule.codeOnly && isWholeLineComment(line.slice(1))) continue;
 
           if (rule.pattern.test(line)) {
             findings.push({

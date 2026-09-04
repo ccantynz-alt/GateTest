@@ -61,6 +61,16 @@ const VALIDATION_SIGNALS = [
 
 // ─── module ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Is `name` a whole path SEGMENT of `rel`? `rel.includes('node_modules')`
+ * is a substring test — it also matches a directory merely CONTAINING the
+ * word. Same mistake as `.includes('.git')` matching `.github`.
+ */
+function hasSegment(rel, name) {
+  return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
+}
+
 class WebhookPayloadValidator extends BaseModule {
   constructor() {
     super('webhookPayload', 'Webhook Payload Validator — catches webhook handlers that use req.body without validation');
@@ -76,7 +86,7 @@ class WebhookPayloadValidator extends BaseModule {
 
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
-      if (rel.includes('node_modules') || rel.includes('.next') || rel.includes('.test.') || rel.includes('.spec.')) continue;
+      if (hasSegment(rel, 'node_modules') || hasSegment(rel, '.next') || this._isTestPath(rel)) continue;
 
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }

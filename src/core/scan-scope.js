@@ -57,12 +57,21 @@ function isIllustrationPath(relPath) {
 
 // Test and benchmark HARNESS directories. Separate from illustrations because
 // the two answer different questions: an illustration is not the application,
-// a harness is not a PAGE A USER VISITS. Only the presentation modules
-// (a11y, visual, seo) care about the second distinction — authBypass and
-// hardcoded-url already handle test paths their own way, and secrets/security
-// must keep scanning both.
+// a harness is not a PAGE A USER VISITS. The presentation modules (a11y,
+// visual, seo) care about the second distinction, and so does hardcoded-url:
+// a `localhost` URL in a benchmark is the harness addressing the server it
+// measures. authBypass handles test paths its own way, and secrets/security
+// must keep scanning both — a credential in `benchmarks/` is still a
+// credential.
+// The compound names matter as much as the bare ones. honojs/hono keeps its
+// harnesses in `runtime-tests/` and `perf-measures/`, neither of which is
+// `tests/` or `perf/`, so both were audited as application code: 3 and 2
+// blocking findings respectively, plus 12 more under `benchmarks/`. A
+// segment that IS a harness word, ENDS in one (`runtime-tests`,
+// `integration-tests`), or is a `perf-`/`bench-` compound (`perf-measures`,
+// `bench-target`) is a harness.
 const HARNESS_DIR_RE =
-  /(^|\/)(tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?)\//i;
+  /(^|\/)(?:tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?|[a-z0-9]+-(?:tests?|specs?|benchmarks?)|(?:perf|bench)-[a-z0-9-]+)\//i;
 
 /**
  * True when `relPath` is a document nobody navigates to as a user: a demo, a

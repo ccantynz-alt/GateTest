@@ -1,0 +1,73 @@
+{
+  "_comment": [
+    "Real third-party repositories, pinned by SHA, scanned as a customer would.",
+    "",
+    "WHY THIS FILE EXISTS. On 2026-09-04 the known-good corpus gate was green",
+    "while every real repo it had never seen was BLOCKED: express 2, flask 2,",
+    "fastify 6, got 20, zod 51, hono 55. The corpus that was supposed to",
+    "guarantee precision contained two synthetic fixtures. A rule tuned against",
+    "this repo looks clean against this repo; that is the one measurement it",
+    "cannot make.",
+    "",
+    "maxBlocking is a CEILING, not a target. It ratchets DOWN as precision",
+    "improves and must never be raised to make a build pass — raising it is how",
+    "you go back to shipping a gate that blocks express. If a change genuinely",
+    "makes a repo noisier, that is the finding.",
+    "",
+    "minBlocking guards the other half. A scanner that reports nothing passes",
+    "every precision test ever written, so NodeGoat (OWASP's deliberately",
+    "vulnerable app) must keep FAILING. Precision without recall is a tool that",
+    "returns no results."
+  ],
+  "repos": [
+    {
+      "name": "express",
+      "url": "https://github.com/expressjs/express.git",
+      "sha": "023767fe9872e029271df1418f73401bff20ff40",
+      "why": "the most-depended-on Node package there is; the canonical clean control",
+      "maxBlocking": 0
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask.git",
+      "sha": "d318b683471101618febed18996405ad26462110",
+      "why": "Python — proves the non-JS rules are held to the same bar",
+      "maxBlocking": 2
+    },
+    {
+      "name": "fastify",
+      "url": "https://github.com/fastify/fastify.git",
+      "sha": "15ebc8e2fe6932d3e91afa84709523804f8a2537",
+      "why": "large plugin-oriented server; exercises the auth and route grammars",
+      "maxBlocking": 5
+    },
+    {
+      "name": "got",
+      "url": "https://github.com/sindresorhus/got.git",
+      "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
+      "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
+      "maxBlocking": 15
+    },
+    {
+      "name": "hono",
+      "url": "https://github.com/honojs/hono.git",
+      "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
+      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
+      "maxBlocking": 33
+    },
+    {
+      "name": "zod",
+      "url": "https://github.com/colinhacks/zod.git",
+      "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
+      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
+      "maxBlocking": 20
+    },
+    {
+      "name": "NodeGoat",
+      "url": "https://github.com/OWASP/NodeGoat.git",
+      "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "why": "OWASP's deliberately vulnerable app — the recall floor",
+      "minBlocking": 40
+    }
+  ]
+}

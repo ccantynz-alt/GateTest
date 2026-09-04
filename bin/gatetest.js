@@ -65,6 +65,13 @@ const HELP = `
 
   OPTIONS
     --suite <name>     Run a test suite: quick, standard, full (default: standard)
+                       "full" is the 88-module engine. It deliberately does
+                       NOT run mutation testing, which re-runs your whole
+                       test suite once per mutant — minutes, not seconds.
+                       Every scan prints what it deferred. Run it directly
+                       with "gatetest --module mutation", or via --suite
+                       nuclear / the GitHub Action, where a CI runner can
+                       afford a complete pass.
     --module <name>    Run a specific module by name
     --skip-module <name>
                        Skip a specific module within the chosen suite.

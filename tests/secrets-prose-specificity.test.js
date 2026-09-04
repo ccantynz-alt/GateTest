@@ -43,6 +43,9 @@ const { BLOCK_THRESHOLD } = require('../src/core/confidence');
 // correctly so. See tests/secrets-docs-scanning.test.js.
 const AWS_KEY = 'AKIA' + 'I0SFODNN7REALKEY';
 const PEM = '-----BEGIN RSA PRIVATE KEY-----';
+// A PEM body, assembled at runtime for the same reason AWS_KEY is. 64-char
+// base64 lines are what a real key looks like on disk and inlined in source.
+const PEM_BODY = 'MIIEowIBAAKCAQEAx' + 'GH8yQvKq3rNbW9pLmZtYVc2dEhKcm5FUXBSb2xUZGFB';
 
 /** Run the module and return findings with their effective confidence. */
 async function scan(files) {
@@ -78,10 +81,44 @@ describe('secrets — vendor-shaped credentials block in prose', () => {
     assert.ok(isConfident(found[0]), 'an AWS key in a README must be blocking, not soft');
   });
 
-  it('a PEM header in docs/setup.md is confident', async () => {
-    const found = await scan({ 'docs/setup.md': `# Setup\n\n${PEM}\nMIIEow...\n` });
+  it('a PEM with real key material in docs/setup.md is confident', async () => {
+    // The fixture used to be `${PEM}\nMIIEow...` — an ELIDED body. It stood in
+    // for a real key, and the rule that satisfied it fired on the header
+    // alone, which made docs/ops/GO_LIVE_RUNBOOK.md a blocking "committed
+    // private key" for a table row telling an operator what to paste. Every
+    // customer's setup runbook has that row.
+    //
+    // The principle this suite is about — a vendor-shaped credential blocks
+    // even in prose, unlike an identifier-keyed one — is unchanged. The
+    // fixture now carries key material, so it tests that principle instead of
+    // standing in for it.
+    const found = await scan({ 'docs/setup.md': `# Setup\n\n${PEM}\n${PEM_BODY}\n` });
     assert.ok(found.length > 0, 'the private key was not detected at all');
-    assert.ok(isConfident(found[0]), 'a PEM header in docs must be blocking');
+    assert.ok(isConfident(found[0]), 'a real private key in docs must be blocking');
+  });
+
+  it('an ELIDED PEM in a runbook does not block', async () => {
+    // The load-bearing other half. A value with an ellipsis in it cannot
+    // authenticate; reporting it as a committed key is a false positive on
+    // documentation, and blocking on it makes the gate unusable for any repo
+    // that documents its own setup.
+    const found = await scan({
+      'docs/ops/RUNBOOK.md':
+        `| GATETEST_PRIVATE_KEY | paste the .pem | \`${PEM}\\nMIIE...\\n-----END RSA PRIVATE KEY-----\` |\n`,
+    });
+    assert.deepStrictEqual(
+      found.map((f) => f.id), [],
+      'a truncated example in a runbook is documentation, not a committed key',
+    );
+  });
+
+  it('a real key inlined in source still blocks', async () => {
+    // A key committed in code uses \n escapes rather than real newlines —
+    // requiring key material must not create a hole for that shape.
+    const found = await scan({
+      'src/config.js': `const KEY = "${PEM}\\n${PEM_BODY}\\n-----END RSA PRIVATE KEY-----";\n`,
+    });
+    assert.ok(found.length > 0, 'a key inlined in source must still be detected');
   });
 });
 

@@ -94,7 +94,10 @@ class GateTest {
       const skip = new Set(opts.skipModules);
       modules = modules.filter((m) => !skip.has(m));
     }
-    return this._run(modules);
+    // What this suite deliberately does NOT run travels with the result, so
+    // no consumer (CLI, MCP, website, JSON report) can present a deferred
+    // suite as if it were exhaustive. Forbidden #16 — never silently fail.
+    return this._run(modules, { deferred: this.config.getSuiteDeferrals(suiteName) });
   }
 
   /**
@@ -128,8 +131,11 @@ class GateTest {
     return parser.parse();
   }
 
-  async _run(moduleNames) {
-    const runner = new GateTestRunner(this.config, this.options);
+  async _run(moduleNames, runOpts = {}) {
+    const runner = new GateTestRunner(this.config, {
+      ...this.options,
+      deferredModules: runOpts.deferred || [],
+    });
 
     // Register modules
     const allModules = this.registry.getAll();

@@ -50,6 +50,66 @@ describe('Protected integration artifacts', () => {
     );
   });
 
+  // ───────────────────────────────────────────────────────────────────────
+  // The gate must be able to say no.
+  //
+  // `continue-on-error` is not the only way to soft-fail a gate, and it was
+  // not the way this one was soft-failed. Both customer branches ran with
+  // `--report-only`, whose own `--help` text reads "Report findings but
+  // NEVER fail the gate". Admin repos got real enforcement; every paying
+  // customer got a report that could not fail their build. A quality gate
+  // that cannot fail is a linter with better marketing.
+  //
+  // Adoption is a real problem and `--report-only` was a real answer to it,
+  // just a permanent one. The replacements are scoped instead of silent:
+  // PR runs use `--diff`, so only files the author changed are scanned;
+  // full repo scans use `.gatetest/baseline.json`, so existing debt is
+  // grandfathered once and only NEW findings block.
+  //
+  // Measured on colinhacks/zod @ HEAD: 50 blocking before, 554 findings
+  // grandfathered, 0 blocking after — and a planted command injection plus
+  // a hardcoded live key still exited 1.
+  // ───────────────────────────────────────────────────────────────────────
+  it('CI gate must not run in report-only mode', () => {
+    const wf = fs.readFileSync(
+      path.join(ROOT, 'integrations/github-actions/gatetest-gate.yml'),
+      'utf8',
+    );
+    const offending = wf
+      .split('\n')
+      .map((line, i) => [i + 1, line])
+      .filter(([, line]) => /gatetest\.js/.test(line) && /--report-only\b/.test(line));
+
+    assert.deepStrictEqual(
+      offending.map(([n, line]) => `${n}: ${line.trim()}`),
+      [],
+      'A gate invocation runs with --report-only, which never fails the build. ' +
+        'Use --diff (PRs) or --baseline (full scans) to stay adoptable without ' +
+        'giving up enforcement.',
+    );
+  });
+
+  it('CI gate keeps a baseline path so enforcement is adoptable', () => {
+    const wf = fs.readFileSync(
+      path.join(ROOT, 'integrations/github-actions/gatetest-gate.yml'),
+      'utf8',
+    );
+    // The load-bearing half of the rule above. Turning enforcement on
+    // without an onboarding ramp just moves the failure from "never blocks"
+    // to "blocks everyone on day one", and the second one gets uninstalled
+    // faster.
+    assert.match(
+      wf,
+      /baseline\.json/,
+      'the full-scan path must consult .gatetest/baseline.json',
+    );
+    assert.match(
+      wf,
+      /--baseline\b/,
+      'the full-scan path must snapshot a baseline when none exists',
+    );
+  });
+
   it('CI workflow must reference the GateTest repo', () => {
     const wf = fs.readFileSync(
       path.join(ROOT, 'integrations/github-actions/gatetest-gate.yml'),

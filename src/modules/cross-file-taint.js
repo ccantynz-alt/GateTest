@@ -143,11 +143,28 @@ const TAINT_DESTRUCT_RE = /(?:const|let|var)\s+\{([^}]+)\}\s*=\s*(.*)/;
 
 // Dangerous sink patterns
 const SINKS = [
-  { name: 'sql-query',         re: /\.\s*(?:query|raw|execute|run|all)\s*\(/ },
+  // `.all(` alone made `Promise.all(...)` a SQL sink, and `.query(` made
+  // every HTTP query-string read one (`c.req.query()`, `req.query()`).
+  // Measured on honojs/hono: 4 of 4 sql-query findings were `c.req.query()`.
+  // The receiver decides — `not` lists the shapes that are never SQL.
+  {
+    name: 'sql-query',
+    re: /\.\s*(?:query|raw|execute|run|all)\s*\(/,
+    not: /\bPromise\s*\.\s*(?:all|allSettled|race|any)\s*\(|(?:^|[^.\w])(?:req|request|ctx|c)\s*\.\s*(?:req\s*\.\s*)?query\s*\(|\.\s*req\s*\.\s*query\s*\(/,
+  },
   { name: 'eval',              re: /\beval\s*\(/ },
   { name: 'new-function',      re: /\bnew\s+Function\s*\(/ },
   { name: 'vm-run',            re: /\bvm\.runIn(?:New)?Context\s*\(/ },
-  { name: 'exec',              re: /\b(?:exec|execSync)\s*\(/ },
+  // `\bexec\s*\(` matched `RegExp.prototype.exec` — the commonest `.exec(`
+  // in JavaScript by a wide margin. On honojs/hono both `exec` findings were
+  // `CREDENTIALS_REGEXP.exec(...)` in basic-auth.ts, reported as a blocking
+  // command-execution sink in a security file. A bare `exec(` still counts,
+  // as does one qualified by a child_process alias; a method call on some
+  // other object does not.
+  {
+    name: 'exec',
+    re: /(?:^|[^.\w])(?:exec|execSync)\s*\(|\b(?:child_process|childProcess|cp)\s*\.\s*(?:exec|execSync)\s*\(/,
+  },
   { name: 'spawn',             re: /\b(?:spawn|spawnSync)\s*\(/ },
   { name: 'file-read',         re: /\b(?:readFile|readFileSync|createReadStream)\s*\(/ },
   { name: 'file-write',        re: /\b(?:writeFile|writeFileSync|appendFile|unlink|rm|rmdir)\s*\(/ },
@@ -605,6 +622,7 @@ class CrossFileTaintModule extends BaseModule {
 
       for (const sink of SINKS) {
         if (!sink.re.test(sinkSafeLine)) continue;
+        if (sink.not && sink.not.test(sinkSafeLine)) continue;
         // Is a tainted var present on this line?
         for (const v of tainted) {
           if (this._lineReferencesVar(sinkSafeLine, v)) {
@@ -706,6 +724,7 @@ class CrossFileTaintModule extends BaseModule {
       if (!SUPPRESS_TAINT_OK_RE.test(raw)) {
         for (const sink of SINKS) {
           if (!sink.re.test(codeLine)) continue;
+          if (sink.not && sink.not.test(codeLine)) continue;
           for (const [name, idx] of activeFn.origin) {
             if (!this._lineReferencesVar(propagationLine, name)) continue;
             const contextLines = lines.slice(Math.max(0, i - 3), i + 1).join('\n');

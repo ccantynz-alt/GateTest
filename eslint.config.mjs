@@ -85,6 +85,12 @@ export default [
     // integrations (and node_modules) must be listed here.
     ignores: [
       'node_modules/**',
+      // Tooling state, including git worktrees. `eslint .` otherwise lints
+      // every checked-out branch under .claude/worktrees/ and reports their
+      // problems as this tree's — 100 errors from four worktrees, none of
+      // them in this checkout. The lint MODULE runs `eslint .`, so this also
+      // made GateTest block its own repo.
+      '.claude/**',
       'website/**',
       'benchmarks/**',
       'reliability-corpus/**',

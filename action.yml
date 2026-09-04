@@ -63,9 +63,9 @@ inputs:
     required: false
     default: 'true'
   block:
-    description: 'When true, the gate FAILS the workflow on any confident error finding. Default FALSE — fresh installs report findings as a PR comment but never block CI, so pre-existing rot in a mature codebase does not stop deploys on day 1. Flip to `true` once the team has triaged the baseline and wants the gate to actually enforce.'
+    description: 'When true (the DEFAULT), the gate FAILS the workflow on a confident error finding. Day-1 rot is handled by scoping rather than by never failing: on pull requests `diff-only` (also default true) scans only the files the PR changes, and full-repo runs grandfather everything already present into .gatetest/baseline.json on their first run, so only NEW findings block. Set to `false` for a report-only gate that can never fail the build.'
     required: false
-    default: 'false'
+    default: 'true'
   share-learnings:
     description: 'OPT-IN: sync successful fix recipes (anonymised — no paths, no repo names, no source code outside the 2KB before/after snippet) to gatetest.io so every other customer benefits from this fix. Default off. See https://gatetest.io/trust for what is and is not shared.'
     required: false
@@ -179,15 +179,25 @@ runs:
             ;;
         esac
 
-        # Report-only mode controls whether the workflow exits non-zero
-        # on a blocking finding. The default for the action input
-        # `block` is FALSE — fresh installs report but never block.
-        # Customers flip `block: true` once they trust the findings.
+        # Whether the workflow exits non-zero on a blocking finding.
+        #
+        # This used to default to report-only, and the justification written
+        # here was that a mature codebase should not have day-1 rot stop its
+        # deploys. That is a real concern with a real answer, and the answer
+        # is scoping — which this action ALREADY does, by defaulting
+        # diff-only to true so a PR is judged on the files it changes. The
+        # two protections were redundant, and the surviving one was the one
+        # that made the gate unable to fail. A quality gate that cannot say
+        # no is a linter with better marketing.
+        #
+        # So: enforcing by default, with the day-1 problem handled below by
+        # --pr on pull requests and a committed baseline on full-repo runs.
         BLOCK_FLAG=""
-        if [ "${{ inputs.block }}" = "true" ]; then
-          BLOCK_FLAG="--strict"
-        else
+        if [ "${{ inputs.block }}" = "false" ]; then
           BLOCK_FLAG="--report-only"
+          echo "::warning title=GateTest is not enforcing::block:false runs the gate in report-only mode — findings are reported but the build can never fail. Remove block:false to let the gate enforce."
+        else
+          BLOCK_FLAG="--strict"
         fi
 
         # Diff-aware PR scanning (inputs.diff-only, default true): on PR
@@ -206,9 +216,24 @@ runs:
           echo "Diff-aware mode: scanning only files changed vs origin/${GITHUB_BASE_REF:-main} (set diff-only: false for full-repo scans)."
         fi
 
+        # A full-repo scan is the one shape that can dump years of backlog on
+        # a team the first time it runs. When we are enforcing and NOT
+        # diff-scoped, grandfather what is already there: the first run
+        # snapshots .gatetest/baseline.json and passes, every run after it
+        # fails on NEW findings only.
+        #
+        # Measured on colinhacks/zod: 50 blocking before, 554 grandfathered,
+        # 0 blocking after — and a planted command injection plus a hardcoded
+        # live key still exited 1.
+        BASELINE_FLAG=""
+        if [ -z "$DIFF_FLAG" ] && [ "${{ inputs.block }}" != "false" ] && [ ! -f "$(pwd)/.gatetest/baseline.json" ]; then
+          BASELINE_FLAG="--baseline"
+          echo "::notice title=GateTest baseline created::No .gatetest/baseline.json found, so this full-repo run snapshots the findings already present and passes. Commit that file — from then on the gate fails on new findings only."
+        fi
+
         # Run the gate, capture stdout for parsing.
         set +e
-        OUTPUT=$(${GATETEST_BIN} --suite "${{ inputs.suite }}" $EXTRA_FLAGS $BLOCK_FLAG $DIFF_FLAG --project "$(pwd)" 2>&1)
+        OUTPUT=$(${GATETEST_BIN} --suite "${{ inputs.suite }}" $EXTRA_FLAGS $BLOCK_FLAG $DIFF_FLAG $BASELINE_FLAG --project "$(pwd)" 2>&1)
         EXIT_CODE=$?
         set -e
         echo "$OUTPUT"

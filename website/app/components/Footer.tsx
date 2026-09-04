@@ -25,10 +25,13 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-4">Product</h4>
             <ul className="space-y-2">
+              {/* Real routes, not homepage anchors — /modules, /pricing and
+                  /enterprise are pages in their own right. /#features has no
+                  page of its own, so it stays an anchor. */}
               <li><Link href="/#features" className="text-sm text-muted hover:text-foreground transition-colors">Features</Link></li>
-              <li><Link href="/#modules" className="text-sm text-muted hover:text-foreground transition-colors">Modules</Link></li>
-              <li><Link href="/#pricing" className="text-sm text-muted hover:text-foreground transition-colors">Pricing</Link></li>
-              <li><Link href="/#comparison" className="text-sm text-muted hover:text-foreground transition-colors">Compare</Link></li>
+              <li><Link href="/modules" className="text-sm text-muted hover:text-foreground transition-colors">Modules</Link></li>
+              <li><Link href="/pricing" className="text-sm text-muted hover:text-foreground transition-colors">Pricing</Link></li>
+              <li><Link href="/enterprise" className="text-sm text-muted hover:text-foreground transition-colors">Enterprise</Link></li>
               <li><Link href="/web" className="text-sm text-muted hover:text-foreground transition-colors">Website Scanner</Link></li>
               <li><Link href="/wp" className="text-sm text-muted hover:text-foreground transition-colors">WordPress Scanner</Link></li>
               <li><Link href="/billing" className="text-sm text-muted hover:text-foreground transition-colors">Manage Subscription</Link></li>

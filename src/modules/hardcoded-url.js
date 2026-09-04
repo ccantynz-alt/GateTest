@@ -55,7 +55,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isIllustrationPath } = require('../core/scan-scope');
+const { isNonUserFacingPage } = require('../core/scan-scope');
 const BaseModule = require('./base-module');
 
 const DEFAULT_EXCLUDES = [
@@ -180,7 +180,13 @@ class HardcodedUrlModule extends BaseModule {
     // demo working as intended, not a production defect. Downgraded to info so
     // it stays visible without failing anyone's build. Measured on axios
     // @81df7a5, where 3 of 5 localhost findings were in exactly those dirs.
-    const isTestFile = this._isTestPath(rel) || isIllustrationPath(rel);
+    // Benchmark and perf harnesses belong here for the same reason tests and
+    // examples do: `http://localhost:3000` in `benchmarks/http-server/` is
+    // the harness pointing at the server it is measuring, not a production
+    // URL that leaked. Measured on honojs/hono — 12 of its 17 blocking
+    // localhost findings were under `benchmarks/`, and 3 more under
+    // `runtime-tests/`. Scope, not severity: these stay visible at info.
+    const isTestFile = this._isTestPath(rel) || isNonUserFacingPage(rel);
     const lines = content.split('\n');
     let issues = 0;
 

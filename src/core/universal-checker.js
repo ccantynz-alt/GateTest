@@ -69,13 +69,27 @@ const LANGUAGE_SPECS = {
     extensions: ['.go'],
     testFilePattern: /_test\.go$/,
     patterns: [
-      { name: 'ignored-error', pattern: /^\s*_\s*,\s*_\s*:?=\s/, severity: 'warning',
-        message: 'Both return values discarded — likely ignored error',
+      // `_, _ =` is the RAREST way a Go programmer ignores an error. The
+      // canonical form is `f, _ := os.Open(path)` — keep the value, discard
+      // the error — and the old line-anchored `^\s*_\s*,\s*_` matched none
+      // of it. Verified on a planted file: `f, _ := os.Open("/etc/passwd")`
+      // and `data, _ := io.ReadAll(r)` were both silent.
+      //
+      // Now: `_` as the LAST assigned name, with a CALL on the right. The
+      // negative lookahead excludes `for i, _ := range xs`, where the `_`
+      // discards a value, not an error — Go puts the error last by
+      // convention, and range has none.
+      { name: 'ignored-error', pattern: /,\s*_\s*:?=\s*(?![^\n]*\brange\b)[^\n]*\(/, severity: 'warning',
+        message: 'Error return discarded with `_` — the failure is invisible',
         suggestion: 'Check the error return, even if only to log it.' },
       { name: 'fmt-println-lib', pattern: /^\s*fmt\.Println\s*\(/, severity: 'info',
         message: 'fmt.Println in source — consider structured logging',
         suggestion: 'Use log package or a structured logger for anything beyond main().' },
-      { name: 'panic-in-lib', pattern: /^\s*panic\s*\(/, severity: 'warning',
+      // Line-anchored, so `if err != nil { panic(err) }` — the shape panic
+      // almost always takes in real Go — never matched. Whole-line comments
+      // are already skipped before patterns run (isLikelyCommentOrFixture),
+      // so dropping the anchor does not start matching prose.
+      { name: 'panic-in-lib', pattern: /\bpanic\s*\(/, severity: 'warning',
         message: 'panic() call — library code should return errors, not panic',
         suggestion: 'Return an error value. Reserve panic for truly unrecoverable conditions.' },
       { name: 'goroutine-wait-missing', pattern: /^\s*go\s+func\s*\(/, severity: 'info',

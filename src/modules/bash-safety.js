@@ -270,8 +270,12 @@ class BashSafetyModule extends BaseModule {
     const walk = (dir) => {
       let entries;
       try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      const dirSegments = new Set(dir.split(/[\\/]+/));
       for (const e of entries) {
-        if (excludes.some(x => e.name === x || dir.includes(`/${x}`))) continue;
+        // Segment-anchored, not substring: `dir.includes('/.git')` also
+        // matched `/.github`, which made every GitHub Actions workflow
+        // invisible to this scanner — the exact files it exists to read.
+        if (excludes.some(x => e.name === x || dirSegments.has(x))) continue;
         const full = path.join(dir, e.name);
         if (e.isDirectory()) walk(full);
         else if (pattern.test(full.replace(/\\/g, '/'))) results.push(full);

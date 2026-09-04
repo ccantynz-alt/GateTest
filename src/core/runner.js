@@ -997,6 +997,11 @@ class GateTestRunner extends EventEmitter {
       gateStatus,
       findings,
       findingSummary,
+      // Modules this suite deliberately did not run, and where they run
+      // instead (src/core/config.js → SUITE_DEFERRALS). Always an array.
+      // Carried on the summary so no consumer can present a deferred suite
+      // as exhaustive — Forbidden #16.
+      deferred: this.options.deferredModules || [],
       timestamp: new Date().toISOString(),
       duration: endTime - startTime,
       diffOnly: this.options.diffOnly,

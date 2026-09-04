@@ -4,7 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
-const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
+const { JS_SOURCE_EXTS } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 
@@ -290,16 +290,36 @@ class CodeQualityModule extends BaseModule {
    * @param {string} projectRoot
    * @returns {boolean}
    */
-  _publishesPackage(projectRoot) {
-    if (this._publishesCache && this._publishesCache.root === projectRoot) {
-      return this._publishesCache.value;
-    }
+  _publishesPackage(projectRoot, relFwd) {
+    // The NEAREST package.json decides, not the repo root. A file's consumers
+    // are the consumers of the package it belongs to, and in any repo with a
+    // nested app that is not the root package.
+    //
+    // GateTest itself: the root package.json publishes (`main`, `bin`), while
+    // `website/` is a Next.js app with `"private": true` and no entry point
+    // that anything imports. Judged by the root, all 30 console.log lines in
+    // `website/capture-baseline.mjs` — an operator script that prints its own
+    // progress — were errors, and they were 30 of the 31 findings blocking
+    // this repo's own gate. Every monorepo hits this.
+    const dir = relFwd ? path.posix.dirname(relFwd.replace(/\\/g, '/')) : '.';
+    const cacheKey = `${projectRoot}\u0000${dir}`;
+    this._publishesCache = this._publishesCache || new Map();
+    if (this._publishesCache.has(cacheKey)) return this._publishesCache.get(cacheKey);
+
     let value = false;
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+    // Walk up from the file toward the project root; the first package.json
+    // found owns this file.
+    const segments = dir === '.' || dir === '' ? [] : dir.split('/');
+    for (let i = segments.length; i >= 0; i -= 1) {
+      const candidate = path.join(projectRoot, ...segments.slice(0, i), 'package.json');
+      let pkg;
+      try {
+        pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
+      } catch { continue; /* no package.json at this level — keep walking up */ }
       value = pkg.private !== true && Boolean(pkg.main || pkg.exports || pkg.module || pkg.bin);
-    } catch { /* no/unreadable package.json — treat as an application */ }
-    this._publishesCache = { root: projectRoot, value };
+      break;
+    }
+    this._publishesCache.set(cacheKey, value);
     return value;
   }
 
@@ -354,7 +374,7 @@ class CodeQualityModule extends BaseModule {
     // package logging from lib/ is still an error.
     if (!this._isLibraryPath(relFwd)) return 'info';
     if (this._isDeliberateLogging(rawLine)) return 'warning';
-    if (!this._publishesPackage(projectRoot)) return 'warning';
+    if (!this._publishesPackage(projectRoot, relFwd)) return 'warning';
     return undefined;
   }
 

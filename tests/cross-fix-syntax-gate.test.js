@@ -253,3 +253,74 @@ test('validateFixesSyntax — a .ts fix that does not parse is rejected, languag
   assert.equal(rejected.length, 1);
   assert.equal(rejected[0].language, 'ts');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "all clean" has to mean something was actually parsed.
+//
+// checkTsSyntax returns a pass when `require('typescript')` fails, which is
+// the right call — failing closed would break every TS fix on a box that
+// simply has no compiler. What was wrong is that the pass was
+// indistinguishable from a real one, so summariseSyntaxGate reported
+// "2 fixes validated, all clean" over fixes nothing had looked at, and that
+// string goes into the PR body a paying customer reads.
+//
+// typescript is a devDependency of website/, and a production install that
+// omits dev dependencies lands exactly here — on the paid fix path.
+// ─────────────────────────────────────────────────────────────────────────────
+test('an unverified TS fix is accepted but marked, not reported as validated', () => {
+  // Simulate the compiler being absent by injecting the shape checkTsSyntax
+  // returns in that case.
+  const tsUnavailable = () => ({
+    ok: true,
+    unverified: true,
+    reason: 'typescript unavailable — fix not syntax-checked',
+  });
+  const { accepted, rejected } = validateFixesSyntax({
+    fixes: [
+      { file: 'src/a.ts', fixed: 'export const a: number = 1;\n', original: '', issues: [] },
+      { file: 'src/b.js', fixed: 'const b = 1;\n', original: '', issues: [] },
+    ],
+    checkers: { ts: tsUnavailable },
+  });
+
+  assert.equal(rejected.length, 0, 'an unverifiable fix is still accepted');
+  const ts = accepted.find((a) => a.file === 'src/a.ts');
+  const js = accepted.find((a) => a.file === 'src/b.js');
+  assert.equal(ts.unverified, true, 'the TS fix must carry the unverified marker');
+  assert.ok(/typescript unavailable/.test(ts.unverifiedReason));
+  assert.equal(js.unverified, undefined, 'the JS fix WAS verified and must not be marked');
+
+  const summary = summariseSyntaxGate({ accepted, rejected });
+  assert.ok(
+    /NOT syntax-checked/.test(summary),
+    `summary must disclose the unverified fix, got: ${summary}`,
+  );
+  assert.ok(
+    !/^syntax gate: 2 fixes validated, all clean$/.test(summary),
+    'must not claim both fixes were validated when only one was',
+  );
+  assert.ok(summary.includes('src/a.ts'), 'name the file that was not checked');
+});
+
+test('when nothing could be verified the summary says so outright', () => {
+  const tsUnavailable = () => ({ ok: true, unverified: true, reason: 'typescript unavailable' });
+  const { accepted, rejected } = validateFixesSyntax({
+    fixes: [{ file: 'src/a.ts', fixed: 'export const a = 1;\n', original: '', issues: [] }],
+    checkers: { ts: tsUnavailable },
+  });
+  const summary = summariseSyntaxGate({ accepted, rejected });
+  assert.ok(/NONE verified/.test(summary), `got: ${summary}`);
+});
+
+test('a real checker still produces the plain all-clean wording', () => {
+  // The load-bearing negative control: the honest-reporting change must not
+  // make an ordinary, fully-verified run look uncertain.
+  const { accepted, rejected } = validateFixesSyntax({
+    fixes: [
+      { file: 'src/a.js', fixed: 'const a = 1;\n', original: '', issues: [] },
+      { file: 'src/b.json', fixed: '{"a":1}', original: '', issues: [] },
+    ],
+  });
+  assert.equal(rejected.length, 0);
+  assert.equal(summariseSyntaxGate({ accepted, rejected }), 'syntax gate: 2 fixes validated, all clean');
+});

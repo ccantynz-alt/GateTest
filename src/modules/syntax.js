@@ -206,8 +206,15 @@ class SyntaxModule extends BaseModule {
 
   _checkJsonSyntax(file, result, projectRoot) {
     const relPath = path.relative(projectRoot, file);
+    // Declared out here on purpose: the JSONC retry below lives in the
+    // `catch`, and a `const` inside the `try` is not in scope there. It
+    // used to be, which made the retry throw ReferenceError — swallowed by
+    // the bare `catch` on the retry itself, so every commented tsconfig.json
+    // was reported as a plain JSON syntax error and the JSONC branch below
+    // had never once run.
+    let content;
     try {
-      const content = fs.readFileSync(file, 'utf-8');
+      content = fs.readFileSync(file, 'utf-8');
       JSON.parse(content);
       result.addCheck(`json:${relPath}`, true);
     } catch (err) {
@@ -224,7 +231,12 @@ class SyntaxModule extends BaseModule {
             message: 'Valid JSONC (comments / trailing commas permitted in this file type)',
           });
           return;
-        } catch { /* fall through — malformed even as JSONC */ }
+        } catch (retryErr) {
+          // Malformed even as JSONC — fall through to the real error. Only
+          // a parse failure belongs here; anything else is a bug in this
+          // module and must not be silently absorbed.
+          if (retryErr instanceof ReferenceError || retryErr instanceof TypeError) throw retryErr;
+        }
       }
       result.addCheck(`json:${relPath}`, false, {
         file: relPath,

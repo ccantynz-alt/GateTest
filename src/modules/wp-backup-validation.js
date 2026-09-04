@@ -124,17 +124,29 @@ class WpBackupValidationModule extends BaseModule {
     // wpVersionLeak shipped exactly that (2026-09-02). The other WP modules
     // survived only because their _defaultFetch happened not to call `this`.
     const fetchFn = moduleConfig.fetchFn || this._defaultFetch.bind(this);
-    const probeFn = moduleConfig.probeFn || this._defaultProbe;
+    // Bound for the same reason as _defaultFetch above — the 2026-09-02 fix
+    // bound nine `_defaultFetch` extractions but missed the two
+    // `_defaultProbe` ones because the guard test grepped the method name.
+    const probeFn = moduleConfig.probeFn || this._defaultProbe.bind(this);
     const timeoutMs = Math.max(1000, Math.min(moduleConfig.timeoutMs || 8000, 30000));
 
     // 1. Detect backup plugins from homepage HTML
     let html = '';
+    let homepageFailed = false;
     try {
       const res = await fetchFn(`${normalised}/`, { timeoutMs });
       if (res.status >= 200 && res.status < 300 && typeof res.body === 'string') {
         html = res.body;
+      } else {
+        // A 403/500/redirect-loop homepage yields no HTML to search either.
+        homepageFailed = true;
+        result.addCheck('wp-backup:homepage-unusable', true, {
+          severity: 'info',
+          message: `Homepage returned ${res.status} with no usable HTML — plugin detection could not run`,
+        });
       }
     } catch (err) {
+      homepageFailed = true;
       result.addCheck('wp-backup:homepage-error', true, {
         severity: 'info',
         message: `Could not fetch homepage: ${err.message || err}`,
@@ -165,6 +177,21 @@ class WpBackupValidationModule extends BaseModule {
             `wpBackupValidation: no backup plugin detected but URL appears to be on a managed host that backs up by default. ` +
             `Verify in your hosting dashboard that the auto-backup schedule is active and you know how to restore.`,
         });
+      } else if (homepageFailed) {
+        // WE NEVER READ THE HOMEPAGE, SO WE CANNOT SAY WHAT IS NOT ON IT.
+        //
+        // Measured 2026-09-04 against an unreachable host: this module raised
+        // a BLOCKING warning — "no backup plugin detected on the site" — built
+        // entirely out of a failed fetch. The mirror image of a false clean
+        // bill: an unmeasurable state reported as a definite measurement, this
+        // time manufacturing a finding rather than hiding one.
+        result.addCheck('wp-backup:not-checked', true, {
+          severity: 'info',
+          message:
+            'wpBackupValidation: NOT CHECKED — the homepage could not be read, so no backup '
+            + 'plugin detection was possible. This is neither a pass nor a finding; re-run when '
+            + 'the site is reachable.',
+        });
       } else {
         result.addCheck('wp-backup:no-plugin-detected', false, {
           severity: 'warning',
@@ -179,13 +206,16 @@ class WpBackupValidationModule extends BaseModule {
 
     // 2. Probe for exposed-backup paths
     let exposedCount = 0;
+    let probeErrors = 0;
     for (const entry of EXPOSED_BACKUP_PATHS) {
       const probeUrl = `${normalised}/${entry.path}`;
       let res;
       try {
         res = await probeFn(probeUrl, { timeoutMs });
       } catch {
-        continue; // per-probe failure is fine
+        // Not "this backup is not exposed" — we never got an answer.
+        probeErrors += 1;
+        continue;
       }
       if (res.status >= 200 && res.status < 300) {
         exposedCount += 1;
@@ -203,12 +233,20 @@ class WpBackupValidationModule extends BaseModule {
       }
     }
 
-    result.addCheck('wp-backup:summary', true, {
-      severity: 'info',
-      message:
-        `wpBackupValidation: plugins detected=${detectedSlugs.size}, exposed-backup files=${exposedCount}. ` +
-        `Best state: at least one plugin detected AND zero exposed files.`,
-    });
+    const totalProbes = EXPOSED_BACKUP_PATHS.length;
+    let summary;
+    if (homepageFailed && probeErrors >= totalProbes) {
+      summary = `wpBackupValidation: NOT CHECKED — the homepage and all ${totalProbes} exposed-backup `
+        + 'probes failed to complete. This is not a clean result; the site could not be reached.';
+    } else if (probeErrors > 0 || homepageFailed) {
+      summary = `wpBackupValidation: plugins detected=${homepageFailed ? 'not checked' : detectedSlugs.size}, `
+        + `exposed-backup files=${exposedCount} across the ${totalProbes - probeErrors} of ${totalProbes} `
+        + 'paths that could be probed — partial result.';
+    } else {
+      summary = `wpBackupValidation: plugins detected=${detectedSlugs.size}, exposed-backup files=${exposedCount}. `
+        + 'Best state: at least one plugin detected AND zero exposed files.';
+    }
+    result.addCheck('wp-backup:summary', true, { severity: 'info', message: summary });
   }
 
   _normaliseBaseUrl(input) {

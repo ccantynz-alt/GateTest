@@ -22,6 +22,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 const BaseModule = require('../src/modules/base-module');
 const MODULES_DIR = path.join(__dirname, '..', 'src', 'modules');
@@ -134,5 +135,124 @@ describe('KI #77 — the drift cannot come back', () => {
     // responsibility in one place.
     const src = fs.readFileSync(path.join(MODULES_DIR, 'base-module.js'), 'utf8');
     assert.match(src, /_isTestPath\(relPath\)\s*\{[\s\S]*?replace\(\/\\\\\/g, '\/'\)/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The hole the drift guard above left open (found 2026-09-04).
+//
+// "no module re-declares TEST_PATH_RE" only catches the *named* copy. It does
+// not catch the much commoner shape — a bare substring test on the path:
+//
+//     if (relPath.includes('test')) continue;
+//
+// That is not a narrower predicate, it is a WRONG one, and it fails toward
+// silence: it also matches `src/latest/`, `src/attestation.js`,
+// `src/contest/` and `app/testimonials/` — shipped code the module then
+// never scans. dataIntegrity._checkDataValidation (the module that flags
+// unvalidated `req.body`) and integrationTests._detectApiEndpoints both
+// carried it and were never migrated with the other twenty.
+//
+// The `.git` variant is the same mistake against a different word:
+// `rel.includes('.git')` also matches `.github`, so bashSafety,
+// deployContract and deployScriptValidator each skipped every GitHub
+// Actions workflow — deployScriptValidator's isDeployFile() ends with a
+// clause written specifically to match `.github/workflows/*.yml`, which
+// made that clause unreachable.
+//
+// Substring containment is never the right test for a path segment. Use
+// this._isTestPath(), or split on the separator and compare segments.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('path filters are segment-anchored, not substring', () => {
+  // A path variable — not file CONTENT, which may legitimately be searched
+  // for the word "test". Only the identifiers that hold a path are checked.
+  const PATH_VAR = String.raw`(?:rel|relPath|relFwd|filePath|fullPath|p)`;
+  const BAD_WORD = String.raw`(?:test|spec|\.git|node_modules)`;
+  const SUBSTRING_PATH_FILTER = new RegExp(
+    String.raw`\b${PATH_VAR}\.includes\((['"])${BAD_WORD}\1\)`,
+  );
+
+  const files = fs
+    .readdirSync(MODULES_DIR)
+    .filter((f) => f.endsWith('.js'));
+
+  for (const f of files) {
+    it(`${f} uses no substring path filter`, () => {
+      const src = fs.readFileSync(path.join(MODULES_DIR, f), 'utf8');
+      const offending = src
+        .split('\n')
+        .map((line, i) => [i + 1, line])
+        .filter(([, line]) => !/^\s*(?:\/\/|\*)/.test(line)) // not a comment
+        .filter(([, line]) => SUBSTRING_PATH_FILTER.test(line));
+
+      assert.deepStrictEqual(
+        offending.map(([n, line]) => `${f}:${n} ${line.trim()}`),
+        [],
+        'substring containment matches src/latest/, attestation.js and .github/ — ' +
+          'use this._isTestPath() or compare path segments',
+      );
+    });
+  }
+});
+
+describe('.github survives the .git exclusion', () => {
+  // Behavioural, not textual: the regex guard above already forbids the bad
+  // shape, so what is worth pinning here is that a workflow file actually
+  // reaches a scanner. bashSafety returned 0 findings on this exact input
+  // and 1 on the identical file at `ci/w.yml` — same content, different
+  // directory — because `dir.includes('/.git')` matched `/.github`.
+  const BashSafety = require('../src/modules/bash-safety');
+
+  const WORKFLOW = [
+    'jobs:',
+    '  j:',
+    '    steps:',
+    '      - name: Notify',
+    '        run: |',
+    '          set +e',
+    '          gh issue create --title x',
+    '',
+  ].join('\n');
+
+  async function scanAt(rel) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-dotgithub-'));
+    try {
+      const file = path.join(tmp, rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, WORKFLOW);
+      const checks = [];
+      const result = {
+        checks,
+        addCheck: (id, passed, meta) => checks.push({ id, passed, ...(meta || {}) }),
+        addInfo() {},
+      };
+      await new BashSafety().run(result, { projectRoot: tmp });
+      return checks.filter((c) => !c.passed);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+
+  it('an unrestored `set +e` is found inside .github/workflows', async () => {
+    const found = await scanAt('.github/workflows/w.yml');
+    assert.ok(
+      found.some((c) => c.id.includes('set-e-disabled')),
+      'a GitHub Actions workflow must be scanned, not skipped as if it were .git',
+    );
+  });
+
+  it('the same file elsewhere reports identically', async () => {
+    const inGithub = await scanAt('.github/workflows/w.yml');
+    const elsewhere = await scanAt('ci/w.yml');
+    assert.strictEqual(
+      inGithub.length,
+      elsewhere.length,
+      'identical content must not depend on the directory it sits in',
+    );
+  });
+
+  it('a real .git directory is still excluded', async () => {
+    const found = await scanAt('.git/hooks/w.yml');
+    assert.deepStrictEqual(found, [], '.git itself must stay excluded');
   });
 });
