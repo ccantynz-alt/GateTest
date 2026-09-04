@@ -132,7 +132,7 @@ jobs:
           if [ "$IS_ADMIN" = "true" ]; then
             echo "[GateTest] ADMIN MODE — strict enforcement, auto-fix on. No advisory labels."
           else
-            echo "[GateTest] ADVISORY MODE — findings reported, gate never blocks."
+            echo "[GateTest] ENFORCING — PRs are judged on changed files only; full scans on new findings only (.gatetest/baseline.json)."
           fi
 
       # --parallel runs all modules concurrently — ~3x speedup on GitHub
@@ -148,10 +148,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GATETEST_ADMIN: ${{ steps.admin_detect.outputs.is_admin == 'true' && '1' || '' }}
         run: |
+          # ENFORCING, not advisory. `--diff` scopes the scan to the files
+          # this PR actually changed, so the author is only ever blocked on
+          # code they just wrote — a repo's existing debt lives in files the
+          # diff does not touch and is never scanned here. That is what makes
+          # blocking safe on a PR without any baseline.
           if [ "${{ steps.admin_detect.outputs.is_admin }}" = "true" ]; then
             node "$GATETEST_HOME/bin/gatetest.js" --suite quick --diff --sarif --junit --parallel --fix --project "$GITHUB_WORKSPACE"
           else
-            node "$GATETEST_HOME/bin/gatetest.js" --suite quick --diff --sarif --junit --parallel --report-only --project "$GITHUB_WORKSPACE"
+            node "$GATETEST_HOME/bin/gatetest.js" --suite quick --diff --sarif --junit --parallel --project "$GITHUB_WORKSPACE"
           fi
 
       - name: GateTest — Full on main push
@@ -160,10 +165,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GATETEST_ADMIN: ${{ steps.admin_detect.outputs.is_admin == 'true' && '1' || '' }}
         run: |
+          # A repo-wide full scan is the one place a mature codebase would eat
+          # years of backlog on day one, so this path is baselined rather than
+          # made advisory. With .gatetest/baseline.json committed the gate
+          # fails on NEW findings only; without it, the first run snapshots
+          # what is already there and passes once.
+          #
+          # Measured on colinhacks/zod: 50 blocking findings before, 554
+          # grandfathered, 0 blocking after — and a planted command injection
+          # plus a hardcoded live key still failed the build (exit 1). That is
+          # the difference between a gate and a report: this one can still say
+          # no.
           if [ "${{ steps.admin_detect.outputs.is_admin }}" = "true" ]; then
             node "$GATETEST_HOME/bin/gatetest.js" --suite full --sarif --junit --parallel --fix --project "$GITHUB_WORKSPACE"
+          elif [ -f "$GITHUB_WORKSPACE/.gatetest/baseline.json" ]; then
+            node "$GATETEST_HOME/bin/gatetest.js" --suite full --sarif --junit --parallel --project "$GITHUB_WORKSPACE"
           else
-            node "$GATETEST_HOME/bin/gatetest.js" --suite full --sarif --junit --parallel --report-only --project "$GITHUB_WORKSPACE"
+            echo "[GateTest] No .gatetest/baseline.json found — snapshotting this repo's existing findings."
+            echo "[GateTest] This run will PASS. Commit the baseline file and every run after it enforces."
+            node "$GATETEST_HOME/bin/gatetest.js" --suite full --sarif --junit --parallel --baseline --project "$GITHUB_WORKSPACE"
+            echo "::notice title=GateTest baseline created::Commit .gatetest/baseline.json to turn the gate on. Until you do, full-scan runs stay in snapshot mode."
           fi
 
       - name: Upload SARIF to GitHub Security
