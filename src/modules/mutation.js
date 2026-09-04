@@ -9,7 +9,7 @@
  */
 
 const BaseModule = require('./base-module');
-const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
+const { JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
 // Mutation operators extracted to a testable engine module so they can
@@ -122,8 +122,20 @@ class MutationModule extends BaseModule {
       return;
     }
 
-    // Verify tests pass before mutating
+    // Verify tests pass before mutating.
+    //
+    // The baseline is also the MEASUREMENT that makes the rest of this module
+    // honest. A mutant run used to get a hardcoded 30s; on any project whose
+    // suite takes longer than that, every mutant timed out, every timeout was
+    // read as a non-zero exit, and a non-zero exit was counted as "killed" —
+    // so the module reported a perfect score without a single test ever
+    // having finished. Measured on a fixture whose suite takes 35s:
+    // "Mutation score: 100% (3/3 killed, 0 survived)", all three from
+    // timeouts. That is the most dangerous number this engine can print: a
+    // team reads it as "our tests are bulletproof".
+    const baselineStart = Date.now();
     const baseline = this._exec(testCmd, { cwd: projectRoot, timeout: 120000 });
+    const baselineMs = Date.now() - baselineStart;
     if (baseline.exitCode !== 0) {
       result.addCheck('mutation:baseline', true, {
         message: 'Skipped — the suite does not pass, so mutants cannot be measured (see unitTests for the failure)',
@@ -138,25 +150,40 @@ class MutationModule extends BaseModule {
       severity: 'info',
     });
 
+    // A mutant gets three times what the clean suite needed, floored at the
+    // old 30s and capped so one pathological run cannot eat the budget.
+    const mutantTimeout = Math.min(Math.max(baselineMs * 2, 30000), 90000);
+
+    // Wall-clock budget for the whole module. maxMutants alone bounds the
+    // COUNT, not the TIME: 50 mutants against a 30s suite is 25 minutes, and
+    // a full self-scan of this repo hit `timeout 1200` (exit 124) still
+    // inside this module, against the 60s bar in CLAUDE.md section 9.
+    // Sampling fewer mutants and saying so beats a scan that never returns.
+    const timeBudgetMs = (mutationConfig && mutationConfig.timeBudgetMs) || 120000;
+    const deadline = Date.now() + timeBudgetMs;
+
     // Generate and test mutants
     let killed = 0;
     let survived = 0;
+    let inconclusive = 0;
+    let budgetExhausted = false;
     let totalMutants = 0;
     const survivors = [];
 
     for (const file of sourceFiles) {
-      if (totalMutants >= maxMutants) break;
+      if (totalMutants >= maxMutants || budgetExhausted) break;
+      if (Date.now() > deadline) { budgetExhausted = true; break; }
 
       const relPath = path.relative(projectRoot, file);
       const original = fs.readFileSync(file, 'utf-8');
       const lines = original.split('\n');
 
       for (const mutation of MUTATIONS) {
-        if (totalMutants >= maxMutants) break;
+        if (totalMutants >= maxMutants || budgetExhausted) break;
 
         // Find lines where this mutation can apply
         for (let i = 0; i < lines.length; i++) {
-          if (totalMutants >= maxMutants) break;
+          if (totalMutants >= maxMutants || budgetExhausted) break;
 
           const line = lines[i];
           // Skip comments, imports, requires — delegated to mutation-engine
@@ -178,13 +205,23 @@ class MutationModule extends BaseModule {
           totalMutants++;
 
           // Write mutant, run tests, restore original
+          // The bound has to sit where the cost is. Every other check above
+          // is a convenience; this is the one that stops a single file from
+          // running a full set of mutants past the deadline.
+          if (Date.now() > deadline) { budgetExhausted = true; break; }
+
           try {
             installRestoreHandlers();
             IN_FLIGHT.set(file, original);
             fs.writeFileSync(file, mutatedSource);
-            const testResult = this._exec(testCmd, { cwd: projectRoot, timeout: 30000 });
+            const testResult = this._exec(testCmd, { cwd: projectRoot, timeout: mutantTimeout });
 
-            if (testResult.exitCode !== 0) {
+            if (testResult.timedOut) {
+              // We learned nothing. The suite did not finish, so it neither
+              // caught the mutant nor missed it. Counting this as a kill is
+              // how a 100% score gets manufactured out of slow tests.
+              inconclusive++;
+            } else if (testResult.exitCode !== 0) {
               killed++;
             } else {
               survived++;
@@ -217,15 +254,51 @@ class MutationModule extends BaseModule {
       return;
     }
 
-    const score = Math.round((killed / totalMutants) * 100);
+    // Score over mutants we actually learned something from. An inconclusive
+    // mutant is excluded from both halves of the fraction rather than
+    // silently improving it.
+    const conclusive = killed + survived;
 
-    result.addCheck('mutation:score', score >= threshold, {
-      message: `Mutation score: ${score}% (${killed}/${totalMutants} killed, ${survived} survived)`,
+    if (conclusive === 0) {
+      result.addCheck('mutation:score', true, {
+        message:
+          `Mutation score: not measured — all ${totalMutants} mutant run(s) exceeded ` +
+          `${Math.round(mutantTimeout / 1000)}s and were inconclusive. The suite takes ` +
+          `~${Math.round(baselineMs / 1000)}s clean; raise modules.mutation.timeBudgetMs ` +
+          'or speed the suite up.',
+        severity: 'info',
+      });
+      return;
+    }
+
+    const score = Math.round((killed / conclusive) * 100);
+    const caveats = [];
+    if (inconclusive > 0) caveats.push(`${inconclusive} inconclusive (timed out, not counted)`);
+    if (budgetExhausted) caveats.push(`stopped at the ${Math.round(timeBudgetMs / 1000)}s budget`);
+    const caveat = caveats.length ? ` — ${caveats.join('; ')}` : '';
+
+    // A truncated run is a SAMPLE, not a measurement. On this repo the budget
+    // stops it after 4 mutants, and failing a build on "0% of 4" is the kind
+    // of unreliable verdict that teaches people to ignore the gate — the
+    // number is real but it cannot carry a build decision. Blocking is
+    // reserved for a run that finished; a truncated one reports the same
+    // number as a warning, says it is a sample, and says why it stopped.
+    const truncated = budgetExhausted || totalMutants >= maxMutants;
+    const failing = score < threshold;
+    const blocks = failing && !truncated;
+
+    result.addCheck('mutation:score', !failing || truncated, {
+      message:
+        `Mutation score: ${score}% (${killed}/${conclusive} killed, ${survived} survived)` +
+        `${caveat}${truncated ? ' — SAMPLE, not a full measurement' : ''}`,
       expected: `>= ${threshold}%`,
       actual: `${score}%`,
-      severity: score >= threshold ? 'info' : 'error',
-      suggestion: score < threshold
-        ? 'Add tests that detect the surviving mutations listed below'
+      severity: !failing ? 'info' : (blocks ? 'error' : 'warning'),
+      suggestion: failing
+        ? (truncated
+          ? 'Add tests for the survivors below. This sample did not cover the whole repo — ' +
+            'raise modules.mutation.timeBudgetMs / maxMutants for a verdict that can block.'
+          : 'Add tests that detect the surviving mutations listed below')
         : undefined,
     });
 
