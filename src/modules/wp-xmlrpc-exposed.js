@@ -74,6 +74,11 @@ class WpXmlrpcExposedModule extends BaseModule {
     const xmlrpcUrl = `${normalised}/xmlrpc.php`;
 
     // GET probe
+    // A probe that never completed tells us nothing about xmlrpc.php. Tracked
+    // so the summary can say so instead of reading the absence of a
+    // fingerprint as evidence of hardening.
+    let getFailed = false;
+    let postFailed = false;
     let getSignal = false;
     let getStatus = 0;
     try {
@@ -83,6 +88,7 @@ class WpXmlrpcExposedModule extends BaseModule {
         getSignal = GET_FINGERPRINT.test(res.body);
       }
     } catch (err) {
+      getFailed = true;
       result.addCheck('wp-xmlrpc:get-error', true, {
         severity: 'info',
         message: `GET ${xmlrpcUrl} failed: ${err.message || err}`,
@@ -107,6 +113,7 @@ class WpXmlrpcExposedModule extends BaseModule {
         pingbackAvailable = PINGBACK_AVAILABLE_REGEX.test(res.body);
       }
     } catch (err) {
+      postFailed = true;
       result.addCheck('wp-xmlrpc:post-error', true, {
         severity: 'info',
         message: `POST ${xmlrpcUrl} failed: ${err.message || err}`,
@@ -115,9 +122,29 @@ class WpXmlrpcExposedModule extends BaseModule {
 
     const exposed = getSignal || postSignal;
     if (!exposed) {
+      // "DISABLED OR BLOCKED" IS A FINDING; A FAILED PROBE IS NOT.
+      //
+      // Measured 2026-09-04 against an unreachable host, this module reported
+      // "/xmlrpc.php appears to be disabled or blocked (GET=0, POST=0). Good."
+      // Both probes had thrown — GET=0/POST=0 is the tell, and it rendered as
+      // reassurance. An owner reading that would not re-check a live DDoS
+      // reflector.
+      if (getFailed && postFailed) {
+        result.addCheck('wp-xmlrpc:not-checked', true, {
+          severity: 'info',
+          message:
+            'wpXmlrpcExposed: NOT CHECKED — both the GET and POST probes failed to complete '
+            + `(${xmlrpcUrl} could not be reached). This is not a clean result; xmlrpc.php may `
+            + 'still be exposed.',
+        });
+        return;
+      }
+      const partial = getFailed || postFailed
+        ? ` One of the two probes failed (${getFailed ? 'GET' : 'POST'}), so this is a partial result.`
+        : '';
       result.addCheck('wp-xmlrpc:not-exposed', true, {
         severity: 'info',
-        message: `wpXmlrpcExposed: /xmlrpc.php appears to be disabled or blocked (GET=${getStatus}, POST=${postStatus}). Good.`,
+        message: `wpXmlrpcExposed: /xmlrpc.php appears to be disabled or blocked (GET=${getStatus}, POST=${postStatus}).${partial || ' Good.'}`,
       });
       return;
     }

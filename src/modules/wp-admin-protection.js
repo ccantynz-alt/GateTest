@@ -100,6 +100,11 @@ class WpAdminProtectionModule extends BaseModule {
     const timeoutMs = Math.max(1000, Math.min(moduleConfig.timeoutMs || 8000, 30000));
 
     // 1. /wp-login.php reachability
+    // A probe that never completed leaves loginStatus/adminStatus at 0, which
+    // reads exactly like "nothing to report" downstream. Tracked so the
+    // summary can distinguish the two.
+    let loginProbeFailed = false;
+    let adminProbeFailed = false;
     let loginStatus = 0;
     let loginBody = '';
     let loginHeaders = {};
@@ -111,6 +116,7 @@ class WpAdminProtectionModule extends BaseModule {
       loginHeaders = res.headers || {};
       loginCookies = res.headers && (res.headers['set-cookie'] || '') || '';
     } catch (err) {
+      loginProbeFailed = true;
       result.addCheck('wp-admin-protection:login-probe-error', true, {
         severity: 'info',
         message: `Could not probe /wp-login.php: ${err.message || err}`,
@@ -173,6 +179,7 @@ class WpAdminProtectionModule extends BaseModule {
       const res = await fetchFn(`${normalised}/wp-admin/`, { method: 'GET', timeoutMs, redirect: 'manual' });
       adminStatus = res.status;
     } catch (err) {
+      adminProbeFailed = true;
       result.addCheck('wp-admin-protection:admin-probe-error', true, {
         severity: 'info',
         message: `Could not probe /wp-admin/: ${err.message || err}`,
@@ -219,12 +226,26 @@ class WpAdminProtectionModule extends BaseModule {
       }
     }
 
-    result.addCheck('wp-admin-protection:summary', true, {
-      severity: 'info',
-      message:
-        `wpAdminProtection: login=${loginStatus}, admin=${adminStatus}, ` +
-        `${result.checks.filter((c) => c.name.startsWith('wp-admin-protection:') && c.passed === false).length} hardening gap(s) found.`,
-    });
+    // "0 HARDENING GAPS" IS A RESULT ONLY IF WE REACHED THE SITE.
+    //
+    // Measured 2026-09-04 against an unreachable host, this read
+    // "wpAdminProtection: login=0, admin=0, 0 hardening gap(s) found." — the
+    // same sentence a genuinely hardened site gets, over two probes that threw.
+    const gaps = result.checks.filter(
+      (c) => c.name.startsWith('wp-admin-protection:') && c.passed === false
+    ).length;
+    let summary;
+    if (loginProbeFailed && adminProbeFailed) {
+      summary = 'wpAdminProtection: NOT CHECKED — both the /wp-login.php and /wp-admin/ probes '
+        + 'failed to complete. This is not a clean result; the site could not be reached.';
+    } else if (loginProbeFailed || adminProbeFailed) {
+      summary = `wpAdminProtection: login=${loginStatus}, admin=${adminStatus}, ${gaps} hardening `
+        + `gap(s) found — partial result, the ${loginProbeFailed ? '/wp-login.php' : '/wp-admin/'} `
+        + 'probe failed to complete.';
+    } else {
+      summary = `wpAdminProtection: login=${loginStatus}, admin=${adminStatus}, ${gaps} hardening gap(s) found.`;
+    }
+    result.addCheck('wp-admin-protection:summary', true, { severity: 'info', message: summary });
   }
 
   _normaliseBaseUrl(input) {

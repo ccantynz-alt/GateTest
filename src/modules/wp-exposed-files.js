@@ -107,12 +107,20 @@ class WpExposedFilesModule extends BaseModule {
       return;
     }
 
-    const probe = moduleConfig.probeFn || this._defaultProbe;
+    // Bound. Extracting the method bare loses `this`, so any `this._x()` added
+    // to it later throws — and every probe's catch turns that into a passed
+    // check, so the module reports a clean site having never completed a
+    // request. wpVersionLeak shipped exactly that (2026-09-02); the fix bound
+    // nine `_defaultFetch` extractions and missed the two `_defaultProbe` ones,
+    // here and in wp-backup-validation, because the guard test grepped for the
+    // method NAME. It now matches any `this._default*`.
+    const probe = moduleConfig.probeFn || this._defaultProbe.bind(this);
     const concurrency = Math.max(1, Math.min(moduleConfig.concurrency || 6, 20));
     const timeoutMs  = Math.max(1000, Math.min(moduleConfig.timeoutMs  || 8000, 30000));
 
     let cursor = 0;
     const probedCount = { value: 0 };
+    const errorCount = { value: 0 };
     const foundCount = { value: 0 };
 
     async function worker() {
@@ -125,11 +133,15 @@ class WpExposedFilesModule extends BaseModule {
           probeResult = await probe(url, { timeoutMs });
         } catch (err) {
           // Network failure on a single probe should not abort the whole module.
+          // It also does not count as a probe: `probedCount` was incremented
+          // here, so an unreachable host produced "probed 26 known-bad paths;
+          // 0 exposure(s) found" (measured 2026-09-04) — a count of work that
+          // did not happen, presented as a measurement.
           result.addCheck(`wp-exposed-files:probe-error:${entry.path}`, true, {
             severity: 'info',
             message: `Could not probe ${entry.path}: ${err.message || err}`,
           });
-          probedCount.value += 1;
+          errorCount.value += 1;
           continue;
         }
         probedCount.value += 1;
@@ -150,10 +162,20 @@ class WpExposedFilesModule extends BaseModule {
     );
     await Promise.all(workers);
 
-    result.addCheck('wp-exposed-files:summary', true, {
-      severity: 'info',
-      message: `wpExposedFiles: probed ${probedCount.value} known-bad paths against ${normalised}; ${foundCount.value} exposure(s) found`,
-    });
+    const total = KNOWN_BAD_PATHS.length;
+    let summary;
+    if (probedCount.value === 0) {
+      summary = `wpExposedFiles: NOT CHECKED — all ${total} probes against ${normalised} failed to `
+        + 'complete. This is not a clean result; exposed backups and config files may still be public.';
+    } else if (errorCount.value > 0) {
+      summary = `wpExposedFiles: probed ${probedCount.value} of ${total} known-bad paths against `
+        + `${normalised}; ${foundCount.value} exposure(s) found. ${errorCount.value} probe(s) failed, `
+        + 'so this is a partial result.';
+    } else {
+      summary = `wpExposedFiles: probed ${probedCount.value} known-bad paths against ${normalised}; `
+        + `${foundCount.value} exposure(s) found`;
+    }
+    result.addCheck('wp-exposed-files:summary', true, { severity: 'info', message: summary });
   }
 
   async _scanFilesystem(result, projectRoot) {
