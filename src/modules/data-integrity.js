@@ -279,7 +279,10 @@ class DataIntegrityModule extends BaseModule {
 
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
-      if (relPath.includes('test') || relPath.includes('node_modules')) continue;
+      // `includes('test')` also matched `src/latest/`, `attestation.js`
+      // and `testimonials/` — real shipped code, silently skipped.
+      // BaseModule._isTestPath() is the canonical segment-anchored form.
+      if (this._isTestPath(relPath) || relPath.split(/[\\/]/).includes('node_modules')) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
 

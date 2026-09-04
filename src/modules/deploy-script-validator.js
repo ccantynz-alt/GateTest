@@ -93,7 +93,11 @@ class DeployScriptValidator extends BaseModule {
       // Forward slashes always — the Next.js route regex below matched
       // nothing on Windows (backslash paths), leaving the registry blind.
       const rel = path.relative(projectRoot, file).split(path.sep).join('/');
-      if (rel.includes('node_modules') || rel.includes('.git')) continue;
+      // Segment-anchored: `rel.includes('.git')` also matched `.github`,
+      // which excluded every `.github/workflows/*.yml` — the exact files
+      // isDeployFile() names on its last line. That branch was unreachable.
+      const segments = rel.split('/');
+      if (segments.includes('node_modules') || segments.includes('.git')) continue;
 
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
