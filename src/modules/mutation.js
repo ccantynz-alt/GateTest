@@ -40,9 +40,9 @@ const IN_FLIGHT = new Map(); // absPath -> original contents
 
 function restoreAllInFlight() {
   for (const [file, original] of IN_FLIGHT) {
-    // error-ok: we are on an exit path with nowhere left to report to, and a
-    // failed restore must not stop us restoring the remaining files.
-    try { fs.writeFileSync(file, original); } catch { /* best effort on the way out */ }
+    // On an exit path there is nowhere left to report to, and one failed
+    // restore must not stop us restoring the remaining files.
+    try { fs.writeFileSync(file, original); } catch { /* error-ok: exit path, best effort */ }
   }
   IN_FLIGHT.clear();
 }
@@ -60,9 +60,9 @@ function installRestoreHandlers() {
         // that we were signalled rather than that we exited cleanly.
         process.exit(sig === 'SIGINT' ? 130 : 143);
       });
-      // error-ok: SIGBREAK is Windows-only and SIGHUP is absent on some
-      // platforms; an unknown signal name is expected, not a failure.
-    } catch { /* platform does not have this signal */ }
+      // SIGBREAK is Windows-only and SIGHUP is absent on some platforms; an
+      // unknown signal name is expected here, not a failure.
+    } catch { /* error-ok: platform does not have this signal */ }
   }
 }
 
@@ -336,7 +336,7 @@ class MutationModule extends BaseModule {
         if (pkg.scripts?.test && !pkg.scripts.test.includes('no test specified')) {
           return 'npm test 2>&1';
         }
-      } catch { /* ignore */ }
+      } catch { /* error-ok: unreadable or malformed package.json — fall through to the next detection strategy; the syntax module reports the file itself */ }
     }
 
     const testDirs = ['tests', 'test', '__tests__'];
