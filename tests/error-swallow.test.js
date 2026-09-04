@@ -156,6 +156,227 @@ describe('ErrorSwallowModule — empty catch', () => {
   });
 });
 
+describe('ErrorSwallowModule — harness scope (control pair)', () => {
+  // Measured on colinhacks/zod @7a002366: 23 of the module's 33 blocking
+  // findings were benchmark harnesses deliberately measuring the throw path
+  // (`packages/zod/src/v3/benchmarks/`, `packages/bench/memory/`). The module
+  // already treated a test file as harness code; a benchmark is the same KIND
+  // of code. SCOPE, not silence — it still reports, it stops blocking.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-scope-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const SWALLOW = [
+    'function run(i) {',
+    '  try {',
+    '    bigSchema.parse({ n: "not-a-number" });',
+    '  } catch {}',
+    '}',
+    '',
+  ].join('\n');
+
+  it('downgrades — but still reports — an empty catch in a benchmark harness', async () => {
+    write(tmp, 'packages/zod/src/v3/benchmarks/primitives.ts', SWALLOW);
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit, 'benchmark findings must stay visible, not vanish');
+    assert.strictEqual(hit.severity, 'warning');
+  });
+
+  it('still ERRORS on the identical code in shipped source', async () => {
+    write(tmp, 'packages/zod/src/v3/parse.ts', SWALLOW);
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error', 'the downgrade must be about the path, not the code');
+  });
+
+  it('does not treat `src/latest/` or `src/benchmarking.ts` as a harness', async () => {
+    // Segment-anchored: the recurring bug in this engine is a substring test
+    // where a segment test was meant.
+    write(tmp, 'src/latest/a.ts', SWALLOW);
+    write(tmp, 'src/benchmarking.ts', SWALLOW);
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.strictEqual(hits.length, 2);
+    for (const h of hits) assert.strictEqual(h.severity, 'error', `${h.file} should not read as a harness`);
+  });
+
+  it('skips the floating-promise heuristic in a benchmark, keeps it in source', async () => {
+    const FLOATING = [
+      'function main() {',
+      '  queue.publish({ id: 1 });',
+      '}',
+      '',
+    ].join('\n');
+    write(tmp, 'bench/run.js', FLOATING);
+    write(tmp, 'src/run.js', FLOATING);
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('error-swallow:floating-promise:'));
+    assert.strictEqual(hits.length, 1, `expected only the src/ finding, got ${JSON.stringify(hits.map((h) => h.file))}`);
+    assert.strictEqual(hits[0].file.replace(/\\/g, '/'), 'src/run.js');
+  });
+});
+
+describe('ErrorSwallowModule — guarded attempt (control pair)', () => {
+  // In a PARSING library, `try { ... } catch {}` is frequently "that shape did
+  // not parse, fall through and try the next one". The discriminator is not
+  // the library, it is whether the code around the catch can OBSERVE the
+  // failure. See src/core/guarded-catch.js for the measurement.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-guard-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('warns (not errors) on coerce-then-check, and says why', async () => {
+    write(tmp, 'src/schemas.ts', [
+      'export const parseNumber = (payload) => {',
+      '  if (def.coerce)',
+      '    try {',
+      '      payload.value = Number(payload.value);',
+      '    } catch (_) {}',
+      '  const input = payload.value;',
+      '  if (typeof input === "number") return payload;',
+      '  payload.issues.push({ expected: "number" });',
+      '  return payload;',
+      '};',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit, 'a guarded attempt is downgraded, never dropped');
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'checked-target');
+    assert.match(hit.message, /handled by the surrounding control flow/);
+  });
+
+  it('warns on the sync-attempt / async-fallback fallthrough', async () => {
+    write(tmp, 'src/standard.ts', [
+      'export const validate = (value) => {',
+      '  try {',
+      '    const r = inst._zod.run({ value, issues: [] }, ctx);',
+      '    if (!(r instanceof Promise)) return toStandardResult(r, ctx);',
+      '  } catch (_) {}',
+      '  return validateAsync(inst, value);',
+      '};',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'fallthrough');
+  });
+
+  it('STILL ERRORS on a swallow the following code cannot observe', async () => {
+    write(tmp, 'src/checkout.ts', [
+      'export async function checkout(order, res) {',
+      '  try {',
+      '    await sendReceipt(order.email);',
+      '  } catch {}',
+      '  await db.markPaid(order.id);',
+      '  return res.json({ ok: true });',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+    assert.strictEqual(hit.guarded, undefined);
+  });
+
+  it('STILL ERRORS when the value is read afterwards but never tested', async () => {
+    write(tmp, 'src/load.ts', [
+      'export async function load(id) {',
+      '  let user = null;',
+      '  try {',
+      '    user = await db.users.find(id);',
+      '  } catch {}',
+      '  return user;',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+});
+
+describe('ErrorSwallowModule — prose is not code (control pair)', () => {
+  // Found by self-scan 2026-09-04: `src/core/guarded-catch.js` documents the
+  // shape it detects, and this module reported the two examples in its doc
+  // comment at ERROR — blocking our own repo on its own documentation.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-prose-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('does NOT flag an example inside a /** block comment */', async () => {
+    write(tmp, 'src/doc.js', [
+      '/**',
+      ' * The swallow this rule is about:',
+      ' *',
+      ' *     try { await db.commit(); } catch {}',
+      ' *',
+      ' * Do not write that.',
+      ' */',
+      'module.exports = {};',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.passed === false);
+    assert.strictEqual(hits.length, 0, `documentation is not a defect, got: ${JSON.stringify(hits, null, 2)}`);
+  });
+
+  it('does NOT flag `.catch(() => {})` quoted in a doc comment', async () => {
+    write(tmp, 'src/doc.js', [
+      '/** Never write `.catch(() => {})` on a payment call. */',
+      'module.exports = {};',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.strictEqual(r.checks.filter((c) => c.passed === false).length, 0);
+  });
+
+  it('STILL flags a swallow that sits below a regex literal containing a quote', async () => {
+    // The false-NEGATIVE direction of the same machinery: `/["']/` carries an
+    // unbalanced quote, and a masker that mishandles it blanks the rest of the
+    // file — after which every finding below reads as prose and disappears.
+    write(tmp, 'src/tokenize.js', [
+      'const QUOTE_RE = /["\']/;',
+      'async function run() {',
+      '  try {',
+      '    await db.commit();',
+      '  } catch {}',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.ok(hit, 'a regex literal must not silence the rest of the file');
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('STILL flags the same code when it is code, on the line below the comment', async () => {
+    write(tmp, 'src/doc.js', [
+      '/**',
+      ' *     try { await db.commit(); } catch {}',
+      ' */',
+      'async function run() {',
+      '  try {',
+      '    await db.commit();',
+      '  } catch {}',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('error-swallow:empty-catch:'));
+    assert.strictEqual(hits.length, 1, `expected exactly the executable one, got: ${JSON.stringify(hits.map((h) => h.line))}`);
+    assert.strictEqual(hits[0].line, 7);
+    assert.strictEqual(hits[0].severity, 'error');
+  });
+});
+
 describe('ErrorSwallowModule — log-and-eat', () => {
   let tmp;
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-log-')); });

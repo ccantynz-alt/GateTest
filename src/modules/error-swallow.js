@@ -24,15 +24,28 @@
  * We cover all six families.
  *
  * Discovery: `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`,
- * `.cts`. Tests (`*.test.*`, `*.spec.*`, under `tests/`, `__tests__/`,
- * `spec/`) are scanned at reduced severity — a silent catch in a test
- * is usually intentional (testing the unhappy path).
+ * `.cts`. HARNESS code — tests (`*.test.*`, `*.spec.*`, `tests/`,
+ * `__tests__/`, `spec/`) and benchmarks (`bench/`, `benchmarks/`,
+ * `perf/`, and the compounds `HARNESS_DIR_RE` in
+ * `src/core/scan-scope.js` recognises) — is scanned at reduced
+ * severity. A silent catch in a test or a benchmark is usually the
+ * point of the measurement, not a defect: zod's
+ * `packages/zod/src/v3/benchmarks/` times the throw path 22 times and
+ * used to be told 22 times that it had erased an error. This is the
+ * module's own long-standing test-path calibration, applied to the
+ * other kind of harness; it is SCOPE, and the finding still reports.
  *
  * Rules:
  *
  *   error:   truly bare empty `catch (err) { }` block — no code, no
  *            comment                                          (prod)
- *            warning in tests
+ *            warning in a test/benchmark harness, and warning when the
+ *            failure is GUARDED: the try block exits on success and
+ *            code follows the catch, or the try only assigns a target
+ *            the following code then tests. In a parsing library
+ *            `try { ... } catch {}` is usually "that shape did not
+ *            parse, fall through" — see `src/core/guarded-catch.js`
+ *            for the discriminator and its control pairs.
  *            (rule: `error-swallow:empty-catch:<rel>:<line>`)
  *   warning: catch block that contains ONLY comments — a comment
  *            documents intent, it doesn't handle the error. Still a
@@ -71,6 +84,8 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
+const { HARNESS_DIR_RE } = require('../core/scan-scope');
+const { classifyEmptyCatch, maskNonCode } = require('../core/guarded-catch');
 
 const DEFAULT_EXCLUDES = [
   'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
@@ -249,8 +264,19 @@ class ErrorSwallowModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const isTest = this._isTestPath(rel.replace(/\\/g, '/'));
+    const relPosix = rel.replace(/\\/g, '/');
+    // A benchmark is the same KIND of code as a test: a harness, not something
+    // that ships. `HARNESS_DIR_RE` is the engine's single definition of that
+    // (src/core/scan-scope.js) — this module used to know only about tests, so
+    // zod's `packages/zod/src/v3/benchmarks/` measured the throw path 22 times
+    // and was told 22 times that it had erased an error.
+    const isHarness = this._isTestPath(relPosix) || HARNESS_DIR_RE.test(relPosix);
     const lines = content.split('\n');
+    // Masked copy (string and comment CONTENT blanked, offsets preserved) for
+    // the structural analysis in guarded-catch — and for `_isExecutableAt`,
+    // which is what keeps this module from reporting the examples in its own
+    // documentation. Built once per file.
+    const masked = maskNonCode(content).split('\n');
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -261,27 +287,28 @@ class ErrorSwallowModule extends BaseModule {
       // 1. Empty catch block — `catch (err) {}` or `catch {}` on one
       //    line, OR `catch (err) {` followed immediately by `}`.
       const catchOnLine = line.match(/\bcatch\s*(?:\(([^)]*)\))?\s*\{/);
-      if (catchOnLine && !isInString(line, catchOnLine.index) && !this._isSuppressed(lines, i)) {
+      if (catchOnLine && !isInString(line, catchOnLine.index) && this._isExecutableAt(masked, i, line, catchOnLine.index) && !this._isSuppressed(lines, i)) {
         const bodyText = this._collectBlockBody(lines, i, catchOnLine.index);
         const rawBody = bodyText.closed ? bodyText.body.trim() : bodyText.body;
         const effectiveBody = bodyText.closed ? this._stripComments(bodyText.body) : bodyText.body;
         const isBareEmpty = bodyText.closed && rawBody === '';
         const isCommentOnly = bodyText.closed && !isBareEmpty && effectiveBody === '';
         if (isBareEmpty || isCommentOnly) {
-          issues += this._flag(result, `error-swallow:empty-catch:${rel}:${i + 1}`, {
-            severity: isTest ? 'warning' : (isBareEmpty ? 'error' : 'warning'),
-            file: rel,
-            line: i + 1,
-            message: isBareEmpty
-              ? `${rel}:${i + 1} has an empty catch block — any error thrown in the try is erased`
-              : `${rel}:${i + 1} catch block contains only comments — a comment documents intent but does not handle the error`,
-            suggestion: isBareEmpty
-              ? 'At minimum log the error with context; preferably rethrow or handle it. If the error is genuinely expected and benign, comment WHY.'
-              : 'A comment alone doesn\'t handle the error — if it\'s genuinely safe to ignore, keep the comment AND add a log call so the swallow is visible in production.',
-          });
+          // Is the failure observable by the code around the catch? A
+          // fallthrough alternative, or a target the next statement tests, is
+          // a handled branch rather than a swallow. Only worth asking about a
+          // bare empty catch that would otherwise block.
+          const guard = (isBareEmpty && !isHarness)
+            ? classifyEmptyCatch(masked, i, catchOnLine.index)
+            : { guarded: false };
+          issues += this._flag(
+            result,
+            `error-swallow:empty-catch:${rel}:${i + 1}`,
+            this._emptyCatchDetails({ rel, line: i + 1, isHarness, isBareEmpty, guard }),
+          );
         } else if (bodyText.closed && this._isLogAndEat(bodyText.body)) {
           issues += this._flag(result, `error-swallow:log-and-eat:${rel}:${i + 1}`, {
-            severity: isTest ? 'info' : 'error',
+            severity: isHarness ? 'info' : 'error',
             file: rel,
             line: i + 1,
             message: `${rel}:${i + 1} catch block only logs and does not re-throw — visible in logs but invisible to callers, breaks downstream error handling`,
@@ -294,9 +321,9 @@ class ErrorSwallowModule extends BaseModule {
       // Suppressed when the chain is part of a `void expression`
       // statement — the idiomatic JS fire-and-forget pattern.
       const catchNoop = line.match(/\.catch\s*\(\s*(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0)\s*\)/);
-      if (catchNoop && !isInString(line, catchNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
+      if (catchNoop && !isInString(line, catchNoop.index) && this._isExecutableAt(masked, i, line, catchNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
-          severity: isTest ? 'warning' : 'error',
+          severity: isHarness ? 'warning' : 'error',
           file: rel,
           line: i + 1,
           message: `${rel}:${i + 1} has \`.catch(() => {})\` or equivalent — Promise rejection is silently dropped`,
@@ -306,9 +333,9 @@ class ErrorSwallowModule extends BaseModule {
       // `.catch(noop)` / `.catch(ignore)` / `.catch(() => { /* ignore */ })`
       // — same void-prefix suppression applies.
       const catchNamedNoop = line.match(/\.catch\s*\(\s*(?:noop|ignore|swallow|_)\s*\)/);
-      if (catchNamedNoop && !isInString(line, catchNamedNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
+      if (catchNamedNoop && !isInString(line, catchNamedNoop.index) && this._isExecutableAt(masked, i, line, catchNamedNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
-          severity: isTest ? 'warning' : 'error',
+          severity: isHarness ? 'warning' : 'error',
           file: rel,
           line: i + 1,
           message: `${rel}:${i + 1} passes a known noop (\`noop\`/\`ignore\`/\`swallow\`/\`_\`) to \`.catch()\``,
@@ -318,7 +345,7 @@ class ErrorSwallowModule extends BaseModule {
 
       // 3. Global silent handlers
       const globalHandler = line.match(/process\.on\s*\(\s*['"`](uncaughtException|unhandledRejection)['"`]/);
-      if (globalHandler && !isInString(line, globalHandler.index) && !this._isSuppressed(lines, i)) {
+      if (globalHandler && !isInString(line, globalHandler.index) && this._isExecutableAt(masked, i, line, globalHandler.index) && !this._isSuppressed(lines, i)) {
         // Look at next ~8 lines for a throw/exit/log-with-rethrow
         const windowText = lines.slice(i, Math.min(lines.length, i + 10)).join('\n');
         const hasExit = /\bprocess\.exit\s*\(/.test(windowText);
@@ -346,7 +373,7 @@ class ErrorSwallowModule extends BaseModule {
       //    avoid counting the param itself.
       const nodeCb = line.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/)
         || line.match(/function\s*(?:[A-Za-z_$][\w$]*\s*)?\(\s*(err|error)\s*,\s*[^)]+\)\s*\{/);
-      if (nodeCb && !isInString(line, nodeCb.index) && !this._isSuppressed(lines, i)) {
+      if (nodeCb && !isInString(line, nodeCb.index) && this._isExecutableAt(masked, i, line, nodeCb.index) && !this._isSuppressed(lines, i)) {
         const errName = nodeCb[1];
         // Body starts right after the `{` on this line; scan until the
         // callback's braces balance (capped at 60 lines for pathological
@@ -383,9 +410,9 @@ class ErrorSwallowModule extends BaseModule {
       //    known promise-returning method, NOT preceded by `await`,
       //    `return`, `void`, `=` etc., and NOT followed on the same
       //    line by `.then(` or `.catch(`. Deliberately narrow.
-      if (!isTest) {
+      if (!isHarness) {
         const flt = line.match(/^(\s*)([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)\s*\(/);
-        if (flt && !isInString(line, flt.index) && !this._isSuppressed(lines, i)) {
+        if (flt && !isInString(line, flt.index) && this._isExecutableAt(masked, i, line, flt.index) && !this._isSuppressed(lines, i)) {
           const indent = flt[1];
           const receiver = flt[2];
           const method = flt[3];
@@ -428,6 +455,76 @@ class ErrorSwallowModule extends BaseModule {
     }
 
     return issues;
+  }
+
+  /**
+   * Is the match at `idx` executable code, or prose that looks like it?
+   *
+   * Found by self-scan 2026-09-04: the doc comment at the top of
+   * `src/core/guarded-catch.js` shows `try { await db.commit(); } catch {}` as
+   * the example of a genuine swallow, and this module reported it — twice, at
+   * ERROR, blocking our own repo on its own documentation. `_isCommentLine`
+   * only covers a whole line starting with `//`; a `/** ... *\/` block or a
+   * trailing comment slipped straight through, and `isInString` answers a
+   * different question.
+   *
+   * The masked copy already blanks comment and string content while keeping
+   * every offset, so the test is simply: is the character still there?
+   */
+  _isExecutableAt(masked, lineIdx, line, idx) {
+    const m = masked && masked[lineIdx];
+    if (typeof m !== 'string') return true;
+    let p = idx;
+    while (p < line.length && /\s/.test(line[p])) p += 1;
+    return m[p] === line[p];
+  }
+
+  /**
+   * The finding for an empty / comment-only catch, at the severity its
+   * evidence supports.
+   *
+   *   error    a bare `catch {}` in shipped code whose failure nothing
+   *            downstream can observe — the real swallow
+   *   warning  a comment-only catch (a comment documents intent, it does not
+   *            handle the error), a catch in a test/benchmark harness, or a
+   *            GUARDED ATTEMPT: the try's success path exits and code follows,
+   *            or the try only assigns a target the next statement tests
+   *
+   * A guarded attempt is downgraded, never dropped. "The repo went quiet" is
+   * not evidence that a rule got smarter, so the finding stays on the report
+   * with the reason it is not blocking written into it.
+   */
+  _emptyCatchDetails({ rel, line, isHarness, isBareEmpty, guard }) {
+    const at = `${rel}:${line}`;
+    if (!isBareEmpty) {
+      return {
+        severity: 'warning',
+        file: rel,
+        line,
+        message: `${at} catch block contains only comments — a comment documents intent but does not handle the error`,
+        suggestion: 'A comment alone doesn\'t handle the error — if it\'s genuinely safe to ignore, keep the comment AND add a log call so the swallow is visible in production.',
+      };
+    }
+    if (guard && guard.guarded) {
+      const why = guard.shape === 'fallthrough'
+        ? 'the try block exits on success, so the code after the catch IS the failure path'
+        : `the try block only sets \`${guard.target}\`, which the code after the catch then tests`;
+      return {
+        severity: 'warning',
+        file: rel,
+        line,
+        guarded: guard.shape,
+        message: `${at} has an empty catch block, but the failure is handled by the surrounding control flow — ${why}`,
+        suggestion: 'Not blocking: this reads as an attempted operation with a fallback path, not a swallowed error. Confirm the fallback covers every failure (a bare `catch` also swallows programmer errors such as TypeError); one comment naming the fallback makes that explicit.',
+      };
+    }
+    return {
+      severity: isHarness ? 'warning' : 'error',
+      file: rel,
+      line,
+      message: `${at} has an empty catch block — any error thrown in the try is erased`,
+      suggestion: 'At minimum log the error with context; preferably rethrow or handle it. If the error is genuinely expected and benign, comment WHY.',
+    };
   }
 
   // Best-effort block-body extractor. Starting at `lines[lineIdx]`
