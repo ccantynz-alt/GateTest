@@ -26,7 +26,16 @@ const path = require('path');
  * which the Database-URL rule matched. Without this, switching on docs
  * scanning traded a false negative for a false positive.
  */
-const PLACEHOLDER_VALUE_RE = /(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo|<[a-z0-9_. -]{2,30}>)/i;
+// An ELIDED value cannot be a working credential. Documentation redacts by
+// truncation — `sk_test_51...`, `sk-ant-api03-...`, `MIIE...` — and
+// docs/ops/GO_LIVE_RUNBOOK.md was reported as a committed secret at ERROR
+// severity for a table of exactly those examples. Every customer with a
+// setup runbook has the same table.
+//
+// Three dots or more, never one or two: a JWT is `header.payload.signature`
+// and a real key can contain a dot, so `\.{3,}` is the line between a
+// truncation mark and ordinary punctuation.
+const PLACEHOLDER_VALUE_RE = /(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo|<[a-z0-9_. -]{2,30}>|\.{3,}|\u2026)/i;
 
 /**
  * Credential types recognisable from the VALUE alone.
@@ -61,7 +70,21 @@ class SecretsModule extends BaseModule {
       { regex: /(?:secret|password|passwd|pwd)\s*[:=]\s*['"][^'"]{8,}/gi, type: 'Password/Secret' },
       { regex: /(?:token|bearer)\s*[:=]\s*['"][^'"]{8,}/gi, type: 'Token' },
       { regex: /(?:aws|amazon).{0,20}(?:key|secret|token).{0,20}['"][A-Za-z0-9/+=]{20,}/gi, type: 'AWS Credential' },
-      { regex: /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/g, type: 'Private Key' },
+      // The header ALONE is not a key. A setup runbook writes
+      // `-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END...` in a table to
+      // tell an operator what to paste, and docs/ops/GO_LIVE_RUNBOOK.md was
+      // reported as a committed private key at ERROR severity for exactly
+      // that line. The comment above this list says "nobody writes one to
+      // illustrate a concept" — a runbook does, and so does every customer's.
+      //
+      // The header has to keep matching on its own, because a real .pem has
+      // it alone on line one and this scanner reads a line at a time — so
+      // "require key material" cannot be the test. What separates a key from
+      // a mention is ELISION: `MIIE...` cannot authenticate, and neither a
+      // .pem on disk nor a key inlined in source ever carries an ellipsis.
+      // `illustrationIfElided` applies that to the LINE, since the ellipsis
+      // sits beside the header rather than inside the match.
+      { regex: /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/g, type: 'Private Key', illustrationIfElided: true },
       { regex: /ghp_[A-Za-z0-9_]{36,}/g, type: 'GitHub PAT' },
       { regex: /gho_[A-Za-z0-9_]{36,}/g, type: 'GitHub OAuth Token' },
       { regex: /github_pat_[A-Za-z0-9_]{22,}/g, type: 'GitHub Fine-Grained Token' },
@@ -349,6 +372,11 @@ class SecretsModule extends BaseModule {
               // AKIAIOSFODNN7EXAMPLE — and a secrets module must fail
               // toward detection, never toward silence.
               if (PLACEHOLDER_VALUE_RE.test(val)) continue;
+              // A structural header (a PEM marker) matches on its own, so an
+              // ellipsis beside it never reaches the value check above. On a
+              // line showing a redacted example the header is a description
+              // of a format, not a credential.
+              if (pattern.illustrationIfElided && /\.{3,}|\u2026/.test(line)) continue;
               // Skip prose values. `CRON_SECRET: 'the scan queue is never
               // drained'` is a docs/description map keyed by env-var NAME —
               // the name matches the rule, the value is an English sentence.
