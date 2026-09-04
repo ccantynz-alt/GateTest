@@ -14,6 +14,16 @@ name: Reliability Corpus (false-positive gate)
 # #49 bare-\n split in env-integrity.js took modern-node-idioms from 10 to 13
 # warnings and failed this suite with
 #   "total warnings 13 > expected atMost 10".
+#
+# 2026-09-04 — the second job below exists because this one was GREEN while
+# every real repository it had never seen was blocked: express 2, flask 2,
+# fastify 6, got 20, zod 51, hono 55 blocking findings. The known-good corpus
+# is two synthetic fixtures. Every rule in this engine was written and tuned
+# against THIS repo, which makes this repo the one codebase where their
+# false-positive rate cannot be measured. real-world-precision.js scans pinned
+# third-party commits instead, and holds a ceiling per repo plus a recall floor
+# on OWASP/NodeGoat — because a scanner that reports nothing passes every
+# precision test ever written.
 
 on:
   push:
@@ -64,3 +74,25 @@ jobs:
           path: reliability-corpus/**/.gatetest/reports/gatetest-report-latest.json
           if-no-files-found: ignore
           retention-days: 14
+
+  real-world:
+    name: real repos must not be blocked
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Clones each repo at a pinned SHA and scans it exactly as a customer
+      # would. Ceilings ratchet DOWN — raising one to make this pass is how
+      # the engine goes back to blocking express, so treat a raise as the
+      # finding it is. A repo that cannot be cloned FAILS rather than being
+      # skipped: "we could not measure it" must never read as "it passed".
+      - name: Real-world precision + recall
+        run: node scripts/real-world-precision.js
