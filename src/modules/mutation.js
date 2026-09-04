@@ -40,6 +40,8 @@ const IN_FLIGHT = new Map(); // absPath -> original contents
 
 function restoreAllInFlight() {
   for (const [file, original] of IN_FLIGHT) {
+    // error-ok: we are on an exit path with nowhere left to report to, and a
+    // failed restore must not stop us restoring the remaining files.
     try { fs.writeFileSync(file, original); } catch { /* best effort on the way out */ }
   }
   IN_FLIGHT.clear();
@@ -58,6 +60,8 @@ function installRestoreHandlers() {
         // that we were signalled rather than that we exited cleanly.
         process.exit(sig === 'SIGINT' ? 130 : 143);
       });
+      // error-ok: SIGBREAK is Windows-only and SIGHUP is absent on some
+      // platforms; an unknown signal name is expected, not a failure.
     } catch { /* platform does not have this signal */ }
   }
 }
