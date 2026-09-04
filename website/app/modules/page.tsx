@@ -36,7 +36,10 @@ export default function ModulesIndexPage() {
     hasPart: categories.flatMap((cat) =>
       cat.modules.map((mod) => ({
         "@type": "WebPage",
-        url: `https://gatetest.io/modules/${mod.slug}`,
+        // Never a literal — CLAUDE.md THE DOMAIN. This one survived the
+        // .ai -> .io sweep and would publish a dead host in structured data
+        // the moment NEXT_PUBLIC_BASE_URL moves again.
+        url: `${SITE_URL}/modules/${mod.slug}`,
         name: prettify(mod.name),
         description: mod.description,
       }))

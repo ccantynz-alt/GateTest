@@ -3,6 +3,21 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+/**
+ * Primary nav — real routes, not homepage anchors.
+ *
+ * These three were `/#modules`, `/#comparison` and `/#pricing`: anchors into
+ * the homepage. That made /pricing (the most-linked URL a developer tool has),
+ * the /compare hub, and the 121 statically-generated /modules/[slug] pages —
+ * the largest organic-search asset in the repo — reachable only by scrolling.
+ * The homepage sections and their anchors are untouched and still work.
+ */
+const PRIMARY_LINKS = [
+  { label: "Modules", href: "/modules" },
+  { label: "Compare", href: "/compare" },
+  { label: "Pricing", href: "/pricing" },
+] as const;
+
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -43,18 +58,18 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden xl:flex items-center gap-6">
-          {["Modules", "Compare", "Pricing"].map((item) => (
-            <a
-              key={item}
-              href={`/#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+          {PRIMARY_LINKS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
               className={`text-sm transition-colors ${
                 scrolled
                   ? "text-muted hover:text-foreground"
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              {item}
-            </a>
+              {item.label}
+            </Link>
           ))}
           {/*
             Website + WordPress were reachable only by scrolling the homepage,
@@ -156,15 +171,15 @@ export default function Navbar() {
             ? "border-border bg-white/95 backdrop-blur-xl"
             : "border-black/5 bg-[#f7f4ed]/95 backdrop-blur-xl"
         }`}>
-          {["Modules", "Compare", "Pricing"].map((item) => (
-            <a
-              key={item}
-              href={`/#${item.toLowerCase() === "compare" ? "comparison" : item.toLowerCase()}`}
+          {PRIMARY_LINKS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
               className={`block text-sm ${scrolled ? "text-muted hover:text-foreground" : "text-gray-600 hover:text-gray-900"}`}
               onClick={() => setMobileOpen(false)}
             >
-              {item}
-            </a>
+              {item.label}
+            </Link>
           ))}
           <Link
             href="/web"

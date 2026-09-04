@@ -20,6 +20,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/github/setup`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/dashboard`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/modules`, lastModified: now, changeFrequency: "weekly", priority: 0.95 },
+    // /pricing and /enterprise were components only — pricing rendered as the
+    // homepage `#pricing` section, Enterprise sat unshipped under preview/.
+    // An anchor cannot be canonicalised or indexed on its own.
+    { url: `${base}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.95 },
+    { url: `${base}/enterprise`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/how-it-works`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/quickstart`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
