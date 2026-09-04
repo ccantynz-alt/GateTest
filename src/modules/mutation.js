@@ -16,6 +16,52 @@ const path = require('path');
 // be unit-tested independently of the test-runner orchestration.
 const { MUTATIONS, shouldSkipLine } = require('../core/mutation-engine');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Crash-safe restore.
+//
+// This module writes a mutant into the user's REAL source file, runs their
+// tests against it, and restores the original in a `finally`. `finally`
+// covers a thrown exception. It does not cover the process being killed —
+// and that is the common case, not the exotic one: a CI step that times out
+// gets SIGTERM, a developer who hits Ctrl-C sends SIGINT, and either lands
+// inside the window where the file on disk is corrupt.
+//
+// Observed three times in one session: `a - b` left as `a + b` in
+// arena-scaffold/src/math.js, a `+` flipped to `-` inside a string literal
+// in arena-scaffold/scripts/inject-bug.js, and a mutant in
+// benchmarks/bench-target/config/default.js. A scanner that silently edits
+// your working tree is worse than one that misses a bug.
+//
+// So every in-flight mutation is registered here and replayed on any exit
+// path Node can observe. SIGKILL still cannot be caught — nothing can fix
+// that — but SIGTERM/SIGINT/SIGHUP and a plain process.exit() now restore.
+// ─────────────────────────────────────────────────────────────────────────────
+const IN_FLIGHT = new Map(); // absPath -> original contents
+
+function restoreAllInFlight() {
+  for (const [file, original] of IN_FLIGHT) {
+    try { fs.writeFileSync(file, original); } catch { /* best effort on the way out */ }
+  }
+  IN_FLIGHT.clear();
+}
+
+let handlersInstalled = false;
+function installRestoreHandlers() {
+  if (handlersInstalled) return;
+  handlersInstalled = true;
+  process.on('exit', restoreAllInFlight);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
+    try {
+      process.on(sig, () => {
+        restoreAllInFlight();
+        // Re-raise with the conventional exit code so callers still see
+        // that we were signalled rather than that we exited cleanly.
+        process.exit(sig === 'SIGINT' ? 130 : 143);
+      });
+    } catch { /* platform does not have this signal */ }
+  }
+}
+
 class MutationModule extends BaseModule {
   constructor() {
     super('mutation', 'Mutation Testing — Tests the Tests');
@@ -133,6 +179,8 @@ class MutationModule extends BaseModule {
 
           // Write mutant, run tests, restore original
           try {
+            installRestoreHandlers();
+            IN_FLIGHT.set(file, original);
             fs.writeFileSync(file, mutatedSource);
             const testResult = this._exec(testCmd, { cwd: projectRoot, timeout: 30000 });
 
@@ -152,6 +200,7 @@ class MutationModule extends BaseModule {
           } finally {
             // Always restore original
             fs.writeFileSync(file, original);
+            IN_FLIGHT.delete(file);
           }
 
           // Only test first match per mutation per file to keep runtime reasonable
