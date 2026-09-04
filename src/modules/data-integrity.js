@@ -211,7 +211,7 @@ class DataIntegrityModule extends BaseModule {
     let piiCount = 0;
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
-      if (relPath.includes('test') || relPath.includes('.test.')) continue;
+      if (this._isTestPath(relPath)) continue;
       // Skip GateTest's own scanner modules — they contain detection patterns
       // (e.g. regex strings matching console.log(password)) that are not PII leaks.
       if (/^src[\\/]modules[\\/]/.test(relPath)) continue;

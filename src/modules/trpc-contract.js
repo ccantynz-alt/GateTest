@@ -60,6 +60,16 @@ function isRouterFile(rel) {
 
 // ─── module ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Is `name` a whole path SEGMENT of `rel`? `rel.includes('node_modules')`
+ * is a substring test — it also matches a directory merely CONTAINING the
+ * word. Same mistake as `.includes('.git')` matching `.github`.
+ */
+function hasSegment(rel, name) {
+  return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
+}
+
 class TRPCContractDrift extends BaseModule {
   constructor() {
     super('trpcContract', 'tRPC Contract Drift — procedure definitions vs frontend call sites');
@@ -97,7 +107,7 @@ class TRPCContractDrift extends BaseModule {
 
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
-      if (rel.includes('node_modules') || rel.includes('.next')) continue;
+      if (hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')) continue;
 
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }

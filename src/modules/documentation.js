@@ -252,7 +252,7 @@ class DocumentationModule extends BaseModule {
     for (const file of jsFiles) {
       const relPath = path.relative(projectRoot, file);
       // Skip test files and generated files
-      if (relPath.includes('test') || relPath.includes('.min.')) continue;
+      if (this._isTestPath(relPath) || relPath.includes('.min.')) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);

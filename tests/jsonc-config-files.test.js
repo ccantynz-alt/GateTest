@@ -121,3 +121,84 @@ describe('jsonc — genuinely broken input is still broken', () => {
     });
   }
 });
+
+// =============================================================================
+// The half that was missing (found 2026-09-04).
+//
+// Everything above tests `stripJsonc` and `isJsoncPath` as pure functions,
+// and all of it passed. The module that CALLS them did not work: in
+// `_checkJsonSyntax`, `content` was `const`-declared inside the `try`, so
+// the JSONC retry in the `catch` referenced a variable that was not in
+// scope. The resulting ReferenceError was then absorbed by the retry's own
+// bare `catch {}`, so the failure was invisible — it simply fell through and
+// reported the original JSON error.
+//
+// Net effect: the fix documented at the top of this file shipped, was
+// unit-tested, and never once ran. A commented tsconfig.json — what
+// `tsc --init` itself emits — was still reported as a syntax error.
+//
+// Unit tests on a helper cannot see that. These go through the module.
+// =============================================================================
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const SyntaxModule = require('../src/modules/syntax');
+
+async function checkJson(rel, body) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-jsonc-e2e-'));
+  try {
+    const file = path.join(root, rel);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, body);
+    const checks = [];
+    const result = {
+      checks,
+      addCheck: (id, passed, meta) => checks.push({ id, passed, ...(meta || {}) }),
+      addInfo() {},
+    };
+    await new SyntaxModule().run(result, { projectRoot: root });
+    return checks.find((c) => c.id === `json:${rel}`) || null;
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+describe('jsonc — through the syntax module, not just the helper', () => {
+  it('a commented tsconfig.json passes (what `tsc --init` emits)', async () => {
+    const check = await checkJson(
+      'tsconfig.json',
+      '{\n  // Comments are legal here\n  "compilerOptions": { "strict": true, }\n}',
+    );
+    assert.ok(check, 'tsconfig.json must be checked at all');
+    assert.strictEqual(check.passed, true, 'a commented tsconfig is not a syntax error');
+  });
+
+  it('a block-commented jsconfig.json passes', async () => {
+    const check = await checkJson('jsconfig.json', '{ /* block */ "a": 1 }');
+    assert.strictEqual(check.passed, true);
+  });
+
+  // The load-bearing half: tolerance must not become blindness.
+  it('an ordinary data JSON with a trailing comma still FAILS', async () => {
+    const check = await checkJson('data/config.json', '{ "a": 1, }');
+    assert.strictEqual(check.passed, false, 'JSONC tolerance is scoped to config formats');
+  });
+
+  it('a tsconfig broken beyond legal JSONC still FAILS', async () => {
+    const check = await checkJson('tsconfig.json', '{ "a": [1,2 }');
+    assert.strictEqual(check.passed, false, 'the second parse must still be able to fail');
+  });
+
+  it('the JSONC retry does not swallow a programming error', async () => {
+    // The bug was hidden because `catch {}` absorbed a ReferenceError. Pin
+    // that a non-parse failure is no longer silently treated as "malformed".
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'modules', 'syntax.js'),
+      'utf8',
+    );
+    assert.ok(
+      /catch \(retryErr\)[\s\S]{0,400}?instanceof ReferenceError/.test(src),
+      'the JSONC retry must rethrow ReferenceError/TypeError rather than absorb it',
+    );
+  });
+});

@@ -49,6 +49,16 @@ const TYPED_PROPS_RE  = /(?:function|const)\s+[A-Z][a-zA-Z0-9]*\s*(?::\s*(?:Reac
 
 // ─── module ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Is `name` a whole path SEGMENT of `rel`? `rel.includes('node_modules')`
+ * is a substring test — it also matches a directory merely CONTAINING the
+ * word. Same mistake as `.includes('.git')` matching `.github`.
+ */
+function hasSegment(rel, name) {
+  return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
+}
+
 class ZodSchemaPresence extends BaseModule {
   constructor() {
     super('zodSchemaPresence', 'Zod Schema Presence — flags React components without runtime prop validation');
@@ -87,11 +97,10 @@ class ZodSchemaPresence extends BaseModule {
 
       // Skip test files, stories, pages (they often don't export reusable components)
       if (
-        rel.includes('.test.') || rel.includes('.spec.') ||
-        rel.includes('.stories.') || rel.includes('__tests__') ||
+        this._isTestPath(rel) ||
         rel.endsWith('/page.tsx') || rel.endsWith('/layout.tsx') ||
         rel.endsWith('/loading.tsx') || rel.endsWith('/error.tsx') ||
-        rel.includes('node_modules') || rel.includes('.next')
+        hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')
       ) continue;
 
       let content;

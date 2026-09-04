@@ -93,6 +93,16 @@ function detectBundlerTools(scripts) {
 
 // ─── module ────────────────────────────────────────────────────────────────
 
+
+/**
+ * Is `name` a whole path SEGMENT of `rel`? `rel.includes('node_modules')`
+ * is a substring test — it also matches a directory merely CONTAINING the
+ * word. Same mistake as `.includes('.git')` matching `.github`.
+ */
+function hasSegment(rel, name) {
+  return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
+}
+
 class NativeBundlerGuard extends BaseModule {
   constructor() {
     super('nativeBundlerGuard', 'Native Bundler Guard — catches native Node addons that cannot be bundled');
@@ -157,7 +167,7 @@ class NativeBundlerGuard extends BaseModule {
     const jsFiles = this._collectFiles(projectRoot, ['.js', '.ts', '.mjs', '.cjs']);
     for (const file of jsFiles) {
       const rel = path.relative(projectRoot, file);
-      if (rel.includes('node_modules')) continue;
+      if (hasSegment(rel, 'node_modules')) continue;
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
