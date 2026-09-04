@@ -505,9 +505,16 @@ class AuthBypassDetector extends BaseModule {
       let m;
       // Built once per file, lazily — most route files never need it.
       let fnBodies = null;
+      // `/api/` is a directory name, not a framework. An Express app at
+      // `server/api/account.js` used to enter this branch, match no Next.js
+      // export, and return [] — its routes were never scanned by any
+      // grammar. Track whether this really is an App Router file; if not,
+      // fall through to the Express/Fastify pass below.
+      let sawNextExport = false;
       NEXTJS_EXPORT_RE.lastIndex = 0;
       while ((m = NEXTJS_EXPORT_RE.exec(content)) !== null) {
         const method = m[1];
+        sawNextExport = true;
         const matchIdx = m.index;
         const lineNo   = content.slice(0, matchIdx).split('\n').length;
         const lineText = lines[lineNo - 1] || '';
@@ -545,7 +552,8 @@ class AuthBypassDetector extends BaseModule {
         issues.push({ method, route: routePath, line: lineNo });
       }
       NEXTJS_EXPORT_RE.lastIndex = 0;
-      return issues;
+      if (sawNextExport) return issues;
+      // Not an App Router handler after all — keep going.
     }
 
     // Express / Fastify / Hono / Koa — one registration grammar, one pass
