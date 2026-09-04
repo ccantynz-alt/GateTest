@@ -7,6 +7,40 @@ const fs = require('fs');
 const path = require('path');
 const { innerHtmlAssignmentIsSafe } = require('./inner-html-safety');
 
+/**
+ * Modules a suite deliberately does NOT run, and where they run instead.
+ *
+ * A module dropped from a suite with no trace is a silent coverage cut —
+ * the user believes they ran "the full engine" and no longer did
+ * (Forbidden #16: never silently fail). So every omission is recorded
+ * here, surfaced in the console summary ("Deferred: ..."), carried on the
+ * scan summary as `summary.deferred` for API/MCP/website consumers, and
+ * covered by tests/suite-deferrals.test.js — which also asserts each
+ * deferred module still runs in at least one suite, so this table can
+ * never become a way to quietly retire a module.
+ *
+ * mutation (2026-09-04): mutation testing re-runs the customer's ENTIRE
+ * test suite once per mutant. Measured on this repo: the suite is 7559
+ * tests / ~55s, so the mutation module's own BASELINE run alone costs as
+ * much as the rest of the scan put together, and a real 50-mutant pass
+ * would cost ~45 minutes. It cannot fit the 60s interactive bar in
+ * CLAUDE.md §9 at any budget, and a truncated 4-mutant sample is a worse
+ * answer than a complete nightly one. Worse, the per-mutant timeout
+ * (30s) is SHORTER than this suite's runtime, so every mutant would time
+ * out and be scored as "killed" — a fake 100%. It runs in full, uncapped,
+ * in .github/workflows/mutation-nightly.yml, on demand via
+ * `gatetest --module mutation`, and in the `nuclear` suite (CI path).
+ */
+const SUITE_DEFERRALS = {
+  full: [
+    {
+      module: 'mutation',
+      reason: 're-runs your whole test suite once per mutant — minutes, not seconds',
+      runsIn: 'nightly CI, `gatetest --module mutation`, or --suite nuclear',
+    },
+  ],
+};
+
 const DEFAULT_CONFIG = {
   // Quality thresholds (from CLAUDE.md)
   thresholds: {
@@ -189,7 +223,12 @@ const DEFAULT_CONFIG = {
       'tlsSecurity',
       'cookieSecurity',
       'crossFileTaint',
-      'mutation',
+      // NOTE: 'mutation' is deliberately NOT here — see SUITE_DEFERRALS below.
+      // It re-runs the customer's ENTIRE test suite once per mutant, which
+      // cannot fit an interactive scan. It stays in `nuclear` (CI/Action
+      // path) and runs nightly. This also makes the code match what the
+      // README has always promised for the $99 Full Scan: "88 modules;
+      // mutation + chaos run via the GitHub Action instead".
       'python',
       'go',
       'rust',
@@ -827,6 +866,15 @@ class GateTestConfig {
     return this.config.suites[suiteName] || this.config.suites.standard;
   }
 
+  /**
+   * What this suite deliberately does NOT run, and where it runs instead.
+   * Always an array (empty for suites that defer nothing) so callers can
+   * render it without a null check. See SUITE_DEFERRALS above.
+   */
+  getSuiteDeferrals(suiteName) {
+    return SUITE_DEFERRALS[suiteName] || [];
+  }
+
   save() {
     const dir = path.dirname(this.configPath);
     if (!fs.existsSync(dir)) {
@@ -836,4 +884,4 @@ class GateTestConfig {
   }
 }
 
-module.exports = { GateTestConfig, DEFAULT_CONFIG };
+module.exports = { GateTestConfig, DEFAULT_CONFIG, SUITE_DEFERRALS };

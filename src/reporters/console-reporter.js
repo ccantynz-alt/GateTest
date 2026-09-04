@@ -208,6 +208,16 @@ class ConsoleReporter {
       console.log(`${COLORS.dim}  Mode: diff-only (${(summary.changedFiles || []).length} changed files)${COLORS.reset}`);
     }
     console.log(`  Modules:  ${summary.modules.passed}/${summary.modules.total} passed`);
+    // "86/89 passed" reads as "the whole engine ran". When a suite
+    // deliberately holds a module back, saying so here is the difference
+    // between a documented trade-off and a silent coverage cut
+    // (Forbidden #16 — never silently fail). Same spirit as the Softened
+    // line below: never quiet about being quiet.
+    for (const d of summary.deferred || []) {
+      console.log(
+        `  ${COLORS.dim}Deferred: ${d.module} — ${d.reason}. Runs in: ${d.runsIn}${COLORS.reset}`,
+      );
+    }
     // Info-severity "findings" (markdown whitespace nits, missing Stylelint
     // config, etc.) never block and are never even a warning — but each one
     // still counts as one failed check in the raw total. Left in the
