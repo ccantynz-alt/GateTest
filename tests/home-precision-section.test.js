@@ -39,3 +39,14 @@ describe('homepage precision + honesty sections', () => {
     assert.doesNotMatch(jsxText, /\b(\d{1,3}|twenty|sixteen|eleven)\s+(real\s+)?(repositor|repos\b|blocking)/i, 'counts come from precision.json, not prose');
   });
 });
+
+// Craig, 2026-09-05: "Yes let's do it" — the hero leads with the precision
+// claim. The repository count in it must be read from precision.json.
+describe('homepage hero — the precision thesis', () => {
+  it('leads with the claim and reads the corpus size from precision.json', () => {
+    const hero = read('website/app/components/Hero.tsx');
+    assert.match(hero, /doesn&apos;t cry wolf/);
+    assert.match(hero, /import precision from "\.\.\/data\/precision\.json"/);
+    assert.match(hero, /Measured on \{CORPUS_SIZE\} real repositories/);
+  });
+});
