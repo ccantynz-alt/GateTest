@@ -237,12 +237,12 @@ describe('the walk shares BaseModule\'s excludes', () => {
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-migdirs-excl-')); });
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
-  it('WALK_EXCLUDES is byte-for-byte the list in BaseModule._collectFiles', () => {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', 'base-module.js'), 'utf8');
-    const m = src.match(/const defaultExcludes = \[([\s\S]*?)\];/);
-    assert.ok(m, 'base-module.js must still declare defaultExcludes');
-    const declared = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
-    assert.deepStrictEqual([...WALK_EXCLUDES].sort(), declared.sort());
+  it('WALK_EXCLUDES is the one list in src/core/walk-excludes.js, which BaseModule._collectFiles also imports', () => {
+    const { WALK_EXCLUDES: canonical } = require('../src/core/walk-excludes');
+    assert.deepStrictEqual([...WALK_EXCLUDES].sort(), [...canonical].sort());
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', 'base-module.js'), 'utf-8');
+    assert.match(src, /require\('\.\.\/core\/walk-excludes'\)/, 'base-module must import the list, not carry a copy');
+    assert.doesNotMatch(src, /const defaultExcludes = \[/, 'base-module re-declares the exclude list');
   });
 
   it('does not descend into node_modules, vendor, dist, .git', () => {

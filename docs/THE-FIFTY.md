@@ -50,7 +50,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 17 | Every report says what it did *not* check | done | PR comment: partial scan, coverage, not-checked modules (PR #423) |
 | 18 | Never derive a metric from a timeout | done — policy | mutation: timeouts are inconclusive |
 | 19 | Deterministic scans: same SHA, same findings | done | `scripts/determinism-check.js` + CI job; failure path tested (PR #423) |
-| 20 | Never write to the user's tree without saying so | partial | restore is signal-safe; mutate-a-copy still open |
+| 20 | Never write to the user's tree without saying so | done | mutation writes every mutant into a sandbox copy (`src/core/tree-copy.js`: the tree minus walk-excluded dirs, node_modules symlinked, bounded — past the bound it reports NOT RUN, never falls back to the real tree); the report says so; the restore-the-user's-file machinery is gone with the write. The exclude list has one home (`src/core/walk-excludes.js`) |
 | 21 | Signed, reproducible scan reports | done | provenance + HMAC; `gatetest verify-report` (PR #423) |
 | 22 | Public status page | **Craig** | — |
 

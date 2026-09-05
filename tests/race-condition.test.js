@@ -265,3 +265,30 @@ describe('RaceConditionModule — clean baseline', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+describe('RaceConditionModule — fs TOCTOU compares the WHOLE path argument (PR #437 bot finding)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rc-arg-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('NEGATIVE: lstat on path.join(dir, "a") then write to path.join(dir, "b") is two files, not a race', async () => {
+    write(tmp, 'src/a.js', [
+      "const link = fs.lstatSync(path.join(r.dir, 'node_modules')).isSymbolicLink();",
+      "fs.writeFileSync(path.join(r.dir, 'src/a.js'), 'MUTANT');",
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.ok(!r.checks.find((c) => c.name.startsWith('race-condition:fs-toctou:')), r.checks.map((c) => c.name).join(', '));
+  });
+
+  it('POSITIVE: the same nested expression on both sides still fires', async () => {
+    write(tmp, 'src/b.js', [
+      "if (fs.statSync(path.join(root, 'cfg.json')).isFile()) {",
+      "  fs.writeFileSync(path.join(root, 'cfg.json'), data);",
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('race-condition:fs-toctou:')));
+  });
+});

@@ -57,13 +57,7 @@ const path = require('path');
 // inverting the layering, and BaseModule does not export the list. If that
 // list changes, change this one — tests/migration-dirs.test.js pins the two
 // together.
-const WALK_EXCLUDES = new Set([
-  'node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage',
-  '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
-  '__pycache__', '.pytest_cache', 'target', 'vendor', '.cargo',
-  'out', 'public/build', '.cache', '.parcel-cache',
-  '.claude',
-]);
+const WALK_EXCLUDES = new Set(require('./walk-excludes').WALK_EXCLUDES);
 
 /**
  * Name conventions, each with the tool family it belongs to. The regex is

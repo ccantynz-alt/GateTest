@@ -102,11 +102,34 @@ function matchOutsideString(line, re) {
   return null;
 }
 
-// fs check patterns — capture the first argument (the path expression).
+// fs check patterns — the first argument (the path expression) is read by
+// balancedFirstArg from the text after the `(`, NOT by a `[^,)]+` capture:
+// that cut `path.join(r.dir, 'node_modules')` down to `path.join(r.dir`,
+// which then "matched" a later `fs.writeFileSync(path.join(r.dir, 'src/a.js'))`
+// — two different files reported as one TOCTOU (our own scanner on PR #437,
+// 2026-09-05).
 const FS_CHECK_RES = [
-  /\bfs(?:\.promises)?\.(?:exists|existsSync|stat|statSync|lstat|lstatSync|access|accessSync)\s*\(\s*([^,)]+)/,
-  /\bexistsSync\s*\(\s*([^,)]+)/,
+  /\bfs(?:\.promises)?\.(?:exists|existsSync|stat|statSync|lstat|lstatSync|access|accessSync)\s*\(/,
+  /\bexistsSync\s*\(/,
 ];
+
+/**
+ * The first call argument in `text` (which starts just after the `(`),
+ * balanced across nested parens / brackets / braces and quoted strings, so
+ * `path.join(a, 'b')` comes back whole. Empty when there is none.
+ */
+function balancedFirstArg(text) {
+  let depth = 0; let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) { if (ch === '\\') { i++; continue; } if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) return text.slice(0, i).trim(); depth--; continue; }
+    if (ch === ',' && depth === 0) return text.slice(0, i).trim();
+  }
+  return text.trim();
+}
 
 // fs mutating operations that, when called on the same path, are
 // TOCTOU-risky. Restricted to DESTRUCTIVE / SECURITY-SENSITIVE ops:
@@ -227,7 +250,7 @@ class RaceConditionModule extends BaseModule {
       for (const checkRe of FS_CHECK_RES) {
         const m = matchOutsideString(line, checkRe);
         if (!m) continue;
-        const pathExpr = (m[1] || '').trim();
+        const pathExpr = balancedFirstArg(line.slice(m.index + m[0].length));
         if (!pathExpr) continue;
 
         // `stat`/`lstat` broadens the mutation set (symlink-race
@@ -238,7 +261,7 @@ class RaceConditionModule extends BaseModule {
         // Include the tail of the current line (anything after the
         // check expression) so single-line `if (exists(p)) unlink(p)`
         // patterns are caught.
-        const tail = line.slice(m.index + m[0].length);
+        const tail = line.slice(m.index + m[0].length + pathExpr.length);
         const window = `${tail}\n${this._forwardWindow(lines, i, 15)}`;
 
         // Find a mutate call whose FIRST ARGUMENT actually references
@@ -252,11 +275,12 @@ class RaceConditionModule extends BaseModule {
         let mutateMatch = null;
         let gm;
         while ((gm = mutateRegexGlobal.exec(window)) !== null) {
-          // Grab up to 80 chars after the mutate for the first arg.
-          const after = window.slice(gm.index + gm[0].length, gm.index + gm[0].length + 120);
-          const argCloseIdx = after.search(/[),]/);
-          const firstArg = argCloseIdx >= 0 ? after.slice(0, argCloseIdx) : after;
-          if (new RegExp(`(?:^|[^\\w$])${pathToken}(?:[^\\w$]|$)`).test(firstArg)) {
+          // The mutate's first argument, balanced, so a nested call is
+          // compared whole: the check's expression must be the argument or a
+          // token inside it, never merely its prefix.
+          const after = window.slice(gm.index + gm[0].length, gm.index + gm[0].length + 200);
+          const firstArg = balancedFirstArg(after).replace(/['"`]/g, '').trim();
+          if (firstArg === normalizedPath || (!/[(]/.test(normalizedPath) && new RegExp(`(?:^|[^\\w$])${pathToken}(?:[^\\w$]|$)`).test(firstArg))) {
             mutateMatch = gm;
             break;
           }

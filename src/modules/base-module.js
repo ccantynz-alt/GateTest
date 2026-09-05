@@ -52,17 +52,7 @@ class BaseModule {
     const path = require('path');
     const files = [];
 
-    const defaultExcludes = [
-      'node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage',
-      '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
-      '__pycache__', '.pytest_cache', 'target', 'vendor', '.cargo',
-      'out', 'public/build', '.cache', '.parcel-cache',
-      // .claude is the agent-coordination dir (worktrees, scratch state).
-      // Scanning .claude/worktrees/agent-* inflates findings with
-      // duplicate scans of the same code — every gatetest run on a
-      // repo with active agent worktrees would produce N× the noise.
-      '.claude',
-    ];
+    const { WALK_EXCLUDES: defaultExcludes } = require('../core/walk-excludes');
     const allExcludes = [...defaultExcludes, ...excludes];
 
     const walk = (dir) => {
