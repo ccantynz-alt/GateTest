@@ -267,8 +267,17 @@ class HardcodedUrlModule extends BaseModule {
             line: i + 1,
             host,
             kind: 'private-ip',
-            message: `${rel}:${i + 1} hardcoded RFC1918 private-range URL \`${scheme}://${host}\` — a developer's LAN address escaped into committed code`,
-            suggestion: 'Replace with a public hostname, a config/env var, or a service-discovery lookup. Never commit raw private IPs.',
+            // Same three-way wording as localhost above: the address in a test
+            // is a fixture on record, not a LAN address that escaped — the
+            // scanner's own code-scanning alerts on tests/ssrf.test.js said
+            // "escaped into committed code" about 169.254.169.254, which is
+            // link-local, not RFC1918, and is the test's subject (2026-09-05).
+            message: isTestFile
+              ? `${rel}:${i + 1} hardcoded private / link-local URL \`${scheme}://${host}\` in a test file — a fixture, not a leak; reported so the address is on record`
+              : `${rel}:${i + 1} hardcoded private / link-local URL \`${scheme}://${host}\` (RFC1918, 169.254/16 or loopback) — a developer's LAN address escaped into committed code`,
+            suggestion: isTestFile
+              ? 'Nothing to change unless the test really targets a live private host — then read the address from an env var.'
+              : 'Replace with a public hostname, a config/env var, or a service-discovery lookup. Never commit raw private IPs.',
           });
           continue;
         }
@@ -280,8 +289,12 @@ class HardcodedUrlModule extends BaseModule {
             line: i + 1,
             host,
             kind: 'internal-tld',
-            message: `${rel}:${i + 1} hardcoded internal/staging URL \`${scheme}://${host}\` — \`.internal\`/\`.local\`/staging subdomains won't resolve for external users`,
-            suggestion: 'Move the host to environment-specific config. Use env-driven base URLs so prod targets prod, staging targets staging, without code changes.',
+            message: isTestFile
+              ? `${rel}:${i + 1} hardcoded internal/staging URL \`${scheme}://${host}\` in a test file — a fixture, not a leak; reported so the address is on record`
+              : `${rel}:${i + 1} hardcoded internal/staging URL \`${scheme}://${host}\` — \`.internal\`/\`.local\`/staging subdomains won't resolve for external users`,
+            suggestion: isTestFile
+              ? 'Nothing to change unless the test really targets that host — then read it from an env var.'
+              : 'Move the host to environment-specific config. Use env-driven base URLs so prod targets prod, staging targets staging, without code changes.',
           });
           continue;
         }

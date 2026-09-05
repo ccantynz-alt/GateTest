@@ -391,3 +391,34 @@ describe('HardcodedUrlModule — string, template and comment are told apart by 
     ]);
   });
 });
+
+describe('HardcodedUrlModule — a private IP or internal host in a test file is a fixture on record (2026-09-05)', () => {
+  // The scanner's own code-scanning alerts on this PR called the
+  // 169.254.169.254 in tests/ssrf.test.js "a developer's LAN address escaped
+  // into committed code": it is link-local, it is the test's subject, and
+  // the localhost rule already had the honest three-way wording.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-hu-fixture-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('info + "a fixture, not a leak" under tests/; error + "escaped into committed code" under src/', async () => {
+    const src = 'fetch("http://169.254.169.254/latest/meta-data/");\nfetch("http://staging.example.io/x");\n';
+    write(tmp, 'tests/meta.test.js', src);
+    write(tmp, 'src/meta.js', src);
+    const r = await run(tmp);
+    const byName = (n) => r.checks.find((c) => c.name === n);
+    const tIp = byName('hardcoded-url:private-ip:tests/meta.test.js:1');
+    const sIp = byName('hardcoded-url:private-ip:src/meta.js:1');
+    const tTld = byName('hardcoded-url:internal-tld:tests/meta.test.js:2');
+    const sTld = byName('hardcoded-url:internal-tld:src/meta.js:2');
+    assert.ok(tIp && sIp && tTld && sTld, r.checks.map((c) => c.name).join(', '));
+    assert.strictEqual(tIp.severity, 'info');
+    assert.match(tIp.message, /in a test file — a fixture, not a leak/);
+    assert.strictEqual(sIp.severity, 'error');
+    assert.match(sIp.message, /link-local.*escaped into committed code/);
+    assert.strictEqual(tTld.severity, 'info');
+    assert.match(tTld.message, /a fixture, not a leak/);
+    assert.strictEqual(sTld.severity, 'warning');
+    assert.match(sTld.message, /won't resolve for external users/);
+  });
+});
