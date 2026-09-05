@@ -85,8 +85,10 @@ const EXTRA_EXCLUDES = ['.terraform'];
 
 const TS_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 
-// Files that legitimately use `any` for test-subject purposes.
-const TEST_FILE_RE = /\.(?:test|spec)\.(?:ts|tsx|mts|cts)$/i;
+// Test files legitimately use `any` for test-subject purposes. "Is this a
+// test path" has one definition, `BaseModule._isTestPath`; this module kept
+// a suffix-only copy until 2026-09-05, so `tests/foo.ts` was held to the
+// production bar while `foo.test.ts` was not.
 
 // Declaration files — we skip `any`-leak checks but still flag
 // `@ts-nocheck` / `@ts-ignore`.
@@ -296,7 +298,7 @@ class TypeScriptStrictnessModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
-    const isTest = TEST_FILE_RE.test(rel);
+    const isTest = this._isTestPath(rel);
     const isDts = DTS_RE.test(rel);
     const lines = content.split(/\r?\n/);
     let issues = 0;

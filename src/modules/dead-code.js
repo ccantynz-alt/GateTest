@@ -21,13 +21,13 @@ const ALL_EXTS_MAIN = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.p
 // Test files are executed by the runner, never imported — their top-level
 // exports are incidental (a local `run` helper, a mock), so "unused export"
 // analysis on them is pure noise (and "delete this dead code" is dangerous
-// advice for test code). Matches *.test.*, *.spec.*, /tests|__tests__/, and
-// the Python runner conventions — pytest collects `test_*.py` / `*_test.py`
-// and loads `conftest.py` by name; Django's runner discovers `test*.py`
-// (`tests.py`). Extended 2026-09-05 (KI #96 Python): a module read only by
-// `tests/test_x.py` was already test-only, one read only by a sibling
-// `test_x.py` was not.
-const TEST_FILE_RE = /(?:^|[\\/])(?:tests?|__tests__)[\\/]|\.(?:test|spec)\.[a-z]+$|(?:^|[\\/])(?:test_[^\\/]*|[^\\/]*_test|tests?|conftest)\.py$/i;
+// advice for test code), and a test is never a production READER of the
+// module it exercises. "Is this a test path" has one definition,
+// `BaseModule._isTestPath` (`TEST_PATH_RE`, Doctrine §4) — this module
+// carried its own copy under another name until 2026-09-05, which the
+// canonical-definition guard could not see, and the copy had drifted
+// (`test.py` counted as a test; pytest never collects it, and django's
+// `manage.py test` command lives in one).
 
 const FRAMEWORK_RESERVED = new Set([
   'default', 'metadata', 'generateMetadata', 'generateStaticParams',
@@ -123,7 +123,7 @@ class DeadCodeModule extends BaseModule {
     const graph = buildImportGraph({ projectRoot, files: jsFiles.concat(mdx) });
     const rev = reverseGraph(graph.fullGraph);
     const productionImporters = new Map();
-    const production = (importers) => [...importers].filter((i) => !TEST_FILE_RE.test(graph.rel(i)));
+    const production = (importers) => [...importers].filter((i) => !this._isTestPath(graph.rel(i)));
     for (const f of jsFiles) productionImporters.set(f, production(rev.get(f) || []));
     for (const [f, importers] of pythonImporters(pyFiles, projectRoot)) {
       productionImporters.set(f, production(importers));
@@ -176,7 +176,7 @@ class DeadCodeModule extends BaseModule {
       // is the common "module exports helpers, its test does
       // `const M = require('./mod')` then uses M.helper" pattern.
       if (nsFiles.has(path.normalize(file)) || nsFiles.has(file)) continue;
-      if (TEST_FILE_RE.test(info.rel)) continue;
+      if (this._isTestPath(info.rel)) continue;
       if (this._matchesIgnorePattern(info.rel, ignorePatterns)) continue;
 
       for (const exp of info.exports) {
@@ -202,7 +202,7 @@ class DeadCodeModule extends BaseModule {
     for (const [file, info] of index.perFile.entries()) {
       if (info.exports.length === 0) continue;
       if (this._isEntryPoint(file, index.projectRoot)) continue;
-      if (TEST_FILE_RE.test(info.rel)) continue;
+      if (this._isTestPath(info.rel)) continue;
       // The import graphs decide (JS/TS: aliases, workspaces, registry
       // strings; Python: relative imports, src layout, dotted literals). The
       // index's `referencedFiles` no longer backs this rule — it fed Python

@@ -150,11 +150,15 @@ describe('KI #77 — the drift cannot come back', () => {
   // for all 20 modules.
   const ALLOWED_OWN_PATTERN = new Set(['base-module.js', 'claude-compliance.js']);
 
-  it('no module re-declares its own TEST_PATH_RE', () => {
+  it('no module re-declares its own TEST_PATH_RE — under that name or another', () => {
+    // dead-code.js kept a `TEST_FILE_RE` for months: the same question under
+    // a different name, invisible to a guard that only knew one spelling,
+    // and drifted (it counted `test.py` as a test). The guard now catches the
+    // shape, not the label.
     const offenders = fs
       .readdirSync(MODULES_DIR)
       .filter((f) => f.endsWith('.js') && !ALLOWED_OWN_PATTERN.has(f))
-      .filter((f) => /const\s+TEST_PATH_RE\s*=/.test(fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')));
+      .filter((f) => /const\s+TEST_(?:PATH|FILE|DIR)_RE\s*=/.test(fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')));
     assert.deepStrictEqual(offenders, [], 'use this._isTestPath() instead of a local copy');
   });
 
@@ -165,6 +169,7 @@ describe('KI #77 — the drift cannot come back', () => {
       'cookie-security.js', 'log-pii.js', 'money-float.js', 'tls-security.js',
       'homoglyph.js', 'error-swallow.js', 'redos.js', 'datetime-bug.js',
       'feature-flag.js', 'cron-expression.js', 'cross-file-taint.js',
+      'dead-code.js',
     ];
     for (const f of migrated) {
       const src = fs.readFileSync(path.join(MODULES_DIR, f), 'utf8');
