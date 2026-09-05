@@ -20,19 +20,34 @@
  * modules is coupled to forty modules; you cannot move it without moving them.
  * So the graph records all three kinds and lets each caller choose:
  *
- *   'static' — top-level runtime import/require. Forms cycles.
- *   'lazy'   — function-scoped require / dynamic import(). Coupling, not a cycle.
- *   'type'   — type-only import/export. Compile-time coupling only.
+ *   'static'    — top-level runtime import/require, resolved directly. Forms cycles.
+ *   'ts-esm'    — the same, resolved by the `.js`-for-`.ts` swap (TypeScript NodeNext).
+ *   'multiline' — the same, written across lines. (Kept as its own kind so the
+ *                 pre-elision `staticGraph` stays what the equivalence tests pinned.)
+ *   'lazy'      — function-scoped require / dynamic import(). Coupling, not a cycle.
+ *   'type'      — `import type`, `export type … from`, OR a plain import whose
+ *                 every binding is used only in type positions — elided by tsc
+ *                 (src/core/import-elision.js). Compile-time coupling only.
+ *   'alias' / 'workspace' / 'path-literal' — resolved through tsconfig paths, a
+ *                 workspace package, or a bare path string. Coupling; not yet cycles.
  *
- * `staticGraph` is exactly what import-cycle used to build for itself, so its
- * findings are unchanged by the extraction (asserted in tests/import-graph.test.js).
- * `fullGraph` is the coupling view that structural analysis needs.
+ * Runtime import edges also carry `use`: 'load' (read at module evaluation) or
+ * 'deferred' (read only inside function bodies / instance initialisers /
+ * parameter defaults — the ESM shape of a lazy require), and `via` says how
+ * the specifier resolved.
+ *
+ * Views: `staticGraph` (kind 'static' only — the pre-elision cycle view the
+ * extraction tests pinned), `runtimeGraph` (static + ts-esm + multiline, post-
+ * elision), `loadGraph` (runtimeGraph minus deferred edges — what import-cycle
+ * blocks on), `fullGraph` (every kind — the coupling view structural analysis needs).
  */
 
 const fs = require('fs');
 const path = require('path');
 const { workspacePackageMap } = require('./workspaces');
-const { resolveAlias, resolvePackageEntry, resolvePackageSubpath, tsEquivalents } = require('./module-resolution');
+const { resolveAlias, resolvePackageEntry, resolvePackageSubpath, tsEquivalents, elisionMode } = require('./module-resolution');
+const { readImports } = require('./ts-tokens');
+const { classifyUses, statementUses } = require('./import-elision');
 
 const EXCLUDE_DIRS = new Set([
   'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
@@ -50,21 +65,16 @@ const SUPPRESS_RE = /\bimport-cycle-ok\b/;
 // Line-level and deliberately conservative: a missed edge understates coupling,
 // a wrong edge invents a dependency that does not exist. Understating is the
 // safer failure for a module that reports on architecture.
-const IMPORT_FROM_RE = /^\s*import\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/;
-const IMPORT_TYPE_RE = /^\s*import\s+type\b/;
-const EXPORT_FROM_RE = /^\s*export\s+(?:type\s+)?(?:\*|\{[\s\S]*?\})\s+from\s+['"]([^'"]+)['"]/;
-const EXPORT_TYPE_RE = /^\s*export\s+type\b/;
 const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/;
 const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/;
-// The closing line of a multi-line import / export-from:
-//   import {\n  a,\n  b,\n} from './x';
-// The `import` line carries no specifier and the `from` line carries no
-// `import`, so a line-based reader saw neither. KI #96 step 3: five live
-// website modules were reported unreachable for exactly this shape. Kept
-// out of staticGraph (kind 'multiline') so import-cycle's proven edge set is
-// unchanged; cycles through multi-line imports are a separate, corpus-
-// validated change.
-const CONTINUATION_FROM_RE = /^\s*(?:[\w$,\s]*\})?\s*from\s+['"]([^'"]+)['"]/;
+// import / export-from statements are read WHOLE by ./ts-tokens (multi-line,
+// inline `type` modifiers) and classified by ./import-elision; only require(),
+// dynamic import() and path strings are still read line by line here.
+const TS_EXT_SET = new Set(['.ts', '.tsx', '.mts', '.cts']);
+const JSX_EXT_SET = new Set(['.tsx', '.jsx']);
+// The kinds import-cycle sees: every import statement the emitted JavaScript
+// still executes, however its specifier was resolved.
+const RUNTIME_KINDS = new Set(['static', 'ts-esm', 'multiline']);
 // A relative path written as a plain STRING, outside any import/require. This
 // is how plugin registries, route tables and DI manifests reference code:
 // `registry.js` maps every module as `accessibility: '../modules/accessibility.js'`.
@@ -191,10 +201,106 @@ function isRelative(spec) {
 }
 
 /**
+ * Resolve one specifier from `dir`; returns [absPath, resolutionKind] or null.
+ * The resolution kind says HOW the edge was found (direct / `.js`-for-`.ts`
+ * swap / tsconfig alias / workspace package) — the caller decides what it
+ * means for the graph.
+ */
+function resolveSpec(dir, absPath, spec, fileSet, ctx) {
+  if (isRelative(spec)) {
+    const to = resolveImport(dir, spec, fileSet);
+    if (to) return [to, 'static'];
+    const swapped = resolveImportTsEsm(dir, spec, fileSet);
+    return swapped ? [swapped, 'ts-esm'] : null;
+  }
+  // A bare specifier is external unless a path alias or a workspace package
+  // of THIS project names it. Those edges are real coupling but never enter
+  // the cycle views (kinds 'alias' / 'workspace') — the conservative half of
+  // KI #96; cycles through aliases are their own corpus-validated change.
+  if (!ctx.projectRoot) return null;
+  const bases = resolveAlias(absPath, spec, ctx.projectRoot);
+  const viaAlias = bases
+    ? bases.map((b) => resolveImport(path.dirname(b), `./${path.basename(b)}`, fileSet) || resolveImportTsEsm(path.dirname(b), `./${path.basename(b)}`, fileSet)).find(Boolean)
+    : null;
+  if (viaAlias) return [viaAlias, 'alias'];
+  const viaWs = ctx.workspaces && ctx.workspaces.size ? resolveWorkspace(spec, ctx.workspaces, fileSet) : null;
+  return viaWs ? [viaWs, 'workspace'] : null;
+}
+
+/**
+ * Read every import / export-from statement whole and decide what the emitted
+ * JavaScript does with it. Returns the edges plus the set of source lines the
+ * statements occupy (so the line reader below does not see them twice).
+ */
+function importStatementEdges(absPath, text, ctx) {
+  // No import / export-from statement at a line start → nothing to read, and
+  // no reason to tokenise (this repository is CommonJS: 1,341 files, most of
+  // them `require` only — Doctrine §14).
+  if (!IMPORT_STATEMENT_HINT_RE.test(text)) return { edges: [], consumedLines: EMPTY_SET, unchecked: null };
+  const lines = text.split(/\r?\n/);
+  const ext = path.extname(absPath).toLowerCase();
+  const isTs = TS_EXT_SET.has(ext);
+  const jsx = JSX_EXT_SET.has(ext);
+  const { tokens, statements, consumed } = readImports(text);
+  const kept = statements.filter((st) => {
+    for (let l = st.line; l <= st.endLine; l += 1) if (SUPPRESS_RE.test(lines[l - 1] || '')) return false;
+    return true;
+  });
+  const names = new Set();
+  for (const st of kept) for (const b of st.bindings) if (!b.typeOnly) names.add(b.local);
+  const mode = isTs && !jsx ? elisionMode(path.dirname(absPath), ctx.projectRoot) : { elide: false };
+  // JSX is NOT checked: its text can hold an apostrophe or a brace that a
+  // character-level stripper reads as syntax, and a scanner that can be
+  // knocked off course by prose would elide edges it should keep. A .tsx
+  // import is therefore what it always was — kept, load-time — and the
+  // file is reported as unchecked (Doctrine §6). Measured against tsc on the
+  // corpus: every remaining disagreement in the dangerous direction was .tsx.
+  const uses = jsx ? new Map() : classifyUses(tokens, consumed, names, {});
+  const useOf = jsx ? kept.map((st) => (st.typeOnly ? 'type' : 'load')) : statementUses(kept, uses, mode);
+  const edges = [];
+  kept.forEach((st, i) => {
+    const use = useOf[i];
+    const multiline = st.endLine !== st.line;
+    edges.push({ spec: st.spec, line: st.line, use, kind: use === 'type' ? 'type' : (multiline ? 'multiline' : null) });
+  });
+  const consumedLines = new Set();
+  for (const st of statements) for (let l = st.line; l <= st.endLine; l += 1) consumedLines.add(l);
+  return { edges, consumedLines, unchecked: jsx && kept.length ? 'jsx' : null };
+}
+
+const IMPORT_STATEMENT_HINT_RE = /^\s*(?:import\s+[^(.]|export\s+(?:type\s+)?(?:\*|\{))/m;
+const EMPTY_SET = new Set();
+
+// One parse per file per process. Three quick-suite modules (importCycle,
+// deadCode, spineHealth) each build the graph; the file has not changed
+// between them. Keyed on size + mtime so a --watch rescan sees edits.
+const fileEdgeCache = new Map();
+const FILE_EDGE_CACHE_MAX = 50000;
+
+/**
  * Extract every outgoing edge from one file, tagged by kind.
- * @returns {Array<{to: string, kind: 'static'|'lazy'|'type', line: number}>}
+ * @returns {Array<{to: string, kind: string, line: number, via: 'static'|'ts-esm'|'alias'|'workspace', use?: 'load'|'deferred'}>}
+ *   kind — what the edge MEANS (static / type / lazy / multiline / …); via — how the specifier RESOLVED.
  */
 function edgesForFile(absPath, fileSet, ctx = {}) {
+  let cacheKey = null;
+  try {
+    const st = fs.statSync(absPath);
+    cacheKey = `${absPath}|${st.size}|${st.mtimeMs}|${ctx.projectRoot || ''}|${fileSet.size}`;
+    const hit = fileEdgeCache.get(cacheKey);
+    if (hit) { const copy = hit.edges.map((e) => ({ ...e })); if (hit.unchecked) copy.unchecked = hit.unchecked; return copy; }
+  } catch {
+    cacheKey = null; // error-ok — unreadable stat, just don't cache
+  }
+  const out = edgesForFileUncached(absPath, fileSet, ctx);
+  if (cacheKey) {
+    if (fileEdgeCache.size >= FILE_EDGE_CACHE_MAX) fileEdgeCache.clear();
+    fileEdgeCache.set(cacheKey, { edges: out.map((e) => ({ ...e })), unchecked: out.unchecked || null });
+  }
+  return out;
+}
+
+function edgesForFileUncached(absPath, fileSet, ctx) {
   const out = [];
   let text;
   try {
@@ -208,57 +314,40 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
   const dir = path.dirname(absPath);
   const seen = new Set(); // dedupe identical to+kind pairs per file
 
-  const record = (to, kind, lineNo) => {
+  const record = (to, kind, lineNo, use, via) => {
     const key = `${to}|${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ to, kind, line: lineNo });
+    const edge = { to, kind, line: lineNo, via };
+    if (use) edge.use = use;
+    out.push(edge);
   };
-  const push = (spec, kind, lineNo) => {
-    if (isRelative(spec)) {
-      const to = resolveImport(dir, spec, fileSet);
-      if (to) { record(to, kind, lineNo); return; }
-      const swapped = resolveImportTsEsm(dir, spec, fileSet);
-      if (swapped) record(swapped, 'ts-esm', lineNo);
-      return;
-    }
-    // A bare specifier is external unless a path alias or a workspace
-    // package of THIS project names it. Those edges are real coupling but
-    // never enter staticGraph (kinds 'alias' / 'workspace'), so import-cycle
-    // is unchanged; that is the deliberate, conservative half of KI #96.
-    if (ctx.projectRoot) {
-      const bases = resolveAlias(absPath, spec, ctx.projectRoot);
-      const viaAlias = bases
-        ? bases.map((b) => resolveImport(path.dirname(b), `./${path.basename(b)}`, fileSet) || resolveImportTsEsm(path.dirname(b), `./${path.basename(b)}`, fileSet)).find(Boolean)
-        : null;
-      if (viaAlias) { record(viaAlias, 'alias', lineNo); return; }
-      const viaWs = ctx.workspaces && ctx.workspaces.size ? resolveWorkspace(spec, ctx.workspaces, fileSet) : null;
-      if (viaWs) record(viaWs, 'workspace', lineNo);
-    }
+  // `kind` null means "whatever the resolution says"; a named kind (type,
+  // multiline, lazy, path-literal) overrides it because it says something the
+  // resolution does not — an `import type` through an alias is still elided.
+  const push = (spec, kind, lineNo, use) => {
+    const r = resolveSpec(dir, absPath, spec, fileSet, ctx);
+    if (r) record(r[0], kind || r[1], lineNo, use, r[1]);
   };
+
+  const { edges: stmtEdges, consumedLines, unchecked } = importStatementEdges(absPath, text, ctx);
+  for (const e of stmtEdges) push(e.spec, e.kind, e.line, e.use === 'type' ? undefined : e.use);
+  if (unchecked) out.unchecked = unchecked;
 
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i];
     const lineNo = i + 1;
+    if (consumedLines.has(lineNo)) continue;
     // The suppression marker is an import-cycle concept, but honouring it here
     // keeps the extracted staticGraph byte-identical to the old private one.
     if (SUPPRESS_RE.test(raw)) continue;
 
     const line = stripLineComment(raw);
-    const typeOnly = IMPORT_TYPE_RE.test(line) || EXPORT_TYPE_RE.test(line);
-
-    const mImp = IMPORT_FROM_RE.exec(line);
-    if (mImp) { push(mImp[1], typeOnly ? 'type' : 'static', lineNo); continue; }
-
-    const mExp = EXPORT_FROM_RE.exec(line);
-    if (mExp) { push(mExp[1], typeOnly ? 'type' : 'static', lineNo); continue; }
-
-    const mCont = CONTINUATION_FROM_RE.exec(line);
-    if (mCont) { push(mCont[1], 'multiline', lineNo); continue; }
 
     const mReq = REQUIRE_RE.exec(line);
     if (mReq) {
-      push(mReq[1], isTopLevel(raw) ? 'static' : 'lazy', lineNo);
+      const top = isTopLevel(raw);
+      push(mReq[1], top ? null : 'lazy', lineNo, top ? 'load' : undefined);
       continue;
     }
 
@@ -270,8 +359,7 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
     // real file in this project, with no import syntax around it. Only reached
     // for lines that produced no import/require/dynamic edge above, and only
     // recorded when the path RESOLVES — an unresolvable string is just a
-    // string. This kind never enters staticGraph, so import-cycle's cycle
-    // detection is unchanged.
+    // string. This kind never enters the cycle views.
     PATH_LITERAL_RE.lastIndex = 0;
     let mLit = PATH_LITERAL_RE.exec(line);
     while (mLit !== null) {
@@ -283,7 +371,7 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
       let mRoot = ROOT_LITERAL_RE.exec(line);
       while (mRoot !== null) {
         const to = resolveImport(ctx.projectRoot, `./${mRoot[1]}`, fileSet);
-        if (to && to !== absPath) record(to, 'path-literal', lineNo);
+        if (to && to !== absPath) record(to, 'path-literal', lineNo, undefined, 'static');
         mRoot = ROOT_LITERAL_RE.exec(line);
       }
     }
@@ -301,10 +389,14 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
  * @returns {{
  *   files: string[],
  *   fileSet: Set<string>,
- *   staticGraph: Map<string, Set<string>>,
+ *   staticGraph: Map<string, Set<string>>,   kind 'static' only — the pre-elision-era cycle view, kept for the equivalence tests
+ *   runtimeGraph: Map<string, Set<string>>,  every import the emitted JS executes (static + ts-esm + multiline, post-elision)
+ *   loadGraph: Map<string, Set<string>>,     runtimeGraph minus edges whose only value uses are deferred to call time
  *   fullGraph: Map<string, Set<string>>,
  *   edges: Array<{from: string, to: string, kind: string, line: number}>,
  *   staticEdgeCount: number,
+ *   runtimeEdgeCount: number,
+ *   unchecked: { jsx: string[] },              files whose imports were kept without elision analysis, by reason
  *   rel: (abs: string) => string,
  * }}
  */
@@ -314,27 +406,44 @@ function buildImportGraph(opts = {}) {
   const fileSet = new Set(files);
 
   const staticGraph = new Map();
+  const runtimeGraph = new Map();
+  const loadGraph = new Map();
   const fullGraph = new Map();
   const edges = [];
   let staticEdgeCount = 0;
+  let runtimeEdgeCount = 0;
+  const unchecked = { jsx: [] }; // files whose imports were kept unexamined, by reason
   const ctx = { projectRoot, workspaces: workspacePackageMap(projectRoot) };
 
   for (const abs of files) {
     const statics = new Set();
+    const runtime = new Set();
+    const load = new Set();
     const all = new Set();
-    for (const e of edgesForFile(abs, fileSet, ctx)) {
-      edges.push({ from: abs, to: e.to, kind: e.kind, line: e.line });
+    const fileEdges = edgesForFile(abs, fileSet, ctx);
+    if (fileEdges.unchecked) unchecked[fileEdges.unchecked].push(abs);
+    for (const e of fileEdges) {
+      const edge = { from: abs, to: e.to, kind: e.kind, line: e.line, via: e.via };
+      if (e.use) edge.use = e.use;
+      edges.push(edge);
       all.add(e.to);
       if (e.kind === 'static') statics.add(e.to);
+      if (RUNTIME_KINDS.has(e.kind)) {
+        runtime.add(e.to);
+        if (e.use !== 'deferred') load.add(e.to);
+      }
     }
     staticGraph.set(abs, statics);
+    runtimeGraph.set(abs, runtime);
+    loadGraph.set(abs, load);
     fullGraph.set(abs, all);
     staticEdgeCount += statics.size;
+    runtimeEdgeCount += runtime.size;
   }
 
   const rel = (abs) => path.relative(projectRoot, abs).split(path.sep).join('/');
 
-  return { files, fileSet, staticGraph, fullGraph, edges, staticEdgeCount, rel };
+  return { files, fileSet, staticGraph, runtimeGraph, loadGraph, fullGraph, edges, staticEdgeCount, runtimeEdgeCount, unchecked, rel };
 }
 
 /**

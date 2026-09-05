@@ -29,32 +29,57 @@
  *
  * Design choices:
  *
- *   - Type-only imports (`import type { X } from`, `import { type X }`)
- *     are erased at build time. They don't create runtime cycles.
- *     Skipped.
+ *   - Type-only imports are erased at build time and cannot form a runtime
+ *     cycle — and that includes a plain `import { A } from './a.js'` whose
+ *     A is only ever used as a type, which tsc / esbuild / swc all drop.
+ *     `src/core/import-elision.js` decides that per file, the way the
+ *     compiler does. Before it existed this module was blind to NodeNext
+ *     `.js`-for-`.ts` specifiers altogether (KI #96): it reported silence on
+ *     every such project because letting those edges in without elision
+ *     produced 15 false cycles on nest through `.interface.ts` files.
  *
  *   - Function-scoped `require(...)` / dynamic `import(...)` expressions
  *     are LAZY. They defer resolution to call time, which is the
  *     standard workaround for breaking a cycle. Skipped.
  *
+ *   - An ESM import whose bindings are read ONLY inside function bodies,
+ *     arrow bodies, instance-field initialisers or parameter defaults is
+ *     the same thing with different syntax: the edge is real (the module
+ *     loads) but nothing reads the binding while the graph is still
+ *     loading, so it cannot produce the undefined-at-import bug. Such a
+ *     cycle is reported as `cycle-deferred` at WARNING — measured on
+ *     eight third-party TypeScript repositories, every cycle the old rule
+ *     blocked on (hono 4, prisma 3) and every cycle the NodeNext edges
+ *     added (nest 10, apollo 1, zod 1) was of this kind, and each ships.
+ *
  *   - Only relative imports (`./`, `../`) form cycles. Bare-package
- *     imports (`react`, `lodash`) are external and skipped.
+ *     imports (`react`, `lodash`) are external and skipped. tsconfig
+ *     path aliases and workspace packages are resolved for coupling but
+ *     still kept out of the cycle views (their own corpus-validated change).
  *
  *   - Resolved to real files via `path.resolve` + extension-retry
  *     (`./x` → `./x.ts`, `./x.tsx`, `./x/index.ts`, etc.). If we
- *     can't resolve, we skip silently — don't false-positive on
- *     path-alias configs (`@/components/x`) that we can't read
- *     without a tsconfig parse.
+ *     can't resolve, we skip silently.
  *
  * Rules:
  *
- *   error:   runtime cycle of 2+ files. One error per distinct SCC.
+ *   error:   load-time cycle of 2+ files — every edge is read at module
+ *            evaluation (top level, class heritage, decorator, static
+ *            initialiser, enum initialiser). One error per distinct SCC.
  *            (rule: `import-cycle:cycle:<a>|<b>|...|<a>`)
+ *
+ *   warning: runtime cycle whose back-edges are all deferred to call time.
+ *            Real coupling; breaks the moment one of those reads moves to
+ *            module scope. (rule: `import-cycle:cycle-deferred:<a>|<b>|...`)
  *
  *   error:   file imports itself (self-loop).
  *            (rule: `import-cycle:self-loop:<rel>`)
  *
- *   info:    summary — number of files, edges, cycles.
+ *   info:    summary — files, edges, cycles, and what was NOT checked:
+ *            JSX files (kept as load-time imports, unexamined) and the
+ *            emitDecoratorMetadata case (a class-typed annotation on a
+ *            decorated member is a runtime reference the scanner cannot
+ *            see without type information).
  *            (rule: `import-cycle:summary`)
  *
  * Suppressions:
@@ -80,10 +105,11 @@
 
 const BaseModule = require('./base-module');
 const path = require('path');
-// The graph builder was extracted to src/core so structural analysis could share
-// ONE definition of "what depends on what" — see the note at the top of that
-// file. `staticGraph` is exactly the graph this module used to build privately;
-// tests/import-graph.test.js pins that equivalence.
+// The graph builder lives in src/core so structural analysis shares ONE
+// definition of "what depends on what" — see the note at the top of that file.
+// This module reads its `loadGraph` and `runtimeGraph` views; the older
+// `staticGraph` view (pre-elision, no NodeNext edges) is kept for the
+// equivalence tests in tests/import-graph.test.js.
 const { collectSourceFiles, buildImportGraph, tarjanSCC } = require('../core/import-graph');
 
 class ImportCycleModule extends BaseModule {
@@ -109,11 +135,15 @@ class ImportCycleModule extends BaseModule {
       fileCount: files.length,
     });
 
-    // Only STATIC edges form runtime cycles: a function-scoped require defers
-    // to call time (the standard cycle workaround) and a type-only import is
-    // erased at build time. The shared builder also records those as 'lazy' and
-    // 'type' edges, which spineHealth uses for coupling — deliberately not here.
-    const { staticGraph: graph, staticEdgeCount: edgeCount } = buildImportGraph({ projectRoot, files });
+    // Two views of one graph (src/core/import-graph.js): `loadGraph` holds
+    // every import the emitted JavaScript reads while the module graph is
+    // still loading — a cycle there is the undefined-at-import bug;
+    // `runtimeGraph` adds the imports whose reads are all deferred to call
+    // time — a cycle there is real coupling that does not break at load.
+    // Lazy requires and type-only (or type-only-used) imports are in neither.
+    const built = buildImportGraph({ projectRoot, files });
+    const graph = built.loadGraph;
+    const edgeCount = built.runtimeEdgeCount;
 
     // SCCs via iterative Tarjan — iterative so a deep chain can't blow the stack.
     const sccs = tarjanSCC(graph);
@@ -130,6 +160,14 @@ class ImportCycleModule extends BaseModule {
         if (graph.get(n)?.has(n)) selfLoops.push(n);
       }
     }
+    // Deferred cycles: SCCs of the runtime view that are not load-time SCCs.
+    // A runtime SCC that contains a load-time cycle is already reported above
+    // (the load cycle is the actionable part); only wholly-deferred SCCs
+    // get the warning.
+    const loadSccKeys = new Set(cycles.map((scc) => [...scc].sort().join('|')));
+    const inLoadCycle = new Set(cycles.flat());
+    const deferredCycles = tarjanSCC(built.runtimeGraph)
+      .filter((scc) => scc.length >= 2 && !loadSccKeys.has([...scc].sort().join('|')) && !scc.some((n) => inLoadCycle.has(n)));
 
     // Report self-loops
     for (const abs of selfLoops) {
@@ -158,13 +196,31 @@ class ImportCycleModule extends BaseModule {
       });
     }
 
+    for (const scc of deferredCycles) {
+      const ordered = this._orderCycle(scc, built.runtimeGraph, projectRoot);
+      const rels = ordered.map((a) => path.relative(projectRoot, a).replace(/\\/g, '/'));
+      const display = [...rels, rels[0]].join(' -> ');
+      result.addCheck(`import-cycle:cycle-deferred:${rels.join('|')}`, false, {
+        severity: 'warning',
+        message: `Import cycle (${rels.length} files), load-safe: ${display} — every read of the cycle's bindings happens inside a function, so nothing is undefined at import time; it breaks the moment one of those reads moves to module scope`,
+        files: rels,
+      });
+    }
+
+    const jsxUnchecked = (built.unchecked && built.unchecked.jsx) || [];
+    const notChecked = [];
+    if (jsxUnchecked.length) notChecked.push(`${jsxUnchecked.length} JSX file(s) kept every import as load-time (type-only elision is not analysed in JSX)`);
+    notChecked.push('emitDecoratorMetadata: a class-typed annotation on a decorated member is a runtime reference this scan cannot see without type information');
     result.addCheck('import-cycle:summary', true, {
       severity: 'info',
-      message: `${files.length} file(s) scanned, ${edgeCount} edge(s), ${cycles.length} cycle(s), ${selfLoops.length} self-loop(s)`,
+      message: `${files.length} file(s) scanned, ${edgeCount} runtime edge(s), ${cycles.length} load-time cycle(s), ${deferredCycles.length} deferred cycle(s), ${selfLoops.length} self-loop(s). Not checked: ${notChecked.join('; ')}`,
       fileCount: files.length,
       edgeCount,
       cycleCount: cycles.length,
+      deferredCycleCount: deferredCycles.length,
       selfLoopCount: selfLoops.length,
+      notChecked,
+      jsxUncheckedCount: jsxUnchecked.length,
     });
   }
 
