@@ -314,4 +314,4 @@ function tsEquivalents(base) {
   return JS_TO_TS[ext].map((e) => stem + e);
 }
 
-module.exports = { tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSources, resolveAlias, stripJsoncLite, nearestTsconfig, elisionMode };
+module.exports = { tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSources, resolveAlias, stripJsoncLite, elisionMode };

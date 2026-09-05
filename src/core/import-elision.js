@@ -29,18 +29,10 @@
  * types and `const enum`, not import elision).
  */
 
-const STATEMENT_START = new Set(['export', 'import', 'const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum', 'declare', 'abstract', 'async', 'return', 'if', 'for', 'while', 'do', 'switch', 'try', 'throw', 'namespace', 'module', 'break', 'continue', 'default', 'case']);
-const LABEL_TARGETS = new Set(['for', 'while', 'do', 'switch', 'if', 'try']);
-const CONTROL = new Set(['if', 'for', 'while', 'switch', 'catch', 'with']);
-const MODIFIERS = new Set(['static', 'public', 'private', 'protected', 'readonly', 'async', 'get', 'set', 'override', 'abstract', 'declare', 'accessor']);
-const DECL_KEYWORDS = new Set(['const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum', 'namespace', 'module']);
-// Tokens after which `{` opens an object literal and `<` cannot be a binary operator.
-const EXPR_START = new Set(['=', '(', ',', '[', 'return', '=>', '?', '||', '&&', '??', '!', '...', 'throw', 'yield', 'await', 'in', 'of', 'typeof', 'void', 'delete', 'case', ':', '{', '}', ';', '|', '&', '+', '-', '*', '/', '%', '<', '>', '==', '===', '!=', '!==', '<=', '>=', 'new', 'default', 'async']);
-// Tokens after which a `{` continues a type rather than opening a body.
-const TYPE_CONTINUES = new Set([':', '=>', '|', '&', '=', '<', ',', '(', '[', '?', 'keyof', 'readonly', 'extends', 'implements', 'typeof', 'infer', 'in']);
-// Identifiers that continue a type after a line break (`Foo\n  extends Bar`).
-const TYPE_CONTINUES_ID = new Set(['extends', 'is', 'in', 'keyof', 'infer', 'readonly', 'implements', 'asserts']);
-const TYPE_ONLY_TOKENS = new Set(['.', ',', '|', '&', '[', ']', '(', ')', '=>', ':', '?', '{', '}', ';', '<', '>', '-', '...', '=', '*']);
+const {
+  STATEMENT_START, LABEL_TARGETS, MODIFIERS, DECL_KEYWORDS, EXPR_START, TYPE_CONTINUES, TYPE_CONTINUES_ID,
+  looksGeneric, parenParamsOf, braceKind,
+} = require('./elision-syntax');
 
 /**
  * @param {import('./ts-tokens').tokenize extends (...a:any)=>infer R ? R['tokens'] : never} tokens
@@ -78,26 +70,6 @@ function classifyUses(tokens, skip, names, opts = {}) {
   const record = (name, cls, line) => { const c = counts.get(name); if (!c) return; c[cls] += 1; if (cls === 'load' && c.loadLines.length < 5) c.loadLines.push(line); };
   const endExprAt = (f) => { if (f.arrowExpr > 0) f.arrowExpr = 0; f.initExpr = false; };
 
-  // Is `<` at index i a generic argument list (vs a comparison)? In value
-  // context a generic list only ever precedes a call, a `new`, a tagged
-  // template or a class body, and it never closes a bracket it did not open —
-  // `if (a < b) {` reaches the `)` first and is a comparison.
-  const looksGeneric = (i) => {
-    let depth = 0;
-    let pdepth = 0;
-    for (let k = i; k < tokens.length && k < i + 400; k += 1) {
-      const tk = tokens[k];
-      const v = tk.v;
-      if (v === '<') depth += 1;
-      else if (v[0] === '>') { depth -= v.replace(/=/g, '').length; if (depth <= 0) { const n = at(k + 1).v; return depth === 0 && (n === '(' || n === '{' || n === 'implements' || n === '`'); } }
-      else if (v === '(' || v === '[') pdepth += 1;
-      else if (v === ')' || v === ']') { if (pdepth === 0) return false; pdepth -= 1; }
-      else if (v === ';' || v === '=' || v === '}') return false;
-      else if (tk.t === 'p' && !TYPE_ONLY_TOKENS.has(v)) return false;
-      else if (tk.t === 'id' && (STATEMENT_START.has(v) || v === 'await' || v === 'yield' || v === 'new')) return false;
-    }
-    return false;
-  };
 
   for (let i = 0; i < tokens.length; i += 1) {
     if (skip.has(i)) continue;
@@ -131,15 +103,7 @@ function classifyUses(tokens, skip, names, opts = {}) {
       if (v === '(') {
         if (afterAt || (prev.t === 'id' && at(i - 2).v === '@') || f.decoratorChain) { frame.forceLoad = true; }
         if (!inType()) {
-          // `function f<T>(` / `m<T>(`: the head is the token before the generic list.
-          const h = prev.v === '>' && lastGenericHead >= 0 ? lastGenericHead : i - 1;
-          const head = at(h);
-          const beforeHead = at(h - 1);
-          if (head.v === 'function' || head.v === 'constructor' || (head.t === 'id' && beforeHead.v === 'function')) frame.paramsOf = 'function';
-          else if (CONTROL.has(head.v)) frame.paramsOf = 'control';
-          else if (f.kind === 'class' && head.t === 'id' && !f.initExpr) frame.paramsOf = 'method';
-          else if (f.kind === 'obj' && head.t === 'id' && (beforeHead.v === ',' || beforeHead.v === '{' || MODIFIERS.has(beforeHead.v))) frame.paramsOf = 'method';
-          else frame.paramsOf = null;
+          frame.paramsOf = parenParamsOf(tokens, i, f, lastGenericHead);
           if (frame.paramsOf === 'function' || frame.paramsOf === 'method') frame.deferred = true; // defaults evaluate at call time
         }
       }
@@ -148,26 +112,13 @@ function classifyUses(tokens, skip, names, opts = {}) {
       continue;
     }
     if (v === '{') {
-      let kind = 'block';
-      let deferred = false;
       // A `{` after a complete type ends a heritage clause (`implements A {`)
       // or a return-type annotation (`(): { a: A } {`): what follows is a body.
       let bodyOf = null;
       if (typeMode && typeMode.depth === stack.length && (typeMode.afterParen || typeMode.kind === 'heritage') && !TYPE_CONTINUES.has(prev.v)) { bodyOf = typeMode.afterParen; endTypeMode(); }
       const inHead = inType(); // a `{}` inside a declaration head (`interface X<T = {}> {`) is not the body
-      if (tok.hole || (opts.tsx && (f.jsxTag || prev.v === '>' || (prev.v === '}' && f.kind !== 'block')))) kind = 'hole';
-      else if (prev.v === 'type' && at(i - 2).v === 'export') kind = 'typelit'; // `export type { A }`
-      else if (inType()) kind = 'typelit';
-      else if (bodyOf) kind = bodyOf.paramsOf === 'function' || bodyOf.paramsOf === 'method' ? 'fnbody' : 'block';
-      else if (lastDecl === 'class') kind = 'class';
-      else if (lastDecl === 'interface') kind = 'typelit';
-      else if (lastDecl === 'enum') kind = 'enum';
-      else if (prev.v === 'export' || prev.v === 'type') kind = 'export';
-      else if (prev.v === ')') { kind = lastClosedParen && (lastClosedParen.paramsOf === 'function' || lastClosedParen.paramsOf === 'method') ? 'fnbody' : 'block'; }
-      else if (prev.v === '=>') kind = 'fnbody';
-      else if (EXPR_START.has(prev.v) || prev.t === 'str' || f.kind === 'obj') kind = 'obj';
-      if (kind === 'fnbody') deferred = true;
-      // `{` in type mode after a type ends heritage / return-type annotations.
+      const kind = braceKind(tokens, i, f, { tsx: opts.tsx, inType: inType(), bodyOf, lastDecl, lastClosedParen });
+      const deferred = kind === 'fnbody';
       const frame = { open: '{', kind, ternary: 0, arrowExpr: 0, initExpr: false, deferred, forceLoad: false, casePending: false, typeCtx: kind === 'typelit' || (kind === 'block' && f.typeCtx) };
       if (kind === 'class') frame.memberPos = true;
       stack.push(frame);
@@ -186,7 +137,7 @@ function classifyUses(tokens, skip, names, opts = {}) {
       // `class B<T = A>`, `function f<T>(`, `foo<T>(` in a class body: a
       // declaration's type-parameter list, generic by construction.
       const declHead = prev.t === 'id' && (lastDecl !== null || at(i - 2).v === 'function' || (f.kind === 'class' && !f.initExpr));
-      if (operandBefore && (declHead || ((prev.t !== 'id' || !EXPR_START.has(prev.v)) && looksGeneric(i)))) {
+      if (operandBefore && (declHead || ((prev.t !== 'id' || !EXPR_START.has(prev.v)) && looksGeneric(tokens, i)))) {
         stack.push({ open: '<', kind: 'generic', headIdx: i - 1, ternary: 0, arrowExpr: 0, initExpr: false, deferred: false, forceLoad: false, typeCtx: true });
         continue;
       }
