@@ -23,7 +23,7 @@ const https = require('https');
 // template-tag library).
 const SQL_KEYWORDS = 'SELECT|INSERT|UPDATE|DELETE|CREATE|DROP';
 const SQL_CONCAT_RE = new RegExp(`(['"])(?:${SQL_KEYWORDS})\\b(?:(?!\\1).)*\\1\\s*\\+\\s*[A-Za-z_$][\\w.$]*`, 'i');
-const SQL_TEMPLATE_RE = new RegExp('(?<![\\w$])`(?:' + SQL_KEYWORDS + ')\\b(?:(?!`).)*\\$\\{[^}]+\\}(?:(?!`).)*`', 'i');
+const SQL_TEMPLATE_RE = new RegExp('(?<![\\w$)\\]])`(?:' + SQL_KEYWORDS + ')\\b(?:(?!`).)*\\$\\{[^}]+\\}(?:(?!`).)*`', 'i');
 const SQL_SINK_RE = /\.\s*(?:query|execute|raw|run|all)\s*\(/;
 const SQL_ASSIGN_RE = /^\s*(?:const|let|var)\s+(\w+)\s*=/;
 const SQL_INJECTION_LOOKAHEAD = 15;
@@ -85,6 +85,181 @@ function credentialIsFullyExpanded(matchedText) {
   if (colon === -1) return false;
   const password = userinfo.slice(colon + 1);
   return password.length > 0 && !password.split('').some((c) => c !== INTERPOLATION_MASK);
+}
+
+/**
+ * A connection string whose credential is a DEVELOPMENT DEFAULT, not a leak.
+ *
+ * prisma/prisma @ HEAD (2026-09-05) produced 12 `security:secret` findings,
+ * every one of them this shape:
+ *   postgres://postgres:postgres@127.0.0.1:5433/prisma        (CI service)
+ *   postgresql://diamond:diamond@localhost:5432/diamond       (7 fixtures)
+ *   DATABASE_URL="postgresql://user:password@localhost/mydb"  (init template)
+ * Two shapes, both precise:
+ *   1. The password IS a credential word — `password`, `secret`, `changeme`.
+ *      Nobody's secret is the word "password" (the same principle the
+ *      identifier-keyed label rule already applies). Host does not matter.
+ *   2. Username and password are IDENTICAL and the host is not routable —
+ *      loopback, `localhost`, or a single-label name (`db`, `postgres`: a
+ *      docker-compose / k8s service). That is the default credential of a
+ *      local container. `postgres:postgres@db.example.com` STILL fires:
+ *      a default credential on a reachable host is worse, not better.
+ * A distinct password on localhost (`admin:hunter2@localhost`) still fires —
+ * it may be the same password the author uses everywhere.
+ */
+const PLACEHOLDER_PASSWORD_RE = /^(?:password|passwd|passwort|pwd|pass|secret|changeme|change_me|example|placeholder|x{3,})$/i;
+const LOCAL_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal|[a-z0-9_-]+)$/i;
+
+function connectionStringIsDevDefault(matchedText) {
+  const schemeEnd = matchedText.indexOf('://');
+  if (schemeEnd === -1) return false;
+  const at = matchedText.indexOf('@', schemeEnd + 3);
+  if (at === -1) return false;
+  const userinfo = matchedText.slice(schemeEnd + 3, at);
+  const colon = userinfo.lastIndexOf(':');
+  if (colon === -1) return false;
+  const user = userinfo.slice(0, colon);
+  const password = userinfo.slice(colon + 1);
+  if (!password) return false;
+  if (PLACEHOLDER_PASSWORD_RE.test(password)) return true;
+  const host = matchedText.slice(at + 1).split(/[/:?#]/)[0];
+  return user === password && LOCAL_HOST_RE.test(host);
+}
+
+// ---------------------------------------------------------------------------
+// Math.random() is a SECURITY finding only when the value is a credential.
+//
+// The previous rule keyed on `id`, `code`, `key`, `reset`, `invite` as bare
+// SUBSTRINGS of the assignment target. nestjs/nest @ HEAD (2026-09-05): five
+// blocking findings, all `id = Math.random()` — a request-context id
+// (`packages/core/helpers/context-id-factory.ts:14`), two Kafka fixture
+// entity ids, a request-logger id. trpc: ten, all `id:` / `nonce` in tests
+// and examples. None was a secret. `id` also matched INSIDE `valid`, `grid`,
+// `paid`; `key` matched React's `key: Math.random()` list anti-pattern;
+// `code` matched `statusCode`, `zipCode`.
+//
+// Identifiers are split into WORDS (camelCase, snake_case, kebab, dotted
+// member chains) and judged as words, Doctrine §5: tokens, not substrings.
+//   sensitive on their own:  token secret nonce otp password passcode pin
+//                            session salt csrf xsrf apikey totp
+//   sensitive when qualified: `key` after api/secret/private/signing/…
+//                             `code` after verification/confirm/activation/…
+//   never, whatever else is on the identifier: timeout delay interval ttl
+//                             jitter backoff expiry — those are the words
+//                             that make `sessionTimeout = base * Math.random()`
+//                             a retry, not a credential.
+// One extra shape: the SMS-OTP snippet `Math.floor(100000 + Math.random() *
+// 900000)` assigned to a bare `code`/`digits` — the digit range is the tell.
+// ---------------------------------------------------------------------------
+const RANDOM_SENSITIVE_WORDS = new Set([
+  'token', 'secret', 'nonce', 'otp', 'password', 'passwd', 'passcode', 'pin',
+  'session', 'sessionid', 'salt', 'csrf', 'xsrf', 'apikey', 'totp', 'mfa', '2fa',
+]);
+const RANDOM_KEY_QUALIFIERS = new Set([
+  'api', 'secret', 'private', 'signing', 'sign', 'encryption', 'encrypt',
+  'session', 'access', 'auth', 'license', 'licence', 'recovery', 'master',
+  'hmac', 'jwt', 'shared', 'client', 'consumer', 'app',
+]);
+const RANDOM_CODE_QUALIFIERS = new Set([
+  'verification', 'verify', 'confirmation', 'confirm', 'activation', 'activate',
+  'reset', 'auth', 'authorization', 'authorisation', 'otp', 'security', 'access',
+  'recovery', 'invite', 'invitation', 'sms', 'login', 'signin', 'backup',
+  'onetime', 'one', 'totp', 'mfa', '2fa', 'pin', 'referral', 'promo', 'coupon',
+]);
+const RANDOM_VOID_WORDS = new Set([
+  'timeout', 'delay', 'interval', 'ttl', 'duration', 'expiry', 'expires',
+  'expiration', 'jitter', 'backoff', 'index', 'offset', 'count', 'length',
+  'size', 'width', 'height', 'color', 'colour', 'seed', 'sample', 'ratio',
+  'chance', 'probability', 'weight', 'ms', 'seconds', 'millis',
+]);
+const OTP_RANGE_RE = /Math\.floor\s*\([^)]*Math\.random\s*\(\s*\)\s*\*\s*\d{4,}|\d{4,}\s*\+\s*Math\.random\s*\(/;
+
+function identifierWords(ident) {
+  return String(ident)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function wordsNameACredential(words, line) {
+  if (words.some((w) => RANDOM_VOID_WORDS.has(w))) return false;
+  if (words.some((w) => RANDOM_SENSITIVE_WORDS.has(w))) return true;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i] === 'key' && RANDOM_KEY_QUALIFIERS.has(words[i - 1])) return true;
+    if (words[i] === 'code' && RANDOM_CODE_QUALIFIERS.has(words[i - 1])) return true;
+  }
+  const last = words[words.length - 1];
+  return (last === 'code' || last === 'digits') && OTP_RANGE_RE.test(line);
+}
+
+/**
+ * True when the `Math.random()` on `line` feeds a credential-shaped value:
+ * the assignment / property target's words name a credential, or — for the
+ * `toString(36|16)` "make me a string" idiom — any identifier on the line
+ * does (`res.cookie('sessionId', Math.random().toString(36))`).
+ */
+function mathRandomIsSecuritySensitive(line) {
+  const at = line.search(/Math\.random\s*\(/);
+  if (at === -1) return false;
+  // Quoted prose cannot supply the target (`"token = Math.random()"`); the
+  // quoted NAMES are still consulted by the toString fallback below.
+  const lhs = line.slice(0, at).replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, (q) => ' '.repeat(q.length));
+  const targetRe = /([\w$.]+)\s*[:=](?!=)/g;
+  let target = null;
+  let m;
+  while ((m = targetRe.exec(lhs)) !== null) target = m[1];
+  if (target && wordsNameACredential(identifierWords(target), line)) return true;
+  if (!/\.toString\s*\(\s*(?:36|16|32)\s*\)/.test(line)) return false;
+  const idents = line.match(/[A-Za-z_$][\w$]*/g) || [];
+  return idents.some((id) => id !== 'Math' && wordsNameACredential(identifierWords(id), line));
+}
+
+// ---------------------------------------------------------------------------
+// A SQL splice made only of CONSTANTS is not an injection.
+//
+// prisma/prisma @ HEAD (2026-09-05): 31 `security:sql-injection` findings.
+// Twenty-two interpolated nothing but a SCREAMING_SNAKE module constant —
+//   await connection.query(`DROP TABLE IF EXISTS "${STORAGE_TABLE}"`);
+//   await driver.query(`create schema if not exists ${TENANT_A_SCHEMA}`);
+// — the codec test-kits, migration tests and fixture setup naming their own
+// tables. A `const STORAGE_TABLE = 'x'` is decided by the author at write
+// time; no request reaches it. `${tableName}`, `${req.query.t}`, `${i}` and
+// `${entry.literal}` are NOT constants and still fire; a splice that mixes
+// a constant with anything else still fires (`"${VALUE_COLUMN}" ${columnType}`
+// at postgres-codec-testkit/src/index.ts:337 is reported — correctly).
+// Four more were `rawSql()\`SELECT … ${1}\`` — a tagged template whose tag is
+// a CALL, which the `(?<![\w$])` tag exclusion could not see. `)` or `]`
+// immediately before a backtick is only ever a tag in JavaScript.
+// ---------------------------------------------------------------------------
+const SQL_CONSTANT_SPLICE_RE = /^\s*(?:[A-Z][A-Z0-9_]+|\d+(?:\.\d+)?)\s*$/;
+
+function sqlSpliceIsConstantOnly(line, match) {
+  const text = match[0];
+  if (text.startsWith('`')) {
+    const splices = [...text.matchAll(/\$\{([^}]*)\}/g)].map((s) => s[1]);
+    return splices.length > 0 && splices.every((s) => SQL_CONSTANT_SPLICE_RE.test(s));
+  }
+  // Concat form: the match ends at the first `+ ident`; walk the rest of the
+  // `+` chain on the line. Anything that is not a constant, a literal or a
+  // plain identifier ends the walk as "not constant" — conservative.
+  const quote = text[0];
+  const closeQuote = text.indexOf(quote, 1);
+  let rest = text.slice(closeQuote + 1) + line.slice(match.index + text.length);
+  const piece = /^\s*\+\s*(?:([A-Za-z_$][\w.$]*)|'[^']*'|"[^"]*"|`[^`$]*`|\d+(?:\.\d+)?)/;
+  let sawIdent = false;
+  for (;;) {
+    const p = piece.exec(rest);
+    if (!p) break;
+    if (p[1] !== undefined) {
+      sawIdent = true;
+      if (!SQL_CONSTANT_SPLICE_RE.test(p[1])) return false;
+    }
+    rest = rest.slice(p[0].length);
+  }
+  if (/^\s*\+/.test(rest)) return false; // a `+ something` we could not parse
+  return sawIdent;
 }
 
 class SecurityModule extends BaseModule {
@@ -310,11 +485,22 @@ class SecurityModule extends BaseModule {
       { regex: /\$\{.*req\.(params|query|body)/g, name: 'unsanitized user input in template', severity: 'critical' },
       { regex: /res\.redirect\s*\(\s*req\./g, name: 'open redirect risk', severity: 'high' },
       { regex: /\.createReadStream\s*\(\s*req\./g, name: 'path traversal risk', severity: 'critical' },
-      // Math.random() is only a SECURITY finding when the value becomes a
-      // token / secret / id / nonce / password / OTP / session / key. Used
-      // for jitter, dates, sampling, animation or test data it is fine —
-      // 10/10 sampled hits in the 2026-08-18 audit were that kind.
-      { regex: /(?:token|secret|nonce|otp|password|passcode|session|salt|apiKey|api_key|csrf|verification|reset|invite|code|id|uuid|key)\w*\s*[:=]\s*[^;\n]*Math\.random\s*\(|Math\.random\s*\([^;\n]*(?:toString\(36\)|toString\(16\))[^;\n]*(?:token|secret|nonce|otp|password|session|salt|key|id)/gi, name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)', severity: 'moderate' },
+      // Math.random() is a SECURITY finding only when the value is a
+      // credential — see `mathRandomIsSecuritySensitive` at the top of this
+      // file for the word list and the nest/trpc measurement that replaced
+      // the substring rule. Identifier-keyed, so a test-tree hit is a
+      // warning (a test's `nonce-${Math.random()}` cache-buster is not
+      // shipped), same split as the secret patterns below.
+      // Anchored at the line start on purpose: the match must begin OUTSIDE
+      // any template literal, or `apiKey = \`${Math.random()}\`` is skipped
+      // by the inside-a-string guard below as if it were prose.
+      {
+        regex: /^[^\n]*?Math\.random\s*\(/g,
+        name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)',
+        severity: 'moderate',
+        identifierKeyed: true,
+        safeIf: (line) => !mathRandomIsSecuritySensitive(line),
+      },
       { regex: /disable.*csrf|csrf.*disable/gi, name: 'CSRF protection disabled', severity: 'critical' },
       // NoSQL injection: a $where clause built from dynamic input executes
       // attacker-controlled JavaScript on the MongoDB server (NodeGoat A1;
@@ -415,6 +601,7 @@ class SecurityModule extends BaseModule {
             result.addCheck(`security:${pattern.name}:${relPath}:${i + 1}`, false, {
               file: relPath,
               line: i + 1,
+              ...(pattern.identifierKeyed && this._isTestPath(normalisedPath) ? { severity: 'warning' } : {}),
               // Carried so the confidence scorer can judge the exact
               // position rather than falling back to a whole-line guess.
               column: match.index,
@@ -482,6 +669,7 @@ class SecurityModule extends BaseModule {
         const match = SQL_CONCAT_RE.exec(line) || SQL_TEMPLATE_RE.exec(line);
         if (!match) continue;
         if (this._isInsideStringLiteral(line, match.index)) continue;
+        if (sqlSpliceIsConstantOnly(line, match)) continue;
 
         // Built and used at a sink on the same line — flag directly.
         if (SQL_SINK_RE.test(line)) {
@@ -971,7 +1159,19 @@ class SecurityModule extends BaseModule {
             // are the one place a mask can still satisfy the pattern, so the
             // password position is checked explicitly.
             if (credentialIsFullyExpanded(match[0])) continue;
+            if (connectionStringIsDevDefault(match[0])) continue;
             if (pattern.identifierKeyed && labelValue(match[0])) continue;
+            // `'jwtSecret' in options` — the quoted text is a property NAME
+            // being tested for, not a value being assigned (prisma
+            // packages/3-extensions/supabase/src/runtime/supabase.ts:183).
+            if (pattern.identifierKeyed && /^\s+in\b/.test(maskedLine.slice(match.index + match[0].length))) continue;
+            // Algolia DocSearch config — `algolia: { appId, apiKey, indexName }`
+            // in a Docusaurus site. That apiKey is the SEARCH-ONLY key Algolia
+            // tells you to commit; every DocSearch site ships it in the
+            // browser bundle (trpc www/docusaurus.config.ts:48). Only the
+            // `apiKey` inside a block that opens with `algolia:` is exempt.
+            if (pattern.identifierKeyed && /\bapi[_-]?key\s*[:=]/i.test(line)
+              && lines.slice(Math.max(0, i - 6), i + 1).some((l) => /\balgolia\s*[:=]\s*\{/.test(l))) continue;
             matchedThisLine = true;
             // Preview comes from the ORIGINAL line — the mask is
             // length-preserving, so the offsets carry over.

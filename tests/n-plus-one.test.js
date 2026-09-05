@@ -271,3 +271,95 @@ describe('NPlusOneModule — clean baseline', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// prisma/prisma @ HEAD (2026-09-05): 25 `query-in-loop`, 6 blocking, none a
+// per-row lookup — DDL in a setup loop, `SELECT 1` in a wait-for-db loop, a
+// statement list being replayed, and fixture rows seeded in test setup.
+// ---------------------------------------------------------------------------
+
+describe('NPlusOneModule — what a loop of queries is NOT', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-np-scope-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const hits = (r) => r.checks.filter((c) => c.name.startsWith('n-plus-one:query-in-loop:'));
+
+  it('DDL and `SELECT 1` in a loop are not reported', async () => {
+    write(tmp, 'scripts/record.ts', [
+      'async function prepare(client, count) {',
+      '  for (let i = 0; i < count; i++) {',
+      '    const dbName = `prisma_rec_${i}`;',
+      // prisma packages/1-framework/3-tooling/cli/scripts/record.ts:435-436, :448
+      '    await client.query(`DROP DATABASE IF EXISTS ${dbName}`);',
+      '    await client.query(`CREATE DATABASE ${dbName}`);',
+      '    await client.query(`DROP DATABASE IF EXISTS prisma_rec_${i}`);',
+      '  }',
+      '  while (true) {',
+      // prisma packages/1-framework/3-tooling/cli/scripts/record.ts:348
+      "    try { await client.query('SELECT 1'); break; } catch { await sleep(100); }",
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    assert.deepStrictEqual(hits(await run(tmp)), []);
+  });
+
+  it('an opaque pre-built statement is a warning that says so', async () => {
+    write(tmp, 'src/index.ts', [
+      'async function setup(connection, conformanceCase) {',
+      '  for (const statement of conformanceCase.setupSql ?? []) {',
+      // prisma packages/3-targets/6-adapters/postgres-codec-testkit/src/index.ts:333
+      '    await connection.query(statement);',
+      '  }',
+      '  for (const action of actions) {',
+      // prisma packages/1-framework/3-tooling/cli/scripts/record.ts:417
+      '    await client.query(action.query);',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const found = hits(await run(tmp));
+    assert.strictEqual(found.length, 2);
+    for (const f of found) {
+      assert.strictEqual(f.severity, 'warning');
+      assert.strictEqual(f.opaque, true);
+      assert.match(f.message, /cannot tell/);
+    }
+  });
+
+  it('a per-row lookup through a raw driver in application code is still an error', async () => {
+    write(tmp, 'src/orders.ts', [
+      'async function load(client, users) {',
+      '  for (const u of users) {',
+      '    const r = await client.query(`SELECT * FROM orders WHERE user_id = ${u.id}`);',
+      '    await client.query("SELECT * FROM profiles WHERE id = $1", [u.id]);',
+      '    await client.query(buildQuery(u.id));',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const found = hits(await run(tmp));
+    assert.deepStrictEqual(found.map((f) => [f.line, f.severity]), [[3, 'error'], [4, 'error'], [5, 'error']]);
+  });
+
+  it('a test harness seeding rows is a warning, the same loop in src/ an error', async () => {
+    const src = [
+      'async function seed(db, input) {',
+      '  for (const id of ids) {',
+      // prisma test/integration/test/ports/engines/queries/aggregation/uniq-count-relation/uniq-count-relation.test.ts:16
+      '    await db.public.Comment.create({ id, postId: input.id });',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    write(tmp, 'test/integration/uniq-count-relation.test.ts', src);
+    write(tmp, 'benchmarks/seed.ts', src);
+    write(tmp, 'src/seed.ts', src);
+    const found = hits(await run(tmp));
+    const by = Object.fromEntries(found.map((f) => [f.file, f]));
+    assert.strictEqual(by['test/integration/uniq-count-relation.test.ts'].severity, 'warning');
+    assert.strictEqual(by['test/integration/uniq-count-relation.test.ts'].harness, true);
+    assert.strictEqual(by['benchmarks/seed.ts'].severity, 'warning');
+    assert.strictEqual(by['src/seed.ts'].severity, 'error');
+  });
+});
