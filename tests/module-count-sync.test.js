@@ -72,6 +72,7 @@ const SURFACES = [
  */
 const EVIDENCE = [
   'website/app/scans/page.tsx',   // dated scan results: "120-module engine", 2026-07-12
+  'website/app/data/changelog.json', // commit titles as they were written: "120 modules" on 2026-08-06 is a record, not a claim
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'coverage', '.gatetest', 'dist', 'build']);

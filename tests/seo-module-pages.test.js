@@ -33,6 +33,7 @@ test("module-slugs.ts: exports the right public surface", () => {
   assert.match(src, /export function getRelatedModules/);
   assert.match(src, /export function getTotalModuleCount/);
   assert.match(src, /export function getModulesByCategory/);
+  assert.match(src, /export function getSlugForModuleName/);
   // Public type imported by the page
   assert.match(src, /export interface ResolvedModule/);
   // Internal helpers — should NOT be exported

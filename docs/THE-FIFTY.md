@@ -79,7 +79,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 36 | Badges as the distribution channel | done | graded badge redirect; free scan ends with the badge (PR #423) |
 | 37 | Free scan as the primary call to action | **Craig** | — |
 | 38 | Keep the comparison pages dated and factual | done | git-dated `ComparisonReviewed` (PR #423) |
-| 39 | A real changelog page | open | `docs/HISTORY.md` is prose; needs a structured source |
+| 39 | A real changelog page | done | the structured source is the main branch itself: `scripts/generate-changelog.js` reads the first-parent history into `website/app/data/changelog.json` (PR, date, area by file count, modules touched via the registry, version bumps as facts on the commit that made them; direct commits included as such) — regenerated at website prebuild on a full clone and on the nightly; `/changelog` renders it, `tests/changelog-sync.test.js` holds the file to the repo and the page to the file |
 | 40 | Three case studies with numbers | **Craig** | — |
 
 ## E. Enterprise readiness (41–46)
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-09 (recalibrate confidence against the corpus), 20, 39, 42, 48, 49, 50.
+09 (recalibrate confidence against the corpus), 20, 42, 48, 49, 50.
 Waiting on Craig: 15, 29, 35, 41.
