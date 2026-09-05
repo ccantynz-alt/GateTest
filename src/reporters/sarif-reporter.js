@@ -13,6 +13,7 @@ const { siteUrl } = require('../core/site-url');
 // decade. Derived, never typed. (Note: the `version: '2.1.0'` below is the
 // SARIF SPEC version and must stay fixed.)
 const PKG_VERSION = require('../../package.json').version;
+const { isBlockingFinding } = require('../core/confidence');
 
 // Module → CWE / OWASP / security-severity mapping. Findings emitted by
 // these modules get enriched SARIF metadata that renders as filterable
@@ -138,6 +139,25 @@ const MODULE_SECURITY_META = {
   },
 };
 
+// security-severity is a per-MODULE score, but a finding's severity is
+// per-FINDING: the engine downgrades a credential fixture in a test tree to
+// `warning`, and a low-confidence error to non-blocking "soft". Until
+// 2026-09-05 the score ignored both, so a `password='hunter2'` fixture in a
+// test file reached GitHub Code Scanning as a 9.1 CRITICAL and failed the PR
+// check that the engine's own verdict had passed (PR #422).
+//
+// The finding's effective level picks the band GitHub will show — its
+// thresholds are 9.0 critical / 7.0 high / 4.0 medium — and the module's
+// score orders within it. An error keeps the module's score; a warning can
+// be at most medium; a note at most low.
+const SECURITY_SEVERITY_CAP = { error: 10, warning: 6.9, note: 3.9 };
+const LEVEL_RANK = { note: 0, warning: 1, error: 2 };
+
+function bandedSecuritySeverity(score, level) {
+  const cap = SECURITY_SEVERITY_CAP[level] ?? SECURITY_SEVERITY_CAP.warning;
+  return Math.min(Number(score), cap).toFixed(1);
+}
+
 class SarifReporter {
   constructor(runner, config) {
     this.runner = runner;
@@ -173,18 +193,40 @@ class SarifReporter {
     // Resolve once at the project root so file-less findings still ride.
     const projectLevelUri = this._resolveProjectLevelUri();
 
+    const threshold = summary.confidenceThreshold;
+
     for (const moduleResult of summary.results) {
       for (const check of moduleResult.checks) {
         if (check.passed) continue;
+        // .gatetestignore / baseline suppressions are the user's decision;
+        // the Security tab is their alert list, not an audit trail.
+        if (check.suppressed) continue;
+
+        // The level GitHub sees is the level the GATE used: an error the
+        // confidence threshold made non-blocking ("soft") is a warning.
+        const effectiveSeverity = check.severity === 'error' && !isBlockingFinding(check, threshold)
+          ? 'warning'
+          : check.severity;
+        const level = this._severityToSarif(effectiveSeverity);
 
         // Create rule if not exists
         const ruleId = `gatetest/${moduleResult.module}/${this._sanitizeRuleId(check.name)}`;
-        if (!ruleIndex.has(ruleId)) {
+        const meta = MODULE_SECURITY_META[moduleResult.module] || null;
+        if (ruleIndex.has(ruleId)) {
+          // Rule already emitted from an earlier check: a later, more
+          // severe finding under the same rule lifts the rule to its level.
+          const existing = rules[ruleIndex.get(ruleId)];
+          if (LEVEL_RANK[level] > LEVEL_RANK[existing.defaultConfiguration.level]) {
+            existing.defaultConfiguration.level = level;
+            if (meta && meta.securitySeverity) {
+              existing.properties['security-severity'] = bandedSecuritySeverity(meta.securitySeverity, level);
+            }
+          }
+        } else {
           ruleIndex.set(ruleId, rules.length);
           // Look up CWE / OWASP / security-severity for this module so
           // GitHub Code Scanning can render the finding with proper
           // severity, filter tags, and a "View advisory" link.
-          const meta = MODULE_SECURITY_META[moduleResult.module] || null;
           const properties = {
             tags: meta && Array.isArray(meta.tags) && meta.tags.length > 0
               ? meta.tags.slice()
@@ -193,7 +235,7 @@ class SarifReporter {
           if (meta && meta.securitySeverity) {
             // GitHub-specific extension key, recognised by the Security tab
             // for severity-threshold gating in branch protection rules.
-            properties['security-severity'] = meta.securitySeverity;
+            properties['security-severity'] = bandedSecuritySeverity(meta.securitySeverity, level);
           }
           if (meta && meta.cwe) {
             properties.cwe = meta.cwe;
@@ -207,7 +249,7 @@ class SarifReporter {
             shortDescription: { text: check.message || check.name },
             fullDescription: { text: check.suggestion || check.message || check.name },
             defaultConfiguration: {
-              level: this._severityToSarif(check.severity),
+              level,
             },
             properties,
           };
@@ -226,9 +268,13 @@ class SarifReporter {
         const sarifResult = {
           ruleId,
           ruleIndex: ruleIndex.get(ruleId),
-          level: this._severityToSarif(check.severity),
+          level,
           message: {
             text: check.message || check.suggestion || check.name,
+          },
+          properties: {
+            confidence: typeof check.confidence === 'number' ? check.confidence : null,
+            blocking: isBlockingFinding(check, threshold),
           },
         };
 

@@ -398,7 +398,10 @@ class SecretsModule extends BaseModule {
 
       if (found.length > 0) {
         totalSecrets += found.length;
-        const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)[\\/]|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
+        // One definition of "test path" for the whole engine (base-module
+        // TEST_PATH_RE). The private copy this replaced did not know
+        // `js_tests/` or `runtime-tests/`, so django's QUnit fixtures blocked.
+        const isTest = this._isTestPath(relUnix);
 
         // PROSE vs CONFIG vs CODE.
         //

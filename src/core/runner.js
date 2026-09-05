@@ -417,6 +417,9 @@ class TestResult {
       // findings are all silenced looks like it never fires. Expose the
       // count so fireRate can stay honest (KI #76).
       suppressedChecks: this.suppressedChecks.length,
+      // Findings a narrowed scan (--diff / --pr) dropped because they sat in
+      // files the diff never touched. Zero on a full scan.
+      scopedOut: this.scopedOut || 0,
       fixes: this.fixes.length,
       checks: this.checks,
       appliedFixes: this.fixes,
@@ -705,6 +708,7 @@ class GateTestRunner extends EventEmitter {
       }
       const timeoutMs = this._moduleTimeoutMs(name);
       await this._runModuleWithTimeout(name, mod.run(result, moduleConfig), timeoutMs);
+      this._scopeResultToChangedFiles(result, name);
 
       // Only CONFIDENT errors block — soft errors (below threshold) are
       // surfaced in the report but don't fail the module. Warnings always
@@ -794,6 +798,79 @@ class GateTestRunner extends EventEmitter {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * The repo-relative, forward-slash paths a scan was narrowed to
+   * (`--diff`, `--since`, `--pr`), or null for a full scan.
+   */
+  _scopedFileSet() {
+    const root = this.config && this.config.projectRoot;
+    const rel = (f) => {
+      const p = root && path.isAbsolute(f) ? path.relative(root, f) : f;
+      return p.split(path.sep).join('/');
+    };
+    if (this.options.diffOnly && Array.isArray(this.options.changedFiles) && this.options.changedFiles.length > 0) {
+      return new Set(this.options.changedFiles.map(rel));
+    }
+    if (this._incrementalMode && this._incrementalFileSet) {
+      return new Set(Array.from(this._incrementalFileSet, rel));
+    }
+    return null;
+  }
+
+  /**
+   * Hold a narrowed scan to its own promise: only findings in changed files.
+   *
+   * Measured 2026-09-05 on PR #422: "Mode: diff-only (20 changed files)",
+   * and a SARIF with 961 results across 379 files — 945 of them in files the
+   * PR never touched. `_collectFiles` honours the changed set, but 22 of the
+   * 25 quick-suite modules carry their own copy of the directory walk and
+   * never see it, so `--diff` narrowed a handful of modules and reported
+   * the rest as if it had narrowed everything. Every pre-existing finding
+   * then reached GitHub Code Scanning as something the PR introduced.
+   *
+   * Filtering here, once, at the seam every module passes through, is the
+   * only place the promise can be kept for all of them. Rules:
+   *   - a finding with no file (repo-wide, config-level) is kept
+   *   - a finding in a changed file is kept
+   *   - a finding anchored elsewhere is kept when a changed file caused it —
+   *     it names the file in `source` / `related` / its message (cross-file
+   *     taint reports at the sink, duplicate-code at the twin)
+   *   - modules in `incremental.alwaysRunList` are exempt by configuration
+   */
+  _scopeResultToChangedFiles(result, moduleName) {
+    const scoped = this._scopedFileSet();
+    if (!scoped || !result || !Array.isArray(result.checks)) return;
+    const incCfg = (this.config && this.config.config && this.config.config.incremental) || {};
+    if ((incCfg.alwaysRunList || []).includes(moduleName)) return;
+
+    const root = this.config && this.config.projectRoot;
+    const rel = (f) => {
+      const p = root && path.isAbsolute(f) ? path.relative(root, f) : String(f);
+      return p.split(path.sep).join('/').replace(/^\.\//, '');
+    };
+    // A changed path cited inside free text: bounded so `a.js` does not
+    // match `data.js`, and `src/x.js` still matches `src/x.js:16`.
+    const cited = Array.from(scoped, (f) => new RegExp(
+      `(?:^|[^\\w/.-])${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`,
+    ));
+    const causedByChange = (check) => {
+      const text = [check.source, check.related, check.relatedFile, check.otherFile, check.message]
+        .filter((v) => typeof v === 'string').join('\n');
+      return text.length > 0 && cited.some((re) => re.test(text));
+    };
+
+    const before = result.checks.length;
+    result.checks = result.checks.filter((check) => {
+      if (check.passed) return true;
+      const own = check.file || check.filePath;
+      if (!own) return true;
+      if (scoped.has(rel(own))) return true;
+      return causedByChange(check);
+    });
+    const dropped = before - result.checks.length;
+    if (dropped > 0) result.scopedOut = (result.scopedOut || 0) + dropped;
   }
 
   /**

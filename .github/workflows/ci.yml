@@ -145,10 +145,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF to GitHub Security
-        if: always()
+        # ONE Code Scanning configuration for both SARIF jobs (`category`
+        # below, shared with gatetest-full). Before this, each job uploaded
+        # under its default category (workflow:job), so every PR check
+        # carried "1 configuration present on main was not found" —
+        # gatetest-full only runs on main.
+        #
+        # PR-only: on push to main the full job's upload IS the baseline
+        # every PR is compared against, and a diff-scoped upload landing
+        # after it under the same category would shrink that baseline to
+        # one commit's findings, making old alerts read as new on every PR.
+        if: always() && github.event_name == 'pull_request'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: .gatetest/reports/
+          category: gatetest
         continue-on-error: true
 
       - name: Upload JUnit results
@@ -346,10 +357,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF to GitHub Security
+        # Same category as the PR job above — this upload is main's
+        # baseline for every PR's "new alerts" comparison.
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: .gatetest/reports/
+          category: gatetest
         continue-on-error: true
 
       - name: Upload full scan report
