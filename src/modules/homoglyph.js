@@ -69,6 +69,8 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
+const { stripStringsAndComments } = require('../core/source-strip');
+const JS_FAMILY = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 
 const SOURCE_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
@@ -223,6 +225,15 @@ class HomoglyphModule extends BaseModule {
     if (isLocale || isDoc) return 0;
 
     const lines = content.split(/\r?\n/);
+    // "Where do the strings, comments and regex literals begin and end" has
+    // one definition for JavaScript / TypeScript (src/core/source-strip.js,
+    // whole-file, offset-preserving). The line-level heuristic below is only
+    // for the languages that stripper does not parse: it cannot see a block
+    // comment or a template literal that spans lines, so a Cyrillic letter on
+    // the second line of either was reported as a mixed-script identifier.
+    const jsStripped = JS_FAMILY.has(path.extname(file).toLowerCase())
+      ? stripStringsAndComments(content).split(/\r?\n/)
+      : null;
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -280,7 +291,7 @@ class HomoglyphModule extends BaseModule {
       // Walk each identifier-ish run and check if it mixes Latin with
       // Cyrillic/Greek lookalikes. Skip string-literal interiors so
       // translation strings in non-locale files don't false-positive.
-      const scrubbed = this._stripStringsAndComments(scanLine);
+      const scrubbed = jsStripped ? (jsStripped[i] || '') : this._stripLineLiterals(scanLine);
       let j = 0;
       while (j < scrubbed.length) {
         if (!IDENT_CHAR_RE.test(scrubbed[j])) { j += 1; continue; }
@@ -324,11 +335,14 @@ class HomoglyphModule extends BaseModule {
   }
 
   /**
-   * Replace string-literal and comment contents with spaces so
-   * identifier extraction doesn't walk into them. Keeps positions
-   * stable so line indexing still lines up.
+   * Line-level literal/comment blanking for the languages the canonical
+   * stripper does not parse (Python, Ruby, Go, shell, YAML, …): `#` and
+   * `//` line comments, a block comment that opens and closes on one line,
+   * and single-line quotes.
+   * Positions stay stable so line indexing lines up. JavaScript and
+   * TypeScript never come through here — see `jsStripped` in _scanFile.
    */
-  _stripStringsAndComments(line) {
+  _stripLineLiterals(line) {
     const out = [];
     let inS = false; let inD = false; let inT = false;
     let i = 0;
