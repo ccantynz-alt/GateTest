@@ -28,6 +28,49 @@ const os   = require('os');
 const SCAN_FINDINGS_FILE = path.join(os.homedir(), '.gatetest', 'telemetry', 'scan-findings.jsonl');
 const MAX_MODULE_LEN = 100;
 const MAX_MODULES_PER_RECORD = 200; // sanity cap — the engine has 120
+const MAX_RULES_PER_RECORD = 400;
+const MAX_RULE_LEN = 120;
+const { ruleIdentity } = require('./rule-identity');
+
+/**
+ * A rule id is a code identifier (`secrets:aws-key`), never a path or text.
+ * ruleIdentity strips the embedded file:line; anything that still carries a
+ * separator or a space is dropped rather than shipped.
+ */
+function _ruleId(check) {
+  const id = ruleIdentity(check);
+  if (!id || id.length > MAX_RULE_LEN) return null;
+  if (/[\s/\\]/.test(id)) return null;
+  return id;
+}
+
+/**
+ * Per-rule signal for the flywheel leaderboard (the Fifty, move 07): how
+ * many findings each rule produced in this scan, and how many the team had
+ * silenced through .gatetestignore / an ignore reply. A baselined finding is
+ * "real, fix later", not a dismissal, and is not counted as silenced.
+ */
+function _buildRules(results) {
+  const byRule = new Map();
+  for (const r of results) {
+    for (const c of (r && r.checks) || []) {
+      if (!c || c.passed) continue;
+      const id = _ruleId(c);
+      if (!id) continue;
+      const entry = byRule.get(id) || { id, fired: 0, silenced: 0 };
+      if (c.suppressed) {
+        if (c.suppressReason !== 'baseline') entry.silenced++;
+      } else {
+        entry.fired++;
+      }
+      byRule.set(id, entry);
+    }
+  }
+  return [...byRule.values()]
+    .filter((e) => e.fired + e.silenced > 0)
+    .sort((a, b) => (a.id < b.id ? -1 : 1))
+    .slice(0, MAX_RULES_PER_RECORD);
+}
 
 let persistentMemory = null;
 try { persistentMemory = require('./persistent-memory'); } catch { /* optional */ } // error-ok
@@ -98,6 +141,7 @@ function _buildRecord(summary, { source, suite }) {
     totalErrors:   _int(summary && summary.checks && summary.checks.errors),
     totalWarnings: _int(summary && summary.checks && summary.checks.warnings),
     modules,
+    rules: _buildRules(results),
   };
 }
 

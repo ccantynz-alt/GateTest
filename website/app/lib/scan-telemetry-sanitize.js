@@ -14,6 +14,11 @@ const MAX_MODULE_LEN = 100;
 const MAX_SOURCE_LEN = 20;
 const MAX_SUITE_LEN = 30;
 const MAX_MODULES_PER_RECORD = 200;
+const MAX_RULES_PER_RECORD = 400;
+const MAX_RULE_LEN = 120;
+// A rule id is `module:rule[:qualifier]` — identifier characters only. A slash,
+// a backslash or whitespace means a path or text leaked past the recorder.
+const RULE_ID_RE = /^[A-Za-z0-9_.:@*-]{1,120}$/;
 
 // Keys that must NEVER appear on an anonymized record. Their presence means a
 // malformed or hostile client, so the whole record is rejected.
@@ -66,6 +71,16 @@ function sanitizeRecord(raw) {
     });
   }
 
+  const rulesRaw = Array.isArray(raw.rules) ? raw.rules : [];
+  if (rulesRaw.length > MAX_RULES_PER_RECORD) return { ok: false, reason: 'too-many-rules' };
+  const rules = [];
+  for (const r of rulesRaw) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    if (hasForbiddenKey(r)) return { ok: false, reason: 'forbidden-key-in-rule' };
+    const id = typeof r.id === 'string' && r.id.length <= MAX_RULE_LEN && RULE_ID_RE.test(r.id) ? r.id : null;
+    if (!id) return { ok: false, reason: 'rule-id-not-an-identifier' };
+    rules.push({ id, fired: nonNegInt(r.fired), silenced: nonNegInt(r.silenced) });
+  }
   return {
     ok: true,
     record: {
@@ -77,8 +92,9 @@ function sanitizeRecord(raw) {
       totalErrors: nonNegInt(raw.totalErrors),
       totalWarnings: nonNegInt(raw.totalWarnings),
       modules,
+      rules,
     },
   };
 }
 
-module.exports = { sanitizeRecord, FORBIDDEN_KEYS, MAX_MODULES_PER_RECORD };
+module.exports = { sanitizeRecord };

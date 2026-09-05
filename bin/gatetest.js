@@ -136,6 +136,12 @@ const HELP = `
     --watch            Watch for file changes and re-scan continuously
     --sarif            Output results in SARIF format (for GitHub Security)
     --junit            Output results in JUnit XML format (for CI)
+    --compliance       Write the compliance evidence pack: findings filed
+                       under OWASP Top 10 / SOC 2 / CIS Controls, control by
+                       control, with the raw results and the signed
+                       provenance (.gatetest/reports/gatetest-compliance-*).
+                       A control is PASS only when a mapped module ran and
+                       found nothing; "not checked" is printed, never hidden.
     --github-annotations
                        Emit GitHub Actions workflow commands so findings
                        appear as inline annotations on the PR diff (red
@@ -410,6 +416,7 @@ async function main() {
     // developer stops running the tool.
     showAll: args.all || false,
     junit: args.junit || false,
+    compliance: args.compliance || false,
     githubAnnotations: args.githubAnnotations || false,
     // Report-only mode — gate reports findings but never fails the
     // workflow on them. Strict mode (default OFF) reverses this and

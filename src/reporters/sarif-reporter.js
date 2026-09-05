@@ -14,8 +14,13 @@ const { siteUrl } = require('../core/site-url');
 // SARIF SPEC version and must stay fixed.)
 const PKG_VERSION = require('../../package.json').version;
 const { isBlockingFinding } = require('../core/confidence');
+const { getComplianceMapping, hasExplicitMapping } = require('../core/compliance-mappings');
 
-// Module → CWE / OWASP / security-severity mapping. Findings emitted by
+// Module → CWE / security-severity mapping. The OWASP category is NOT here:
+// it comes from src/core/compliance-mappings.js, the one table the CISO
+// report and the compliance evidence pack also read (two modules had drifted
+// between the two lists — redos A05/A06, kubernetes A01/A05 — 2026-09-05).
+// Findings emitted by
 // these modules get enriched SARIF metadata that renders as filterable
 // tags in the GitHub Security tab and exposes the rule's security severity
 // score (used for branch-protection rule severity-threshold gating).
@@ -30,110 +35,92 @@ const MODULE_SECURITY_META = {
   // Active-exploit security findings — high severity
   ssrf: {
     cwe: 'CWE-918',
-    owasp: 'A10:2021',
     securitySeverity: '8.6',
     tags: ['security', 'ssrf', 'injection', 'external/cwe/cwe-918'],
   },
   secrets: {
     cwe: 'CWE-798',
-    owasp: 'A07:2021',
     securitySeverity: '9.1',
     tags: ['security', 'hardcoded-credentials', 'external/cwe/cwe-798'],
   },
   secretRotation: {
     cwe: 'CWE-798',
-    owasp: 'A07:2021',
     securitySeverity: '7.5',
     tags: ['security', 'credential-management', 'external/cwe/cwe-798'],
   },
   tlsSecurity: {
     cwe: 'CWE-295',
-    owasp: 'A02:2021',
     securitySeverity: '8.1',
     tags: ['security', 'tls', 'mitm', 'external/cwe/cwe-295'],
   },
   cookieSecurity: {
     cwe: 'CWE-1004',
-    owasp: 'A05:2021',
     securitySeverity: '6.5',
     tags: ['security', 'session', 'cookie', 'external/cwe/cwe-1004'],
   },
   webHeaders: {
     cwe: 'CWE-693',
-    owasp: 'A05:2021',
     securitySeverity: '5.5',
     tags: ['security', 'headers', 'csp', 'external/cwe/cwe-693'],
   },
   redos: {
     cwe: 'CWE-1333',
-    owasp: 'A05:2021',
     securitySeverity: '6.5',
     tags: ['security', 'regex', 'dos', 'external/cwe/cwe-1333'],
   },
   homoglyph: {
     cwe: 'CWE-1007',
-    owasp: null,
     securitySeverity: '7.3',
     tags: ['security', 'trojan-source', 'supply-chain', 'external/cwe/cwe-1007'],
   },
   logPii: {
     cwe: 'CWE-532',
-    owasp: 'A09:2021',
     securitySeverity: '5.3',
     tags: ['security', 'privacy', 'logging', 'gdpr', 'external/cwe/cwe-532'],
   },
   ciSecurity: {
     cwe: 'CWE-829',
-    owasp: 'A08:2021',
     securitySeverity: '7.4',
     tags: ['security', 'supply-chain', 'ci', 'external/cwe/cwe-829'],
   },
   dependencies: {
     cwe: 'CWE-1395',
-    owasp: 'A06:2021',
     securitySeverity: '6.8',
     tags: ['security', 'dependencies', 'supply-chain', 'external/cwe/cwe-1395'],
   },
   dockerfile: {
     cwe: 'CWE-250',
-    owasp: 'A05:2021',
     securitySeverity: '6.3',
     tags: ['security', 'container', 'hardening', 'external/cwe/cwe-250'],
   },
   terraform: {
     cwe: 'CWE-1188',
-    owasp: 'A05:2021',
     securitySeverity: '6.7',
     tags: ['security', 'iac', 'cloud', 'external/cwe/cwe-1188'],
   },
   kubernetes: {
     cwe: 'CWE-732',
-    owasp: 'A01:2021',
     securitySeverity: '6.5',
     tags: ['security', 'k8s', 'permissions', 'external/cwe/cwe-732'],
   },
   promptSafety: {
     cwe: 'CWE-1426',
-    owasp: null,
     securitySeverity: '7.0',
     tags: ['security', 'llm', 'prompt-injection', 'external/cwe/cwe-1426'],
   },
   hardcodedUrl: {
     cwe: 'CWE-1100',
-    owasp: null,
     securitySeverity: '3.7',
     tags: ['security', 'config', 'environment', 'external/cwe/cwe-1100'],
   },
   // Code-quality findings — informational tags only, no security-severity
   undefinedRef: {
     cwe: 'CWE-628',
-    owasp: null,
     securitySeverity: null,
     tags: ['reliability', 'runtime-error'],
   },
   moneyFloat: {
     cwe: 'CWE-682',
-    owasp: null,
     securitySeverity: '5.0',
     tags: ['correctness', 'finance', 'rounding', 'external/cwe/cwe-682'],
   },
@@ -156,6 +143,18 @@ const LEVEL_RANK = { note: 0, warning: 1, error: 2 };
 function bandedSecuritySeverity(score, level) {
   const cap = SECURITY_SEVERITY_CAP[level] ?? SECURITY_SEVERITY_CAP.warning;
   return Math.min(Number(score), cap).toFixed(1);
+}
+
+/**
+ * The OWASP tag GitHub shows: the mapping table's first category, for modules
+ * that carry security metadata here. The table's catch-all A04 "Insecure
+ * Design" (workflow-hygiene modules) is deliberately not surfaced as a
+ * security tag — it would label a flaky test as an OWASP finding.
+ */
+function owaspFor(moduleName, meta) {
+  if (!meta || !hasExplicitMapping(moduleName)) return null;
+  const first = getComplianceMapping(moduleName).owasp[0];
+  return first && first !== 'A04:2021' ? first : null;
 }
 
 class SarifReporter {
@@ -240,9 +239,8 @@ class SarifReporter {
           if (meta && meta.cwe) {
             properties.cwe = meta.cwe;
           }
-          if (meta && meta.owasp) {
-            properties.owasp = meta.owasp;
-          }
+          const owasp = owaspFor(moduleResult.module, meta);
+          if (owasp) properties.owasp = owasp;
           const ruleEntry = {
             id: ruleId,
             name: check.name,

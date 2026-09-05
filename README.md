@@ -113,7 +113,7 @@ vendor/**
 
 Suppressed findings are excluded from the gate decision and every failure count, but stay visible in a `suppressedChecks` list — nothing is silently hidden. Two more controls:
 
-- `gatetest --noise` — ranks your noisiest modules and prints the exact ignore line to copy.
+- `gatetest --noise` — ranks your noisiest modules and prints the exact ignore line to copy. The same signal, aggregated across every opted-in scan, is published rule by rule at [gatetest.io/noise](https://gatetest.io/noise).
 - **Auto-softening** — a module you chronically dismiss stops blocking the gate on its own (never on thin evidence: it takes repeated dismissals at a high fire-rate).
 
 **The policy is reviewed as policy.** `.gatetest.json` and `.gatetestignore` are what
@@ -242,6 +242,22 @@ gatetest verify-report .gatetest/reports/gatetest-report-latest.json --key "$GAT
 match the digest — neither block can be edited without the other noticing.
 Without a key the report says `signature.unsigned` explicitly rather than
 carrying a decorative field.
+
+### Compliance evidence pack
+
+```bash
+gatetest --suite full --compliance
+```
+
+Writes `.gatetest/reports/gatetest-compliance-<timestamp>.json` and `.md`: every
+finding filed under **OWASP Top 10 2021**, **SOC 2 Trust Services Criteria** and
+**CIS Controls v8**, control by control, with the raw results behind the tables
+and the same provenance + signature as the JSON report, so `gatetest verify-report`
+proves the pack was not edited after the scan. Three states, never two: a control is
+**PASS** only when a module mapped to it ran and found nothing; **NOT CHECKED**
+when no mapped module ran in that suite (and the report names which, and why);
+**NO MODULE** when nothing in the engine maps to it. Modules without a framework
+mapping are listed as unattributed rather than filed under a catch-all.
 
 ### Root-cause a bug from the CLI
 

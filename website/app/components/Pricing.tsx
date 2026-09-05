@@ -21,7 +21,7 @@ export const pricingScans = [
       "Lint Violation Scanner",
       "Secret & API Key Exposure",
       "Code Quality Baseline",
-      "JSON / SARIF / JUnit output via the CLI & GitHub Action",
+      "JSON / SARIF / JUnit / compliance evidence output via the CLI & GitHub Action",
       "Scan-only (no auto-fix)"
     ],
     cta: "Run Quick Scan",

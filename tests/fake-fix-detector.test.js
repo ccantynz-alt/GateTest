@@ -535,5 +535,17 @@ describe('fakeFixDetector — the policy finding survives --pr scoping', () => {
     const exts = new GateTestConfig(require('node:os').tmpdir()).get('incremental.sourceExtensions');
     assert.ok(exts.includes('.gatetestignore'), 'a suppression-only PR must not read as "nothing changed"');
     assert.ok(exts.includes('.json'), '.gatetest.json is matched by extension');
+
+describe('fakeFixDetector — a threshold in a TEST file is fixture data (PR #433 bot finding)', () => {
+  const hunk = (file, line) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1,1 +1,2 @@\n line\n+${line}\n`;
+  it('NEGATIVE: confidenceThreshold: 0.7 inside tests/x.test.js is not a policy change', async () => {
+    const result = new TestResult('fakeFixDetector');
+    await new FakeFixDetector().run(result, makeConfig(hunk('tests/compliance-evidence.test.js', '  confidenceThreshold: 0.7,')));
+    assert.ok(!findFailure(result, 'threshold-lowered'), failedCheckNames(result).join(', '));
+  });
+  it('POSITIVE: the same line in jest.config.js still fires', async () => {
+    const result = new TestResult('fakeFixDetector');
+    await new FakeFixDetector().run(result, makeConfig(hunk('jest.config.js', '  coverageThreshold: 50,')));
+    assert.ok(findFailure(result, 'threshold-lowered'));
   });
 });

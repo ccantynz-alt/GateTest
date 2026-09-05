@@ -14,6 +14,7 @@ const { JsonReporter } = require('./reporters/json-reporter');
 const { HtmlReporter } = require('./reporters/html-reporter');
 const { SarifReporter } = require('./reporters/sarif-reporter');
 const { JunitReporter } = require('./reporters/junit-reporter');
+const { ComplianceReporter } = require('./reporters/compliance-reporter');
 const { GithubAnnotationsReporter } = require('./reporters/github-annotations-reporter');
 const { CiSummaryReporter } = require('./reporters/ci-summary-reporter');
 const { GateTestCache } = require('./core/cache');
@@ -149,6 +150,7 @@ class GateTest {
     new HtmlReporter(runner, this.config);
     if (this.options.sarif) new SarifReporter(runner, this.config);
     if (this.options.junit) new JunitReporter(runner, this.config);
+    if (this.options.compliance) new ComplianceReporter(runner, this.config);
     // Inline PR annotations — auto-on when running inside GitHub Actions
     // (the GITHUB_ACTIONS env var is set by every Actions runner). Customers
     // get red squiggles on the PR diff with zero configuration. Can be
