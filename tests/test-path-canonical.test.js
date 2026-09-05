@@ -278,3 +278,27 @@ describe('.github survives the .git exclusion', () => {
     assert.deepStrictEqual(found, [], '.git itself must stay excluded');
   });
 });
+
+// `_collectFiles` matches on path.extname. A compound suffix such as
+// '.test.js' therefore matches nothing — integration-tests asked for
+// ['.test.js', '.spec.js', '.test.ts', '.spec.ts'] and silently found zero
+// test files on every repo, for as long as the module existed (2026-09-05).
+// Extensions go to the walk; test-ness goes to `_isTestPath`.
+describe('_collectFiles is never handed a compound suffix', () => {
+  it('no module passes a two-dot pattern to the walk', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const dir = path.join(__dirname, '..', 'src', 'modules');
+    const offenders = [];
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.js')) continue;
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      const re = /_collectFiles\([^)]*?\[([^\]]*)\]/g;
+      let m;
+      while ((m = re.exec(src)) !== null) {
+        if (/['"]\.[a-z0-9]+\.[a-z0-9]+['"]/i.test(m[1])) offenders.push(`${f}: [${m[1].trim()}]`);
+      }
+    }
+    assert.deepStrictEqual(offenders, []);
+  });
+});
