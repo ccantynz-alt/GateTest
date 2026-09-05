@@ -1,0 +1,227 @@
+# GateTest Engineering Doctrine
+
+> The Bible (`CLAUDE.md`) holds the rules. This file holds the *method* — how a
+> professional works on this codebase so the rules are met by construction,
+> not by memory. Every principle here was paid for: each one names the defect
+> that proved it. Read it before touching the engine; re-read it when a fix
+> feels obvious.
+
+Doctrine is short by design. The evidence for each principle is one sentence
+and a commit or PR you can open. When a principle stops being true, change it
+here and say why — never leave it to drift.
+
+---
+
+## 1. The bug shape that matters most is "reports success while doing nothing"
+
+A scanner that crashes is a bad day. A scanner that says *clean* over code it
+never read is a bad quarter, because nobody looks again. The whole 2026-09-04
+session was this shape: the customer gate ran `--report-only`, the "known-good
+corpus" was two synthetic fixtures, `checkTsSyntax` returned *valid* when the
+compiler was missing, the WordPress probes reported *Good* when the site was
+unreachable, and `--diff` printed "diff-only (20 files)" over a report of 379.
+
+**Method.** Every time you touch a code path that can return a success value,
+ask: *what happens when the input is missing, the tool is absent, the network
+is down, or the loop ran zero times?* If the answer is "it says clean", it is a
+defect. Prefer three-state answers — checked-and-clean, checked-and-found,
+**not checked** — and make the third state visible to the customer (the PR
+comment's "Partial scan" / "Not checked" lines, the console's "Deferred" line).
+
+## 2. Precision is measured on code we did not write
+
+Every rule in this engine was tuned against this repository, so this
+repository is the one codebase on which its false-positive rate *cannot* be
+measured. On 2026-09-04 the self-scan was green while express, flask, fastify,
+got, zod and hono were all blocked.
+
+**Method.** `reliability-corpus/real-world.json` pins eleven third-party
+repositories at exact commits, each with a blocking ceiling that only ratchets
+down, plus OWASP NodeGoat held to a *floor* so precision cannot be bought with
+silence. `node scripts/real-world-precision.js` runs them; CI runs it on every
+push; `/precision` renders it. **Any change to a rule's recall or scope is
+unvalidated until the corpus says otherwise** — a first fix for Ruby backticks
+took Rails from 56 to 127 and the corpus was the only thing that noticed.
+
+## 3. No rule ships without a control pair
+
+A test that proves a rule *fires* is half a test. The other half proves it
+*stays quiet* on the shape it resembles. Three fixes in one session had a
+first cut that the negative control rejected (the label-shape rule that
+skipped `secretpass1`; the strict-to-loose regex; the backtick command form).
+
+**Method.** For every rule change: one positive control (the real line from the
+repo that exposed the bug, verbatim), one negative control (the legitimate
+idiom next to it). When a probe reports *silence* — "this module finds
+nothing", "this test never fires" — it needs its **own** positive control
+first; three "SILENT" reports in one session were the probe being broken.
+Name the file the shape came from in the test's comment.
+
+## 4. One definition, imported — never a private copy
+
+Six modules had their own `TEST_PATH_RE`; 36 had their own directory walk;
+five decided "is this a route handler" with a hand-spelled `app.post`; the
+domain lived in 55 string literals. Every private copy drifts, and the drift
+is always toward the author's own repo.
+
+**Method.** The canonical definitions and where they live:
+
+| Question | One place |
+|---|---|
+| Which files does a module see? | `BaseModule._collectFiles` (honours `--diff`, the exclude list, `_respectsIncremental`) |
+| Is this a test path? | `BaseModule._isTestPath` / exported `TEST_PATH_RE` |
+| Is this an illustration / harness dir? | `src/core/scan-scope.js` |
+| Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
+| What depends on what? | `src/core/import-graph.js` |
+| What is this finding's identity? | `src/core/report-provenance.js` `fingerprintFindings` (shared with the determinism gate) |
+| Which `.gatetestignore` line silences it? | `src/core/ignore-file.js` `suggestLine` (verified against the matcher) |
+| The public origin | `src/core/site-url.js` / `website/app/lib/site-url.js` |
+| The module count, the corpus numbers, page dates | generated: `site-stats.json`, `precision.json`, `build-info.json` |
+
+If you find yourself writing a second answer to one of these questions, stop
+and import the first. If the first is wrong, fix it there — every caller gets
+the fix.
+
+## 5. Segments, not substrings; tokens, not substrings
+
+`includes('.git')` matches `.github`. `includes('test')` matches
+`src/latest/`, `contest/`, `attestation.js`, `inspect.js`. `/==[^=]/` matches
+inside `=== 'x'`. `dir.includes('dist')` on an *absolute* path hides an entire
+checkout under `/home/ci/build/`. Every one of these was live in this codebase
+and every one was a recall hole — a file silently exempted from a check.
+
+**Method.** Path tests anchor on segment boundaries: `/(?:^|\/)tests?(?:\/|$)/`.
+Token tests anchor on token boundaries: `(?<![=!])==(?!=)`. Exclude lists
+compare *segments*, never `includes`. `tests/test-path-canonical.test.js`
+forbids the shape across `src/`, `bin/` and `website/app/lib`; extend its word
+list when you find a new one rather than fixing the one instance.
+
+## 6. Say what was not checked
+
+A report that lists findings implies the rest was verified. Deferred modules,
+truncated file coverage, an engine fallback, a skipped language, a suppressed
+finding — each is a hole in that implication, and each must be printed where
+the report is read: the console (`Deferred:`), the PR comment (`Not checked:`,
+`Partial scan`), the JSON report (`provenance.modules.{skipped,deferred}`).
+
+**Method.** Any new "skip" path adds its reason to the summary the reporters
+consume. A pass that came from a fallback may not wear the green tick.
+
+## 7. Generated over typed
+
+A number typed by hand is a number that will be wrong later: module counts
+(`120` survived in 231 places after module 121 shipped), corpus results,
+"last updated" dates, permission lists. If a fact can be produced by running
+the thing it describes, produce it and import it, and let a test fail when
+the import and the copy disagree.
+
+**Method.** `scripts/generate-site-stats.js`, `scripts/real-world-precision.js
+--write-json`, `scripts/generate-build-info.js` — extend these rather than
+adding a literal. `tests/module-count-sync.test.js`,
+`tests/precision-page-sync.test.js`, `tests/comparison-reviewed.test.js` and
+`tests/site-url.test.js` are the tripwires.
+
+## 8. Verify in the environment that decides, after the last edit
+
+Four reporter tests were green locally and red in CI because `src/index.js`
+attaches two extra reporters under `GITHUB_ACTIONS=true`. A green self-scan
+predated the edit that added an undeclared env var, and CI's self-scan blocked
+on it. "It passed for me" is only evidence about the environment it ran in and
+the moment it ran.
+
+**Method.** The sweep in the Bible runs the fast suite twice — plain and under
+the Actions environment — and runs the quick self-scan **last**. A rule change
+also runs the real-world corpus. A module change also runs
+`scripts/determinism-check.js`. Reproduce a CI failure locally *first*, then
+show the same command passing; one validated push beats three speculative
+ones.
+
+## 9. Our own scanner reviewing our own PR is the best bug report we get
+
+GitHub Code Scanning runs GateTest on every PR to this repository. On
+2026-09-05 five of its findings on one PR were the scanner's, not the code's:
+a regex that matched inside `===`, an orphan rule blind to `@/` aliases, a
+catch-that-exits counted as a swallow, prose in a docs table read as fake
+fixes, a line-ending rewrite read as a 510-line change. Each one was fixed the
+same day with a control pair.
+
+**Method.** Treat every bot finding on our own PRs as a bug report with two
+possible defendants — the code or the rule — and close it against one of
+them. Never `.gatetestignore` a finding on this repository without first
+deciding which defendant it was.
+
+## 10. Expect the worst of prior work — and prove it either way
+
+Craig's standing instruction: the earlier sessions were weaker; assume every
+claim in the code is untested until you have run it. This is not cynicism, it
+is the measurement stance: the eight-language claim had been measured on one
+language; the badge `?repo=` parameter was advertised for months and never
+read by the handler; the "PR scan drops to 3–10s" comment described a walk
+that 22 of 25 modules ignored.
+
+**Method.** When you touch a subsystem, run it end to end once on real input
+before trusting its comments. Reconstruct deleted code and diff the outputs
+when replacing it (the walk unification proved 36 file sets identical by
+reconstruction). Measure before and after; write the numbers in the commit.
+
+## 11. Parallelise mechanical work; verify by reconstruction
+
+Thirty-six file walks, fifty-five domain literals, a 121-module audit — each
+was done by background agents with a precise brief, disjoint files, no
+commits, and a report table. The brief carried the acceptance test; the
+agents carried the diff. What made it safe was that every agent proved
+equivalence (old walk vs new, file set vs file set) rather than asserting it.
+
+**Method.** Agents get: the exact files they may touch, the tests they must
+run, the control they must show, and "do not commit". The orchestrator runs
+the full suite, the self-scan and the corpus once everything lands, and
+commits in coherent units. Never let two agents edit the same file.
+
+## 12. Edit files the way their bytes are stored
+
+A Python text-mode read/write turned `docs/ARCHITECTURE.md` (CRLF) into LF —
+a 510-line diff for a one-line change, which then lit up five fake-fix
+patterns on prose. Scripted edits must preserve line endings, encoding and
+BOMs (several website files carry a BOM).
+
+**Method.** Before a scripted edit of a file you did not create, check its
+line endings (`grep -c $'\r$'`) and edit in binary mode if they are CRLF.
+After any scripted sweep, read `git diff --numstat` and question any file
+whose change count is far larger than the edit.
+
+## 13. Commit as coherent units; push and merge without being asked
+
+Craig's standing instruction: *always push and merge our PRs.* A branch that
+sits unmerged is work the customer cannot use and a merge conflict waiting to
+happen. The unit of a commit is one cause — one bug, one move — with the
+measurement in the message; the PR body is a reviewer's map, not a diary.
+
+**Method.** Per commit: what changed, why (with the line that exposed it), how
+it was measured, what was deliberately not done. Per PR: open as draft, CI
+green on the current head, merge with a merge commit, unsubscribe, restart
+the branch from `main` under the same name. A red PR is never "waiting on
+review".
+
+## 14. Speed is a precision feature
+
+A gate that takes ten minutes is a gate teams learn to skip; one that takes
+eight seconds on a PR runs on every push. The 17s → 8s diff scan came from
+correctness work (the walk unification), not from tuning. The Bible's bars —
+quick scan < 15s, full scan < 60s — are precision bars in disguise.
+
+**Method.** Measure wall-clock on the standard commands before and after any
+change to the runner, a walker, or a module's file set, and put the numbers
+in the commit.
+
+---
+
+## How to use this document
+
+- **Starting a session:** read the Bible, then this file, then `docs/THE-FIFTY.md`
+  for the current work queue and `docs/ROADMAP.md` Known Issues.
+- **Starting a rule change:** principles 2, 3, 5, 8 — corpus, control pair,
+  segments, verify in CI.
+- **Starting a refactor:** principles 4, 10, 11, 12 — one definition,
+  reconstruct and diff, parallelise safely, preserve bytes.
+- **Finishing anything:** principles 6, 7, 13 — say what was not checked,
+  generate the facts, ship it.

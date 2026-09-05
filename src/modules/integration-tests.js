@@ -6,12 +6,31 @@
 
 const BaseModule = require('./base-module');
 const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
+const { ROUTE_OBJECTS, ROUTE_VERBS } = require('../core/route-grammar');
 const fs = require('fs');
 const path = require('path');
+
+// One grammar for "this line registers a route" (src/core/route-grammar.js),
+// with captures for the verb and the path. Until 2026-09-05 this module
+// knew `app.`/`router.` and five Express verbs: a Fastify, Hono, Koa or
+// Elysia service, a NestJS controller or a SvelteKit `+server.ts` reported
+// `integration-tests:not-needed` — "no API endpoints detected" (KI #106).
+const ROUTE_CALL_CAPTURE_RE = new RegExp(
+  String.raw`\b${ROUTE_OBJECTS}\s*\.\s*(${ROUTE_VERBS})\s*\(\s*['"\x60]([^'"\x60]+)['"\x60]`, 'g',
+);
+const USE_CALL_RE = /(?:app|router)\.(use)\s*\(\s*['"]([^'"]+)['"]/g;
+/** NestJS / routing-controllers: `@Get(':id')`, `@Post()` — path optional. */
+const VERB_DECORATOR_CAPTURE_RE = /@(Get|Post|Put|Patch|Delete|Head|Options|All)\s*\(\s*(?:['"\x60]([^'"\x60]*)['"\x60])?/g;
+const CONTROLLER_PREFIX_RE = /@(?:Controller|JsonController)\s*\(\s*['"\x60]([^'"\x60]*)['"\x60]/;
+/** Next.js App Router `route.ts`, SvelteKit `+server.ts`, Remix/Nuxt verb exports. */
+const VERB_EXPORT_CAPTURE_RE = /\bexport\s+(?:async\s+)?(?:function\s+|const\s+)(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/g;
+const FILE_ROUTE_RE = /(?:^|\/)(?:route|\+server|server)\.[cm]?[jt]sx?$/;
+const VERB_ALIASES = { del: 'DELETE', route: 'ALL' };
 
 class IntegrationTestsModule extends BaseModule {
   constructor() {
     super('integrationTests', 'Integration Test Execution');
+    this._testTimeoutMs = 300000; // overridable for tests
   }
 
   async run(result, config) {
@@ -88,6 +107,8 @@ class IntegrationTestsModule extends BaseModule {
     const integrationDirs = [
       'tests/integration', 'test/integration', '__tests__/integration',
       'integration-tests', 'tests/api', 'test/api',
+      'tests/e2e', 'test/e2e', '__tests__/e2e', 'e2e',
+      'spec/requests', 'spec/integration', 'spec/api',
     ];
 
     let testDir = null;
@@ -99,13 +120,22 @@ class IntegrationTestsModule extends BaseModule {
       }
     }
 
-    // Also find files with integration/api patterns
-    const allTestFiles = this._collectFiles(projectRoot, ['.test.js', '.spec.js', '.test.ts', '.spec.ts']);
-    const testFiles = allTestFiles.filter(f => {
+    // Test files by name. `_collectFiles` matches on path.extname, so the
+    // old call with ['.test.js', '.spec.js', …] matched NOTHING — every
+    // repo had zero integration test files, every endpoint was "untested",
+    // and a test dir was the only way to be "found" (2026-09-05). Walk real
+    // extensions and ask the one test-path definition instead.
+    const allTestFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS)
+      .filter((f) => this._isTestPath(path.relative(projectRoot, f)));
+    const byName = allTestFiles.filter((f) => {
       const base = path.basename(f).toLowerCase();
       return base.includes('integration') || base.includes('.int.') ||
-             base.includes('.api.') || base.includes('endpoint');
+             base.includes('.api.') || base.includes('endpoint') || base.includes('e2e');
     });
+    const inDir = testDir
+      ? allTestFiles.filter((f) => f.startsWith(testDir + path.sep))
+      : [];
+    const testFiles = Array.from(new Set([...byName, ...inDir]));
 
     return { testDir, testFiles };
   }
@@ -121,13 +151,20 @@ class IntegrationTestsModule extends BaseModule {
       if (testCmd) {
         const scriptName = pkg.scripts['test:integration'] ? 'test:integration' :
                           pkg.scripts['test:int'] ? 'test:int' : 'test:api';
-        const { exitCode, stdout, stderr } = this._exec(`npm run ${scriptName} 2>&1`, {
+        const { exitCode, stdout, stderr, timedOut } = this._exec(`npm run ${scriptName} 2>&1`, {
           cwd: projectRoot,
-          timeout: 300000,
+          timeout: this._testTimeoutMs,
         });
 
         if (exitCode === 0) {
           result.addCheck('integration-tests:run', true, { message: 'Integration tests passed' });
+        } else if (timedOut) {
+          // A timeout is not a verdict (doctrine, move 18).
+          result.addCheck('integration-tests:run', true, {
+            severity: 'info',
+            message: `Integration tests not executed — \`npm run ${scriptName}\` did not finish within ${Math.round(this._testTimeoutMs / 1000)}s here`,
+            suggestion: 'Run the scan where the suite normally runs (CI) to include integration test results',
+          });
         } else {
           result.addCheck('integration-tests:run', false, {
             message: 'Integration tests failed',
@@ -155,11 +192,11 @@ class IntegrationTestsModule extends BaseModule {
 
       const content = fs.readFileSync(file, 'utf-8');
 
-      // Express/Fastify style routes
-      const routePatterns = [
-        /(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*['"]([^'"]+)['"]/g,
-        /(?:app|router)\.(use)\s*\(\s*['"]([^'"]+)['"]/g,
-      ];
+      // Route registrations (any framework object the shared grammar knows),
+      // `app.use('/prefix', …)` mounts, and NestJS-style verb decorators.
+      const ctrl = content.match(CONTROLLER_PREFIX_RE);
+      const prefix = ctrl ? `/${ctrl[1].replace(/^\/+|\/+$/g, '')}` : '';
+      const routePatterns = [ROUTE_CALL_CAPTURE_RE, USE_CALL_RE, VERB_DECORATOR_CAPTURE_RE];
 
       const lines = content.split(/\r?\n/);
 
@@ -179,19 +216,26 @@ class IntegrationTestsModule extends BaseModule {
           const lineStart = content.lastIndexOf('\n', match.index - 1) + 1;
           if (this._isInsideStringLiteral(lineText, match.index - lineStart)) continue;
 
-          endpoints.push({ method: match[1].toUpperCase(), path: match[2], file: relPath });
+          const verb = match[1].toLowerCase();
+          const method = VERB_ALIASES[verb] || verb.toUpperCase();
+          const routePath = pattern === VERB_DECORATOR_CAPTURE_RE
+            ? `${prefix}/${(match[2] || '').replace(/^\/+/, '')}`.replace(/\/+$/, '') || '/'
+            : match[2];
+          endpoints.push({ method, path: routePath, file: relPath });
         }
         pattern.lastIndex = 0;
       }
 
-      // Next.js API routes
-      if (relPath.includes('api/') && (relPath.endsWith('route.ts') || relPath.endsWith('route.js'))) {
-        const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
-        for (const method of methods) {
-          if (content.includes(`export async function ${method}`) || content.includes(`export function ${method}`)) {
-            endpoints.push({ method, path: relPath, file: relPath });
-          }
+      // File-based routes: Next.js App Router `route.ts`, SvelteKit
+      // `+server.ts`, Remix/Nuxt server files — any verb export counts.
+      const relUnix = relPath.replace(/\\/g, '/');
+      if (FILE_ROUTE_RE.test(relUnix)) {
+        VERB_EXPORT_CAPTURE_RE.lastIndex = 0;
+        let m;
+        while ((m = VERB_EXPORT_CAPTURE_RE.exec(content)) !== null) {
+          endpoints.push({ method: m[1], path: relPath, file: relPath });
         }
+        VERB_EXPORT_CAPTURE_RE.lastIndex = 0;
       }
     }
 

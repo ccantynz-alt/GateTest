@@ -33,3 +33,80 @@ describe('IntegrationTestsModule — baseline shape', () => {
     await assert.doesNotReject(mod.run(result, { projectRoot: tmp }));
   });
 });
+
+// KI #106 (the Fifty, move 11): endpoints were detected with a private
+// `(?:app|router).(get|post|…)` — Express spelled out by hand. A Fastify,
+// Hono, Koa or Elysia service, a NestJS controller or a SvelteKit
+// `+server.ts` reported `integration-tests:not-needed`. And the test-file
+// walk asked `_collectFiles` for ['.test.js', …], which matches on
+// path.extname and so matched NOTHING: every endpoint was "untested" even
+// when a test named it. Both fixed 2026-09-05, with controls both ways.
+describe('IntegrationTestsModule — one route grammar, real test discovery (KI #106)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-integ-grammar-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const w = (rel, c) => { const f = path.join(tmp, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, c); };
+  const run = async () => { const r = makeResult(); await new IntegrationTestsModule().run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } }); return r.checks; };
+  const names = (checks) => checks.map((c) => c.name);
+
+  it('POSITIVE: a Fastify service with no tests is told it has untested endpoints (was: not-needed)', async () => {
+    w('src/server.ts', "import Fastify from 'fastify';\nconst fastify = Fastify();\nfastify.post('/users', async (req) => req.body);\nfastify.get('/users/:id', async () => ({}));\n");
+    const c = await run();
+    assert.ok(!names(c).includes('integration-tests:not-needed'), names(c).join());
+    assert.ok(names(c).includes('integration-tests:missing'), names(c).join());
+    assert.ok(names(c).includes('integration:untested:POST:/users'), names(c).join());
+  });
+
+  it('a NestJS controller: @Controller prefix + verb decorators become endpoints; a SvelteKit +server.ts too', async () => {
+    w('src/cats/cats.controller.ts', "@Controller('cats')\nexport class CatsController {\n  @Get(':id')\n  findOne() {}\n  @Post()\n  create() {}\n}\n");
+    w('src/routes/api/health/+server.ts', 'export async function GET() { return new Response("ok"); }\n');
+    const c = await run();
+    assert.ok(names(c).includes('integration:untested:GET:/cats/:id'), names(c).join());
+    assert.ok(names(c).includes('integration:untested:POST:/cats'), names(c).join());
+    assert.ok(names(c).some((n) => /^integration:untested:GET:.*\+server\.ts$/.test(n)), names(c).join());
+  });
+
+  it('NEGATIVE: a library with no routes, db ops or services is still not-needed; a route inside a comment is not a route', async () => {
+    w('src/index.ts', "// example: fastify.post('/x', handler)\nexport const add = (a: number, b: number) => a + b;\n");
+    const c = await run();
+    assert.ok(names(c).includes('integration-tests:not-needed'), names(c).join());
+  });
+
+  it('POSITIVE CONTROL for the walk: a tests/integration/*.test.ts that names the route IS found and the route is not "untested"', async () => {
+    w('src/app.js', "const app = require('express')();\napp.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', async () => { await request(app).post('/users'); });\n");
+    const c = await run();
+    const found = c.find((x) => x.name === 'integration-tests:found');
+    assert.ok(found && /1 integration test file/.test(found.message), JSON.stringify(found));
+    assert.ok(!names(c).includes('integration:untested:POST:/users'), names(c).join());
+    assert.ok(!names(c).includes('integration-tests:missing'));
+  });
+
+  it('a `users.integration.test.ts` outside any integration dir counts too; an ordinary unit test does not', async () => {
+    w('src/app.js', "const app = require('express')();\napp.get('/health', (req, res) => res.send('ok'));\n");
+    w('src/__tests__/users.integration.test.ts', "it('GET /health', () => {});\n");
+    w('src/__tests__/math.test.ts', "it('adds', () => {});\n");
+    const c = await run();
+    const found = c.find((x) => x.name === 'integration-tests:found');
+    assert.ok(found && /1 integration test file/.test(found.message), JSON.stringify(found));
+  });
+});
+
+describe('IntegrationTestsModule — a timeout is not a verdict', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-integ-to-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const w = (rel, c) => { const f = path.join(tmp, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, typeof c === 'string' ? c : JSON.stringify(c)); };
+  it('a script that does not finish in time is "not executed", reported as info', async () => {
+    w('package.json', { name: 'svc', scripts: { 'test:integration': 'node -e "setTimeout(() => {}, 20000)"' }, devDependencies: { vitest: '^1' } });
+    fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
+    w('src/app.js', "app.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', () => {});\n");
+    const mod = new IntegrationTestsModule();
+    mod._testTimeoutMs = 1500;
+    const r = makeResult();
+    await mod.run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } });
+    const rc = r.checks.find((x) => x.name === 'integration-tests:run');
+    assert.ok(rc && rc.passed && rc.severity === 'info' && /did not finish/.test(rc.message), JSON.stringify(rc));
+  });
+});

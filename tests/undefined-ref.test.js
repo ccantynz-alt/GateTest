@@ -321,3 +321,268 @@ module.exports = config;
     assert.deepStrictEqual(parts.map((p) => p.trim().split(/\s/)[0]), ['a', 'b', 'c']);
   });
 });
+
+describe('UndefinedRefModule — declaration shapes missed on the 2026-09-05 corpus (nest / apollo-server / prisma)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-uref-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const errors = (r) => r.checks.filter((c) => !c.passed && c.severity === 'error').map((c) => c.name);
+  const has = (r, name) => errors(r).some((n) => n.includes(`undefined-ref:${name}:`));
+
+  // nest packages/common/decorators/http/route-params.decorator.ts:53 —
+  // a rest parameter whose type annotation contains parentheses; the whole
+  // parameter list was invisible to `\([^()]*\)` so `legacyPipes` blocked at :68.
+  it('NEGATIVE: parameter list containing parentheses in a type (nest legacyPipes)', async () => {
+    write(tmp, 'src/route-params.decorator.ts', `
+export function assignMetadata<TParamtype = any, TArgs = any>(
+  args: TArgs,
+  paramtype: TParamtype,
+  index: number,
+  options?: ({ data?: ParamData } & ParameterDecoratorOptions) | ParamData,
+  ...legacyPipes: (Type<PipeTransform> | PipeTransform)[]
+) {
+  const normalizedOptions = isOptionsObject
+    ? (options as { data?: ParamData } & ParameterDecoratorOptions)
+    : { data: options as ParamData, pipes: legacyPipes };
+  return normalizedOptions;
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'legacyPipes'), errors(r).join(', '));
+  });
+
+  // prisma examples/prisma-8-demo/src/prisma-no-emit/runtime.ts:7 — a
+  // default value that is a call; `databaseUrl` blocked at :21.
+  it('NEGATIVE: parameter list with a call in a default value (prisma databaseUrl)', async () => {
+    write(tmp, 'src/runtime.ts', `
+import { createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
+import postgres from '@prisma/orm-postgres/runtime';
+export async function getRuntime(
+  databaseUrl: string,
+  middleware: readonly SqlMiddleware[] = [
+    createCacheMiddleware({ maxEntries: 1_000 }),
+    budgets({ maxRows: 10_000, tableRows: { user: 10_000, post: 10_000 } }),
+  ],
+): Promise<Runtime> {
+  const client = postgres({
+    contract,
+    url: databaseUrl,
+    middleware,
+  });
+  return client.connect();
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'databaseUrl'), errors(r).join(', '));
+  });
+
+  // prisma packages/3-extensions/sql-orm-client/src/collection.ts:531 — a
+  // method parameter list containing a function type `(collection: X) => R`;
+  // `relationName` blocked at :593/:603/:613.
+  it('NEGATIVE: parameter list with a function-typed parameter (prisma relationName)', async () => {
+    write(tmp, 'src/collection.ts', `
+class Collection {
+  include<RelName extends string>(
+    relationName: RelName,
+    refineFn?: (
+      collection: IncludeRefinementCollection<TContract, RelatedName>,
+    ) => RefinedResult,
+  ): Collection {
+    if (refineFn) {
+      throw ormError('ORM.INCLUDE_UNSUPPORTED', 'scalar aggregations', {
+        meta: { relation: relationName, kind: 'scalar' },
+      });
+    }
+    return this;
+  }
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'relationName'), errors(r).join(', '));
+  });
+
+  it('POSITIVE CONTROL: an undeclared name in a body whose parameter list contains parentheses still fires', async () => {
+    write(tmp, 'src/x.ts', `
+export function build(
+  options: (Foo | Bar)[],
+  onDone: (result: Result) => void = () => {},
+) {
+  return createThing({ handler: neverDeclaredHandler, done: onDone, opts: options });
+}
+`);
+    const r = await run(tmp);
+    assert.ok(has(r, 'neverDeclaredHandler'), errors(r).join(', '));
+    assert.ok(!has(r, 'onDone') && !has(r, 'options'), errors(r).join(', '));
+  });
+
+  // nest packages/core/repl/repl-context.ts:130 and
+  // packages/core/router/route-conflict-detector.ts:41 — an arrow with a
+  // single unparenthesised parameter; `aliasName` blocked at :134,
+  // `rawSegment` at :58.
+  it('NEGATIVE: unparenthesised arrow parameter (nest aliasName / rawSegment)', async () => {
+    write(tmp, 'src/repl-context.ts', `
+class ReplContext {
+  private addNativeFunction(nativeFunction: any, nativeFunctions: any[]) {
+    nativeFunction.fnDefinition.aliases?.forEach(aliasName => {
+      const aliasNativeFunction = Object.create(nativeFunction);
+      aliasNativeFunction.fnDefinition = {
+        name: aliasName,
+        description: aliasNativeFunction.fnDefinition.description,
+      };
+      nativeFunctions.push(aliasNativeFunction);
+    });
+    return path
+      .split('/')
+      .filter(rawSegment => rawSegment.length > 0)
+      .forEach(rawSegment => {
+        segments.push({ kind: 'wildcard', value: rawSegment });
+      });
+  }
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'aliasName') && !has(r, 'rawSegment'), errors(r).join(', '));
+  });
+
+  it('POSITIVE CONTROL: an undeclared name inside an unparenthesised-arrow body still fires', async () => {
+    write(tmp, 'src/x.ts', `
+items.forEach(itemName => {
+  register({ name: itemName, handler: neverDeclaredHandler });
+});
+`);
+    const r = await run(tmp);
+    assert.ok(has(r, 'neverDeclaredHandler'), errors(r).join(', '));
+    assert.ok(!has(r, 'itemName'), errors(r).join(', '));
+  });
+
+  // apollo-server packages/server/src/plugin/usageReporting/plugin.ts:83 —
+  // a destructured method parameter with a rename and a return-type
+  // annotation; the `:` strip cut the pattern to `{ logger` so
+  // `serverLogger` blocked at :87.
+  it('NEGATIVE: renamed destructured parameter with a return-type annotation (apollo serverLogger)', async () => {
+    write(tmp, 'src/plugin.ts', `
+export function plugin(options: Options) {
+  return internalPlugin({
+    async serverWillStart({
+      logger: serverLogger,
+      apollo,
+      startedInBackground,
+      schema,
+    }): Promise<GraphQLServerListener> {
+      const logger = options.logger ?? serverLogger;
+      return { logger: serverLogger, apollo, schema, bg: startedInBackground };
+    },
+  });
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'serverLogger'), errors(r).join(', '));
+  });
+
+  it('POSITIVE CONTROL: the destructured-parameter method still fires on a name it does not bind', async () => {
+    write(tmp, 'src/x.ts', `
+const plugin = {
+  async serverWillStart({ logger: serverLogger }): Promise<Listener> {
+    return { logger: serverLogger, reporter: neverDeclaredReporter };
+  },
+};
+`);
+    const r = await run(tmp);
+    assert.ok(has(r, 'neverDeclaredReporter'), errors(r).join(', '));
+    assert.ok(!has(r, 'serverLogger'), errors(r).join(', '));
+  });
+
+  // prisma packages/3-extensions/postgres/src/runtime/postgres.ts:4 and :30 —
+  // a default import combined with named imports; `postgresTarget` /
+  // `postgresDriver` blocked at :168/:170/:177 (and sqliteTarget in sqlite.ts:31).
+  it('NEGATIVE: default import combined with named imports (prisma postgresTarget / postgresDriver)', async () => {
+    write(tmp, 'src/postgres.ts', `
+import postgresDriver, { suppressIdleConnectionErrors } from '@internal/driver-postgres/runtime';
+import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import sqliteTarget, {
+  type SqliteTargetId,
+} from '@internal/target-sqlite/runtime';
+import * as nsOnly from 'x';
+const stack = createSqlExecutionStack({
+  target: postgresTarget,
+  driver: postgresDriver,
+  alt: sqliteTarget,
+});
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'postgresTarget') && !has(r, 'postgresDriver') && !has(r, 'sqliteTarget'), errors(r).join(', '));
+  });
+
+  it('POSITIVE CONTROL: a name that is NOT the default binding of a combined import still fires', async () => {
+    write(tmp, 'src/x.ts', `
+import postgresDriver, { suppressIdleConnectionErrors } from '@internal/driver-postgres/runtime';
+const stack = createSqlExecutionStack({
+  driver: postgresDriver,
+  target: postgresTargetNeverImported,
+});
+`);
+    const r = await run(tmp);
+    assert.ok(has(r, 'postgresTargetNeverImported'), errors(r).join(', '));
+    assert.ok(!has(r, 'postgresDriver'), errors(r).join(', '));
+  });
+
+  // prisma packages/3-extensions/sqlite/src/runtime/sqlite.ts:146 — a
+  // destructuring declaration with a type annotation between the pattern
+  // and the `=`; `rawSqlTag` blocked at :150 and :243.
+  it('NEGATIVE: type-annotated destructuring declaration (prisma rawSqlTag)', async () => {
+    write(tmp, 'src/sqlite.ts', `
+export default function sqlite(options: SqliteOptions) {
+  const {
+    sql,
+    raw: rawSqlTag,
+    enums,
+  }: SqliteStaticContext<TContract> = buildSqliteStaticContext<TContract>(options);
+  let [first, { nested: nestedBinding }]: [string, { nested: number }] = pair();
+  return { sql, orm, enums, raw: rawSqlTag, head: first, deep: nestedBinding };
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'rawSqlTag') && !has(r, 'nestedBinding'), errors(r).join(', '));
+  });
+
+  it('POSITIVE CONTROL: a name next to a type-annotated destructure that it does not bind still fires', async () => {
+    write(tmp, 'src/x.ts', `
+const { raw: rawSqlTag }: Ctx = build();
+const out = { raw: rawSqlTag, orm: ormClientNeverDeclared };
+`);
+    const r = await run(tmp);
+    assert.ok(has(r, 'ormClientNeverDeclared'), errors(r).join(', '));
+    assert.ok(!has(r, 'rawSqlTag'), errors(r).join(', '));
+  });
+
+  it('NEGATIVE: JSX apostrophes and regex literals do not derail the parameter walk', async () => {
+    // A `'` inside JSX text must not open a string that eats the next
+    // function's parameter list; `/\\(/` must not be read as an open paren.
+    write(tmp, 'src/page.tsx', `
+export function Banner() {
+  return <p>Don't panic — it's fine</p>;
+}
+export function Handler(requestPayload: Payload) {
+  const cleaned = requestPayload.text.replace(/\\(/g, '');
+  return render({ payload: requestPayload, text: cleaned });
+}
+`);
+    const r = await run(tmp);
+    assert.ok(!has(r, 'requestPayload'), errors(r).join(', '));
+  });
+
+  it('_readBalanced / _splitParams / _parseDestructureNames primitives', () => {
+    assert.strictEqual(UndefinedRefModule._readBalanced('{ a: { b }, c: "}" }: T = x', 0), ' a: { b }, c: "}" ');
+    assert.strictEqual(UndefinedRefModule._readBalanced('( a ', 0), null);
+    const mod = new UndefinedRefModule();
+    assert.deepStrictEqual(
+      mod._splitParams('cb: (x: A) => B, next: Map<string, number>, last'),
+      ['cb: (x: A) => B', ' next: Map<string, number>', ' last'],
+    );
+    assert.deepStrictEqual(
+      mod._parseDestructureNames('a, b: renamed, c: { d, e: [f] }, ...rest, type Foo as Bar, g = 1'),
+      ['a', 'renamed', 'd', 'f', 'rest', 'Bar', 'g'],
+    );
+  });
+});

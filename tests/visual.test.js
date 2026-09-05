@@ -47,6 +47,12 @@ describe('VisualModule — viewport', () => {
     const f = await scan({ 'index.html': '<html><head><title>x</title></head><body></body></html>' });
     assert.ok(ids(f).includes('visual:viewport:index.html'), ids(f).join());
   });
+  it('POSITIVE: a SPA shell (Angular <app-root>) without a viewport meta still fails — the shell OWNS its <head>', async () => {
+    // The body is rendered at runtime; the <head> is not. A shell missing the
+    // viewport tag renders the whole application at desktop width on mobile.
+    const f = await scan({ 'src/index.html': '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>App</title></head><body><app-root></app-root></body></html>' });
+    assert.ok(ids(f).includes('visual:viewport:src/index.html'), ids(f).join());
+  });
   it('NEGATIVE: a fragment (no <head>) and a Next.js layout.tsx (framework injects viewport) are silent', async () => {
     const f = await scan({
       'templates/nav.html': '<div th:fragment="nav"><html-ish></div>',
@@ -124,5 +130,45 @@ describe('VisualModule — print styles', () => {
     const css = '/* sprint-2 layout, small footprint */\n.blueprint { color: #000; }\n@media screen { .a { color: red; } }';
     const f = await scan({ 'src/c.css': css });
     assert.ok(ids(f).some((i) => i.startsWith('visual:print-styles:')), ids(f).join());
+  });
+});
+
+// ── severities (corpus6, 2026-09-05) ─────────────────────────────────────
+//
+// trpc/trpc was gated on `visual:print-styles:www/src/css/custom.css` — a docs
+// site with two `@media only screen` breakpoints and no print sheet. Not
+// having a print stylesheet is not a defect a user hits. The only visual rule
+// that stays an error is `viewport` on a full document, which is NodeGoat's
+// one blocking visual finding and the recall floor.
+describe('VisualModule — severities: only viewport on a full document blocks', () => {
+  it('NEGATIVE: trpc www/src/css/custom.css — screen breakpoints, no print sheet — is info, still reported', async () => {
+    const css = [
+      '@media only screen and (min-width: 997px) {', // verbatim, custom.css:183
+      '  .navbar__items { gap: 1rem; }',
+      '}',
+      '@media only screen and (min-width: 1496px) {', // verbatim, custom.css:189
+      '  .container { max-width: 1400px; }',
+      '}',
+    ].join('\n');
+    const f = await scan({ 'www/src/css/custom.css': css });
+    const hit = f.find((c) => c.id.startsWith('visual:print-styles:'));
+    assert.ok(hit, 'still reported — downgraded, not hidden: ' + ids(f).join());
+    assert.equal(hit.meta.severity, 'info');
+  });
+
+  it('NEGATIVE: z-index: 99999 is a stacking smell — warning, still reported', async () => {
+    const f = await scan({ 'src/modal.css': '.modal { z-index: 99999; }' });
+    const hit = f.find((c) => c.id.startsWith('visual:z-index:'));
+    assert.ok(hit, ids(f).join());
+    assert.equal(hit.meta.severity, 'warning');
+  });
+
+  it('POSITIVE: OWASP NodeGoat app/views/error-template.html — a full document with no viewport — stays an error', async () => {
+    // Verbatim shape of the recall floor's one blocking visual finding.
+    const html = '<!doctype HTML>\n<html>\n\n<head>\n    <title>Internal Error</title>\n</head>\n\n<body>\n\n    Oops..\n    <br>{{error}}\n</body>\n</html>\n';
+    const f = await scan({ 'app/views/error-template.html': html });
+    const hit = f.find((c) => c.id.startsWith('visual:viewport:'));
+    assert.ok(hit, ids(f).join());
+    assert.equal(hit.meta.severity, undefined, 'undefined = module default (error)');
   });
 });

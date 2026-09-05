@@ -110,7 +110,7 @@ export const MODULE_CATEGORIES: ModuleCategory[] = [
       { name: "designSystemCompliance", description: "Audits live computed styles for near-duplicate colors, off-grid spacing, and type-scale drift — catches design-token erosion no pixel diff or source lint sees.", example: "52 distinct colors in use, 20 recommended — palette drifting from shared tokens" },
       { name: "crossBrowser", description: "Runs the same page load across Chromium, Firefox, and WebKit and diffs navigation success, runtime errors, and rendering against Chromium as the reference engine.", example: "Firefox throws a CSP error Chromium doesn't — engine-specific bug" },
       { name: "chaos", description: "Chaos & Resilience Testing — slow network, API failure, offline, missing resources, server timeouts. Runs via the GitHub Action where a headless browser is available; the website-only Forensic scan does not include it.", example: "App freezes on 3G simulation — no loading state shown" },
-      { name: "webHeaders", description: "CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, Express, Fastify, nginx.", example: "CSP missing — defaults to inline-everything" },
+      { name: "webHeaders", description: "CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, nginx, Apache, Caddy and server source in any language.", example: "CSP missing — defaults to inline-everything" },
       { name: "cacheHeaders", description: "Cache Headers & CDN Configuration.", example: "/api/user has Cache-Control: public — PII cacheable at CDN" },
     ],
   },

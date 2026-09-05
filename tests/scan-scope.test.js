@@ -120,3 +120,30 @@ describe('scan-scope — real application code is STILL scanned', () => {
     }
   });
 });
+
+// A SPA shell (Angular / React index.html) has nothing to score: the
+// application renders the page at runtime. CleanArchitecture's two shells
+// produced 26 of its 39 blocking findings (2026-09-05).
+describe('scan-scope — SPA shells are not pages', () => {
+  const { isSpaShell } = require('../src/core/scan-scope');
+  it('recognises Angular and React shells', () => {
+    assert.strictEqual(isSpaShell('<!doctype html><html><head><title>x</title></head><body><app-root></app-root><script src="main.js"></script></body></html>'), true);
+    assert.strictEqual(isSpaShell('<html><head></head><body>\n  <div id="root"></div>\n  <noscript>Enable JS</noscript>\n</body></html>'), true);
+  });
+  it('a real page with content is still a page', () => {
+    assert.strictEqual(isSpaShell('<html><head></head><body><div id="root"><h1>Pricing</h1><p>Three tiers, one gate, no per-seat licensing anywhere.</p></div></body></html>'), false);
+    assert.strictEqual(isSpaShell('<html><head></head><body><main><h1>Docs</h1></main></body></html>'), false);
+  });
+});
+
+describe('scan-scope — Go testdata and Maven/Gradle test-resources are harness dirs', () => {
+  const { isNonUserFacingPage } = require('../src/core/scan-scope');
+  it('are not user-facing', () => {
+    assert.strictEqual(isNonUserFacingPage('ktor-server/core/jvm/test-resources/testdir/test.html'), true);
+    assert.strictEqual(isNonUserFacingPage('pkg/parser/testdata/page.html'), true);
+    assert.strictEqual(isNonUserFacingPage('lib/test_fixtures/a.html'), true);
+  });
+  it('a directory that merely starts with "test" is', () => {
+    assert.strictEqual(isNonUserFacingPage('src/testimonials/index.html'), false);
+  });
+});

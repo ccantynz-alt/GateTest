@@ -73,13 +73,36 @@ const CONFIG_NAMES = [
   'nginx.conf',
 ];
 
+// Config files that CAN set headers but usually do something else too
+// (`.htaccess` is mostly rewrites, a Caddyfile mostly routes). They are
+// header config only when they carry a header directive — otherwise the
+// missing-CSP/HSTS warnings would fire on every rewrite-only `.htaccess`.
+const DIRECTIVE_CONFIG_NAMES = ['.htaccess', 'Caddyfile', 'httpd.conf', 'apache2.conf', 'haproxy.cfg'];
+const HEADER_DIRECTIVE_RE = /^\s*(?:Header\s+(?:always\s+|onsuccess\s+)?(?:set|add|append|merge|edit)\b|header\s+[+-]?[A-Za-z-]|add_header\b|http-response\s+(?:set|add)-header\b)/im;
+
 const CONFIG_EXTENSIONS = ['.nginx'];
 
-// Source files where header-setting calls might appear. Kept tight to
-// avoid line-scanning the whole codebase.
-const SERVER_SOURCE_EXTS = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx']);
+// Server source in every language the engine scans. The rules below key on
+// HEADER NAMES (`content-security-policy`, `access-control-allow-origin`,
+// …), which look the same in Express, Koa, Flask, Gin, Rails and PHP — so
+// the file gate asks whether the file mentions one, not whether it is
+// JavaScript. Until 2026-09-05 only .js/.ts files were ever opened and only
+// when they used `setHeader`/`res.header`/`helmet`: a Koa `ctx.set(...)`,
+// a `res.writeHead(200, {...})`, or a Flask `response.headers[...] = '*'`
+// with credentials could report `web-headers:no-files` clean (KI #106).
+const SERVER_SOURCE_EXTS = new Set([
+  '.js', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
+  '.py', '.go', '.rb', '.php', '.java', '.kt', '.rs', '.cs', '.scala', '.ex', '.exs',
+  '.conf',
+]);
 
-const HEADER_HINTS = /\b(?:setHeader|reply\.header|res\.header|helmet|headers\s*:)/;
+// Only files that mention something a rule can fire on are opened for
+// scanning. A header name (any language), a header-setting API, or a
+// framework that sets them for you.
+const HEADER_HINTS = /content-security-policy|strict-transport-security|x-frame-options|frame-ancestors|x-content-type-options|access-control-allow-(?:origin|credentials)|\bhelmet\b|\bsetHeader\b|reply\.header|res\.header|\bctx\.set\b|\bwriteHead\s*\(|headers\s*:/i;
+
+// Content is sniffed, so cap what we are willing to read for the hint.
+const MAX_SNIFF_BYTES = 1024 * 1024;
 
 const HSTS_MIN_MAX_AGE = 15552000; // 180 days, aligns with Mozilla
 
@@ -87,7 +110,7 @@ class WebHeadersModule extends BaseModule {
   constructor() {
     super(
       'webHeaders',
-      'Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, Express, Fastify, nginx',
+      'Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, nginx, Apache, Caddy and server source in any language',
     );
   }
 
@@ -128,12 +151,16 @@ class WebHeadersModule extends BaseModule {
     if (CONFIG_NAMES.includes(basename)) return true;
     const ext = path.extname(basename).toLowerCase();
     if (CONFIG_EXTENSIONS.includes(ext)) return true;
-    // Server source code that references header-setting APIs
-    if (SERVER_SOURCE_EXTS.has(ext)) {
+    const isDirectiveConfig = DIRECTIVE_CONFIG_NAMES.includes(basename);
+    // Server source code (any language) that mentions a header this
+    // module has a rule for, or a directive config that sets a header.
+    if (isDirectiveConfig || SERVER_SOURCE_EXTS.has(ext)) {
       try {
+        if (fs.statSync(full).size > MAX_SNIFF_BYTES) return false;
         const content = fs.readFileSync(full, 'utf-8');
+        if (isDirectiveConfig) return HEADER_DIRECTIVE_RE.test(content);
         if (HEADER_HINTS.test(content)) return true;
-      } catch { return false; }
+      } catch { return false; } // error-ok — unreadable file: nothing to scan, the walk already listed it
     }
     return false;
   }
@@ -165,8 +192,8 @@ class WebHeadersModule extends BaseModule {
     // fixture is represented via escaped quotes or a template literal, and
     // it's safe: every fixture target in tests/web-headers.test.js (and
     // friends) lives under os.tmpdir(), which never matches this pattern.
-    const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
-    if (isTest) return 0;
+    // One definition of "is this a test path" — BaseModule's (doctrine §4).
+    if (this._isTestPath(relUnix)) return 0;
 
     const lines = content.split(/\r?\n/);
     let issues = 0;
@@ -237,8 +264,11 @@ class WebHeadersModule extends BaseModule {
     }
 
     // Pass 2: CORS wildcard + credentials co-occurrence (file-level)
-    const hasWildcardOrigin = /access-control-allow-origin["'\s:,]+\*/i.test(content);
-    const hasCredentialsTrue = /access-control-allow-credentials["'\s:,]+true/i.test(content);
+    // The separator class covers every assignment shape a header value can
+    // follow: `: '*'`, `, "*"` (Set/setHeader), `'] = '*'` (Flask / Rack
+    // dict subscript), `) = "*"`, and a bare ` *` (Caddy, Apache).
+    const hasWildcardOrigin = /access-control-allow-origin["'\s:,\]=)]+\*/i.test(content);
+    const hasCredentialsTrue = /access-control-allow-credentials["'\s:,\]=)]+true/i.test(content);
     if (hasWildcardOrigin && hasCredentialsTrue) {
       const idx = content.search(/access-control-allow-origin/i);
       const lineNo = content.slice(0, Math.max(0, idx)).split(/\r?\n/).length;
@@ -258,6 +288,9 @@ class WebHeadersModule extends BaseModule {
     const looksLikeHeaderConfig =
       CONFIG_NAMES.includes(path.basename(file)) ||
       CONFIG_EXTENSIONS.includes(path.extname(file).toLowerCase()) ||
+      // an `.htaccess` / Caddyfile only reaches here when it carries a
+      // header directive (see _isHeaderFile), so it IS header config
+      DIRECTIVE_CONFIG_NAMES.includes(path.basename(file)) ||
       /(?:async\s+)?headers\s*\(\s*\)\s*{/.test(content);
 
     if (looksLikeHeaderConfig) {

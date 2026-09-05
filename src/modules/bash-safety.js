@@ -149,6 +149,32 @@ function isTolerantSwallow(rawLine) {
   return head !== null && TOLERANT_EXIT.has(head);
 }
 
+/**
+ * An npm script whose NAME says the step is informational: `coverage`,
+ * `test:cov`, `cov:report`. A `|| true` there is the author declaring, in
+ * the script's own name, that a coverage run never fails the pipeline — the
+ * tests are gated by a script that is not swallowed (nestjs/nest: `"test":
+ * "vitest run"` next to `"coverage": "vitest run --coverage ... || true"`,
+ * corpus6 2026-09-05). That is worth a warning, not a blocked build.
+ *
+ * The NAME governs, not the command: `"test": "vitest --coverage || true"`
+ * is still the test step going green on red, and stays an error. Segments
+ * are split on the separators npm script names use; `recover` and
+ * `discovery` do not contain the segment `cov`.
+ */
+const COVERAGE_SEGMENT_RE = /^(?:cov|coverage)$/i;
+function isCoverageScript(name) {
+  return String(name).split(/[:_\-.\s]+/).some((s) => COVERAGE_SEGMENT_RE.test(s));
+}
+
+/**
+ * `VAR=$(cmd) || true` — the exit status is traded for the OUTPUT. Under
+ * `set -e` (GitHub Actions' default `bash -e`) a failing assignment aborts
+ * the step, so the `|| true` is what lets the next lines read `$VAR` at all.
+ * Matched on masked code so a quoted string cannot look like an assignment.
+ */
+const CAPTURE_SWALLOW_RE = /^\s*(?:export\s+|local\s+)?([A-Za-z_][A-Za-z0-9_]*)=\$\(.*\)\s*\|\|\s*true\b/;
+
 class BashSafetyModule extends BaseModule {
   constructor() { super('bashSafety', 'Bash / Shell Error-Swallow Detector'); }
 
@@ -208,11 +234,12 @@ class BashSafetyModule extends BaseModule {
         // confidence scorer and the PR comment consume — this module used
         // to emit only `fix` with an absolute path, which surfaced as
         // `message: null` findings (2026-08-18 audit residue).
+        const inspected = rule.swallowGuard && this._capturedForInspection(lines, idx, mode);
         result.addCheck(`bash-safety:${rule.code}:${rel}:${lineNum}`, false, {
-          severity: rule.severity,
+          severity: inspected ? 'warning' : rule.severity,
           file: rel,
           line: lineNum,
-          message: rule.message(rawLine),
+          message: rule.message(rawLine) + (inspected ? ' — the captured output is read below; make sure an empty result on failure is not treated as success' : ''),
           fix: `${rel}:${lineNum} — ${rule.message(rawLine)}\nFix: handle the error explicitly or add "# gatetest:swallow-ok reason=\\"<reason>\\"" if intentional.`,
         });
       }
@@ -229,10 +256,11 @@ class BashSafetyModule extends BaseModule {
       for (const rule of RULES) {
         if (rule.pattern.test(maskNonCode(cmd))) {
           if (rule.swallowGuard && isTolerantSwallow(cmd)) continue;
+          const coverage = rule.swallowGuard && isCoverageScript(name);
           result.addCheck(`bash-safety:${rule.code}:package.json:${name}`, false, {
-            severity: rule.severity,
+            severity: coverage ? 'warning' : rule.severity,
             file: 'package.json',
-            message: `scripts.${name}: ${rule.message(cmd)}`,
+            message: `scripts.${name}: ${rule.message(cmd)}` + (coverage ? ' — a coverage step declared non-fatal by its name; keep the tests gated by a script that is not swallowed' : ''),
             fix: `package.json scripts.${name} — ${rule.message(cmd)}\nFix: handle the error or remove the swallow pattern.`,
           });
         }
@@ -258,6 +286,30 @@ class BashSafetyModule extends BaseModule {
       if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(raw)) break;
       if (/\$\?/.test(raw)) return true;
       if (/\bset\s+-[a-zA-Z]*e/.test(maskNonCode(raw))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Is this line `VAR=$(cmd) || true` with `$VAR` read on a later line of the
+   * same block? Then the exit code was swallowed on purpose so the output
+   * could be inspected — trpc's `OUTPUT=$(intent stale --json 2>&1) || true`
+   * followed by `echo "$OUTPUT" | node -e ...` (.github/workflows/
+   * check-skills.yml:44, corpus6 2026-09-05). Downgraded, not exempted: if
+   * the command dies, `$VAR` is empty and a naive reader calls that clean,
+   * which is exactly Doctrine §1's shape — so the customer is still told.
+   *
+   * `$VAR` is matched against RAW lines because it is usually quoted; the
+   * assignment is matched against masked code. Stops at the next YAML step.
+   */
+  _capturedForInspection(lines, idx, mode) {
+    const m = CAPTURE_SWALLOW_RE.exec(maskNonCode(lines[idx]));
+    if (!m) return false;
+    const ref = new RegExp(`\\$\\{?${m[1]}\\b`);
+    const limit = Math.min(lines.length, idx + 60);
+    for (let i = idx + 1; i < limit; i++) {
+      if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(lines[i])) break;
+      if (ref.test(lines[i])) return true;
     }
     return false;
   }

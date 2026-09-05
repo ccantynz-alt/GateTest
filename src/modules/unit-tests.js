@@ -10,6 +10,7 @@ const path = require('path');
 class UnitTestsModule extends BaseModule {
   constructor() {
     super('unitTests', 'Unit Test Execution');
+    this._testTimeoutMs = 300000; // overridable for tests
   }
 
   async run(result, config) {
@@ -69,15 +70,25 @@ class UnitTestsModule extends BaseModule {
     // from the scanner flipped one of this repo's own tests red).
     const env = { ...process.env };
     for (const k of Object.keys(env)) if (/^GATETEST_/.test(k)) delete env[k];
-    const { exitCode, stdout, stderr } = this._exec(testCommand.command, {
+    const { exitCode, stdout, stderr, timedOut } = this._exec(testCommand.command, {
       cwd: projectRoot,
-      timeout: 300000, // 5 minutes
+      timeout: this._testTimeoutMs, // 5 minutes
       env,
     });
 
     const out = stdout + stderr;
     if (exitCode === 0) {
       result.addCheck('unit-tests:run', true, { message: 'All unit tests passed' });
+    } else if (timedOut) {
+      // Never derive a verdict from a timeout (doctrine, move 18): ktor's
+      // Gradle build ran for the full five minutes on CI and was reported
+      // as "Unit tests failed" — a fact about the runner's clock, not the
+      // suite (2026-09-05).
+      result.addCheck('unit-tests:run', true, {
+        severity: 'info',
+        message: `Not executed — the test command did not finish within ${Math.round(this._testTimeoutMs / 1000)}s here`,
+        suggestion: 'Run the scan where the suite normally runs (CI) to include test results',
+      });
     } else if (this._looksLikeMissingToolchain(out)) {
       // ModuleNotFoundError / "command not found" / "no such file" — the
       // environment, not the tests, failed.
@@ -143,7 +154,12 @@ class UnitTestsModule extends BaseModule {
       { files: ['go.mod'], name: 'go test', command: 'go test ./... 2>&1', needsBinary: 'go' },
       { files: ['Cargo.toml'], name: 'cargo test', command: 'cargo test 2>&1', needsBinary: 'cargo' },
       { files: ['pom.xml'], name: 'Maven', command: 'mvn -q test 2>&1', needsBinary: 'mvn' },
-      { files: ['build.gradle', 'build.gradle.kts'], name: 'Gradle', command: 'gradle test 2>&1', needsBinary: 'gradle' },
+      // --no-daemon: the build runs in the child process this module can
+      // kill on timeout. With the daemon, Gradle spawns a detached JVM that
+      // outlives the timeout, keeps writing into the checkout, and on CI
+      // made the corpus script's temp-dir cleanup throw ENOTEMPTY after a
+      // gate that had already PASSED (ktor, 2026-09-05).
+      { files: ['build.gradle', 'build.gradle.kts'], name: 'Gradle', command: 'gradle test --no-daemon --console=plain 2>&1', needsBinary: 'gradle' },
       { files: ['Gemfile'], name: 'RSpec', command: 'bundle exec rspec 2>&1', needsBinary: 'bundle' },
       { files: ['composer.json'], name: 'PHPUnit', command: 'vendor/bin/phpunit 2>&1', needsBinary: 'php' },
     ];
@@ -157,7 +173,11 @@ class UnitTestsModule extends BaseModule {
     // Check for test directories
     const testDirs = ['tests', 'test', '__tests__', 'spec'];
     for (const dir of testDirs) {
-      if (fs.existsSync(path.join(projectRoot, dir))) {
+      // Only when the directory holds JavaScript node can run. Node 22
+      // strips types by default, so a bare `node --test` on a repo whose
+      // only `test.ts` is an Angular/Karma harness "ran" it and reported
+      // "Unit tests failed" (CleanArchitecture, 2026-09-05).
+      if (fs.existsSync(path.join(projectRoot, dir)) && this._hasRunnableJsTests(path.join(projectRoot, dir))) {
         return { name: 'Node.js test runner', command: 'node --test 2>&1' };
       }
     }
@@ -177,7 +197,25 @@ class UnitTestsModule extends BaseModule {
   }
 
   _looksLikeMissingToolchain(out) {
-    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies/i.test(out);
+    // Each alternation is a runner that never reached a test: a missing
+    // binary (`/bin/sh: 1: vendor/bin/phpunit: not found` — laravel, where
+    // composer had not run), a missing module, or a BUILD that failed before
+    // the test task (ktor's Gradle compile under a toolchain this box does
+    // not have). "Unit tests failed" would blame the customer's suite for
+    // our environment.
+    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |: not found\b|Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies|SDK location not found|Could not resolve all (?:files|dependencies)|Unsupported class file major version|Execution failed for task '[^']*:compile|Compilation error\. See log|BUILD FAILURE[\s\S]*COMPILATION ERROR/i.test(out);
+  }
+
+  /** Does a test directory contain anything `node --test` can actually run? */
+  _hasRunnableJsTests(dir, depth = 0) {
+    if (depth > 3) return false;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; } // error-ok — unreadable dir has no runnable tests
+    for (const e of entries) {
+      if (e.isFile() && /\.(?:js|mjs|cjs)$/.test(e.name)) return true;
+      if (e.isDirectory() && e.name !== 'node_modules' && this._hasRunnableJsTests(path.join(dir, e.name), depth + 1)) return true;
+    }
+    return false;
   }
 
   _firstLine(out) {

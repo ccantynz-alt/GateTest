@@ -212,6 +212,26 @@ Authentication is optional — if you have a `GITHUB_TOKEN` set or `gh` CLI
 installed, replay can read private repo runs. Otherwise it uses the
 unauthenticated rate limit (60 req/hour, fine for a few replays).
 
+When a gate is blocked inside GitHub Actions, the log and the checks tab
+already carry this command with the run's URL filled in.
+
+### Verify a scan report
+
+Every JSON report (`.gatetest/reports/gatetest-report-latest.json`) carries a
+`provenance` block — engine version, runtime, which modules ran, which were
+skipped or deferred, the suppression state, and a SHA-256 digest of the
+findings — and, when `GATETEST_REPORT_SIGNING_KEY` is set where the scan runs,
+an HMAC-SHA256 signature over it.
+
+```bash
+gatetest verify-report .gatetest/reports/gatetest-report-latest.json --key "$GATETEST_REPORT_SIGNING_KEY"
+```
+
+`VERIFIED` means the signature matches the provenance and the findings still
+match the digest — neither block can be edited without the other noticing.
+Without a key the report says `signature.unsigned` explicitly rather than
+carrying a decorative field.
+
 ### Root-cause a bug from the CLI
 
 ```bash

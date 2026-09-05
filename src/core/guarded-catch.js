@@ -44,6 +44,27 @@
  *                   The attempt failed, the target kept its previous value,
  *                   and the check downstream is what notices.
  *
+ *   RETHROW         the code after the catch begins with a `throw`. The
+ *                   function is already on its failure path and raising the
+ *                   primary cause; a secondary failure erased here would
+ *                   otherwise have MASKED that cause.
+ *
+ *   CLEANUP         the catch sits inside a `finally` block, or inside a
+ *                   function whose name says it is teardown (`close`, `end`,
+ *                   `destroy`, `dispose`, `destroyConnection`,
+ *                   `ownedDispose` — `isTeardownName`). The resource is being
+ *                   discarded; a failure to discard it has no consumer by
+ *                   construction, and thrown from a `finally` it would
+ *                   REPLACE whatever the try block returned or threw. Measured
+ *                   2026-09-05 on prisma @HEAD: `scripts/lint-casts.mjs:107`
+ *                   (`finally { try { git('worktree','remove',...) } catch {}
+ *                   rmSync(tmpDir, { force: true }) }`) and 16 `.catch(() =>
+ *                   undefined)` on `close()` / `end()` / `destroy()` calls,
+ *                   one of them carrying prisma's own reasoning in a comment:
+ *                   "we're already about to throw a more informative error …
+ *                   surfacing [the teardown error] would mask the original
+ *                   cause" (`sql-runtime.ts:1036`).
+ *
  * Deliberately NOT a suppression. A guarded attempt is still reported — it
  * drops from blocking to warning, the same calibration the module already
  * applies to comment-only catches. If the target is only *read* and never
@@ -201,6 +222,15 @@ function tryBodyBefore(masked, catchLine, catchIdx) {
   return chunk.slice(p + 1, closeAt);
 }
 
+// The text just before a `{` when that brace opens a control-flow body rather
+// than a function. `for await (...)` is a loop like any other — without the
+// `await` alternative its body read as a function named `await`. The
+// condition's parentheses must BALANCE (two levels deep): the earlier
+// `\([\s\S]*\)` let an `if (` a hundred characters up the head reach the
+// `()` of `public async close()` and read the method as an `if` body
+// (trpc `wsClient.ts:144`, 2026-09-05).
+const CONTROL_FLOW_HEAD_RE = /(?:^|[\s;{}()])(?:if|else|for(?:\s+await)?|while|switch|do|try|finally|catch)(?![\w$])\s*(?:\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))?\s*$/;
+
 /**
  * Walk backwards from a `}` to the `{` it closes, and report whether that
  * block was opened by a control-flow keyword (`if (...) {`, `else {`, `for
@@ -228,7 +258,7 @@ function blockOpenerIsControlFlow(masked, closeLine, closeCol) {
   }
   if (p < 0) return false;
   const head = chunk.slice(Math.max(0, p - 400), p);
-  return /(?:^|[\s;{}()])(?:if|else|for|while|switch|do|try|finally|catch)(?![\w$])\s*(?:\([\s\S]*\))?\s*$/.test(head);
+  return CONTROL_FLOW_HEAD_RE.test(head);
 }
 
 /** Step over a `finally { ... }` / `else { ... }` / `else if (...) { ... }` clause. */
@@ -399,6 +429,111 @@ function isTestedAfter(target, after) {
   });
 }
 
+// Verbs that name teardown. A bare verb is teardown on its own (`close()`,
+// `client.end()`, `conn.destroy(err)`); the first word of a compound is
+// teardown only when a RESOURCE noun follows it (`destroyDatabasePool`,
+// `closeDb`), because `closeAccount()` is a business operation whose failure
+// matters; the LAST word of a compound is accepted only for the four words
+// that never name anything but teardown (`ownedDispose`, `ngOnDestroy`,
+// `runCleanup`) — `onClose` / `handleClose` are event handlers, not teardown.
+const TEARDOWN_VERBS = new Set([
+  'close', 'end', 'destroy', 'dispose', 'disconnect', 'quit', 'terminate',
+  'shutdown', 'teardown', 'cleanup', 'release', 'stop', 'unsubscribe',
+]);
+const TEARDOWN_TAIL_WORDS = new Set(['dispose', 'destroy', 'teardown', 'cleanup']);
+const RESOURCE_NOUNS = new Set([
+  'connection', 'connections', 'conn', 'pool', 'pools', 'client', 'clients',
+  'socket', 'sockets', 'server', 'db', 'database', 'stream', 'streams',
+  'worker', 'workers', 'browser', 'page', 'session', 'handle', 'handles',
+  'resource', 'resources', 'process', 'watcher', 'watchers', 'timer', 'timers',
+  'channel', 'channels', 'transport', 'subscription', 'subscriptions',
+  'listener', 'listeners', 'runtime', 'driver', 'store', 'cache', 'file',
+  'files', 'fd', 'workspace', 'workspaces', 'tmp', 'temp', 'dir', 'directory',
+  'all',
+]);
+
+/** Split `destroyDatabasePool` / `owned_dispose` / `#closeDb` into lower-case words. */
+function nameWords(name) {
+  return String(name || '')
+    .replace(/^[#_$]+/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/[_$-]+/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Does this identifier name a teardown — a function whose contract is that
+ * the resource is being discarded?
+ */
+function isTeardownName(name) {
+  const words = nameWords(name);
+  if (words.length === 0) return false;
+  if (words.length === 1) return TEARDOWN_VERBS.has(words[0]);
+  if (TEARDOWN_TAIL_WORDS.has(words[words.length - 1])) return true;
+  return TEARDOWN_VERBS.has(words[0]) && words.slice(1).some((w) => RESOURCE_NOUNS.has(w));
+}
+
+const RESERVED_HEAD_WORDS = new Set([
+  'if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'await',
+  'yield', 'typeof', 'new', 'else', 'do', 'try', 'finally', 'with', 'class',
+  'import', 'export', 'default', 'async', 'in', 'of', 'delete', 'void',
+]);
+const PARAMS = '\\((?:[^()]|\\([^()]*\\))*\\)';
+const NAMED_FUNCTION_HEADS = [
+  // `async close(): Promise<void>` / `function destroyPool(a, b)` / `public override end()`
+  new RegExp(`(?:^|[\\s;{}(,])(?:(?:export|default|public|private|protected|static|async|override|readonly|get|set|function)\\s+)*\\*?\\s*([A-Za-z_$][\\w$]*)\\s*(?:<[^{}]*>)?\\s*${PARAMS}\\s*(?::\\s*[^{;=]+)?\\s*$`),
+  // `const destroyConnection = async (reason: unknown): Promise<void> =>` / `x = (a) =>` / `x = a =>`
+  new RegExp(`([A-Za-z_$][\\w$]*)\\s*(?::\\s*[^=]+?)?\\s*=\\s*(?:async\\s+)?(?:${PARAMS}|[A-Za-z_$][\\w$]*)\\s*(?::\\s*[^=]+?)?\\s*=>\\s*$`),
+  // `x = async function name(...)` / `x = function (...)`
+  new RegExp(`([A-Za-z_$][\\w$]*)\\s*(?::\\s*[^=]+?)?\\s*=\\s*(?:async\\s+)?function\\s*\\*?\\s*(?:[A-Za-z_$][\\w$]*)?\\s*${PARAMS}\\s*(?::\\s*[^{;=]+)?\\s*$`),
+  // object property: `close: async () =>` / `close: function ()`
+  new RegExp(`([A-Za-z_$][\\w$]*)\\s*:\\s*(?:async\\s+)?(?:function\\s*\\*?\\s*(?:[A-Za-z_$][\\w$]*)?\\s*${PARAMS}|${PARAMS}\\s*(?::\\s*[^=]+?)?\\s*=>)\\s*$`),
+];
+
+/** The name of the function a `{` opens, given the text before the brace; null if anonymous or not a function. */
+function namedFunctionHead(head) {
+  for (const re of NAMED_FUNCTION_HEADS) {
+    const m = head.match(re);
+    if (m && !RESERVED_HEAD_WORDS.has(m[1])) return m[1];
+  }
+  return null;
+}
+
+const CONTEXT_LOOKBEHIND_LINES = 300;
+
+/**
+ * What encloses position (`line`, `col`)? Walks outward through the blocks
+ * that contain it, stepping through control-flow bodies and anonymous
+ * callbacks, and stops at the first `finally` or the first NAMED function.
+ *
+ * @returns {{finally: boolean, fn: string|null, teardown: boolean}}
+ */
+function enclosingContext(masked, line, col) {
+  const from = Math.max(0, line - CONTEXT_LOOKBEHIND_LINES);
+  const chunkLines = masked.slice(from, line + 1);
+  chunkLines[chunkLines.length - 1] = (chunkLines[chunkLines.length - 1] || '').slice(0, col);
+  const chunk = chunkLines.join('\n');
+  const none = { finally: false, fn: null, teardown: false };
+  let depth = 0;
+  let hops = 0;
+  for (let p = chunk.length - 1; p >= 0 && hops < 16; p -= 1) {
+    const ch = chunk[p];
+    if (ch === '}') { depth += 1; continue; }
+    if (ch !== '{') continue;
+    if (depth > 0) { depth -= 1; continue; }
+    hops += 1;
+    const head = chunk.slice(Math.max(0, p - 500), p);
+    if (/(?:^|[\s;{}()])finally\s*$/.test(head)) return { finally: true, fn: null, teardown: false };
+    if (CONTROL_FLOW_HEAD_RE.test(head)) continue;
+    const fn = namedFunctionHead(head);
+    if (fn) return { finally: false, fn, teardown: isTeardownName(fn) };
+  }
+  return none;
+}
+
 /**
  * Classify the empty catch whose `catch` keyword matched at
  * (`catchLine`, `catchIdx`).
@@ -413,9 +548,14 @@ function classifyEmptyCatch(masked, catchLine, catchIdx) {
   const body = tryBodyBefore(masked, catchLine, catchIdx);
   if (body === null || !body.trim()) return { guarded: false };
 
+  const context = enclosingContext(masked, catchLine, catchIdx);
+  if (context.finally) return { guarded: true, shape: 'cleanup', context: 'finally' };
+  if (context.teardown) return { guarded: true, shape: 'cleanup', context: context.fn };
+
   const after = codeAfter(masked, end);
   if (!after.trim()) return { guarded: false };
 
+  if (/^\s*throw\b/.test(after)) return { guarded: true, shape: 'rethrow' };
   if (hasTopLevelExit(body)) return { guarded: true, shape: 'fallthrough' };
 
   const targets = assignedTargets(body);
@@ -429,6 +569,8 @@ function classifyEmptyCatch(masked, catchLine, catchIdx) {
 module.exports = {
   classifyEmptyCatch,
   maskNonCode,
+  enclosingContext,
+  isTeardownName,
   // exported for direct unit tests of the individual judgements
   findBlockEnd,
   tryBodyBefore,

@@ -541,3 +541,68 @@ jobs:
     );
   });
 });
+
+// 2026-09-05: every Rust repo was blocked on `dtolnay/rust-toolchain@stable`
+// (a toolchain channel, that action's documented use) and vapor/ktor on their
+// OWN reusable workflows at @main. Both are mutable and stay reported — as
+// warnings. A third-party action on a branch is the supply-chain risk and
+// stays an error.
+describe('CiSecurityModule — branch refs: channel and own-workflow are warnings', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-pin-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const WF = (uses) => `name: ci\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n`;
+  async function pinSeverity(uses, env = {}) {
+    const saved = { GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY, GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE };
+    // GITHUB_REPOSITORY only names the scanned project when the scan targets
+    // the workflow's own checkout — so the workspace is set to tmp here.
+    if (env.GITHUB_REPOSITORY) { process.env.GITHUB_REPOSITORY = env.GITHUB_REPOSITORY; process.env.GITHUB_WORKSPACE = env.GITHUB_WORKSPACE || tmp; } else { delete process.env.GITHUB_REPOSITORY; delete process.env.GITHUB_WORKSPACE; }
+    try {
+      if (env.remote) {
+        const { execFileSync } = require('child_process');
+        execFileSync('git', ['init', '-q'], { cwd: tmp });
+        execFileSync('git', ['remote', 'add', 'origin', env.remote], { cwd: tmp });
+      }
+      writeWorkflow(tmp, 'ci.yml', WF(uses));
+      const r = await run(tmp);
+      const c = r.checks.find((x) => !x.passed && /branch-pin/.test(x.name));
+      return c ? c.severity : null;
+    } finally {
+      for (const k of Object.keys(saved)) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    }
+  }
+  it('dtolnay/rust-toolchain@stable is a warning', async () => {
+    assert.strictEqual(await pinSeverity('dtolnay/rust-toolchain@stable'), 'warning');
+  });
+  it("the repository's own reusable workflow on main is a warning", async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor' }), 'warning');
+  });
+  it("someone else's reusable workflow on main is still an error", async () => {
+    assert.strictEqual(await pinSeverity('other-org/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor' }), 'error');
+  });
+  it('a third-party action on a branch is still an error', async () => {
+    assert.strictEqual(await pinSeverity('someone/action@main'), 'error');
+  });
+  // CI's corpus job scans vapor with GITHUB_REPOSITORY=crclabs-hq/GateTest:
+  // vapor's own reusable workflows came back as third-party errors (1 → 4,
+  // 2026-09-05). The scanned project's remote decides; the env var only
+  // when the project IS the workflow's workspace.
+  it("the scanned project's remote wins over GITHUB_REPOSITORY when the project is not the workspace", async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'crclabs-hq/GateTest', GITHUB_WORKSPACE: '/somewhere/else', remote: 'https://github.com/vapor/vapor.git' }), 'warning');
+  });
+  it('GITHUB_REPOSITORY alone, for a root that is NOT the workspace, makes nothing "our own"', async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor', GITHUB_WORKSPACE: '/somewhere/else' }), 'error');
+  });
+});
+
+describe('CiSecurityModule — taiki-e/install-action@<tool> is a channel, not a branch', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-taiki-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  it('warns rather than errors', async () => {
+    writeWorkflow(tmp, 'ci.yml', 'name: ci\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: taiki-e/install-action@cargo-hack\n');
+    const r = await run(tmp);
+    const c = r.checks.find((x) => !x.passed && /branch-pin/.test(x.name));
+    assert.strictEqual(c && c.severity, 'warning');
+  });
+});

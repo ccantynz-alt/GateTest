@@ -198,12 +198,37 @@ class CiSecurityModule extends BaseModule {
               suggestion: 'Run `gh api /repos/OWNER/REPO/commits/<tag> --jq .sha` to get the SHA and pin to it.',
             });
           } else {
-            // Anything else = branch name / unknown.
+            // Anything else = branch name / unknown. Two shapes are mutable
+            // but not a supply-chain finding worth a red build (2026-09-05,
+            // axum / vapor / ktor):
+            //   - a CHANNEL ref on a toolchain-selector action —
+            //     `dtolnay/rust-toolchain@stable` is that action's documented
+            //     use; "stable" is the toolchain, not a branch to hijack;
+            //   - a reusable workflow from the repository's OWN owner
+            //     (`vapor/ci/.github/workflows/x.yml@main`) — inside the
+            //     trust boundary, mutable by the same people who can edit
+            //     this file.
+            // Both stay reported, as warnings. A third-party `@main` is the
+            // real risk and stays an error.
+            const actionPath = ref.split('@')[0];
+            const isChannel = (/^(?:stable|beta|nightly|latest)$/i.test(version)
+              && /^(?:dtolnay\/rust-toolchain|actions-rs\/toolchain|oven-sh\/setup-bun|denoland\/setup-deno)$/i.test(actionPath))
+              // taiki-e/install-action's documented form is `@<tool-name>`
+              // (`@cargo-hack`, `@nextest`): a per-tool pointer the action
+              // maintains, the same channel shape.
+              || /^taiki-e\/install-action$/i.test(actionPath);
+            const ownerOfRef = actionPath.split('/')[0].toLowerCase();
+            const isOwnReusable = /\/\.github\/workflows\/[^/]+\.ya?ml$/i.test(actionPath)
+              && ownerOfRef !== '' && ownerOfRef === this._repoOwner(projectRoot);
             issues += this._flag(result, `ci-security:branch-pin:${rel}:${i + 1}`, {
-              severity: 'error',
+              severity: isChannel || isOwnReusable ? 'warning' : 'error',
               file: rel,
               line: i + 1,
-              message: `"${ref}" pinned to a branch/non-version ref — the action can change under you at any time (supply-chain risk)`,
+              message: isChannel
+                ? `"${ref}" follows a toolchain channel, not a version — reproducible builds pin the toolchain version too`
+                : isOwnReusable
+                  ? `"${ref}" is your own reusable workflow on a branch — mutable, inside your trust boundary; pin it for reproducibility`
+                  : `"${ref}" pinned to a branch/non-version ref — the action can change under you at any time (supply-chain risk)`,
               suggestion: 'Pin to a specific commit SHA or an immutable tag.',
             });
           }
@@ -352,6 +377,39 @@ class CiSecurityModule extends BaseModule {
       }
     }
     return issues;
+  }
+
+  /**
+   * Owner of the repository being scanned, lower-cased: GITHUB_REPOSITORY
+   * in Actions, else the `origin` remote, else null. Cached per root.
+   */
+  _repoOwner(projectRoot) {
+    if (this._ownerCache && this._ownerCache.root === projectRoot) return this._ownerCache.owner;
+    let owner = null;
+    // The project's own remote first. GITHUB_REPOSITORY names the repo the
+    // WORKFLOW runs in, which is only the project being scanned when the
+    // scan targets the workspace checkout: on CI the corpus job scans
+    // vapor with GITHUB_REPOSITORY=crclabs-hq/GateTest, and vapor's own
+    // reusable workflows on @main came back as third-party errors (1 → 4,
+    // 2026-09-05). The env var is the fallback for a checkout with no
+    // remote, and only when the root IS the workspace.
+    try {
+      const url = require('child_process').execFileSync('git', ['config', '--get', 'remote.origin.url'], {
+        cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      const m = url.match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/);
+      if (m) owner = m[1].toLowerCase();
+    } catch { owner = null; } // error-ok — no git or no remote: try the workflow's own identity below
+    if (!owner) {
+      const envRepo = process.env.GITHUB_REPOSITORY;
+      const workspace = process.env.GITHUB_WORKSPACE;
+      const isWorkspace = workspace && path.resolve(workspace) === path.resolve(projectRoot);
+      if (envRepo && envRepo.includes('/') && isWorkspace) owner = envRepo.split('/')[0].toLowerCase();
+    }
+    // Still nothing: no remote, not the workspace — nothing is "our own",
+    // every branch ref stays an error.
+    this._ownerCache = { root: projectRoot, owner };
+    return owner;
   }
 
   _flag(result, name, details) {

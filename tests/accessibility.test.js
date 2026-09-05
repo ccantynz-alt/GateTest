@@ -54,6 +54,17 @@ describe('AccessibilityModule — fragment / primitive / AAA precision (2026-08-
     assert.ok(f.some((c) => c.name === 'a11y:landmark-main:index.html'));
   });
 
+  it('a SPA shell is not told it lacks <main>/<h1> (the app renders those) — but html-lang is still its own', async () => {
+    // CleanArchitecture src/Web/ClientApp/src/index.html (2026-09-05): the
+    // Angular shell produced landmark-main + heading findings for a body
+    // that is `<app-root>Loading...</app-root>`.
+    w('src/index.html', '<!doctype html><html><head><meta charset="utf-8"><title>App</title></head><body><app-root>Loading...</app-root></body></html>');
+    const f = await run();
+    const names = f.map((c) => c.name);
+    assert.ok(!names.some((n) => /a11y:(landmark-main|heading|h1)[^:]*:src\/index\.html/.test(n)), JSON.stringify(names));
+    assert.ok(names.includes('a11y:html-lang:src/index.html'), 'POSITIVE: a shell without lang still fires — the <head> and <html> are the shell\'s: ' + JSON.stringify(names));
+  });
+
   it('a UI-kit primitive input (components/ui/input.tsx) and a commented-out <input> are not "unlabelled"', async () => {
     w('components/ui/input.tsx', 'export const Input = (props) => <input className="x" {...props} />;');
     w('pages/form.html', '<html><head></head><body><main><!-- <input type="text"> --><label for="q">Q</label><input id="q" type="text"></main></body></html>');

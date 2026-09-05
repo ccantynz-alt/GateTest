@@ -62,6 +62,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
+const { HARNESS_DIR_RE } = require('../core/scan-scope');
 
 // Excludes beyond BaseModule._collectFiles' defaults (KI #104).
 const EXTRA_EXCLUDES = ['.terraform'];
@@ -91,6 +92,23 @@ const QUERY_METHOD_RES = [
   // Generic ORM-ish
   /\borm\.[A-Za-z_$][\w$]*\s*\(/,
 ];
+
+// The raw-driver shape above (`client.query(`, `connection.execute(`…) is
+// the only one whose ARGUMENT decides whether the loop is an N+1. Measured
+// on prisma/prisma @ HEAD (2026-09-05): 25 `query-in-loop` findings, 6 of
+// them blocking, and not one a per-row lookup —
+//   for (let i = 0; i < count; i++) await client.query(`CREATE DATABASE prisma_rec_${i}`)
+//   while (…) { try { await client.query('SELECT 1'); break; } catch … }   (wait-for-db)
+//   for (const statement of setupSql) await connection.query(statement)
+// DDL, session control and `SELECT 1` cannot be batched into one query —
+// there is no "collect the ids first" for CREATE DATABASE — so those are
+// not reported. An OPAQUE statement (`query(statement)`, `query(step.sql,
+// params)`) is a statement LIST being replayed far more often than a
+// per-row lookup, but the line cannot tell, so it is reported as a warning
+// that says so (Doctrine §1: three states, and the third is printed).
+const RAW_DRIVER_RE = /\b(?:client|pool|db|connection|conn)\.(?:query|execute|prepare|run|get|all|each)\s*[`(]/;
+const NOT_N_PLUS_ONE_SQL_RE = /^\s*(?:CREATE|DROP|ALTER|TRUNCATE|GRANT|REVOKE|SET|RESET|BEGIN|START|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|ANALYSE|USE|PRAGMA|LOCK|UNLOCK|COMMENT|SELECT\s+1\b)/i;
+const OPAQUE_STATEMENT_RE = /^\s*[A-Za-z_$][\w$]*(?:\s*[.?]\s*[A-Za-z_$][\w$]*|\s*!)*\s*[,)]/;
 
 // Loop-opening patterns. Each entry: regex + hint about whether it's
 // a "block-form" loop (needs brace matching) or a "callback-form"
@@ -184,11 +202,16 @@ class NPlusOneModule extends BaseModule {
 
       // Check against every query method regex.
       let matched = null;
+      let argStart = -1;
       for (const re of QUERY_METHOD_RES) {
         const m = line.match(re);
-        if (m && !isInString(line, m.index)) { matched = m[0]; break; }
+        if (m && !isInString(line, m.index)) { matched = m[0]; argStart = m.index + m[0].length; break; }
       }
       if (!matched) continue;
+
+      const argKind = this._rawDriverArgKind(line, matched, argStart);
+      if (argKind === 'not-n-plus-one') continue;
+      const opaque = argKind === 'opaque';
 
       // Is this a batched fix shape? `await Promise.all(list.map(...))`
       // — the inner `.map()` creates an array of promises; the DB
@@ -213,18 +236,45 @@ class NPlusOneModule extends BaseModule {
         continue;
       }
 
+      // A test or benchmark harness seeding rows in a loop is not a
+      // production round-trip. Same split error-swallow makes: `_isTestPath`
+      // plus the engine's one definition of a harness dir. Nineteen of
+      // prisma's 25 were `db.public.X.create(…)` in test setup. SCOPE
+      // changes the severity, never the report — the finding still prints.
+      const isHarness = this._isTestPath(rel) || HARNESS_DIR_RE.test(rel.replace(/\\/g, '/'));
+      const severity = isHarness || opaque ? 'warning' : 'error';
+      const why = opaque
+        ? `executes a pre-built statement per iteration (loop opens at line ${loopStart + 1}) — a statement list being replayed is not an N+1, a per-row lookup is; the line cannot tell which, so verify`
+        : `database query inside a loop body (loop opens at line ${loopStart + 1}) — every iteration hits the database, producing an N+1 pattern that is fast in staging and slow in prod`;
       issues += this._flag(result, `n-plus-one:query-in-loop:${rel}:${i + 1}`, {
-        severity: 'error',
+        severity,
         file: rel,
         line: i + 1,
         loopStart: loopStart + 1,
         match: matched.slice(0, 60),
-        message: `${rel}:${i + 1} database query inside a loop body (loop opens at line ${loopStart + 1}) — every iteration hits the database, producing an N+1 pattern that is fast in staging and slow in prod`,
+        ...(isHarness ? { harness: true } : {}),
+        ...(opaque ? { opaque: true } : {}),
+        message: `${rel}:${i + 1} ${why}${isHarness ? ' (test/benchmark harness — warning, not a verdict)' : ''}`,
         suggestion: 'Batch: collect the IDs first and issue one query (e.g. `prisma.user.findMany({ where: { id: { in: ids } } })`), or wrap with `await Promise.all(list.map(async (x) => ...))` to run queries in parallel. For write-heavy loops, use a bulk insert / `createMany`.',
       });
     }
 
     return issues;
+  }
+
+  /**
+   * For a raw-driver call (`client.query(…)`), what the FIRST ARGUMENT says
+   * about the loop: 'not-n-plus-one' for a DDL / session-control / `SELECT 1`
+   * literal, 'opaque' for a pre-built statement passed by name, 'lookup'
+   * otherwise (and for every ORM shape, whose argument is irrelevant).
+   */
+  _rawDriverArgKind(line, matched, argStart) {
+    if (!RAW_DRIVER_RE.test(matched)) return 'lookup';
+    const arg = line.slice(argStart - 1); // include the `(` or backtick
+    const literal = /^[`(]\s*(['"`])([\s\S]*?)(?:\1|$)/.exec(arg) || /^`([\s\S]*?)(?:`|$)/.exec(arg);
+    const sqlText = literal ? (literal[2] !== undefined ? literal[2] : literal[1]) : null;
+    if (sqlText != null) return NOT_N_PLUS_ONE_SQL_RE.test(sqlText) ? 'not-n-plus-one' : 'lookup';
+    return OPAQUE_STATEMENT_RE.test(arg.slice(1)) ? 'opaque' : 'lookup';
   }
 
   // Find all loop ranges in the file. Returns an array of

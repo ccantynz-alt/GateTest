@@ -416,6 +416,220 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-05 — the second precision session (PRs #422, #423)
+
+Sixteen commits on #423 and eight on #422, each found by the one before it.
+What landed: the corpus grown to eleven repos with four non-JavaScript ones
+(django 89 → 65, rails 56 → 47, spring 9, gin 2); `/precision` generated from
+the corpus run; diff scans report only the diff (the runner filters every
+module's result — 22 of 25 quick-suite modules had ignored the incremental
+context) and SARIF reports the level the gate used (a test fixture had
+reached Code Scanning as a 9.1 CRITICAL); 36 private directory walks
+replaced with `_collectFiles`, proven identical by reconstruction, 17s → 8s
+on a PR; line-level PR attribution; a determinism gate in CI; signed report
+provenance and `gatetest verify-report`; the PR comment says what it did not
+check; the exact `.gatetestignore` line per finding; `gatetest replay` under
+a blocked gate in CI; comparison pages dated by git; the graded README badge
+(`?repo=` had never been read); 55 domain literals removed; one route
+grammar and session-middleware detection in both module systems (four of
+fifteen framework-gated exits — KI #106 holds the rest).
+
+Seven engine precision bugs were found by GateTest itself reviewing the PR:
+`strict-to-loose` matched inside `===`; the pattern engine ran on Markdown;
+a catch that calls `process.exit` was "log-and-eat"; `@/` alias imports were
+orphans; and a CRLF→LF rewrite by a scripted edit read as a 510-line change.
+The lessons became `docs/DOCTRINE.md`.
+
+**Later the same day — the other five languages.** Rust, PHP, C#, Kotlin and
+Swift had never been measured. tokio-rs/axum, laravel/framework,
+jasontaylordev/CleanArchitecture, ktorio/ktor and vapor/vapor at pinned
+commits: first contact 28 / 28 / 39 / 21 / 6 blocking, after 6 / 4 / 13 / 7 /
+1. Every drop was a scanner defect: `$redis->eval($lua)` read as PHP eval
+(23 of laravel's 28); `todo!()` inside `#[cfg(test)]` modules (13 of axum's
+28); `dtolnay/rust-toolchain@stable` and a repository's own reusable workflow
+on `@main` treated as third-party supply-chain risk; two SPA `index.html`
+shells scored as public pages (26 of CleanArchitecture's 39); a `test.html`
+under Maven's `test-resources/` scored as a page (14 of ktor's 21); a Gradle
+compile failure in our environment and a bare `node --test` on an Angular
+`test.ts` reported as "Unit tests failed"; a UTF-8 BOM and a `vscode/`
+settings file reported as invalid JSON; a README without an "install"
+heading blocking three of the five. Each fix shipped with a control pair;
+the eleven original repos held their ceilings. One scope fix went too wide on
+the first cut and was pulled back before it shipped: a SPA shell's `<body>` is
+rendered at runtime, but its `<head>` and `<html>` are the file's own, so
+`visual:viewport` and `a11y:html-lang` still fire on it — both shells in
+CleanArchitecture carried both, so the numbers did not move; the control
+tests are what would have caught it later. NodeGoat 59 → 58: the finding
+that left was `docs:readme-usage`, deliberately downgraded to a warning.
+Three ceilings ratcheted the same way, each drop diffed engine-against-engine
+on a fresh clone before it was accepted: zod 20 → 10 (its `packages/docs-v3/
+index.html` is a docsify shell — `<div id="app"></div>` and scripts — and the
+ten were seo/a11y findings on a body the framework fills at runtime), django
+65 → 64 and rails 47 → 46 (the README usage heading).
+
+### v1.61.1 (2026-09-04) — the gate can fail again
+
+**The single most important fact in this file changed: GateTest now ENFORCES
+for customers. It did not before.**
+
+Both shipped enforcement surfaces were advisory for everyone except us:
+
+| Surface | Customer behaviour before |
+|---|---|
+| `integrations/github-actions/gatetest-gate.yml` | `--report-only` on both PR and push |
+| `action.yml` (the Marketplace action) | `block` input defaulted to `'false'` → `--report-only` |
+
+`--report-only`'s own `--help` text is *"Report findings but NEVER fail the
+gate."* Admin repos (`GATETEST_ADMIN`, `crclabs-hq`) got `--fix` and real
+enforcement; every paying customer got a report that could not fail their
+build. **A gate that cannot say no is a linter with better marketing.**
+
+The justification written into both files was real — a mature repo should not
+eat years of backlog on day one — but *never fail* is a permanent answer to a
+first-run problem. The fix is scoping, which both files already had and were
+not relying on:
+
+- **PR runs enforce**, scoped by `--diff` / `--pr`, so an author is only ever
+  blocked on code they just wrote. Existing debt lives in files the diff never
+  opens.
+- **Full-repo runs enforce against `.gatetest/baseline.json`** — the "clean as
+  you code" machinery from KI #66, built long ago and never wired into the
+  shipped gate. First run grandfathers what is already there and passes; every
+  run after fails on NEW findings only.
+- `action.yml` `block` now defaults to `true`. Setting it `false` still works
+  and emits a `::warning` saying the gate cannot fail.
+
+Measured end to end on `colinhacks/zod` @ HEAD:
+
+```
+no baseline              50 blocking   exit 1
+gatetest --baseline     554 grandfathered
+re-scan                   0 blocking   exit 0   "Nothing NEW is blocking"
++ planted danger.js       5 blocking   exit 1
+```
+
+That last run caught a command injection (`exec` with interpolated
+`req.query`), a hardcoded `sk_live` key, and an unauthenticated `/admin/run`
+route — **through a 554-finding baseline.** Adoptable and still able to fail.
+
+`tests/integrations.test.js` gains the tripwire: no gate invocation may carry
+`--report-only`, and the full-scan path must keep a baseline ramp. Turning
+enforcement on without a ramp only moves the failure from "never blocks" to
+"blocks everyone on day one", and that gets uninstalled faster.
+
+**Precision work that made enforcement defensible.** Six third-party repos
+cloned fresh and scanned (`--suite full`); every one was blocked beforehand:
+
+| Repo | Before | After |
+|---|---|---|
+| express | 2 | **0** |
+| flask | 2 | 2 |
+| fastify | 6 | 5 |
+| got | 20 | 16 |
+| zod | 51 | 50 |
+| hono | 55 | 37 |
+
+OWASP/NodeGoat still blocks with 60, so recall is intact. Twelve defects, all
+failing toward silence or toward blocking clean code — among them
+`Promise.all()` counting as a SQL sink, `RegExp.prototype.exec()` as a
+command-execution sink, `.github/` excluded by a `.git` substring match,
+`server/api/` invisible to `authBypass`, and `.npmrc` reported CRITICAL merely
+for being tracked. See `docs/HISTORY.md` and PR #419 for the full list.
+
+**Corpus grown to 11 repos, four of them non-JavaScript (2026-09-05).** The
+engine advertises eight languages; until this pass its false-positive rate was
+measured on JavaScript plus Flask. First contact, `--suite full`, blocking:
+
+| Repo | First scan | After | What was wrong |
+|---|---|---|---|
+| django/django | 89 | **65** | 74 of 76 "secrets" were `password='secret'` fixtures under tests/; `datetime.now(tz)` read as naive; `def eval(self, …)` read as a call |
+| rails/rails | 56 | **47** | `pg_conn.exec("NOTIFY #{…}")` read as a shell; `class_eval reader, __FILE__, line` read as eval; error-severity rules stayed blocking inside test/ |
+| spring-petclinic | 9 | 9 | — |
+| gin-gonic/gin | 2 | 2 | — |
+
+One regression caught by the same gate: a first fix for the Ruby backtick form
+matched every error message with a backtick-quoted word before an
+interpolation and took Rails from 56 to **127**. Narrowed to a command literal
+that opens an expression and closes on the same line. The lesson is the
+session's: **added recall is unvalidated until the corpus says otherwise.**
+
+Django's remaining 65 and Rails' 47 are honest residue, not bugs — the ORM's
+SQL compiler in `django/db` building SQL by string, `rails runner` evaluating
+stdin by design, `datetime.now()` for a file timestamp. A scanner should
+report those; the project is right to ignore them. Ceilings are pinned at the
+measured numbers and ratchet down from here.
+
+**Two things every future session should carry from this:**
+
+1. **The recurring bug shape is a substring test where a segment test was
+   meant.** `includes('.git')` matches `.github`; `includes('test')` matches
+   `src/latest/` and `attestation.js`. `tests/test-path-canonical.test.js` now
+   forbids the shape across all 121 modules — it found five more the moment it
+   ran.
+2. **Precision is measured on third-party repos, never on this one.** Every
+   rule here was tuned against this repo, which is why they looked clean here
+   and blocked express. Clone real repos and scan them before believing any
+   precision claim.
+
+**Known gaps, measured and open:** a full self-scan does not finish (`timeout
+1200`, exit 124, still inside `mutation`, against the §9 bar of 60s);
+`checkTsSyntax` cannot verify when `typescript` is absent and now says so
+rather than reporting "all clean"; `npm run lint` is red on main with 7
+pre-existing errors.
+
+### errorSwallow precision, 2026-09-04 — measured on zod, not on us
+
+The worst repo in the corpus was `colinhacks/zod` @7a002366: **50 blocking, 33
+of them from one module.** Two separate causes, and fixing either alone would
+have hidden the other:
+
+| | zod | got | hono |
+|---|---|---|---|
+| before | 50 | 16 | 37 |
+| after | **20** | **15** | **33** |
+
+express 0, flask 2, fastify 5 unchanged; **OWASP/NodeGoat still blocks with
+60**, so this is precision, not silence. Ceilings in
+`reliability-corpus/real-world.json` ratcheted down to match.
+
+1. **Scope.** 23 of the 33 were benchmark harnesses — `packages/zod/src/v3/
+   benchmarks/` times the *throw* path, and was told 22 times it had erased an
+   error. The module already treated a test file as harness code; a benchmark
+   is the same kind of code. It now asks `HARNESS_DIR_RE` from
+   `src/core/scan-scope.js` instead of knowing only about tests. Reduced
+   severity, not removal — exactly what the module already did for tests.
+
+2. **Rule precision.** 7 were in shipped source, and all 7 were the parsing
+   idiom, not a swallow:
+   `if (def.coerce) try { payload.value = Number(payload.value); } catch {}`
+   followed by `if (typeof input === "number") return payload;`. The
+   discriminator is **not** "is this a parser" but *can the code around the
+   catch observe the failure* — `src/core/guarded-catch.js` recognises two
+   shapes (the try exits on success and an alternative follows; or the try
+   only assigns a target the following code TESTS). A target that is merely
+   *read* afterwards still blocks, because `try { user = await find(id) }
+   catch {} return user` cannot tell "no user" from "database down".
+
+**Do not widen this into an exclusion.** Both fixes ship with control pairs in
+`tests/guarded-catch.test.js` and `tests/error-swallow.test.js`: every negative
+control (the idiom stays quiet) is paired with a positive control (the swallow
+it resembles still blocks). Two zod findings deliberately still block —
+`scripts/compile-fuzz.ts` builds a debug string with a `""` default that
+nothing ever checks — and that is the rule working, not a gap.
+
+Third defect, found by self-scan in the same pass: the module reported the
+examples in its own documentation. A `catch {}` inside a `/** ... */` block was
+executable code as far as it was concerned, at ERROR severity. `_isExecutableAt`
+now answers that from the masked copy the guard analysis already builds.
+
+Fourth defect, caught by a control test before it shipped and the reason to
+write the masker's tests in both directions: a regex literal carrying a quote
+(`/["']/`) desynced `maskNonCode`, blanking the rest of the file — after which
+every finding below it read as prose and was **dropped**. Precision work fails
+toward silence far more quietly than it fails toward noise, so every masking
+change needs a test that a real finding survives it.
+
+
 **Deep audit day (2026-08-18, commits b0b45c25 → 5df15098):** four parallel audits (competitor complaints ~60 sources; engine false positives on 8 real repos; website/sync; engineering/security) → same-day fixes. (1) Free funnel reads public repos through one anonymous archive download (`repo-snapshot.js`) — KI #101 product half closed in production without the box key. (2) Every hosted scan path runs the real engine on the whole repo via `scan-engine-dispatch.ts` + `loadRepoFiles`; worker default tier `deterministic`, pushed SHA scanned, coverage reported. (3) Blocking false positives −~90% on express/flask/gin/sinatra/petclinic/taxonomy/NodeGoat/fastapi with positive+negative controls per rule (seo fragments, authBypass grammar/handler/heuristics/severity-by-risk, visual, a11y, subprocess "couldn't run" = info, unitTests toolchains, undefinedRef multi-declarators, secrets comments/placeholders/dedupe, python/ruby exec/eval, claudeCompliance abstract methods, links schemes/templates, envVars guarded reads, deployScriptValidator, performance images, deployReadiness never blocks alone); fakeFixDetector diff scoped to the project path. (4) Security: SSRF guard + rate limits on url/nuclear/server scans, Slack fail-closed, cron header bypass removed, recipe writes tokenised, server-fix Forensic admin-only, chat limiter fixed, webhook status passthrough, ssrf-guard reserved ranges. (5) Website: playground upsell price/tier, subscription success page, single scan trigger + honest progress + re-run, MCP button pauses without email, generated MCP manifest (120→121), 15 stale counts, root canonical, OG images, compare-page facts, Nuclear→Forensic deliverables, measured self-scan green stat, phantom Continuous cards removed. Report: `docs/audits/2026-08-18-deep-audit.md`.
 
 **Pre-launch credibility pass — overnight session (2026-07-12, commits 81d6382 + ca4ce4b + follow-ups):** Craig's directive: website info must be correct, professional, trust-building, no cyberpunk; full autonomy granted overnight. Two fronts:

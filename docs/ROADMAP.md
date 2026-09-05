@@ -5,6 +5,10 @@ Forward-looking work: evolution tiers, the Inclusive Agentic QA spec, open Known
 > Split out of CLAUDE.md (the Bible) 2026-07-07 to keep every session's context lean.
 > The Bible holds rules + current truth; this file holds the detail. Nothing was deleted.
 
+> **Work queue (2026-09-05):** the current plan is `docs/THE-FIFTY.md` — fifty
+> ordered moves with status and evidence. Pick from it first; the tiers below
+> are the older evolution map and the Known Issues table is the defect queue.
+
 ## HYPER-AGGRESSIVE PRODUCT EVOLUTION ROADMAP (READ THIS EVERY SESSION)
 
 **Authorization:** Craig 2026-05-12 — handed over a 20-item product evolution list and instructed: ship the 5 "Ship Now" items. The rest is recorded here so future sessions don't re-litigate it. Boss Rule items in this list ALWAYS require Craig's explicit go before any code lands.

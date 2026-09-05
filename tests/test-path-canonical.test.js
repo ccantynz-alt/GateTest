@@ -47,6 +47,8 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     // js_tests/, hono's runtime tests in runtime-tests/. Both were
     // application code to every path predicate until 2026-09-05.
     'js_tests/admin/inlines.test.js',
+    'pkg/testdata/fixture.go',
+    'ktor-server/core/test-resources/testdir/test.html',
     'py_tests/a.py',
     'runtime-tests/lambda/mock.ts',
   ];
@@ -59,6 +61,7 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'protest.js',
     'src/manifest/x.js',      // ends in "test" with no separator
     'src/greatest_hits.js',
+    'src/testdatabase.go',
   ];
 
   for (const p of MATCH) {
@@ -273,5 +276,29 @@ describe('.github survives the .git exclusion', () => {
   it('a real .git directory is still excluded', async () => {
     const found = await scanAt('.git/hooks/w.yml');
     assert.deepStrictEqual(found, [], '.git itself must stay excluded');
+  });
+});
+
+// `_collectFiles` matches on path.extname. A compound suffix such as
+// '.test.js' therefore matches nothing — integration-tests asked for
+// ['.test.js', '.spec.js', '.test.ts', '.spec.ts'] and silently found zero
+// test files on every repo, for as long as the module existed (2026-09-05).
+// Extensions go to the walk; test-ness goes to `_isTestPath`.
+describe('_collectFiles is never handed a compound suffix', () => {
+  it('no module passes a two-dot pattern to the walk', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const dir = path.join(__dirname, '..', 'src', 'modules');
+    const offenders = [];
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.js')) continue;
+      const src = fs.readFileSync(path.join(dir, f), 'utf8');
+      const re = /_collectFiles\([^)]*?\[([^\]]*)\]/g;
+      let m;
+      while ((m = re.exec(src)) !== null) {
+        if (/['"]\.[a-z0-9]+\.[a-z0-9]+['"]/i.test(m[1])) offenders.push(`${f}: [${m[1].trim()}]`);
+      }
+    }
+    assert.deepStrictEqual(offenders, []);
   });
 });

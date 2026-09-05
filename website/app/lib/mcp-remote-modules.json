@@ -225,7 +225,7 @@
     },
     {
       "name": "webHeaders",
-      "description": "Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, Express, Fastify, nginx"
+      "description": "Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, nginx, Apache, Caddy and server source in any language"
     },
     {
       "name": "typescriptStrictness",
@@ -425,7 +425,7 @@
     },
     {
       "name": "monorepoConstraints",
-      "description": "Monorepo Constraints — enforces package boundary rules in apps/ packages/ libs/"
+      "description": "Monorepo Constraints — package boundaries from the declared workspaces (apps/ packages/ libs/, pnpm, lerna)"
     },
     {
       "name": "zodSchemaPresence",

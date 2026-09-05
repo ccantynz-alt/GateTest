@@ -23,6 +23,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { workspacePackageNames } = require('../core/workspaces');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
 
@@ -391,24 +392,10 @@ class AiHallucinationDetector extends BaseModule {
   }
 
   _collectWorkspaceNames(projectRoot) {
-    const names = new Set();
-    const workspaceDirs = ['packages', 'apps', 'libs', 'services'];
-    for (const dir of workspaceDirs) {
-      const full = path.join(projectRoot, dir);
-      if (!fs.existsSync(full)) continue;
-      try {
-        for (const entry of fs.readdirSync(full)) {
-          const pkgJson = path.join(full, entry, 'package.json');
-          if (fs.existsSync(pkgJson)) {
-            try {
-              const pkg = JSON.parse(fs.readFileSync(pkgJson, 'utf-8'));
-              if (pkg.name) names.add(pkg.name);
-            } catch { /* skip */ }
-          }
-        }
-      } catch { /* skip */ }
-    }
-    return names;
+    // Every declared workspace member, not just apps/packages/libs/services
+    // (trpc keeps members under examples/* and www; prisma under test/**).
+    // One reader: src/core/workspaces.js.
+    return workspacePackageNames(projectRoot);
   }
 }
 

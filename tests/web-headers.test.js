@@ -317,3 +317,63 @@ describe('WebHeadersModule — clean baseline', () => {
     assert.match(summary.message, /1 file\(s\)/);
   });
 });
+
+// KI #106 (the Fifty, move 11): the rules key on HEADER NAMES, which look
+// the same in every language, but the file gate only ever opened .js/.ts
+// files that used `setHeader`/`res.header`/`helmet`. Every shape below was
+// invisible — a repo with wildcard CORS + credentials reported
+// `web-headers:no-files`. Each positive control has the negative next to it.
+describe('WebHeadersModule — the file gate follows the rules, not the framework (KI #106)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-wh-gate-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const cors = (r) => r.checks.find((c) => c.name.startsWith('web-headers:cors-wildcard-with-credentials:'));
+
+  it('Koa `ctx.set` wildcard + credentials fires; wildcard alone does not', async () => {
+    write(tmp, 'app.js', "app.use(async (ctx, next) => {\n  ctx.set('Access-Control-Allow-Origin', '*');\n  ctx.set('Access-Control-Allow-Credentials', 'true');\n  await next();\n});\n");
+    assert.ok(cors(await run(tmp)), 'ctx.set must be seen');
+    write(tmp, 'app.js', "app.use(async (ctx, next) => {\n  ctx.set('Access-Control-Allow-Origin', '*');\n  await next();\n});\n");
+    assert.strictEqual(cors(await run(tmp)), undefined);
+  });
+
+  it('`res.writeHead(200, {...})` with both headers fires', async () => {
+    write(tmp, 'server.js', "require('http').createServer((req, res) => {\n  res.writeHead(200, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Credentials': 'true' });\n  res.end('ok');\n}).listen(3000);\n");
+    assert.ok(cors(await run(tmp)));
+  });
+
+  it('Flask (Python) and Gin (Go) server files are opened — a header name is a header name in any language', async () => {
+    write(tmp, 'app.py', "@app.after_request\ndef cors(response):\n    response.headers['Access-Control-Allow-Origin'] = '*'\n    response.headers['Access-Control-Allow-Credentials'] = 'true'\n    return response\n");
+    write(tmp, 'main.go', 'func cors(c *gin.Context) {\n\tc.Writer.Header().Set("Access-Control-Allow-Origin", "*")\n\tc.Writer.Header().Set("Access-Control-Allow-Credentials", "true")\n}\n');
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('web-headers:cors-wildcard-with-credentials:')).map((c) => c.name);
+    assert.ok(hits.some((n) => n.includes('app.py')), hits.join());
+    assert.ok(hits.some((n) => n.includes('main.go')), hits.join());
+  });
+
+  it('a Python file that never mentions a header is not opened (still no-files)', async () => {
+    write(tmp, 'models.py', 'class User:\n    pass\n');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'web-headers:no-files'));
+  });
+
+  it('.htaccess with a `Header set` directive is header config: unsafe-eval fires and missing-HSTS warns; a rewrite-only .htaccess is not', async () => {
+    write(tmp, '.htaccess', 'Header set Content-Security-Policy "default-src \'self\'; script-src \'self\' \'unsafe-eval\'"\nHeader always set X-Frame-Options "DENY"\n');
+    let r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('web-headers:csp-unsafe-eval:.htaccess')), r.checks.map((c) => c.name).join());
+    assert.ok(r.checks.find((c) => c.name === 'web-headers:missing-hsts:.htaccess'));
+    write(tmp, '.htaccess', 'RewriteEngine On\nRewriteRule ^(.*)$ index.php?q=$1 [L,QSA]\n');
+    r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'web-headers:no-files'), 'a rewrite-only .htaccess sets no headers');
+  });
+
+  it('a Caddyfile `header` block with wildcard + credentials fires', async () => {
+    write(tmp, 'Caddyfile', 'example.com {\n  header Access-Control-Allow-Origin *\n  header Access-Control-Allow-Credentials true\n  reverse_proxy localhost:8080\n}\n');
+    assert.ok(cors(await run(tmp)));
+  });
+
+  it('test paths use the shared definition: a `.spec.ts` and a `__tests__/` fixture stay silent', async () => {
+    write(tmp, 'src/__tests__/cors.fixture.js', "res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Credentials', 'true');");
+    write(tmp, 'src/cors.spec.ts', "res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Credentials', 'true');");
+    assert.strictEqual(cors(await run(tmp)), undefined);
+  });
+});

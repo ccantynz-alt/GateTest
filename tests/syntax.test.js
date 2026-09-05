@@ -94,3 +94,32 @@ describe('SyntaxModule — dangling patterns do not false-positive on valid code
     assert.ok(flagged, 'a real unclosed template literal must still be caught');
   });
 });
+
+// 2026-09-05: a UTF-8 BOM (Visual Studio's launchSettings.json) and a
+// `vscode/settings.json` outside a dot-directory (axum's contrib/ide) were
+// both reported as invalid JSON.
+describe('SyntaxModule — JSON with a BOM, JSONC under vscode/', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-syntax-bom-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  async function jsonFailures() {
+    const result = makeResult();
+    await new SyntaxModule().run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && /^json:/.test(c.name)).map((c) => c.name);
+  }
+  it('a BOM-prefixed JSON file is valid', async () => {
+    fs.mkdirSync(path.join(tmp, 'Properties'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'Properties', 'launchSettings.json'), '\uFEFF{ "profiles": { "web": { "commandName": "Project" } } }\n');
+    assert.deepStrictEqual(await jsonFailures(), []);
+  });
+  it('contrib/ide/vscode/settings.json may carry comments', async () => {
+    fs.mkdirSync(path.join(tmp, 'contrib', 'ide', 'vscode'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'contrib', 'ide', 'vscode', 'settings.json'), '{\n  // Recommended settings\n  "rust-analyzer.check.command": "clippy",\n}\n');
+    assert.deepStrictEqual(await jsonFailures(), []);
+  });
+  it('an ordinary data file with a trailing comma is still an error', async () => {
+    fs.mkdirSync(path.join(tmp, 'data'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'data', 'config.json'), '{ "a": 1, }\n');
+    assert.strictEqual((await jsonFailures()).length, 1);
+  });
+});

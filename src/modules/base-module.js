@@ -16,7 +16,7 @@ const TEST_PATH_RE =
   // `js_tests/`, hono its runtime tests in `runtime-tests/`. A segment that
   // ENDS in a test word with a separator before it is a test dir; `contest`,
   // `latest`, `tester.js` have no separator and stay application code.
-  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$/i;
+  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus|testdata|test[-_]?resources|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$/i;
 
 class BaseModule {
   constructor(name, description) {

@@ -60,7 +60,13 @@
  *   error:   `.catch(() => {})` / `.catch(() => null)` /
  *            `.catch(() => undefined)` on a Promise chain — swallows
  *            the reason. `.catch(noop)` where `noop = () => {}` is
- *            also caught.
+ *            also caught. Warning when the rejection is GUARDED — see
+ *            `_catchNoopGuard`: the promise is held in a reference the
+ *            file awaits / returns elsewhere (the noop only marks it
+ *            handled), the next statement is a `throw` (the function is
+ *            already failing with the primary cause), or the call is
+ *            teardown (`close()` / `end()` / `destroy()`, or any call
+ *            inside a `finally` or a teardown function).
  *            (rule: `error-swallow:catch-noop:<rel>:<line>`)
  *   warning: `process.on('uncaughtException', ...)` /
  *            `'unhandledRejection'` handler that doesn't re-throw or
@@ -85,7 +91,7 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 const { HARNESS_DIR_RE } = require('../core/scan-scope');
-const { classifyEmptyCatch, maskNonCode } = require('../core/guarded-catch');
+const { classifyEmptyCatch, maskNonCode, enclosingContext, isTeardownName } = require('../core/guarded-catch');
 
 // Directory excludes beyond what `BaseModule._collectFiles` already skips
 // (node_modules, .git, dist, build, coverage, .next, out, …). The old
@@ -303,25 +309,29 @@ class ErrorSwallowModule extends BaseModule {
       // statement — the idiomatic JS fire-and-forget pattern.
       const catchNoop = line.match(/\.catch\s*\(\s*(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0)\s*\)/);
       if (catchNoop && !isInString(line, catchNoop.index) && this._isExecutableAt(masked, i, line, catchNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
-        issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
-          severity: isHarness ? 'warning' : 'error',
-          file: rel,
+        const guard = isHarness ? { guarded: false } : this._catchNoopGuard(masked, i, catchNoop);
+        issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, this._catchNoopDetails({
+          rel,
           line: i + 1,
-          message: `${rel}:${i + 1} has \`.catch(() => {})\` or equivalent — Promise rejection is silently dropped`,
+          isHarness,
+          guard,
+          what: 'has `.catch(() => {})` or equivalent',
           suggestion: 'Replace with `.catch((err) => log.error({ err }, "context"))` and either rethrow or surface a typed error. If this is intentional fire-and-forget, use `void promise` (the JS idiom) or add `// gatetest-fire-and-forget` on the line above.',
-        });
+        }));
       }
       // `.catch(noop)` / `.catch(ignore)` / `.catch(() => { /* ignore */ })`
       // — same void-prefix suppression applies.
       const catchNamedNoop = line.match(/\.catch\s*\(\s*(?:noop|ignore|swallow|_)\s*\)/);
       if (catchNamedNoop && !isInString(line, catchNamedNoop.index) && this._isExecutableAt(masked, i, line, catchNamedNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
-        issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, {
-          severity: isHarness ? 'warning' : 'error',
-          file: rel,
+        const guard = isHarness ? { guarded: false } : this._catchNoopGuard(masked, i, catchNamedNoop);
+        issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, this._catchNoopDetails({
+          rel,
           line: i + 1,
-          message: `${rel}:${i + 1} passes a known noop (\`noop\`/\`ignore\`/\`swallow\`/\`_\`) to \`.catch()\``,
+          isHarness,
+          guard,
+          what: 'passes a known noop (`noop`/`ignore`/`swallow`/`_`) to `.catch()`',
           suggestion: 'Give the handler a real body, or use `void promise` for fire-and-forget, or add `// gatetest-fire-and-forget`.',
-        });
+        }));
       }
 
       // 3. Global silent handlers
@@ -461,6 +471,109 @@ class ErrorSwallowModule extends BaseModule {
   }
 
   /**
+   * Is the rejection a `.catch(noop)` drops still observable, or already
+   * subsumed? Measured 2026-09-05 on nest, trpc and prisma — 30 blocking
+   * `catch-noop` findings, 25 of them one of three shapes. Text analysis on
+   * the masked file; the answer is a downgrade, never a suppression.
+   *
+   *   stored-reference  the receiver is a bare reference (`this.connectionPromise`,
+   *                     `connectPromise?`) that the file `await`s / `return`s /
+   *                     `.then`s elsewhere. `.catch()` returns a NEW promise; the
+   *                     stored one still rejects for whoever awaits it, so the
+   *                     noop handler only marks the rejection as observed. nest
+   *                     `client-redis.ts:129`: `this.connectionPromise =
+   *                     Promise.reject(...); this.connectionPromise.catch(() => {})`
+   *                     with `return this.connectionPromise` in `connect()`.
+   *   rethrow           the next statement is a `throw`. prisma
+   *                     `supabase-runtime.ts:72`: `await conn.destroy(err).catch(()
+   *                     => undefined); throw err;` — the function is already
+   *                     failing with the primary cause.
+   *   cleanup           the callee is a teardown verb, or the call sits inside a
+   *                     `finally` / a teardown function (`isTeardownName`). prisma
+   *                     `control.ts:39` `await this.client.end().catch(() => {})`
+   *                     inside `close()`; trpc `wsClient.ts:76` `this.close().catch(()
+   *                     => null)` from an inactivity timer.
+   *
+   * A `const p = db.commit(); p.catch(() => {})` whose `p` is never read again
+   * is NOT a stored reference — nothing awaits it — and keeps blocking; so does
+   * `db.commit().catch(() => {})` anywhere but a `finally` or a teardown.
+   */
+  _catchNoopGuard(masked, lineIdx, match) {
+    const mline = masked[lineIdx] || '';
+    const before = mline.slice(0, match.index);
+    const rest = mline.slice(match.index + match[0].length);
+
+    // rethrow: statement ends here and the next code line throws.
+    if (/^\s*;?\s*$/.test(rest)) {
+      for (let k = lineIdx + 1; k < Math.min(masked.length, lineIdx + 4); k += 1) {
+        const next = masked[k] || '';
+        if (!next.trim()) continue;
+        if (/^\s*throw\b/.test(next)) return { guarded: true, shape: 'rethrow' };
+        break;
+      }
+    }
+
+    // cleanup: `x.close().catch(...)` / `destroyPool(...).catch(...)`.
+    const callee = this._calleeBefore(before);
+    if (callee && isTeardownName(callee)) return { guarded: true, shape: 'cleanup', context: `${callee}()` };
+    const context = enclosingContext(masked, lineIdx, match.index);
+    if (context.finally) return { guarded: true, shape: 'cleanup', context: 'finally' };
+    if (context.teardown) return { guarded: true, shape: 'cleanup', context: `${context.fn}()` };
+
+    // stored reference, observed elsewhere in the file.
+    const ref = before.match(/(?:^|[^\w$.)\]])([A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\s*\??$/);
+    if (ref && !/^(?:this|self|window|globalThis|Promise)$/.test(ref[1])) {
+      const name = ref[1].replace(/\?\./g, '.');
+      const n = `(?<![\\w$.])${name.replace(/[.$]/g, '\\$&')}(?![\\w$])`;
+      const elsewhere = masked.filter((_, k) => k !== lineIdx).join('\n');
+      const observed = new RegExp(`\\b(?:await|return|yield)\\s+${n}|${n}\\s*!?\\s*\\??\\.then\\s*\\(`).test(elsewhere);
+      if (observed) return { guarded: true, shape: 'stored-reference', context: name };
+    }
+    return { guarded: false };
+  }
+
+  /** `await this.client.end()` → `end`; `ownedDispose?.()` → `ownedDispose`; a bare reference → null. */
+  _calleeBefore(before) {
+    const t = before.trimEnd();
+    if (!t.endsWith(')')) return null;
+    let depth = 0;
+    let p = t.length - 1;
+    for (; p >= 0; p -= 1) {
+      if (t[p] === ')') depth += 1;
+      else if (t[p] === '(') { depth -= 1; if (depth === 0) break; }
+    }
+    if (p <= 0) return null;
+    const m = t.slice(0, p).match(/([A-Za-z_$][\w$]*)\s*(?:\?\.)?\s*$/);
+    return m ? m[1] : null;
+  }
+
+  _catchNoopDetails({ rel, line, isHarness, guard, what, suggestion }) {
+    const at = `${rel}:${line}`;
+    if (guard && guard.guarded) {
+      const why = {
+        'stored-reference': `the promise is held in \`${guard.context}\`, which this file awaits or returns elsewhere — the noop handler only marks the rejection as observed`,
+        rethrow: 'the next statement is a `throw`, so the function is already failing with its primary cause',
+        cleanup: `this is teardown (${guard.context}) — the resource is being discarded and a failure to discard it has no consumer`,
+      }[guard.shape];
+      return {
+        severity: 'warning',
+        file: rel,
+        line,
+        guarded: guard.shape,
+        message: `${at} ${what}, but the rejection is not lost — ${why}`,
+        suggestion: 'Not blocking. If the rejection carries information (a teardown that leaks, a connect that never succeeds), log it inside the handler instead of discarding it.',
+      };
+    }
+    return {
+      severity: isHarness ? 'warning' : 'error',
+      file: rel,
+      line,
+      message: `${at} ${what} — Promise rejection is silently dropped`,
+      suggestion,
+    };
+  }
+
+  /**
    * The finding for an empty / comment-only catch, at the severity its
    * evidence supports.
    *
@@ -487,9 +600,14 @@ class ErrorSwallowModule extends BaseModule {
       };
     }
     if (guard && guard.guarded) {
-      const why = guard.shape === 'fallthrough'
-        ? 'the try block exits on success, so the code after the catch IS the failure path'
-        : `the try block only sets \`${guard.target}\`, which the code after the catch then tests`;
+      const why = {
+        fallthrough: 'the try block exits on success, so the code after the catch IS the failure path',
+        'checked-target': `the try block only sets \`${guard.target}\`, which the code after the catch then tests`,
+        rethrow: 'the code after the catch throws, so the function is already failing with its primary cause',
+        cleanup: guard.context === 'finally'
+          ? 'the catch is inside a `finally` block, where a thrown cleanup error would replace the primary result'
+          : `the catch is inside \`${guard.context}()\`, a teardown — the resource is being discarded`,
+      }[guard.shape];
       return {
         severity: 'warning',
         file: rel,

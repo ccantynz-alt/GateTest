@@ -59,3 +59,22 @@ describe('DocumentationModule — API detection is framework-agnostic', () => {
     assert.strictEqual(await docsApi('module.exports = { add: (a, b) => a + b };\n'), undefined);
   });
 });
+
+// 2026-09-05: axum, laravel and vapor were all BLOCKED for a README without an
+// "install" heading. Hygiene is a warning; a missing README stays what it was.
+describe('DocumentationModule — README section gaps are warnings', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-docs-sev-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  it('setup/install and usage gaps do not block', async () => {
+    fs.writeFileSync(path.join(tmp, 'README.md'), '# axum\n\nA web framework.\n\n## Contributing\n\nSee CONTRIBUTING.md.\n');
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    const result = makeResult();
+    await new DocumentationModule().run(result, { projectRoot: tmp });
+    for (const name of ['docs:readme-setup/install', 'docs:readme-usage']) {
+      const c = result.checks.find((x) => x.name === name && !x.passed);
+      assert.ok(c, `${name} should still be reported`);
+      assert.strictEqual(c.severity, 'warning', name);
+    }
+  });
+});

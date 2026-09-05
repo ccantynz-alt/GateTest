@@ -5,6 +5,7 @@
 
 const BaseModule = require('./base-module');
 const { JS_SOURCE_EXTS } = require('../core/source-extensions');
+const { isIllustrationPath, HARNESS_DIR_RE } = require('../core/scan-scope');
 const fs = require('fs');
 const path = require('path');
 
@@ -278,7 +279,53 @@ class CodeQualityModule extends BaseModule {
    * @returns {boolean}
    */
   _isLibraryPath(relFwd) {
+    // The canonical harness / illustration definitions decide first
+    // (Doctrine §4) — they know compound segments a bare-word set never will.
+    // apollo-server keeps a release check at
+    // `smoke-test/nodenext/src/smoke-test.ts`: `smoke-test` is a test dir
+    // to TEST_PATH_RE (`[a-z0-9]+[-_]tests?`) but not to this set, so its
+    // "smoke test passed!" line was a blocking error (corpus6, 2026-09-05).
+    if (this._isTestPath(relFwd) || isIllustrationPath(relFwd) || HARNESS_DIR_RE.test(relFwd)) return false;
     return !relFwd.split('/').some(seg => CodeQualityModule.NON_LIBRARY_DIRS.has(seg.toLowerCase()));
+  }
+
+  /** `tsdown.config.ts`, `vite.config.mts`, `jest.config.base.js`, `.eslintrc.cjs` — a prefix is required so `src/config.js` (app config, not tool config) stays library code. */
+  static CONFIG_BASENAME_RE = /^[\w.-]+\.config(?:\.[\w-]+)*\.[cm]?[jt]sx?$|^\.[\w-]+rc\.[cm]?[jt]s$/i;
+  static CLI_BASENAME_RE = /^cli\.[cm]?[jt]sx?$/i;
+  /** `logger.js`, `console-logger.service.ts`, `app_logger.ts` — separator-anchored, so `blogger.ts` is not a logger. */
+  static LOGGER_BASENAME_RE = /(?:^|[-_.])logger(?:[-_.]|$)/i;
+
+  /**
+   * What is this file FOR, when that answers the console question by itself?
+   *
+   *   'cli'    — a command-line entry point: basename `cli.*`, a node shebang,
+   *              or a file that reads `process.argv`. Its output IS console.
+   *   'config' — a build/tool configuration file. Its console.log is the
+   *              build talking to the developer running it.
+   *   'logger' — a logger implementation. Calling console is its whole job;
+   *              it is the sanctioned writer every other file should use.
+   *
+   * Found on corpus6 (2026-09-05), one blocking error each: nest's
+   * `packages/common/services/console-logger.service.ts` (`class
+   * ConsoleLogger`), trpc's five `packages/*\/tsdown.config.ts` and
+   * `packages/openapi/src/cli.ts` (shebang + `parseArgs(process.argv)`).
+   * All three are library PATHS in published packages, so the path-based
+   * scope above cannot see them; the file has to be read.
+   *
+   * @param {string} relFwd - repo-relative path, forward slashes
+   * @param {string[]} neutralisedLines - the file with strings/comments blanked,
+   *   so a comment saying "class FooLogger" or "process.argv" cannot vote
+   * @returns {'cli'|'config'|'logger'|null}
+   */
+  _fileRole(relFwd, neutralisedLines) {
+    const base = path.posix.basename(relFwd);
+    if (CodeQualityModule.CLI_BASENAME_RE.test(base)) return 'cli';
+    if (CodeQualityModule.CONFIG_BASENAME_RE.test(base)) return 'config';
+    if (CodeQualityModule.LOGGER_BASENAME_RE.test(base)) return 'logger';
+    if (/^#!.*\bnode\b/.test(neutralisedLines[0] || '')) return 'cli';
+    if (neutralisedLines.some(l => /\bclass\s+\w*Logger\b/.test(l))) return 'logger';
+    if (neutralisedLines.some(l => /\bprocess\.argv\b/.test(l))) return 'cli';
+    return null;
   }
 
   /**
@@ -352,9 +399,11 @@ class CodeQualityModule extends BaseModule {
    * GateTest's own directory names (`src/reporters`, `src/hooks`), so it only
    * ever protected this repo from its own scan.
    *
+   * @param {'cli'|'config'|'logger'|null} [fileRole] - from `_fileRole`; a
+   *   file whose job is the console gets info even on a library path
    * @returns {string|undefined}
    */
-  _severityForForbidden(patternSource, relFwd, rawLine, projectRoot) {
+  _severityForForbidden(patternSource, relFwd, rawLine, projectRoot, fileRole = null) {
     if (!patternSource.includes('console')) return undefined;
     // Non-library path -> INFO, not warning.
     //
@@ -373,6 +422,10 @@ class CodeQualityModule extends BaseModule {
     // wall, not out of the report. Library paths are untouched: a published
     // package logging from lib/ is still an error.
     if (!this._isLibraryPath(relFwd)) return 'info';
+    // Same reasoning, decided by the FILE rather than the directory: a CLI,
+    // a build config or a logger implementation writing to the console is
+    // the file doing its job. See `_fileRole`.
+    if (fileRole) return 'info';
     if (this._isDeliberateLogging(rawLine)) return 'warning';
     if (!this._publishesPackage(projectRoot, relFwd)) return 'warning';
     return undefined;
@@ -381,6 +434,7 @@ class CodeQualityModule extends BaseModule {
   _checkForbiddenPatterns(absPath, relPath, content, lines, neutralisedLines, moduleConfig, result, projectRoot) {
     const patterns = moduleConfig.forbiddenPatterns || [];
     const relFwd = relPath.replace(/\\/g, '/');
+    const fileRole = this._fileRole(relFwd, neutralisedLines);
     for (const { pattern, message, safeIf } of patterns) {
       const regex = new RegExp(pattern.source, pattern.flags);
       for (let i = 0; i < lines.length; i++) {
@@ -405,7 +459,7 @@ class CodeQualityModule extends BaseModule {
           // gone and every assignment would look unparseable.
           if (safeIf && safeIf(line)) continue;
           const lineNum = i;
-          const severity = this._severityForForbidden(pattern.source, relFwd, line, projectRoot);
+          const severity = this._severityForForbidden(pattern.source, relFwd, line, projectRoot, fileRole);
           result.addCheck(`quality:${message}:${relPath}:${i + 1}`, false, {
             file: relPath,
             line: i + 1,

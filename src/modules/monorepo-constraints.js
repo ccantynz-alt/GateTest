@@ -8,11 +8,17 @@
  *   - Impossible to deploy apps independently.
  *   - Hidden coupling that makes refactoring painful.
  *
+ * Members come from the declared workspaces (src/core/workspaces.js), not
+ * from directory names alone.
+ *
  * Rules enforced:
- *   1. apps/web must not import from apps/api (or any sibling app).
- *   2. apps/* must not import from services/* (internal service packages).
- *   3. packages/* must not import from apps/* (package depends on app).
- *   4. No relative imports crossing package boundaries (../../apps/other).
+ *   1. apps/web must not import from apps/api (or any sibling app) — error.
+ *   2. packages/* must not import from apps/* (package depends on app) — error.
+ *   3. No relative import may walk into a sibling member (../../other-pkg/src)
+ *      — warning; it holds only inside this checkout.
+ *   4. A member importing a sibling by name must declare it in its own
+ *      package.json — warning; otherwise it resolves only through hoisting.
+ *   (An "apps → services" rule was listed here for years and never implemented.)
  *
  * Suppression: `// monorepo-ok` on the import line skips that import.
  */
@@ -23,35 +29,23 @@ const fs   = require('fs');
 const path = require('path');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
+const { listWorkspacePackages } = require('../core/workspaces');
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
-function detectMonorepoStructure(projectRoot) {
-  const structure = { apps: [], packages: [], libs: [], services: [] };
+// "app" and "package" in rules 1–2 mean what the directory says (apps/,
+// packages/). Members under any other first segment (examples/, www,
+// test/, tools/) are still members and take part in rules 3–4.
 
-  for (const layer of ['apps', 'packages', 'libs', 'services']) {
-    const layerDir = path.join(projectRoot, layer);
-    if (!fs.existsSync(layerDir)) continue;
-    try {
-      for (const entry of fs.readdirSync(layerDir)) {
-        const full = path.join(layerDir, entry);
-        if (fs.statSync(full).isDirectory()) {
-          structure[layer].push({ name: entry, path: full });
-        }
-      }
-    } catch { /* skip */ }
-  }
-
-  return structure;
-}
-
-function getPackageName(dir) {
-  const pkgPath = path.join(dir, 'package.json');
-  if (!fs.existsSync(pkgPath)) return null;
+function readDeclaredDeps(pkgDir) {
+  const deps = new Set();
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    return pkg.name || null;
-  } catch { return null; }
+    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8'));
+    for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+      for (const name of Object.keys(pkg[key] || {})) deps.add(name);
+    }
+  } catch { /* error-ok — no manifest: nothing declared */ }
+  return deps;
 }
 
 const IMPORT_RE = /(?:^|\n)\s*(?:import\s+.*?from\s+|(?:const|let|var)\s+.*?=\s*require\s*\(\s*)['"]([^'"]+)['"]/g;
@@ -60,118 +54,141 @@ const IMPORT_RE = /(?:^|\n)\s*(?:import\s+.*?from\s+|(?:const|let|var)\s+.*?=\s*
 
 class MonorepoConstraints extends BaseModule {
   constructor() {
-    super('monorepoConstraints', 'Monorepo Constraints — enforces package boundary rules in apps/ packages/ libs/');
+    super('monorepoConstraints', 'Monorepo Constraints — package boundaries from the declared workspaces (apps/ packages/ libs/, pnpm, lerna)');
   }
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const structure   = detectMonorepoStructure(projectRoot);
+    // Members from package.json workspaces / pnpm-workspace.yaml / lerna.json,
+    // falling back to apps/ packages/ libs/ services/ (src/core/workspaces.js).
+    // Until 2026-09-05 only the four directory names were ever read: trpc's
+    // members under examples/* and www, prisma's under packages/** and
+    // test/** were invisible (KI #106).
+    const members = listWorkspacePackages(projectRoot);
 
-    const totalPkgs = structure.apps.length + structure.packages.length +
-                      structure.libs.length + structure.services.length;
-
-    if (totalPkgs < 2) {
+    if (members.length < 2) {
       result.addCheck('monorepo-constraints:not-monorepo', true, {
         severity: 'info',
-        message: 'No monorepo structure detected (apps/, packages/, libs/) — constraint check skipped',
+        message: 'No monorepo structure detected (workspaces, apps/, packages/, libs/) — constraint check skipped',
       });
       return;
     }
 
-    // Build package name → layer map
-    const pkgNameToLayer = new Map();
-    const pkgNameToDir   = new Map();
-    for (const [layer, pkgs] of Object.entries(structure)) {
-      for (const pkg of pkgs) {
-        const name = getPackageName(pkg.path) || pkg.name;
-        pkgNameToLayer.set(name, layer);
-        pkgNameToDir.set(name, pkg.path);
-        // Also map by directory name
-        pkgNameToLayer.set(pkg.name, layer);
-        pkgNameToDir.set(pkg.name, pkg.path);
-      }
-    }
+    const byName = new Map();
+    for (const m of members) if (m.name) byName.set(m.name, m);
+    // Longest rel first, so a nested member (packages/a/b) wins over packages/a.
+    const byRelDesc = [...members].sort((a, b) => b.rel.length - a.rel.length);
+    const memberOf = (absPath) => {
+      const rel = path.relative(projectRoot, absPath).split(path.sep).join('/');
+      return byRelDesc.find((m) => rel === m.rel || rel.startsWith(m.rel + '/')) || null;
+    };
 
     const extensions = ['.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.mts', '.cts'];
     let issueCount = 0;
 
-    // Only scan apps and packages, not node_modules
-    const dirsToScan = [
-      ...structure.apps.map(p => ({ ...p, layer: 'apps' })),
-      ...structure.packages.map(p => ({ ...p, layer: 'packages' })),
-      ...structure.libs.map(p => ({ ...p, layer: 'libs' })),
-    ];
-
-    for (const { name: sourcePkg, path: sourceDir, layer: sourceLayer } of dirsToScan) {
-      const sourceFiles = this._collectFiles(sourceDir, extensions);
+    for (const source of members) {
+      const declared = readDeclaredDeps(source.dir);
+      const sourceFiles = this._collectFiles(source.dir, extensions);
 
       for (const file of sourceFiles) {
-        if (file.includes('node_modules')) continue;
+        if (memberOf(file) !== source) continue; // belongs to a nested member
         let content;
-        try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+        try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; } // error-ok — unreadable file has no imports
 
         const rel = path.relative(projectRoot, file);
+        const isTest = this._isTestPath(rel);
         const lines = content.split(/\r?\n/);
 
         IMPORT_RE.lastIndex = 0;
         let m;
         while ((m = IMPORT_RE.exec(content)) !== null) {
           const specifier = m[1];
-          const lineNo    = content.slice(0, m.index).split(/\r?\n/).length;
+          // IMPORT_RE starts at the newline BEFORE the statement, so the
+          // match index sits on the previous line — every import after the
+          // first was reported one line early (and `// monorepo-ok` was read
+          // from the wrong line) until 2026-09-05.
+          const stmtIndex = content[m.index] === '\n' ? m.index + 1 : m.index;
+          const lineNo    = content.slice(0, stmtIndex).split(/\r?\n/).length;
           const lineText  = lines[lineNo - 1] || '';
           if (lineText.includes('// monorepo-ok')) continue;
 
-          let targetLayer = null;
-          let targetName  = null;
+          let target = null;
+          let viaRelative = false;
 
-          // Bare package name
-          const barePkg = specifier.startsWith('@')
-            ? specifier.split('/').slice(0, 2).join('/')
-            : specifier.split('/')[0];
-
-          if (pkgNameToLayer.has(barePkg)) {
-            targetLayer = pkgNameToLayer.get(barePkg);
-            targetName  = barePkg;
+          if (specifier.startsWith('.')) {
+            target = memberOf(path.resolve(path.dirname(file), specifier));
+            viaRelative = true;
+          } else {
+            const barePkg = specifier.startsWith('@')
+              ? specifier.split('/').slice(0, 2).join('/')
+              : specifier.split('/')[0];
+            target = byName.get(barePkg) || null;
           }
 
-          // Relative cross-boundary: ../../apps/other or ../../packages/other
-          if (!targetLayer && (specifier.startsWith('../') || specifier.startsWith('./'))) {
-            const absTarget = path.resolve(path.dirname(file), specifier);
-            const relTarget = path.relative(projectRoot, absTarget);
-            const parts     = relTarget.replace(/\\/g, '/').split('/');
-
-            if (['apps', 'packages', 'libs', 'services'].includes(parts[0])) {
-              targetLayer = parts[0];
-              targetName  = parts[1];
-            }
-          }
-
-          if (!targetLayer || !targetName) continue;
-          if (targetName === sourcePkg) continue; // intra-package import
+          if (!target || target === source) continue;
+          const targetName = target.name || target.rel;
 
           // Rule 1: apps/* → apps/* is forbidden
-          if (sourceLayer === 'apps' && targetLayer === 'apps') {
+          if (source.layer === 'apps' && target.layer === 'apps') {
             issueCount++;
             result.addCheck(`monorepo-constraints:cross-app:${rel}:${specifier}`, false, {
               severity: 'error',
-              message: `apps/${sourcePkg} imports directly from apps/${targetName} — cross-app imports forbidden. Move shared code to packages/.`,
+              message: `${source.rel} imports directly from ${target.rel} — cross-app imports forbidden. Move shared code to packages/.`,
               file: rel,
               line: lineNo,
-              fix: `Extract the shared code from apps/${targetName} into a packages/ package and import from there.`,
+              fix: `Extract the shared code from ${target.rel} into a packages/ package and import from there.`,
               autoFix: makeAutoFix(file, 'monorepo-constraints:cross-app', `Cross-app import from ${targetName}`, lineNo, `Move shared code to packages/ and update this import`),
             });
+            continue;
           }
 
           // Rule 2: packages/* → apps/* is forbidden
-          if (sourceLayer === 'packages' && targetLayer === 'apps') {
+          if (source.layer === 'packages' && target.layer === 'apps') {
             issueCount++;
             result.addCheck(`monorepo-constraints:pkg-imports-app:${rel}:${specifier}`, false, {
               severity: 'error',
-              message: `packages/${sourcePkg} imports from apps/${targetName} — packages must never depend on apps.`,
+              message: `${source.rel} imports from ${target.rel} — packages must never depend on apps.`,
               file: rel,
               line: lineNo,
-              fix: `Remove the dependency on apps/${targetName}. Packages must be app-agnostic.`,
+              fix: `Remove the dependency on ${target.rel}. Packages must be app-agnostic.`,
               autoFix: makeAutoFix(file, 'monorepo-constraints:pkg-imports-app', `Package importing from app`, lineNo, `Remove this app dependency from the package`),
+            });
+            continue;
+          }
+
+          if (isTest) continue; // the two objective rules below are about shipped code
+          // `import type` is erased at runtime: the MODULE_NOT_FOUND rule 4
+          // warns about cannot happen (apollo-server's plugin-response-cache
+          // imports only a type from @apollo/cache-control-types, 2026-09-05).
+          const typeOnly = /^\s*import\s+type\b/.test(lineText);
+
+          // Rule 3 (objective, any layer): a relative path that walks into a
+          // sibling workspace member bypasses that member's public surface —
+          // it works only while both live in this checkout, and breaks the
+          // moment either is published, vendored or deployed alone.
+          if (viaRelative) {
+            issueCount++;
+            result.addCheck(`monorepo-constraints:relative-cross-package:${rel}:${specifier}`, false, {
+              severity: 'warning',
+              message: `${source.rel} reaches into ${target.rel} by relative path (${specifier}) — import the package by name (${targetName}) so the boundary holds outside this checkout`,
+              file: rel,
+              line: lineNo,
+              fix: `Replace the relative path with an import of ${targetName} and declare it in ${source.rel}/package.json.`,
+            });
+            continue;
+          }
+
+          // Rule 4 (objective, any layer): importing a sibling by name without
+          // declaring it. Hoisting makes it resolve in the monorepo; a consumer
+          // of the published package, or a filtered install, gets MODULE_NOT_FOUND.
+          if (target.name && !typeOnly && !declared.has(target.name)) {
+            issueCount++;
+            result.addCheck(`monorepo-constraints:undeclared-workspace-dep:${rel}:${target.name}`, false, {
+              severity: 'warning',
+              message: `${source.rel} imports ${target.name} but ${source.rel}/package.json does not declare it — resolves only through hoisting`,
+              file: rel,
+              line: lineNo,
+              fix: `Add "${target.name}": "workspace:*" (pnpm) or the workspace version to ${source.rel}/package.json dependencies.`,
             });
           }
         }
@@ -181,7 +198,7 @@ class MonorepoConstraints extends BaseModule {
     if (issueCount === 0) {
       result.addCheck('monorepo-constraints:clean', true, {
         severity: 'info',
-        message: `Monorepo boundaries respected across ${totalPkgs} packages`,
+        message: `Monorepo boundaries respected across ${members.length} packages`,
       });
     }
   }

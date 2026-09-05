@@ -52,8 +52,11 @@ class DocumentationModule extends BaseModule {
 
     // Check for essential sections
     const requiredSections = [
-      { name: 'setup/install', keywords: ['install', 'setup', 'getting started', 'quick start'], severity: 'error' },
-      { name: 'usage', keywords: ['usage', 'how to use', 'example', 'quick start'], severity: 'error' },
+      // warning, not error: a README that lacks an install section is hygiene,
+      // not a defect. axum, laravel and vapor were all BLOCKED on it
+      // (2026-09-05) — the gate as bottleneck, Forbidden #25.
+      { name: 'setup/install', keywords: ['install', 'setup', 'getting started', 'quick start'], severity: 'warning' },
+      { name: 'usage', keywords: ['usage', 'how to use', 'example', 'quick start'], severity: 'warning' },
       { name: 'description', keywords: ['##', '# '], severity: 'error' },
     ];
 
