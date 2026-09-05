@@ -999,3 +999,45 @@ describe('buildMarkdownComment — exact suppression reply per finding', () => {
     assert.strictEqual((body.match(/@gatetest ignore hardcodedUrl/g) || []).length, 1, 'only the finding with a computed line gets one');
   });
 });
+
+// Move 17 (2026-09-05): a report that only lists findings implies the rest
+// was verified. The comment now says what it did NOT check.
+describe('buildMarkdownComment — says what it did not check', () => {
+  const { notCheckedLines } = require('../website/app/lib/github-callback');
+  const base = (over = {}) => ({
+    status: 'complete', totalIssues: 0, duration: 100, engine: 'cli',
+    modules: [{ name: 'secrets', status: 'passed', checks: 3, issues: 0, duration: 1, details: [] }],
+    findings: [], findingSummary: { total: 0, blocking: 0, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 },
+    ...over,
+  });
+
+  it('a full CLI scan with full coverage adds nothing', () => {
+    assert.deepStrictEqual(notCheckedLines(base(), base().modules), []);
+    const body = buildMarkdownComment('o/r', 'abc1234def', base(), null, 'strict');
+    assert.match(body, /## ✅ GateTest — All checks passed/);
+    assert.doesNotMatch(body, /Partial scan|Not checked|Coverage:/);
+  });
+
+  it('an engine fallback cannot wear the green tick', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', base({ engine: 'runTier' }), null, 'strict');
+    assert.match(body, /## 🟡 GateTest — Passed — partial scan \(engine fallback\)/);
+    assert.match(body, /> ⚠️ \*\*Partial scan\.\*\* The full engine was unavailable/);
+  });
+
+  it('truncated coverage says how many files were not read', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', base({ coverageTruncated: true, filesAnalysed: 400, filesInRepo: 1250 }), null, 'strict');
+    assert.match(body, /> \*\*Coverage:\*\* 400 of 1250 files analysed — .* 850 files were not read\./);
+  });
+
+  it('deferred and skipped modules are named', () => {
+    const r = base({
+      engineMeta: { deferred: [{ module: 'mutation', reason: 'minutes, not seconds', runsIn: 'nightly CI' }] },
+      modules: [
+        { name: 'secrets', status: 'passed', checks: 3, issues: 0, duration: 1, details: [] },
+        { name: 'e2e', status: 'skipped', checks: 0, issues: 0, duration: 0, details: [] },
+      ],
+    });
+    const body = buildMarkdownComment('o/r', 'abc1234def', r, null, 'strict');
+    assert.match(body, /> \*\*Not checked:\*\* `mutation` \(runs in nightly CI\), `e2e`/);
+  });
+});

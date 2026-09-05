@@ -204,6 +204,30 @@ function linkifyFinding(detail, owner, repo, sha) {
 /** Hard budget for the ranked "What matters" list — 5 inline items, never a wall. */
 const PR_COMMENT_TOP_FINDINGS = 5;
 
+/**
+ * The lines that say what a scan did not check — empty when it checked
+ * everything it claims to. Kept separate so the shape is testable on its own.
+ */
+function notCheckedLines(scanResult, modules) {
+  const out = [];
+  if (!scanResult) return out;
+  if (typeof scanResult.engine === 'string' && scanResult.engine !== 'cli') {
+    out.push(`> ⚠️ **Partial scan.** The full engine was unavailable for this run; an in-memory fallback ran ${modules.length} module${modules.length === 1 ? '' : 's'}. Findings are a subset — do not read a pass here as a full verdict. The next push re-runs the full engine.`);
+  }
+  if (scanResult.coverageTruncated === true && typeof scanResult.filesAnalysed === 'number' && typeof scanResult.filesInRepo === 'number') {
+    out.push(`> **Coverage:** ${scanResult.filesAnalysed} of ${scanResult.filesInRepo} files analysed — the repository is over the per-scan file cap, so ${scanResult.filesInRepo - scanResult.filesAnalysed} file${scanResult.filesInRepo - scanResult.filesAnalysed === 1 ? ' was' : 's were'} not read.`);
+  }
+  const deferred = scanResult.engineMeta && Array.isArray(scanResult.engineMeta.deferred) ? scanResult.engineMeta.deferred : [];
+  const skipped = modules.filter((m) => m && (m.status === 'skipped' || m.status === 'deferred')).map((m) => m.name);
+  const notRun = [
+    ...deferred.map((d) => `\`${d && d.module ? d.module : d}\`${d && d.runsIn ? ` (runs in ${d.runsIn})` : ''}`),
+    ...skipped.filter((n) => !deferred.some((d) => (d && d.module) === n)).map((n) => `\`${n}\``),
+  ];
+  if (notRun.length) out.push(`> **Not checked:** ${notRun.join(', ')}`);
+  if (out.length) out.push('');
+  return out;
+}
+
 function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'advisory') {
   const ownerRepoParts = String(repository || '').split('/');
   const owner = ownerRepoParts[0] || '';
@@ -218,7 +242,10 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
   // change — the tick is green and the headline must say why, or the
   // reader assumes the scanner missed what it actually held back.
   const heldBack = verdict.enforced && state === 'success' && totalIssues > 0;
-  const icon = state === 'error' ? '⚠️' : advisoryWithFindings ? '🟡' : state === 'failure' ? '❌' : '✅';
+  // A pass from the in-memory fallback is a pass over a subset of modules
+  // — it may not wear the green tick (move 17).
+  const partial = typeof (scanResult && scanResult.engine) === 'string' && scanResult.engine !== 'cli';
+  const icon = state === 'error' ? '⚠️' : (advisoryWithFindings || (partial && state === 'success')) ? '🟡' : state === 'failure' ? '❌' : '✅';
   const headline = state === 'error'
     ? 'Scan error'
     : advisoryWithFindings
@@ -227,7 +254,9 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
         ? `${verdict.blockingInChange} blocking finding${verdict.blockingInChange === 1 ? '' : 's'}${verdict.attributed ? ' in this change' : ''}`
         : heldBack
           ? `Passed — ${totalIssues} finding${totalIssues === 1 ? '' : 's'}, none blocking${verdict.attributed ? ' in this change' : ''}`
-          : 'All checks passed';
+          : partial
+            ? 'Passed — partial scan (engine fallback)'
+            : 'All checks passed';
   const shortSha = sha ? sha.slice(0, 7) : '???????';
 
   const lines = [
@@ -248,6 +277,13 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
 
     lines.push(`**${modules.length} modules** scanned in **${durationSec}s** — **${totalIssues} issue${totalIssues === 1 ? '' : 's'}** found`);
     lines.push('');
+
+    // What this scan did NOT check (the Fifty, move 17). A report that only
+    // lists findings implies the rest was verified. Three things can make
+    // that implication false, and until 2026-09-05 none of them reached
+    // the reader: the full engine falling back to the in-memory tier, the
+    // file cap truncating coverage, and modules deferred or skipped.
+    for (const l of notCheckedLines(scanResult, modules)) lines.push(l);
 
     // Modules with issues first, then passed modules (collapsed).
     const failed = modules.filter((m) => m.issues > 0 || m.status === 'failed');
@@ -685,6 +721,7 @@ module.exports = {
   toCommitState,
   buildDescription,
   buildMarkdownComment,
+  notCheckedLines,
   linkifyFinding,
   fetchRepoMode,
   sendGithubCallback,
