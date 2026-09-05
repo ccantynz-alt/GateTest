@@ -65,7 +65,7 @@ function sniffHead(absPath) {
     return null;
   } finally {
     if (fd !== undefined) {
-      try { fs.closeSync(fd); } catch { /* already closed */ }
+      try { fs.closeSync(fd); } catch { /* error-ok — closing after a failed read; nothing left to recover */ }
     }
   }
 }
