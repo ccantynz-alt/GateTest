@@ -31,7 +31,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 03 | No rule ships without a control pair | done — policy | `docs/DOCTRINE.md` §3; every 2026-09-05 fix shipped both |
 | 04 | Grow the real-world corpus to 20 repos | done | Rust (axum 28→6), PHP (laravel 28→4), C# (CleanArchitecture 39→13), Kotlin (ktor 21→7), Swift (vapor 6→1); then the monorepos — nest 39→9, trpc 33→8, apollo-server 4→0, prisma 90→16 — all 2026-09-05, PR #426 |
 | 05 | Add Django, Rails, Spring, a Go service | done | seven rule defects, each a real line (PR #422); the remaining five languages followed under 04 |
-| 06 | Ratchet the ceilings on a schedule | open | monthly review; ceilings only go down |
+| 06 | Ratchet the ceilings on a schedule | done | `--ratchet` in `scripts/real-world-precision.js` lowers `maxBlocking` to the measured count (never raises, never touches floors); `dogfood-nightly.yml` runs it and ships the manifest on the rolling PR, so every improvement becomes a ceiling within a day |
 | 07 | Per-rule false-positive rate from the flywheel | open | telemetry records dismissals; needs the leaderboard |
 | 08 | Retire any rule above 20% FP that can't be fixed | open | depends on 07 |
 | 09 | Recalibrate confidence against the corpus | open | 0.7 was chosen, not derived |
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-the 8 gates left in KI #106, 06 (schedule the ratchet), 23, 30, 46.
+the 8 gates left in KI #106, 23, 30, 46.
 Waiting on Craig: 15, 29, 35, 41.
