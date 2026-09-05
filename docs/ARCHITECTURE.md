@@ -219,6 +219,7 @@ GateTest/
 | `GATETEST_APP_ID` | GitHub App ID for the dual-host GitHub Marketplace distribution flow — backs the JWT (RS256) auth described above. |
 | `GATETEST_PRIVATE_KEY` | GitHub App private key (`.pem`) — pairs with `GATETEST_APP_ID` for JWT signing. |
 | `GATETEST_WEBHOOK_SECRET` | GitHub App webhook payload signature verification. |
+| `GATETEST_REPORT_SIGNING_KEY` | Optional (≥16 chars). When set, every JSON report's `provenance` block (engine, runtime, modules ran/skipped/deferred, suppression state, SHA-256 of the canonical findings) is HMAC-SHA256 signed; `gatetest verify-report <file>` checks the signature and that the findings still match the digest. Unset → the report says `signature.unsigned` explicitly. Engine-side, not website-only: set it wherever reports are produced for an auditor. |
 | `GATETEST_GITHUB_TOKEN` | Fallback GitHub token used where the App installation token isn't available. |
 | `GIT_HOST` | `HostBridge` selector — `github` or `gluecron`, see the STRATEGIC DIRECTION section of CLAUDE.md. |
 | `GITLAB_CLIENT_ID` / `GITLAB_CLIENT_SECRET` | GitLab OAuth App credentials (parallel to the GitHub OAuth pair above). |
@@ -229,7 +230,8 @@ GateTest/
 | `NEXT_PUBLIC_APP_VERSION` | Client-visible app version string. |
 
 ---
-
+
+
 
 ## HOSTED SCAN PATH (2026-08-18 — read before touching any /api/scan/* route)
 

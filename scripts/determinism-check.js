@@ -62,28 +62,11 @@ function scan(opts) {
   return JSON.parse(fs.readFileSync(reportPath, 'utf8'));
 }
 
-/**
- * A finding's identity for comparison. Everything a user could see, nothing
- * that is allowed to differ between runs (timestamps, durations, ordering).
- */
+// One definition of a finding's identity — shared with the report's
+// provenance digest, so "same digest" and "same findings" mean the same.
+const { fingerprintFindings } = require('../src/core/report-provenance');
 function fingerprint(report) {
-  const out = [];
-  for (const m of report.results || []) {
-    for (const c of m.checks || []) {
-      if (c.passed) continue;
-      out.push([
-        m.module,
-        c.name,
-        c.file || '',
-        c.line || '',
-        c.severity || '',
-        typeof c.confidence === 'number' ? c.confidence.toFixed(4) : '',
-        c.suppressed ? 'suppressed' : '',
-        String(c.message || '').slice(0, 200),
-      ].join('|'));
-    }
-  }
-  return out.sort();
+  return fingerprintFindings(report.results);
 }
 
 /**
