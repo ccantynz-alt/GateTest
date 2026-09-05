@@ -56,7 +56,7 @@ function collectImportedPackages(projectRoot) {
   };
   const files = collectSourceFiles(projectRoot).filter(production);
   const graph = buildImportGraph({ projectRoot, files });
-  for (const specs of graph.externals.values()) for (const spec of specs) imported.add(barePackage(spec));
+  for (const specs of graph.externals.values()) for (const spec of specs.keys()) imported.add(barePackage(spec));
   for (const file of sfcFiles(projectRoot).filter(production)) {
     let src;
     try { src = fs.readFileSync(file, 'utf8'); } catch { continue; } // error-ok — unreadable component

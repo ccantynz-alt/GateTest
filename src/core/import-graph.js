@@ -324,14 +324,14 @@ function edgesForFile(absPath, fileSet, ctx = {}, full = true) {
     const st = fs.statSync(absPath);
     cacheKey = `${absPath}|${st.size}|${st.mtimeMs}|${ctx.projectRoot || ''}|${fileSet.size}|${full ? 'full' : 'cheap'}`;
     const hit = fileEdgeCache.get(cacheKey);
-    if (hit) { const copy = hit.edges.map((e) => ({ ...e })); if (hit.unchecked) copy.unchecked = hit.unchecked; if (hit.pending) copy.pending = true; copy.externals = new Set(hit.externals || []); return copy; }
+    if (hit) { const copy = hit.edges.map((e) => ({ ...e })); if (hit.unchecked) copy.unchecked = hit.unchecked; if (hit.pending) copy.pending = true; if (hit.skipped) copy.skipped = hit.skipped; copy.externals = new Map(hit.externals || []); return copy; }
   } catch {
     cacheKey = null; // error-ok — unreadable stat, just don't cache
   }
   const out = edgesForFileUncached(absPath, fileSet, ctx, full);
   if (cacheKey) {
     if (fileEdgeCache.size >= FILE_EDGE_CACHE_MAX) fileEdgeCache.clear();
-    fileEdgeCache.set(cacheKey, { edges: out.map((e) => ({ ...e })), unchecked: out.unchecked || null, pending: !!out.pending, externals: [...(out.externals || [])] });
+    fileEdgeCache.set(cacheKey, { edges: out.map((e) => ({ ...e })), unchecked: out.unchecked || null, pending: !!out.pending, skipped: out.skipped || null, externals: [...(out.externals || [])] });
   }
   return out;
 }
@@ -344,7 +344,7 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
   } catch {
     return out; // error-ok
   }
-  if (text.length > MAX_FILE_BYTES) return out;
+  if (text.length > MAX_FILE_BYTES) { out.skipped = 'size'; return out; }
 
   const lines = text.split(/\r?\n/);
   const dir = path.dirname(absPath);
@@ -363,9 +363,17 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
   // resolution does not — an `import type` through an alias is still elided.
   // Bare specifiers that resolve to nothing in this project are its EXTERNAL
   // dependencies — the packages it really imports, read from the same
-  // statements and the same masked text as the edges. dependency-reachability
-  // reads them here instead of keeping a third import harvester.
-  const externals = new Set();
+  // statements and the same masked text as the edges. dependencyReachability
+  // and aiHallucination read them here instead of keeping their own import
+  // harvesters. Each carries the line it was seen on, how it resolved
+  // ('unresolved' | 'workspace' | 'alias') and whether every import of it in
+  // this file is type-only: aiHallucination skips the resolved ones (an
+  // aliased or workspace import is not a missing package) and grades a
+  // type-only import lower; dependencyReachability counts them all (a
+  // monorepo that imports its own `@nestjs/common` depends on that package
+  // name). A value import outranks a type import of the same package — the
+  // entry keeps the line of the strongest use, not the first.
+  const externals = new Map();
   const push = (spec, kind, lineNo, use) => {
     const r = resolveSpec(dir, absPath, spec, fileSet, ctx);
     if (r) record(r[0], kind || r[1], lineNo, use, r[1]);
@@ -373,7 +381,11 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
     // that imports its own `@nestjs/common` depends on that package name.
     // A path alias (`@/x`) is neither a package nor external.
     // (nest maps `@nestjs/*` through tsconfig paths — an alias, but still that package.)
-    if (isBarePackageSpec(spec) && (!r || r[1] === 'workspace' || r[1] === 'alias')) externals.add(spec);
+    if (isBarePackageSpec(spec) && (!r || r[1] === 'workspace' || r[1] === 'alias')) {
+      const typeOnly = kind === 'type';
+      const prev = externals.get(spec);
+      if (!prev || (prev.typeOnly && !typeOnly)) externals.set(spec, { line: lineNo, via: r ? r[1] : 'unresolved', typeOnly });
+    }
   };
 
   const { edges: stmtEdges, consumedLines, unchecked, pending } = importStatementEdges(absPath, text, ctx, full);
@@ -458,7 +470,8 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
  *   runtimeEdgeCount: number,
  *   unchecked: { jsx: string[] },              files whose imports were kept without elision analysis, by reason
  *   elision: { scanned: number, pending: number }, files the use-scan ran on (inside a candidate cycle) / files it never needed to
- *   externals: Map<string, Set<string>>,      per file, the bare specifiers that resolve to nothing in this project — its package imports
+ *   externals: Map<string, Map<string, {line: number, via: 'unresolved'|'workspace'|'alias', typeOnly: boolean}>>,  per file, its package imports: bare specifiers that resolve to nothing in this project, or to a workspace package / a package-shaped alias
+ *   skipped: Set<string>,                      files in the walk whose text was never read (over MAX_FILE_BYTES) — nothing below is known about them
  *   rel: (abs: string) => string,
  * }}
  */
@@ -491,7 +504,8 @@ function buildImportGraph(opts = {}) {
     provisional.set(abs, new Set(fileEdges.filter((e) => RUNTIME_KINDS.has(e.kind)).map((e) => e.to)));
   }
   const elision = { scanned: 0, pending: 0 };
-  const externals = new Map(); // abs → Set<bare specifier>
+  const externals = new Map(); // abs → Map<bare specifier, {line, via, typeOnly}>
+  const skipped = new Set();
   for (const scc of tarjanSCC(provisional)) {
     const cyclic = scc.length >= 2 || (provisional.get(scc[0]) || EMPTY_SET).has(scc[0]);
     if (!cyclic) continue;
@@ -510,7 +524,8 @@ function buildImportGraph(opts = {}) {
     const all = new Set();
     const fileEdges = perFile.get(abs);
     if (fileEdges.unchecked) unchecked[fileEdges.unchecked].push(abs);
-    externals.set(abs, fileEdges.externals || new Set());
+    if (fileEdges.skipped) skipped.add(abs);
+    externals.set(abs, fileEdges.externals || new Map());
     for (const e of fileEdges) {
       const edge = { from: abs, to: e.to, kind: e.kind, line: e.line, via: e.via };
       if (e.use) edge.use = e.use;
@@ -532,7 +547,7 @@ function buildImportGraph(opts = {}) {
 
   const rel = (abs) => path.relative(projectRoot, abs).split(path.sep).join('/');
 
-  return { files, fileSet, staticGraph, runtimeGraph, loadGraph, fullGraph, edges, staticEdgeCount, runtimeEdgeCount, unchecked, elision, externals, rel };
+  return { files, fileSet, staticGraph, runtimeGraph, loadGraph, fullGraph, edges, staticEdgeCount, runtimeEdgeCount, unchecked, elision, externals, skipped, rel };
 }
 
 /**
