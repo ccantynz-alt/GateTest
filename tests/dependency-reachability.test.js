@@ -112,3 +112,20 @@ describe('dependency-reachability — production source is "not a test path" (on
     }
   });
 });
+
+describe('dependency-reachability — production imports come from the one import graph (2026-09-05)', () => {
+  const { collectImportedPackages } = require('../src/core/dependency-reachability');
+  it('a package named inside a block comment, a string or a template is not an import; a real one, a scoped one and a Vue script block are', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-dep-reach-graph-'));
+    const w = (rel, body) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), body); };
+    w('src/real.js', "const a = require('really-used');\nimport b from '@scope/pkg/sub';\n");
+    w('src/fake.js', "/* const x = require('only-in-comment'); */\nconst s = \"import y from 'only-in-string'\";\nconst t = `require('only-in-template')`;\nmodule.exports = 1;\n");
+    w('src/App.vue', "<template><div/></template>\n<script>\nimport dayjs from 'in-vue-script';\nexport default {};\n</script>\n");
+    w('vitest.config.coverage.mts', "import { defineConfig } from 'only-in-variant-config';\nexport default defineConfig({});\n");
+    const imported = collectImportedPackages(root);
+    fs.rmSync(root, { recursive: true, force: true });
+    assert.ok(imported.has('really-used') && imported.has('@scope/pkg'), 'POSITIVE CONTROL — real imports, scoped package collapsed to its name');
+    assert.ok(imported.has('in-vue-script'), 'a Vue script block still counts (SFC fallback)');
+    for (const name of ['only-in-comment', 'only-in-string', 'only-in-template', 'only-in-variant-config']) assert.ok(!imported.has(name), `${name} is not an import`);
+  });
+});

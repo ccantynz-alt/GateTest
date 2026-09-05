@@ -26,40 +26,69 @@
 const fs = require('fs');
 const path = require('path');
 const { isTestPath } = require('./test-paths');
+const { buildImportGraph, collectSourceFiles } = require('./import-graph');
 
-const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue', '.svelte']);
 // "Is this a test path" comes from the one definition (src/core/test-paths.js).
 // This walker asks a BROADER question — is the file SHIPPED production source?
 // — so it also excludes what the test predicate deliberately does not: build
 // and maintenance scripts, tooling, benchmarks, docs, cypress trees, and
 // tool config files. A CVE reachable only from a script never runs in prod.
-const NOT_SHIPPED_RE = /(^|\/)(cypress|scripts?|tools?|bench(marks?)?|docs?)\/|\.bench\.[a-z]+$|\.config\.[cm]?[jt]s$/i;
+// A tool config may carry a variant segment — nest's `vitest.config.coverage.mts`
+// and `vitest.config.integration.mts` are still vitest configs, not shipped code.
+const NOT_SHIPPED_RE = /(^|\/)(cypress|scripts?|tools?|bench(marks?)?|docs?)\/|\.bench\.[a-z]+$|\.config(?:\.[\w-]+)*\.[cm]?[jt]s$/i;
+
+/**
+ * Collect the set of package names imported from PRODUCTION source.
+ *
+ * JavaScript / TypeScript is read through the one import graph
+ * (src/core/import-graph.js — the same statements, the same masked text, no
+ * file cap): a package named in a comment or a string is not an import, and
+ * a repository with more than 4,000 source files is read whole (prisma has
+ * 4,551; the private walker this replaced stopped at 4,000). Vue and Svelte
+ * single-file components are not JavaScript files, so their script blocks
+ * still go through the regex harvester below.
+ */
+function collectImportedPackages(projectRoot) {
+  const imported = new Set();
+  const production = (abs) => {
+    const rel = path.relative(projectRoot, abs).replace(/\\/g, '/');
+    return !isTestPath(rel) && !NOT_SHIPPED_RE.test(rel);
+  };
+  const files = collectSourceFiles(projectRoot).filter(production);
+  const graph = buildImportGraph({ projectRoot, files });
+  for (const specs of graph.externals.values()) for (const spec of specs) imported.add(barePackage(spec));
+  for (const file of sfcFiles(projectRoot).filter(production)) {
+    let src;
+    try { src = fs.readFileSync(file, 'utf8'); } catch { continue; } // error-ok — unreadable component
+    for (const name of extractImports(src)) imported.add(name);
+  }
+  return imported;
+}
+
+const SFC_EXTS = new Set(['.vue', '.svelte']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'vendor', '.gatetest', '.claude', '.turbo', '.cache']);
 
-/** Collect the set of package names imported from PRODUCTION source. */
-function collectImportedPackages(projectRoot, opts = {}) {
-  const maxFiles = opts.maxFiles || 4000;
-  const imported = new Set();
-  let seen = 0;
+/** Vue / Svelte single-file components under the project (the graph walks only JS/TS). */
+function sfcFiles(projectRoot) {
+  const out = [];
   const walk = (dir, depth) => {
-    if (depth > 12 || seen >= maxFiles) return;
+    if (depth > 12) return;
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; } // error-ok — unreadable dir
     for (const e of entries) {
-      if (seen >= maxFiles) return;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full, depth + 1); continue; }
-      if (!SOURCE_EXTS.has(path.extname(e.name).toLowerCase())) continue;
-      const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
-      if (isTestPath(rel) || NOT_SHIPPED_RE.test(rel)) continue;
-      seen++;
-      let src;
-      try { src = fs.readFileSync(full, 'utf8'); } catch { continue; }
-      for (const name of extractImports(src)) imported.add(name);
+      if (SFC_EXTS.has(path.extname(e.name).toLowerCase())) out.push(full);
     }
   };
   walk(projectRoot, 0);
-  return imported;
+  return out;
+}
+
+/** `@scope/pkg/sub` → `@scope/pkg`; `lodash/fp` → `lodash`. */
+function barePackage(spec) {
+  const parts = spec.split('/');
+  return spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
 /** Package names from require()/import/import()/export-from specifiers. */
@@ -70,8 +99,7 @@ function extractImports(src) {
   while ((m = re.exec(src)) !== null) {
     const spec = m[1];
     if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('node:') || spec.startsWith('#')) continue;
-    const parts = spec.split('/');
-    out.add(spec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]);
+    out.add(barePackage(spec));
   }
   return out;
 }
