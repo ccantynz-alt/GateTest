@@ -200,6 +200,15 @@ whose change count is far larger than the edit.
 
 ## 13. Commit as coherent units; push and merge without being asked
 
+**The merge is automatic (Craig 2026-09-05: "we need to automatically push
+and merge").** A PR is opened, marked ready, and has GitHub auto-merge
+enabled (merge method: merge commit) in the same breath; it merges itself the
+moment every required check is green. Nobody waits on CI, and a red PR is
+still never "waiting on review" — a red check means reproduce, fix, push, and
+auto-merge fires on the next green head. The subscription and the check-in
+exist to catch the red case and our own scanner's findings, not to press the
+button.
+
 Craig's standing instruction: *always push and merge our PRs.* A branch that
 sits unmerged is work the customer cannot use and a merge conflict waiting to
 happen. The unit of a commit is one cause — one bug, one move — with the
