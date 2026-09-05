@@ -535,6 +535,8 @@ describe('fakeFixDetector — the policy finding survives --pr scoping', () => {
     const exts = new GateTestConfig(require('node:os').tmpdir()).get('incremental.sourceExtensions');
     assert.ok(exts.includes('.gatetestignore'), 'a suppression-only PR must not read as "nothing changed"');
     assert.ok(exts.includes('.json'), '.gatetest.json is matched by extension');
+  });
+});
 
 describe('fakeFixDetector — a threshold in a TEST file is fixture data (PR #433 bot finding)', () => {
   const hunk = (file, line) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1,1 +1,2 @@\n line\n+${line}\n`;
