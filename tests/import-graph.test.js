@@ -537,3 +537,33 @@ describe('import-graph — verbatimModuleSyntax disables elision, isolatedModule
     assert.strictEqual(build({ isolatedModules: true }).kind, 'type');
   });
 });
+
+describe('import-graph — Docusaurus `@site/*` resolves to the site root by convention (2026-09-05)', () => {
+  // The tsconfig that declares the alias is `@docusaurus/tsconfig` inside
+  // node_modules, so no project file says so. trpc's www/: five components
+  // imported only from .mdx docs were "unreachable" for this.
+  let D;
+  let g;
+  before(() => {
+    D = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-docusaurus-'));
+    writeTree(D, {
+      'www/docusaurus.config.js': 'module.exports = { title: "docs" };\n',
+      'www/src/components/Card.tsx': 'export const Card = () => null;\n',
+      'www/docs/intro.mdx': "import { Card } from '@site/src/components/Card';\nimport Layout from '@theme/Layout';\n\n<Card />\n",
+      // NEGATIVE CONTROL — the same import in a tree with no docusaurus.config: not an edge.
+      'other/src/components/Card.tsx': 'export const Card = () => null;\n',
+      'other/docs/intro.mdx': "import { Card } from '@site/src/components/Card';\n",
+    });
+    const files = collectSourceFiles(D).concat([path.join(D, 'www/docs/intro.mdx'), path.join(D, 'other/docs/intro.mdx')]);
+    g = buildImportGraph({ projectRoot: D, files });
+  });
+  after(() => fs.rmSync(D, { recursive: true, force: true }));
+  const edgesFrom = (rel) => g.edges.filter((e) => g.rel(e.from) === rel).map((e) => `${g.rel(e.to)}:${e.kind}`).sort();
+
+  it('POSITIVE CONTROL — under a docusaurus.config, `@site/src/…` is an edge; `@theme/*` stays external', () => {
+    assert.deepStrictEqual(edgesFrom('www/docs/intro.mdx'), ['www/src/components/Card.tsx:alias']);
+  });
+  it('NEGATIVE CONTROL — without a docusaurus.config the alias is nothing', () => {
+    assert.deepStrictEqual(edgesFrom('other/docs/intro.mdx'), []);
+  });
+});

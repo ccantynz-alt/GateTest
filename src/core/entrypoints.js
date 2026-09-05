@@ -102,6 +102,7 @@ function collectStrings(value, out) {
 function manifestEntrypoints(dirs) {
   const out = new Set();
   for (const dir of new Set(dirs)) {
+    angularEntrypoints(dir, out);
     const file = path.join(dir, 'package.json');
     let pkg;
     try { pkg = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { continue; } // error-ok — no manifest here
@@ -121,6 +122,29 @@ function manifestEntrypoints(dirs) {
     }
   }
   return out;
+}
+
+/**
+ * Angular names files in angular.json rather than package.json: the browser /
+ * server entry, polyfills, global styles and scripts, and the
+ * `fileReplacements` a build configuration swaps in (`environment.prod.ts`
+ * is imported by nothing — the CLI substitutes it for `environment.ts`;
+ * CleanArchitecture's ClientApp reported it as an orphan). Every string
+ * under `architect` with a source extension counts, resolved from the
+ * angular.json directory.
+ */
+function angularEntrypoints(dir, out) {
+  let cfg;
+  try { cfg = JSON.parse(fs.readFileSync(path.join(dir, 'angular.json'), 'utf-8')); } catch { return; } // error-ok — not an Angular workspace
+  const projects = cfg && typeof cfg.projects === 'object' ? Object.values(cfg.projects) : [];
+  for (const project of projects) {
+    if (!project || typeof project !== 'object') continue;
+    const strings = [];
+    collectStrings(project.architect || project.targets, strings);
+    for (const s of strings) {
+      if (/\.(?:[cm]?js|jsx|tsx?|mts|cts)$/.test(s) && !s.includes('*')) out.add(path.resolve(dir, s));
+    }
+  }
 }
 
 /**
