@@ -425,7 +425,7 @@
     },
     {
       "name": "monorepoConstraints",
-      "description": "Monorepo Constraints — enforces package boundary rules in apps/ packages/ libs/"
+      "description": "Monorepo Constraints — package boundaries from the declared workspaces (apps/ packages/ libs/, pnpm, lerna)"
     },
     {
       "name": "zodSchemaPresence",

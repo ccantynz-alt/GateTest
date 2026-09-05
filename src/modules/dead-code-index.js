@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { workspacePackageMap } = require('../core/workspaces');
 const {
   PY_EXTS,
   extractJsExports, extractJsImports,
@@ -89,60 +90,10 @@ function buildDeadCodeIndex(files, projectRoot) {
   return { perFile, importedNames, referencedFiles, namespaceReferencedFiles, projectRoot, importedWorkspacePackages, fileWorkspacePackage, workspacePackagesWithSurface };
 }
 
+// The workspace reader lives in src/core/workspaces.js (one definition —
+// monorepoConstraints and aiHallucination read the same globs).
 function buildWorkspaceMap(projectRoot) {
-  const pkgMap = new Map();
-  const patterns = new Set();
-
-  try {
-    const rootPkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
-    const ws = rootPkg.workspaces;
-    if (Array.isArray(ws)) ws.forEach((p) => patterns.add(p));
-    else if (ws && Array.isArray(ws.packages)) ws.packages.forEach((p) => patterns.add(p));
-  } catch { /* not present or invalid */ }
-
-  try {
-    const yaml = fs.readFileSync(path.join(projectRoot, 'pnpm-workspace.yaml'), 'utf-8');
-    for (const line of yaml.split(/\r?\n/)) {
-      const m = line.match(/^\s*-\s*['"]?([^'"#\s]+)['"]?/);
-      if (m) patterns.add(m[1]);
-    }
-  } catch { /* not present */ }
-
-  try {
-    const lerna = JSON.parse(fs.readFileSync(path.join(projectRoot, 'lerna.json'), 'utf-8'));
-    if (Array.isArray(lerna.packages)) lerna.packages.forEach((p) => patterns.add(p));
-  } catch { /* not present */ }
-
-  for (const pattern of patterns) {
-    if (pattern.includes('*')) {
-      const base = pattern.replace(/\/\*+.*$/, '');
-      const depth = pattern.includes('/**') ? 2 : 1;
-      expandWorkspaceGlob(path.join(projectRoot, base), depth, pkgMap);
-    } else {
-      readWorkspacePackage(path.join(projectRoot, pattern), pkgMap);
-    }
-  }
-
-  return pkgMap;
-}
-
-function expandWorkspaceGlob(baseDir, depth, pkgMap) {
-  let entries;
-  try { entries = fs.readdirSync(baseDir, { withFileTypes: true }); }
-  catch { return; }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const full = path.join(baseDir, entry.name);
-    readWorkspacePackage(full, pkgMap);
-    if (depth > 1) expandWorkspaceGlob(full, depth - 1, pkgMap);
-  }
-}
-
-function readWorkspacePackage(pkgDir, pkgMap) {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8'));
-    if (pkg.name) pkgMap.set(pkg.name, pkgDir);
-  } catch { /* not a package directory */ }
+  return workspacePackageMap(projectRoot);
 }
 
 module.exports = { buildDeadCodeIndex };
