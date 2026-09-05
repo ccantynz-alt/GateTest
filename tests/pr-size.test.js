@@ -61,3 +61,35 @@ describe('PrSizeModule — a stacked PR is measured against its own base branch'
     assert.equal(tooManyLines(await run()), true);
   });
 });
+
+describe('PrSizeModule — a stale local main never decides once origin/main resolves', () => {
+  let tmp;
+  const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const commitLines = (file, n, msg) => {
+    fs.writeFileSync(path.join(tmp, file), Array.from({ length: n }, (_, i) => `line ${i} of ${file}`).join('\n') + '\n');
+    git('add', file); git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', msg);
+  };
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-prsize-stale-'));
+    git('init', '-q', '-b', 'main');
+    commitLines('base.txt', 3, 'base');
+    git('update-ref', 'refs/heads/stale-main', 'HEAD');            // what a laptop's `main` looks like a week later
+    commitLines('big.txt', 1200, 'a week of merges on origin');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');          // HEAD == origin/main, as after a fresh fetch
+    git('checkout', '-q', '--detach', 'HEAD');                      // leave main first, THEN wind it back —
+    git('update-ref', 'refs/heads/main', 'refs/heads/stale-main');  // moving a checked-out ref would move HEAD too
+    fs.appendFileSync(path.join(tmp, 'base.txt'), 'one more line\n'); // the actual uncommitted work (tracked: `git diff` sees it)
+  });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const run = async () => { const r = makeResult(); await new PrSizeModule().run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } }); return r.checks; };
+  const tooManyLines = (c) => c.some((x) => !x.passed && x.name === 'pr-size:too-many-lines');
+
+  it('NEGATIVE: HEAD at origin/main with a one-line edit is measured as the working tree, not against stale main', async () => {
+    assert.equal(tooManyLines(await run()), false);
+  });
+
+  it('POSITIVE CONTROL: with origin/main gone, the stale main is the only base and the 1200 lines do block', async () => {
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    assert.equal(tooManyLines(await run()), true);
+  });
+});

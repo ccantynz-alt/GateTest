@@ -457,10 +457,18 @@ class PrSizeModule extends BaseModule {
     //    "long-running feature branch" case), then fall back to
     //    staged / working-tree / HEAD~1..HEAD (the "local pre-push"
     //    case).
+    //    The FIRST candidate that resolves decides. An empty diff against
+    //    origin/main means "nothing committed beyond the base" and the
+    //    answer is the working tree below — not the local `main`, which
+    //    is stale on most machines (2026-09-05: HEAD == origin/main with a
+    //    4-file edit in the tree measured as 152 files / 6,737 lines
+    //    against a `main` that was 221 files behind).
     if (!explicitBase && !against) {
       for (const candidate of ['origin/main', 'main']) {
         const diff = this._diffSinceMergeBase(projectRoot, candidate);
-        if (diff) return diff;
+        if (diff === null) continue;
+        if (diff.trim()) return diff;
+        break;
       }
     }
 

@@ -14,6 +14,7 @@ import Link from "next/link";
  */
 const PRIMARY_LINKS = [
   { label: "Modules", href: "/modules" },
+  { label: "Precision", href: "/precision" },
   { label: "Compare", href: "/compare" },
   { label: "Pricing", href: "/pricing" },
 ] as const;

@@ -58,7 +58,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 | # | Move | Status | Evidence |
 |---|---|---|---|
-| 23 | Make the baseline a first-class onboarding step | partial | quickstart mentions it; README / Action first-run copy open |
+| 23 | Make the baseline a first-class onboarding step | done | blocked full scan with no baseline leads its recap with `gatetest --baseline` (`src/core/plain-summary.js`, controls: diff-scoped and already-baselined runs stay quiet); README Action quickstart and `integrations/README.md` say what the first run does |
 | 24 | PR comments show only what's new | done | line-level attribution, `changed-lines.js` (PR #423) |
 | 25 | Suggest the `.gatetestignore` line | done | `suggestLine`, CLI + PR reply (PR #423) |
 | 26 | A policy file teams can review in a PR | open | — |
