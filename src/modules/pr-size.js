@@ -94,6 +94,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { resolveDiffBase } = require('../core/diff-base');
 
 // Default excludes: auto-generated / locked / vendored content that
 // inflates diffs without reflecting human-review effort.
@@ -371,8 +372,14 @@ class PrSizeModule extends BaseModule {
    */
   _hasOversizeBypass(projectRoot, runnerOptions, moduleConfig) {
     try {
+      const resolved = resolveDiffBase({
+        projectRoot,
+        explicit: (moduleConfig && moduleConfig.baseBranch) || (runnerOptions && runnerOptions.baseBranch),
+        incrementalSince: runnerOptions && runnerOptions.incrementalSince,
+      });
       const base = (moduleConfig && moduleConfig.against)
         || (runnerOptions && runnerOptions.against)
+        || (resolved && resolved.ref)
         || 'origin/main';
       const { execSync } = require('child_process');
       // Cheap: just grep the merge-range commit subjects + bodies.
@@ -415,32 +422,25 @@ class PrSizeModule extends BaseModule {
     if (moduleConfig.diff != null) return moduleConfig.diff;
     if (runnerOptions.diff != null) return runnerOptions.diff;
 
-    // 2. baseBranch configured → resolve merge-base, diff
-    //    `<merge-base>..HEAD`. This is the bulletproof path for
-    //    long-running feature branches: it counts ONLY the changes
-    //    introduced on this branch, not changes merged into main
-    //    since the branch was created.
-    // On GitHub Actions a pull_request run names its base branch: a PR
-    // stacked on another PR must be measured against THAT branch, or the
-    // gate sizes the whole stack (PR #426 part 2, 2026-09-05). Only the
-    // `origin/<ref>` form is tried; if the ref is not fetched it falls
-    // through to the configured/auto-detected base as before.
+    // 2. The base — ONE decision shared with fakeFixDetector and the
+    //    runner's --diff (src/core/diff-base.js): configured baseBranch,
+    //    --since / --pr, a merge-queue base, GITHUB_BASE_REF (a PR stacked
+    //    on another PR is sized against THAT branch, or the gate sizes the
+    //    whole stack — PR #426 part 2, 2026-09-05), origin/main, and a
+    //    local `main` only when no origin exists (HEAD == origin/main with
+    //    a four-file edit was measured as 152 files against a `main` 221
+    //    files behind). `<merge-base>..HEAD` counts only this branch's
+    //    changes. An empty committed diff means the working tree, below.
     const configuredBase = moduleConfig.baseBranch || runnerOptions.baseBranch || null;
-    const actionsBase = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : null;
-    if (!configuredBase && actionsBase) {
-      const diff = this._diffSinceMergeBase(projectRoot, actionsBase);
-      if (diff !== null) return diff;
-      // not fetched on this runner: behave exactly as if the variable were
-      // unset and let auto-detect find origin/main below.
+    const base = resolveDiffBase({
+      projectRoot,
+      explicit: configuredBase,
+      incrementalSince: runnerOptions.incrementalSince,
+    });
+    if (base) {
+      const diffRes = this._exec(`git diff --numstat -C ${base.mergeBase}..HEAD`, { cwd: projectRoot });
+      if (diffRes.exitCode === 0 && diffRes.stdout && diffRes.stdout.trim()) return diffRes.stdout;
     }
-    const explicitBase = configuredBase;
-    if (explicitBase) {
-      const diff = this._diffSinceMergeBase(projectRoot, explicitBase);
-      if (diff !== null) return diff;
-      // explicitly configured base failed to resolve — fall through
-      // to other strategies rather than silently producing no output.
-    }
-
     // 3. Legacy `against` ref (three-dot range, equivalent to
     //    merge-base..HEAD).
     const against = moduleConfig.against || runnerOptions.against;
@@ -451,25 +451,6 @@ class PrSizeModule extends BaseModule {
       );
       if (exitCode === 0 && stdout && stdout.trim()) return stdout;
       // fall through to auto-detect on failure
-    }
-
-    // 4. Auto-detect: try origin/main → main merge-base first (the
-    //    "long-running feature branch" case), then fall back to
-    //    staged / working-tree / HEAD~1..HEAD (the "local pre-push"
-    //    case).
-    //    The FIRST candidate that resolves decides. An empty diff against
-    //    origin/main means "nothing committed beyond the base" and the
-    //    answer is the working tree below — not the local `main`, which
-    //    is stale on most machines (2026-09-05: HEAD == origin/main with a
-    //    4-file edit in the tree measured as 152 files / 6,737 lines
-    //    against a `main` that was 221 files behind).
-    if (!explicitBase && !against) {
-      for (const candidate of ['origin/main', 'main']) {
-        const diff = this._diffSinceMergeBase(projectRoot, candidate);
-        if (diff === null) continue;
-        if (diff.trim()) return diff;
-        break;
-      }
     }
 
     const fallbackCommands = [
@@ -496,22 +477,6 @@ class PrSizeModule extends BaseModule {
    *                       clone, unknown ref, unrelated branch).
    *                       Caller should fall through to next strategy.
    */
-  _diffSinceMergeBase(projectRoot, base) {
-    const mergeBaseRes = this._exec(`git merge-base HEAD ${base}`, {
-      cwd: projectRoot,
-    });
-    if (mergeBaseRes.exitCode !== 0) return null;
-    const mergeBase = (mergeBaseRes.stdout || '').trim();
-    if (!mergeBase) return null;
-
-    const diffRes = this._exec(
-      `git diff --numstat -C ${mergeBase}..HEAD`,
-      { cwd: projectRoot },
-    );
-    if (diffRes.exitCode !== 0) return null;
-    return diffRes.stdout || '';
-  }
-
   // ------------------------------------------------------------------
   // Parsers
   // ------------------------------------------------------------------

@@ -416,12 +416,17 @@ async function main() {
     return;
   }
 
-  // Resolve the incremental base ref for --since / --pr
+  // Resolve the incremental base ref for --since / --pr. In a merge queue
+  // (GITHUB_EVENT_NAME=merge_group) the base is the queue's, named in the
+  // event payload — not GITHUB_BASE_REF, which is empty there (the Fifty,
+  // move 27). Everything else the modules decide through src/core/diff-base.js.
+  const { mergeGroupBase } = require('../src/core/diff-base');
   const incrementalSince = args.since
     || (args.pr
-      ? (process.env.GITHUB_BASE_REF
-          ? `origin/${process.env.GITHUB_BASE_REF}`
-          : 'origin/main')
+      ? ((mergeGroupBase() || [])[0]
+          || (process.env.GITHUB_BASE_REF
+            ? `origin/${process.env.GITHUB_BASE_REF}`
+            : 'origin/main'))
       : undefined);
 
   const gatetest = new GateTest(projectRoot, {

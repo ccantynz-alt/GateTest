@@ -53,6 +53,7 @@ function _loadBaselineMatcher(projectRoot) {
  * @param {{name?: string, file?: string, filePath?: string}} check
  * @returns {string} the rule identity, e.g. `hardcoded-url:localhost`
  */
+const { readPathFilter: _readPathFilter, pathInScope: _pathInScope } = require('./scan-paths');
 const { ruleIdentity: _ruleIdentity } = require('./rule-identity');
 const { isOffline: _isOffline } = require('./offline');
 
@@ -571,6 +572,13 @@ class GateTestRunner extends EventEmitter {
       }
     }
 
+    // Repository path filter (.gatetest.json `paths`): stamped on every
+    // module so _collectFiles decides scope in one place; findings from
+    // modules with their own lookups are scoped at the runner below.
+    this._pathFilter = _readPathFilter(this.config);
+    this._pathFilterDropped = 0;
+    for (const mod of this.modules.values()) mod._scanPathFilter = this._pathFilter;
+
     // Build an absolute-path Set of changed files once per run, then
     // stamp it onto each module so BaseModule._collectFiles can filter.
     // Bigger picture: this is the one wire that turns the whole engine
@@ -700,6 +708,7 @@ class GateTestRunner extends EventEmitter {
       const timeoutMs = this._moduleTimeoutMs(name);
       await this._runModuleWithTimeout(name, mod.run(result, moduleConfig), timeoutMs);
       this._scopeResultToChangedFiles(result, name);
+      this._scopeResultToPathFilter(result);
 
       // Only CONFIDENT errors block — soft errors (below threshold) are
       // surfaced in the report but don't fail the module. Warnings always
@@ -865,46 +874,52 @@ class GateTestRunner extends EventEmitter {
   }
 
   /**
+   * Findings a module reported from outside the repository's path filter
+   * (a module with its own lookup rather than _collectFiles). Repo-wide
+   * findings (no file) stay. Counted, so the summary can say so.
+   */
+  _scopeResultToPathFilter(result) {
+    if (!this._pathFilter || !result || !Array.isArray(result.checks)) return;
+    const root = this.config && this.config.projectRoot;
+    const rel = (f) => {
+      const p = root && path.isAbsolute(f) ? path.relative(root, f) : String(f);
+      return p.split(path.sep).join('/').replace(/^\.\//, '');
+    };
+    const before = result.checks.length;
+    result.checks = result.checks.filter((check) => {
+      if (check.passed) return true;
+      const own = check.file || check.filePath;
+      if (!own) return true;
+      return _pathInScope(this._pathFilter, rel(own));
+    });
+    const dropped = before - result.checks.length;
+    if (dropped > 0) {
+      result.scopedOut = (result.scopedOut || 0) + dropped;
+      this._pathFilterDropped += dropped;
+    }
+  }
+
+  /**
    * Get list of files changed relative to the merge-base with the default branch.
    */
   _getChangedFiles() {
     const { execSync } = require('child_process');
+    const { resolveDiffBase } = require('./diff-base');
+    const projectRoot = (this.config && this.config.projectRoot) || process.cwd();
+    const opts = { encoding: 'utf-8', cwd: projectRoot, stdio: ['pipe', 'pipe', 'pipe'] };
     try {
-      // Get files changed vs merge-base with main/master
-      const baseBranch = (() => {
-        try {
-          execSync('git rev-parse --verify main', { stdio: 'pipe' });
-          return 'main';
-        } catch {
-          try {
-            execSync('git rev-parse --verify master', { stdio: 'pipe' });
-            return 'master';
-          } catch {
-            return 'HEAD~1';
-          }
-        }
-      })();
-
-      const mergeBase = execSync(`git merge-base HEAD ${baseBranch}`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
-
-      const diff = execSync(`git diff --name-only ${mergeBase}`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      // The base is ONE decision shared with prSize and fakeFixDetector
+      // (src/core/diff-base.js): explicit, --since/--pr, a merge-queue
+      // base, GITHUB_BASE_REF, origin/main — a local `main` only when no
+      // origin exists. Before this the runner asked for local `main` first
+      // and fell back to HEAD~1 on CI, where a PR checkout has no `main`.
+      const base = resolveDiffBase({ projectRoot, incrementalSince: this.options.incrementalSince });
+      const diff = execSync(`git diff --name-only ${base ? base.mergeBase : 'HEAD~1'}`, opts).trim();
 
       // Also include staged and unstaged changes
-      const staged = execSync('git diff --cached --name-only', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const staged = execSync('git diff --cached --name-only', opts).trim();
 
-      const unstaged = execSync('git diff --name-only', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const unstaged = execSync('git diff --name-only', opts).trim();
 
       const allChanged = new Set([
         ...diff.split('\n').filter(Boolean),
@@ -1076,6 +1091,11 @@ class GateTestRunner extends EventEmitter {
       changedFiles: this.options.changedFiles,
       // Air-gapped mode (src/core/offline.js): nothing left the machine.
       offline: _isOffline(),
+      // The repository's path filter, so every report can say what was
+      // deliberately out of scope (Doctrine §6). Null when none is set.
+      pathFilter: this._pathFilter
+        ? { include: this._pathFilter.raw.include, exclude: this._pathFilter.raw.exclude, findingsDropped: this._pathFilterDropped }
+        : null,
       confidenceThreshold: this._blockThreshold,
       incremental: this._incrementalMode
         ? { fileCount: this._incrementalFileSet ? this._incrementalFileSet.size : 0 }

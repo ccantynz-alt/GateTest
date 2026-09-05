@@ -50,7 +50,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 17 | Every report says what it did *not* check | done | PR comment: partial scan, coverage, not-checked modules (PR #423) |
 | 18 | Never derive a metric from a timeout | done — policy | mutation: timeouts are inconclusive |
 | 19 | Deterministic scans: same SHA, same findings | done | `scripts/determinism-check.js` + CI job; failure path tested (PR #423) |
-| 20 | Never write to the user's tree without saying so | partial | restore is signal-safe; mutate-a-copy still open |
+| 20 | Never write to the user's tree without saying so | done | mutation writes every mutant into a sandbox copy (`src/core/tree-copy.js`: the tree minus walk-excluded dirs, node_modules symlinked, bounded — past the bound it reports NOT RUN, never falls back to the real tree); the report says so; the restore-the-user's-file machinery is gone with the write. The exclude list has one home (`src/core/walk-excludes.js`) |
 | 21 | Signed, reproducible scan reports | done | provenance + HMAC; `gatetest verify-report` (PR #423) |
 | 22 | Public status page | **Craig** | — |
 
@@ -62,7 +62,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 24 | PR comments show only what's new | done | line-level attribution, `changed-lines.js` (PR #423) |
 | 25 | Suggest the `.gatetestignore` line | done | `suggestLine`, CLI + PR reply (PR #423) |
 | 26 | A policy file teams can review in a PR | done | the policy IS `.gatetest.json` + `.gatetestignore`; fakeFixDetector now reads those two files (and only the policy rules read them): `policy-ignore-line-added` and `policy-gate-softened` warn on the PR that widens a suppression, disables a module, sets report-only or raises the threshold — quiet on comments and on tightening; a suppression-only PR is no longer scoped out as "nothing changed"; provenance carries both files' SHA-256 and `verify-report` prints them |
-| 27 | Merge-queue and monorepo path filters | open | — |
+| 27 | Merge-queue and monorepo path filters | done | one diff base for every module (`src/core/diff-base.js`: explicit → --since/--pr → merge_group payload → GITHUB_BASE_REF → origin/main → a local main only without an origin) — the runner had asked for a stale local main first and prSize/fakeFix each decided differently; `merge_group` handled by action.yml, the drop-in workflow and `--pr`; `.gatetest.json` `paths` include/exclude at `_collectFiles` + the runner, reported in the console line and the signed provenance (`src/core/scan-paths.js`) |
 | 28 | One-command local reproduction of a CI failure | done | blocked gate leads with `gatetest replay <run-url>` (PR #423) |
 | 29 | Lead with the fake-fix detector | **Craig** | positioning |
 | 30 | Make `test.skip` in a "fix" commit block | done | measured first: eleven `.skip` additions in ~14,000 commits across ten real repos, none in a fix-shaped commit. Now: `fake-fix:test-skip-added` scores 1.0 in a test file (it was soft), fakeFixDetector diffs a PR against its base instead of its last commit, and the finding blocks only when a commit touching the file calls itself a fix — otherwise a warning, still reported |
