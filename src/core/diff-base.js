@@ -83,4 +83,4 @@ function resolveDiffBase({ projectRoot, explicit, incrementalSince, env = proces
   return null;
 }
 
-module.exports = { resolveDiffBase, mergeGroupBase, refExists };
+module.exports = { resolveDiffBase, mergeGroupBase };
