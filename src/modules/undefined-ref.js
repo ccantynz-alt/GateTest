@@ -153,11 +153,9 @@ const SUPPORTED_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.ts
 
 // Excluded dir names (anywhere in the path). Same convention as other
 // modules. Test-path downgrade applied separately per finding.
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt',
-  'coverage', 'vendor', 'target', 'bin', 'obj', '.cache', '.parcel-cache',
-  '.gatetest',
-]);
+// One definition (src/core/walk-excludes.js). The private copy this
+// replaces also skipped `bin/` — where a Node project's CLIs live.
+const { WALK_EXCLUDE_SET: EXCLUDE_DIRS } = require('../core/walk-excludes');
 
 class UndefinedRefModule extends BaseModule {
   constructor() {

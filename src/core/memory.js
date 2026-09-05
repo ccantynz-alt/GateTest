@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isExcludedDir } = require('./walk-excludes');
 
 const MEMORY_DIR = '.gatetest/memory';
 
@@ -249,7 +250,7 @@ class MemoryStore {
       let entries;
       try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       for (const entry of entries) {
-        if (['node_modules', '.git', 'dist', 'build', '.gatetest', 'coverage', '.next'].includes(entry.name)) continue;
+        if (isExcludedDir(entry.name)) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full, depth + 1);
         else if (entry.isFile()) {

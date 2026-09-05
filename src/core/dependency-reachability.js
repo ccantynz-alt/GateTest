@@ -66,7 +66,7 @@ function collectImportedPackages(projectRoot) {
 }
 
 const SFC_EXTS = new Set(['.vue', '.svelte']);
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'vendor', '.gatetest', '.claude', '.turbo', '.cache']);
+const { WALK_EXCLUDE_SET: SKIP_DIRS } = require('./walk-excludes');
 
 /** Vue / Svelte single-file components under the project (the graph walks only JS/TS). */
 function sfcFiles(projectRoot) {

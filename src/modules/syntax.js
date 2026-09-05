@@ -8,6 +8,7 @@ const BaseModule = require('./base-module');
 const { stripStringsAndComments } = require('../core/source-strip');
 const fs = require('fs');
 const path = require('path');
+const { WALK_EXCLUDE_SET } = require('../core/walk-excludes');
 const { stripJsonc, isJsoncPath } = require('../core/jsonc');
 
 class SyntaxModule extends BaseModule {
@@ -422,11 +423,7 @@ class SyntaxModule extends BaseModule {
    */
   _discoverRealTsconfigs(projectRoot) {
     const found = new Set();
-    const skip = new Set([
-      'node_modules', '.git', 'dist', 'build', 'coverage',
-      '.next', '.nuxt', '.svelte-kit', '.output', '.vercel', '.turbo',
-      '.gatetest', '.claude', 'out', 'vendor', '__pycache__',
-    ]);
+    const skip = WALK_EXCLUDE_SET;
 
     const isRealConfig = (configPath) => {
       try {

@@ -29,15 +29,8 @@ const { safeReadFile } = require('./safe-fs');
 // Base patterns we always skip — we treat these as if they were in a
 // machine-wide .gitignore. Customer can never override (no point: scanning
 // .git/HEAD generates noise nobody wants).
-const HARD_SKIP_DIRS = new Set([
-  'node_modules', '.git', '.svn', '.hg',
-  'dist', 'build', 'out', '.next', '.nuxt', '.turbo', '.cache',
-  'coverage', '.coverage', '.nyc_output',
-  'vendor', 'target', '.gradle',
-  '.idea', '.vscode',
-  '__pycache__', '.venv', 'venv', '.tox', '.pytest_cache', '.mypy_cache', '.ruff_cache',
-  'bower_components', 'jspm_packages', '.parcel-cache',
-]);
+// One definition of what a walk skips (src/core/walk-excludes.js).
+const { WALK_EXCLUDE_SET: HARD_SKIP_DIRS } = require('./walk-excludes');
 
 /**
  * Compile one gitignore line into a regex matcher.

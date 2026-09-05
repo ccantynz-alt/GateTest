@@ -19,17 +19,44 @@ test('the list is frozen, unique, and names directories by segment — never a s
 });
 
 test('the entries every walk must skip are present', () => {
-  for (const must of ['node_modules', '.git', '.gatetest', 'dist', 'build', 'coverage', '.next', 'vendor', '.claude']) {
+  for (const must of ['node_modules', '.git', '.gatetest', 'dist', 'build', 'coverage', '.next', 'vendor', '.claude', '.terraform', '.venv', 'obj', '.idea']) {
     assert.ok(WALK_EXCLUDES.includes(must), `${must} missing`);
   }
 });
 
-test('the three walkers import it rather than carrying a copy', () => {
+test('every walker imports it rather than carrying a copy', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  for (const rel of ['src/modules/base-module.js', 'src/core/migration-dirs.js', 'src/core/tree-copy.js']) {
+  for (const rel of [
+    'src/modules/base-module.js', 'src/core/migration-dirs.js', 'src/core/tree-copy.js',
+    // 2026-09-05: nine more, each with its own subset and its own extra
+    'src/core/import-graph.js', 'src/core/workspaces.js', 'src/core/dependency-reachability.js',
+    'src/core/safe-fs.js', 'src/core/universal-checker.js', 'src/core/gitignore.js',
+    'src/modules/cross-file-taint.js', 'src/modules/undefined-ref.js', 'src/modules/openapi-drift.js',
+  ]) {
     const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf-8');
     assert.match(src, /walk-excludes/, `${rel} does not import the list`);
-    assert.doesNotMatch(src, /'node_modules',\s*'\.git',\s*'dist'/, `${rel} carries its own copy`);
+    assert.doesNotMatch(src, /'node_modules',\s*'\.git'/, `${rel} carries its own copy`);
   }
+});
+
+test('no file under src/ declares a private exclude list (the shape, not the name — Doctrine §5)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..', 'src');
+  const offenders = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(full); continue; }
+      if (!e.name.endsWith('.js')) continue;
+      const rel = path.relative(path.join(__dirname, '..'), full).split(path.sep).join('/');
+      if (rel === 'src/core/walk-excludes.js') continue;
+      const src = fs.readFileSync(full, 'utf-8');
+      // A literal array/Set that lists node_modules alongside .git is a walk-exclude list.
+      if (/\[[^\]]*'node_modules'[^\]]*'\.git'[^\]]*\]/s.test(src) || /\[[^\]]*'\.git'[^\]]*'node_modules'[^\]]*\]/s.test(src)) offenders.push(rel);
+    }
+  };
+  walk(root);
+  assert.deepEqual(offenders, [], `private walk-exclude lists: ${offenders.join(', ')} — import src/core/walk-excludes.js`);
 });

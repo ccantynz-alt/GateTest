@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CONVENTIONAL_DIRS = ['apps', 'packages', 'libs', 'services'];
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage']);
+const { WALK_EXCLUDE_SET: SKIP_DIRS } = require('./walk-excludes');
 
 /** Workspace glob patterns declared by the repo's tooling, in declaration order. */
 function readWorkspacePatterns(projectRoot) {

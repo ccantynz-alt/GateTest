@@ -24,6 +24,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { workspacePackageNames } = require('../core/workspaces');
+const { isExcludedDir } = require('../core/walk-excludes');
 const { stripStringsAndComments } = require('../core/source-strip');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
@@ -83,7 +84,7 @@ function collectTsconfigAliasPrefixes(projectRoot) {
   const candidates = ['tsconfig.json', 'tsconfig.base.json', 'jsconfig.json'];
   try {
     for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
-      if (entry.isDirectory() && !['node_modules', '.git', '.next', 'dist'].includes(entry.name)) {
+      if (entry.isDirectory() && !isExcludedDir(entry.name)) {
         for (const c of ['tsconfig.json', 'jsconfig.json']) {
           candidates.push(path.join(entry.name, c));
         }

@@ -96,11 +96,7 @@ const path = require('path');
 // Constants
 // ---------------------------------------------------------------------------
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-  '.turbo', '.vercel',
-]);
+const { WALK_EXCLUDE_SET: EXCLUDE_DIRS } = require('../core/walk-excludes');
 
 const JS_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 

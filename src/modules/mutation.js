@@ -370,9 +370,10 @@ class MutationModule extends BaseModule {
   }
 
   _findSourceFiles(projectRoot) {
+    // _collectFiles already skips every walk-exclude (src/core/walk-excludes.js);
+    // only the module's own extras are named here.
     const sourceFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS_NO_JSX, [
-      'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-      '.next', 'website', 'test', 'tests', '__tests__', 'spec',
+      'website', 'test', 'tests', '__tests__', 'spec',
     ]);
 
     // Exclude test files and config files

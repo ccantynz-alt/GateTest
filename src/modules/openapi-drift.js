@@ -67,13 +67,10 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
-
-// Excludes beyond BaseModule._collectFiles' defaults (KI #104).
-const EXTRA_EXCLUDES = ['.terraform'];
+// One definition (src/core/walk-excludes.js); `.terraform` — the extra this
+// module once had to add beyond BaseModule's defaults (KI #104) — is in it.
+const { WALK_EXCLUDES: DEFAULT_EXCLUDES } = require('../core/walk-excludes');
+const EXTRA_EXCLUDES = [];
 
 const SOURCE_EXTS = [
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',

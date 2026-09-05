@@ -33,40 +33,10 @@ const DEFAULT_MAX_FILES = 5000;
 // symlink loops and pathological recursion.
 const DEFAULT_MAX_DEPTH = 25;
 
-const DEFAULT_SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.svn',
-  '.hg',
-  'dist',
-  'build',
-  'out',
-  '.next',
-  '.nuxt',
-  '.turbo',
-  '.cache',
-  'coverage',
-  '.coverage',
-  '.nyc_output',
-  'vendor',
-  'target',
-  '.gradle',
-  '.idea',
-  '.vscode',
-  '__pycache__',
-  '.venv',
-  'venv',
-  'env',
-  '.tox',
-  '.pytest_cache',
-  '.mypy_cache',
-  '.ruff_cache',
-  'bower_components',
-  'jspm_packages',
-  '.parcel-cache',
-  'tmp',
-  'temp',
-]);
+// One definition of what a walk skips (src/core/walk-excludes.js). The copy
+// this replaces also skipped a directory named `env` — a Python virtualenv
+// convention, but also a real source directory in many repositories.
+const { WALK_EXCLUDE_SET: DEFAULT_SKIP_DIRS } = require('./walk-excludes');
 
 // =============================================================================
 // Encoding detection

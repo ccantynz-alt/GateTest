@@ -11,6 +11,7 @@
 const BaseModule = require('./base-module');
 const fs   = require('fs');
 const path = require('path');
+const { isExcludedDir } = require('../core/walk-excludes');
 
 const SMART_QUOTE_RE   = /[‘’“”«»‹›`]/;
 const NON_ASCII_LEAD   = /^[^\x00-\x7F]/;
@@ -151,7 +152,7 @@ class EnvIntegrityModule extends BaseModule {
     // Also scan one level deep (apps/web/.env, packages/api/.env, etc.)
     for (const e of entries) {
       if (!e.isDirectory()) continue;
-      if (['node_modules', '.git', '.claude', '.next', 'dist', 'build'].includes(e.name)) continue;
+      if (isExcludedDir(e.name)) continue;
       const sub = path.join(root, e.name);
       try {
         for (const se of fs.readdirSync(sub, { withFileTypes: true })) {
