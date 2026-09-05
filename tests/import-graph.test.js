@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 
 const {
-  buildImportGraph, collectSourceFiles, reverseGraph, tarjanSCC, stripLineComment, isTopLevel,
+  buildImportGraph, collectSourceFiles, reverseGraph, tarjanSCC, isTopLevel,
 } = require('../src/core/import-graph');
 
 let ROOT;
@@ -201,19 +201,34 @@ describe('reverseGraph', () => {
   });
 });
 
-describe('stripLineComment', () => {
-  it('removes a trailing comment', () => {
-    assert.strictEqual(stripLineComment("const a = 1; // note"), 'const a = 1; ');
+describe('require / import() / path literals are read through the one stripper (2026-09-05)', () => {
+  // The line-level `//` stripper this replaced could not see a block comment
+  // or a template literal spanning lines: a `require('./x')` quoted inside
+  // either was a coupling edge, and a path string in a comment was a registry
+  // reference. Control pair per shape.
+  let R;
+  let g;
+  before(() => {
+    R = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-strip-'));
+    writeTree(R, {
+      'src/a.js': 'module.exports = 1;\n',
+      'src/b.js': 'module.exports = 2;\n',
+      'src/c.js': 'module.exports = 3;\n',
+      // POSITIVE CONTROLS — real code: a top-level require, a lazy require, a dynamic import, a path string.
+      'src/real.js': "const a = require('./a.js');\nfunction f() {\n  return require('./b.js');\n}\nexport const p = () => import('./c.js');\nconst reg = { x: './a.js' };\n",
+      // NEGATIVE CONTROLS — the same text inside a block comment, a template literal, a string, a line comment.
+      'src/fake.js': "/* const a = require('./a.js');\n   see ./b.js */\nconst t = `require('./c.js')\n  ./a.js`;\nconst s = \"require('./b.js')\";\n// require('./c.js') and ./b.js\nmodule.exports = 0;\n",
+    });
+    g = buildImportGraph({ projectRoot: R });
   });
+  after(() => fs.rmSync(R, { recursive: true, force: true }));
+  const edgesFrom = (rel) => g.edges.filter((e) => g.rel(e.from) === rel).map((e) => `${g.rel(e.to)}:${e.kind}`).sort();
 
-  it('leaves a // that is inside a string literal — a URL is not a comment', () => {
-    const line = "const u = 'https://example.com/x';";
-    assert.strictEqual(stripLineComment(line), line);
+  it('POSITIVE CONTROL — code edges are all read: static, lazy, dynamic, path-literal', () => {
+    assert.deepStrictEqual(edgesFrom('src/real.js'), ['src/a.js:path-literal', 'src/a.js:static', 'src/b.js:lazy', 'src/c.js:lazy']);
   });
-
-  it('respects an escaped quote rather than ending the string early', () => {
-    const line = "const s = 'it\\'s // fine';";
-    assert.strictEqual(stripLineComment(line), line);
+  it('NEGATIVE CONTROL — nothing inside a block comment, a template literal, a string or a line comment is an edge', () => {
+    assert.deepStrictEqual(edgesFrom('src/fake.js'), []);
   });
 });
 

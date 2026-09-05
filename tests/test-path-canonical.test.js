@@ -144,22 +144,37 @@ describe('KI #77 — Windows separators (the live defect)', () => {
 });
 
 describe('KI #77 — the drift cannot come back', () => {
-  // base-module owns the canonical body. claude-compliance keeps its own
-  // because it asks a BROADER question (mocks/examples/docs = "not shipped
-  // code"), and folding that in would start suppressing findings in docs/
-  // for all 20 modules.
-  const ALLOWED_OWN_PATTERN = new Set(['base-module.js', 'claude-compliance.js']);
+  // src/core/test-paths.js owns the canonical body (moved there 2026-09-05 so
+  // core files read it without importing from modules/). claude-compliance
+  // keeps its own because it asks a BROADER question (mocks/examples/docs =
+  // "not shipped code"), and folding that in would start suppressing findings
+  // in docs/ for all 20 modules.
+  const ALLOWED_OWN_PATTERN = new Set(['src/core/test-paths.js', 'src/modules/claude-compliance.js']);
+  const SCANNED_DIRS = [MODULES_DIR, path.join(__dirname, '..', 'src', 'core')];
 
-  it('no module re-declares its own TEST_PATH_RE — under that name or another', () => {
+  it('no module or core file re-declares its own TEST_PATH_RE — under that name or another', () => {
     // dead-code.js kept a `TEST_FILE_RE` for months: the same question under
     // a different name, invisible to a guard that only knew one spelling,
     // and drifted (it counted `test.py` as a test). The guard now catches the
-    // shape, not the label.
-    const offenders = fs
-      .readdirSync(MODULES_DIR)
-      .filter((f) => f.endsWith('.js') && !ALLOWED_OWN_PATTERN.has(f))
-      .filter((f) => /const\s+TEST_(?:PATH|FILE|DIR)_RE\s*=/.test(fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')));
-    assert.deepStrictEqual(offenders, [], 'use this._isTestPath() instead of a local copy');
+    // shape, not the label — and src/core too: dependency-reachability.js
+    // carried a TEST_PATH_RE + TEST_FILE_RE pair the modules-only guard never
+    // saw (found 2026-09-05).
+    const offenders = [];
+    for (const dir of SCANNED_DIRS) {
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.js')) continue;
+        const rel = path.relative(path.join(__dirname, '..'), path.join(dir, f)).replace(/\\/g, '/');
+        if (ALLOWED_OWN_PATTERN.has(rel)) continue;
+        if (/const\s+TEST_(?:PATH|FILE|DIR)_RE\s*=/.test(fs.readFileSync(path.join(dir, f), 'utf8'))) offenders.push(rel);
+      }
+    }
+    assert.deepStrictEqual(offenders, [], 'use this._isTestPath() / isTestPath() instead of a local copy');
+  });
+
+  it('base-module imports the definition rather than declaring it', () => {
+    const src = fs.readFileSync(path.join(MODULES_DIR, 'base-module.js'), 'utf8');
+    assert.match(src, /require\('\.\.\/core\/test-paths'\)/);
+    assert.doesNotMatch(src, /const\s+TEST_PATH_RE\s*=/);
   });
 
   it('the modules that were migrated now call the helper', () => {
@@ -180,8 +195,8 @@ describe('KI #77 — the drift cannot come back', () => {
   it('the canonical pattern normalises inside the helper, not at call sites', () => {
     // The whole bug was call sites forgetting to normalise. Keep that
     // responsibility in one place.
-    const src = fs.readFileSync(path.join(MODULES_DIR, 'base-module.js'), 'utf8');
-    assert.match(src, /_isTestPath\(relPath\)\s*\{[\s\S]*?replace\(\/\\\\\/g, '\/'\)/);
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'test-paths.js'), 'utf8');
+    assert.match(src, /function isTestPath\(relPath\)\s*\{[\s\S]*?replace\(\/\\\\\/g, '\/'\)/);
   });
 });
 

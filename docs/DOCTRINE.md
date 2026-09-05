@@ -69,7 +69,7 @@ is always toward the author's own repo.
 | Question | One place |
 |---|---|
 | Which files does a module see? | `BaseModule._collectFiles` (honours `--diff`, the exclude list, `_respectsIncremental`) |
-| Is this a test path? | `BaseModule._isTestPath` / exported `TEST_PATH_RE` |
+| Is this a test path? | `src/core/test-paths.js` (`isTestPath`, `TEST_PATH_RE`) — modules reach it as `BaseModule._isTestPath`; core files (dependency reachability, session telemetry) import it directly. `tests/test-path-canonical.test.js` forbids any other declaration in `src/modules` and `src/core` |
 | Is this an illustration / harness dir? | `src/core/scan-scope.js` |
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
 | What depends on what? | `src/core/import-graph.js` |
@@ -77,7 +77,7 @@ is always toward the author's own repo.
 | Is this file run rather than imported — a package main, a hook, a route file, a tool config, a fixture, a Django `apps.py`? | `src/core/entrypoints.js` |
 | What does this Python specifier resolve to — `from ..x import y`, a src-layout package, `'app.module.Class'` in a settings string? | `src/core/python-imports.js` (`deadCode` reads reachability through it; the extractor joins statement continuations with its `logicalLines`) |
 | Is this import emitted, and is its binding read while the module graph is still loading — type-only (elided), load-time, or deferred to call time? | `src/core/import-elision.js` (`importCycle` reads the `loadGraph` / `runtimeGraph` views it produces) |
-| Where do the strings, comments and regex literals begin and end in this source? | `src/core/source-strip.js` (`syntax.js`, the elision tokenizer, `aiHallucination`'s import harvester and `homoglyph`'s JS/TS identifier walk all mask through it; `homoglyph` keeps a line-level fallback only for the languages the stripper does not parse) |
+| Where do the strings, comments and regex literals begin and end in this source? | `src/core/source-strip.js` (`syntax.js`, the elision tokenizer, the import graph's `require` / `import()` / path-literal line loop, `aiHallucination`'s import harvester and `homoglyph`'s JS/TS identifier walk all mask through it; `homoglyph` keeps a line-level fallback only for the languages the stripper does not parse) |
 | Which packages make up this workspace, which manifest governs a file, what does it declare? | `src/core/workspaces.js` (`listWorkspacePackages`, `nearestWorkspacePackage`, `manifestDeclares`) |
 | Where do the migrations live — and is that directory a migration tree or a framework? | `src/core/migration-dirs.js` |
 | Is this file a shell script? | `src/core/shell-files.js` (extension or shebang; binaries and prose out) |
@@ -199,6 +199,15 @@ After any scripted sweep, read `git diff --numstat` and question any file
 whose change count is far larger than the edit.
 
 ## 13. Commit as coherent units; push and merge without being asked
+
+**The merge is automatic (Craig 2026-09-05: "we need to automatically push
+and merge").** A PR is opened, marked ready, and has GitHub auto-merge
+enabled (merge method: merge commit) in the same breath; it merges itself the
+moment every required check is green. Nobody waits on CI, and a red PR is
+still never "waiting on review" — a red check means reproduce, fix, push, and
+auto-merge fires on the next green head. The subscription and the check-in
+exist to catch the red case and our own scanner's findings, not to press the
+button.
 
 Craig's standing instruction: *always push and merge our PRs.* A branch that
 sits unmerged is work the customer cannot use and a merge conflict waiting to

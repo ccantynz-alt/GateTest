@@ -47,6 +47,7 @@ const path = require('path');
 const { workspacePackageMap } = require('./workspaces');
 const { resolveAlias, resolvePackageEntry, resolvePackageSubpath, tsEquivalents, elisionMode } = require('./module-resolution');
 const { readImports } = require('./ts-tokens');
+const { stripStringsAndComments } = require('./source-strip');
 const { classifyUses, statementUses } = require('./import-elision');
 
 const EXCLUDE_DIRS = new Set([
@@ -65,8 +66,12 @@ const SUPPRESS_RE = /\bimport-cycle-ok\b/;
 // Line-level and deliberately conservative: a missed edge understates coupling,
 // a wrong edge invents a dependency that does not exist. Understating is the
 // safer failure for a module that reports on architecture.
-const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/;
-const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/;
+// Matched on the MASKED line (src/core/source-strip.js — comments gone,
+// string contents blanked, offsets preserved), so a `require(` inside a
+// string, a block comment or a template literal is never an edge; the
+// specifier is read from the raw line at the group's own offsets (`d`).
+const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/d;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/d;
 // import / export-from statements are read WHOLE by ./ts-tokens (multi-line,
 // inline `type` modifiers) and classified by ./import-elision; only require(),
 // dynamic import() and path strings are still read line by line here.
@@ -133,21 +138,6 @@ function collectSourceFiles(root) {
   return out;
 }
 
-/** Strip a `//` line comment that is not inside a string literal. */
-function stripLineComment(line) {
-  let inStr = null;
-  for (let j = 0; j < line.length; j += 1) {
-    const ch = line[j];
-    if (inStr) {
-      if (ch === '\\') { j += 1; continue; }
-      if (ch === inStr) inStr = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
-    if (ch === '/' && line[j + 1] === '/') return line.slice(0, j);
-  }
-  return line;
-}
 
 /**
  * Zero indentation means module scope. Imperfect, but it catches the case that
@@ -370,6 +360,14 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
   if (unchecked) out.unchecked = unchecked;
   if (pending) out.pending = true;
 
+  // One definition of where strings and comments begin and end
+  // (src/core/source-strip.js), whole-file and offset-preserving: masked line
+  // i is raw line i. The line-level `//` stripper this replaced could not see
+  // a block comment or a template literal spanning lines, so a `require('./x')`
+  // quoted inside either was a coupling edge.
+  const masked = stripStringsAndComments(text).split(/\r?\n/);
+  const specAt = (rawLine, m) => rawLine.slice(m.indices[1][0], m.indices[1][1]);
+
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i];
     const lineNo = i + 1;
@@ -378,37 +376,41 @@ function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
     // keeps the extracted staticGraph byte-identical to the old private one.
     if (SUPPRESS_RE.test(raw)) continue;
 
-    const line = stripLineComment(raw);
+    const line = masked[i] || '';
 
     const mReq = REQUIRE_RE.exec(line);
     if (mReq) {
       const top = isTopLevel(raw);
-      push(mReq[1], top ? null : 'lazy', lineNo, top ? 'load' : undefined);
+      push(specAt(raw, mReq), top ? null : 'lazy', lineNo, top ? 'load' : undefined);
       continue;
     }
 
     // `await import('./x')` is lazy wherever it appears.
     const mDyn = DYNAMIC_IMPORT_RE.exec(line);
-    if (mDyn) { push(mDyn[1], 'lazy', lineNo); continue; }
+    if (mDyn) { push(specAt(raw, mDyn), 'lazy', lineNo); continue; }
 
     // Dynamic-registry reference: a relative path string that resolves to a
     // real file in this project, with no import syntax around it. Only reached
     // for lines that produced no import/require/dynamic edge above, and only
     // recorded when the path RESOLVES — an unresolvable string is just a
     // string. This kind never enters the cycle views.
+    // A path string is BY DEFINITION inside a string, so it is matched on the
+    // raw line; the masked line says whether that string is code (its quote
+    // survives) or prose in a comment (blanked).
+    const inString = (m) => line[m.index] === raw[m.index];
     PATH_LITERAL_RE.lastIndex = 0;
-    let mLit = PATH_LITERAL_RE.exec(line);
+    let mLit = PATH_LITERAL_RE.exec(raw);
     while (mLit !== null) {
-      push(mLit[1], 'path-literal', lineNo);
-      mLit = PATH_LITERAL_RE.exec(line);
+      if (inString(mLit)) push(mLit[1], 'path-literal', lineNo);
+      mLit = PATH_LITERAL_RE.exec(raw);
     }
     if (ctx.projectRoot) {
       ROOT_LITERAL_RE.lastIndex = 0;
-      let mRoot = ROOT_LITERAL_RE.exec(line);
+      let mRoot = ROOT_LITERAL_RE.exec(raw);
       while (mRoot !== null) {
         const to = resolveImport(ctx.projectRoot, `./${mRoot[1]}`, fileSet);
-        if (to && to !== absPath) record(to, 'path-literal', lineNo, undefined, 'static');
-        mRoot = ROOT_LITERAL_RE.exec(line);
+        if (to && to !== absPath && inString(mRoot)) record(to, 'path-literal', lineNo, undefined, 'static');
+        mRoot = ROOT_LITERAL_RE.exec(raw);
       }
     }
   }
@@ -639,7 +641,6 @@ module.exports = {
   tarjanSCC,
   reachableCounts,
   resolveImport,
-  stripLineComment,
   isTopLevel,
   edgesForFile,
 };
