@@ -100,7 +100,8 @@ function spawnCapture(cmd, args, options, timeoutMs) {
     // NODE_TEST_CONTEXT is stamped by a `node --test` parent on its children;
     // inherited by a customer's `node --test` it makes that run refuse
     // ("called recursively") and report nothing. The suite we run is theirs.
-    const { NODE_TEST_CONTEXT, ...inherited } = process.env; // eslint-disable-line no-unused-vars
+    const inherited = { ...process.env };
+    delete inherited.NODE_TEST_CONTEXT;
     const posix = process.platform !== 'win32';
     const child = spawn(cmd, args, {
       cwd: options.cwd,

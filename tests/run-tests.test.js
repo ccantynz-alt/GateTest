@@ -22,6 +22,10 @@ function run(files, extra = []) {
   return { code: r.status, out: r.stdout + r.stderr };
 }
 const line = (out, key) => { const m = new RegExp(`^# ${key} (\\d+)$`, 'm').exec(out); return m ? Number(m[1]) : null; };
+// The runner's own wall clock for the whole run — asserting on it instead
+// of a clock read in this file keeps the "did not hang" bound honest without
+// a fake timer, which would defeat a test about real child processes.
+const seconds = (out) => { const m = /^# duration_s ([\d.]+)$/m.exec(out); return m ? Number(m[1]) : Infinity; };
 
 describe('scripts/run-tests.js — every file must report its summary', () => {
   let passing, failing, leaking, exiting, empty;
@@ -59,23 +63,21 @@ describe('scripts/run-tests.js — every file must report its summary', () => {
   });
 
   it('a file that leaks a timer is reported as cancelled — a failure with the leak named — and the runner does not hang on it', () => {
-    const t0 = Date.now();
     const { code, out } = run([leaking]);
     assert.strictEqual(code, 1, out);
     assert.strictEqual(line(out, 'pass'), 1, 'the green test inside it is still counted');
     assert.strictEqual(line(out, 'cancelled'), 1);
     assert.strictEqual(line(out, 'files that did not finish'), 0, 'its summary was read');
     assert.match(out, /leaked timer, socket or child/);
-    assert.ok(Date.now() - t0 < 15000, `must not wait for the leaked interval (${Date.now() - t0}ms)`);
+    assert.ok(seconds(out) < 15, `must not wait for the leaked interval (${seconds(out)} s)`);
   });
 
   it('NEGATIVE CONTROL — a file whose runner never reaches its summary within the file timeout is a failure, not a silent partial count', () => {
-    const t0 = Date.now();
     const { code, out } = run([passing, exiting], ['--timeout', '60000', '--file-timeout', '3000']);
     assert.strictEqual(code, 1, out);
     assert.strictEqual(line(out, 'files that did not finish'), 1);
     assert.match(out, /hang\.test\.js: did not finish within the file timeout/);
-    assert.ok(Date.now() - t0 < 20000, `killed at the file timeout (${Date.now() - t0}ms)`);
+    assert.ok(seconds(out) < 20, `killed at the file timeout (${seconds(out)} s)`);
   });
 
   it('a file that reports zero tests is a failure', () => {

@@ -33,10 +33,10 @@ before(async () => {
       res.writeHead(302, { Location: '/health' });
       res.end();
     } else if (req.url === '/slow') {
-      // The client is expected to give up first; drop the reply timer when
-      // it does, or it keeps this process alive for the full 10 s.
-      const t = setTimeout(() => { res.writeHead(200); res.end('finally'); }, 10000);
-      req.on('close', () => clearTimeout(t));
+      // Never answer: the client under test is expected to give up first.
+      // No timer — a reply that arrives after the client has gone is
+      // nothing to the test, and a pending timer kept this process alive.
+      req.on('close', () => { if (!res.writableEnded) res.destroy(); });
     } else if (req.url === '/auth-check') {
       const auth = req.headers['authorization'] || '';
       res.writeHead(auth ? 200 : 401, { 'Content-Type': 'application/json' });

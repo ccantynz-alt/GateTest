@@ -68,7 +68,8 @@ function spawnTestFile(file, opts) {
   // NODE_TEST_CONTEXT is what a `node --test` parent stamps on its children;
   // inherited here it makes the child refuse to run ("called recursively").
   // Dropping it lets this runner be invoked from inside a test.
-  const { NODE_TEST_CONTEXT, ...env } = process.env; // eslint-disable-line no-unused-vars
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
   return spawn(process.execPath, ['--test', `--test-timeout=${opts.timeout}`, '--test-reporter=tap', file], {
     stdio: ['ignore', 'pipe', 'pipe'], env,
   });
@@ -157,5 +158,4 @@ async function main() {
   }
 }
 
-if (require.main === module) main();
-module.exports = { runFile, verdict, parseArgs };
+main();
