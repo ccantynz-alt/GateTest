@@ -184,13 +184,13 @@ class IntegrationTestsModule extends BaseModule {
           result.addCheck('integration-tests:run', true, {
             severity: 'info',
             message: 'Integration tests not executed — the toolchain is missing here',
-            details: out.split('\n').slice(-10),
+            details: out.split(/\r?\n/).slice(-10),
             suggestion: 'Run the scan where the toolchain is installed (CI) to include integration test results',
           });
         } else {
           result.addCheck('integration-tests:run', false, {
             message: 'Integration tests failed',
-            details: out.split('\n').slice(-20),
+            details: out.split(/\r?\n/).slice(-20),
             suggestion: 'Fix failing integration tests',
           });
         }

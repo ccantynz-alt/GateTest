@@ -96,11 +96,11 @@ class SqlMigrationsModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     // Strip -- line comments (keep lines for line numbers) and /* */ block
     // comments. Preserve line count.
-    const raw = content.split('\n');
+    const raw = content.split(/\r?\n/);
     const stripped = raw.map((l) => l.replace(/--.*$/, ''));
     // Block-comment stripping that preserves newlines
     let joined = stripped.join('\n').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
-    const lines = joined.split('\n');
+    const lines = joined.split(/\r?\n/);
 
     let issues = 0;
     let inTransaction = false;

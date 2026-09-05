@@ -40,28 +40,9 @@ const BARE_JOIN = /\.join\(\s*(['"])\\n\1\s*\)/;
  * This list may only ever SHRINK. Use src/core/text-lines.js when converting.
  */
 const KNOWN_UNCONVERTED = new Set([
-  'ai-review.js',
-  'auth-bypass.js',
-  'ci-security.js',
-  'code-quality.js',
-  'cross-file-taint.js',
-  'duplicate-code.js',
-  'error-swallow.js',
-  'fake-fix-detector.js',
-  'hardcoded-url.js',
-  'integration-tests.js',
-  'kubernetes.js',
-  'lint.js',
-  'mutation.js',
-  'n-plus-one.js',
-  'race-condition.js',
-  'regression-predictor.js',
-  'retry-hygiene.js',
-  'rollback-honesty.js',
-  'runtime-errors.js',
-  'sql-migrations.js',
-  'ssrf.js',
-  'terraform.js',
+  // Emptied 2026-09-05: the last 22 were converted by hand, split and join
+  // together — see tests/crlf-write-paths.test.js for the write paths that
+  // now keep a CRLF file's endings (ai-review, code-quality, lint, mutation).
 ]);
 
 function moduleFiles() {

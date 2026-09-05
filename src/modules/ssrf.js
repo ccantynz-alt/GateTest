@@ -180,7 +180,7 @@ class SSRFModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const isTestFile = this._isTestPath(rel);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     // Library-ok short-circuit: if the file imports an SSRF-filter,

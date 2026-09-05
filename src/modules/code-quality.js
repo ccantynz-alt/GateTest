@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { splitLines, joinLines } = require('../core/text-lines');
 const { JS_SOURCE_EXTS } = require('../core/source-extensions');
 const { isIllustrationPath, HARNESS_DIR_RE } = require('../core/scan-scope');
 const fs = require('fs');
@@ -36,11 +37,11 @@ class CodeQualityModule extends BaseModule {
       }
 
       const content = fs.readFileSync(file, 'utf-8');
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
       // Neutralised version for pattern checks — block comments, strings, and
       // regex literals replaced with spaces so the line numbers still line up,
       // but content inside those contexts can't trigger forbidden-pattern hits.
-      const neutralisedLines = this._neutraliseContent(content).split('\n');
+      const neutralisedLines = this._neutraliseContent(content).split(/\r?\n/);
 
       // Check forbidden patterns
       this._checkForbiddenPatterns(file, relPath, content, lines, neutralisedLines, moduleConfig, result, projectRoot);
@@ -639,11 +640,11 @@ class CodeQualityModule extends BaseModule {
   _removeLineFromFile(absPath, lineIndex, relPath, patternName) {
     try {
       const content = fs.readFileSync(absPath, 'utf-8');
-      const lines = content.split('\n');
+      const lines = splitLines(content);
       if (lineIndex < 0 || lineIndex >= lines.length) {
         return { fixed: false };
       }
-      const neutralisedLines = this._neutraliseContent(content).split('\n');
+      const neutralisedLines = splitLines(this._neutraliseContent(content));
       const neutralisedLine = neutralisedLines[lineIndex] || '';
       // Safety: if the neutralised view of the line is whitespace-only, the
       // original content is entirely string/comment and must not be deleted.
@@ -654,7 +655,7 @@ class CodeQualityModule extends BaseModule {
         };
       }
       lines.splice(lineIndex, 1);
-      fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
+      fs.writeFileSync(absPath, joinLines(lines, content), 'utf-8');
       return {
         fixed: true,
         description: `Removed ${patternName} from ${relPath}:${lineIndex + 1}`,
@@ -671,12 +672,12 @@ class CodeQualityModule extends BaseModule {
   _removeLinesFromFile(absPath, startIndex, count, relPath) {
     try {
       const content = fs.readFileSync(absPath, 'utf-8');
-      const lines = content.split('\n');
+      const lines = splitLines(content);
       if (startIndex < 0 || startIndex + count > lines.length) {
         return { fixed: false };
       }
       lines.splice(startIndex, count);
-      fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
+      fs.writeFileSync(absPath, joinLines(lines, content), 'utf-8');
       return {
         fixed: true,
         description: `Removed ${count} lines of commented-out code from ${relPath}:${startIndex + 1}`,

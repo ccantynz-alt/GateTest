@@ -10,6 +10,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { splitLines, joinLines } = require('../core/text-lines');
 const { JS_SOURCE_EXTS } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
@@ -430,8 +431,8 @@ ${filesText}`;
       if (!fs.existsSync(absPath)) return { fixed: false };
 
       const content = fs.readFileSync(absPath, 'utf-8');
-      const lines = content.split('\n');
-      const fixLines = fixedCode.split('\n');
+      const lines = splitLines(content);
+      const fixLines = splitLines(fixedCode);
       const idx = lineNum - 1;
 
       if (idx < 0 || idx >= lines.length) return { fixed: false };
@@ -442,7 +443,7 @@ ${filesText}`;
       const replaceCount = Math.min(fixLines.length, lines.length - idx);
       lines.splice(idx, replaceCount, ...fixLines);
 
-      fs.writeFileSync(absPath, lines.join('\n'), 'utf-8');
+      fs.writeFileSync(absPath, joinLines(lines, content), 'utf-8');
       return {
         fixed: true,
         description: `AI fix applied to ${relPath}:${lineNum}`,
@@ -465,7 +466,7 @@ ${filesText}`;
         cwd: projectRoot,
       });
 
-      return stdout.trim().split('\n')
+      return stdout.trim().split(/\r?\n/)
         .filter(f => f && this._isReviewableFile(f))
         .map(f => path.join(projectRoot, f))
         .filter(f => fs.existsSync(f));

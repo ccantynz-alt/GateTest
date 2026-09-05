@@ -95,7 +95,7 @@ class DuplicateCode extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
-      const rawLines = content.split('\n');
+      const rawLines = content.split(/\r?\n/);
       const normLines = rawLines.map(normaliseLine);
 
       // Skip trivially short files

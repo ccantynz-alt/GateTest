@@ -178,7 +178,7 @@ class NPlusOneModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     // Build a depth-map: for each character index, how many braces
