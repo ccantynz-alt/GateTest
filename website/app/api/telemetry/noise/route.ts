@@ -13,9 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { readRuleNoiseRows } from "@/app/lib/scan-telemetry-store";
-const { aggregateRuleNoise } = require("@/app/lib/rule-noise") as {
-  aggregateRuleNoise: (rows: unknown[]) => { scans: number; minScans: number; rules: unknown[] };
-};
+import { aggregateRuleNoise } from "@/app/lib/rule-noise";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -148,12 +148,12 @@ export async function recordScanBatch(rawRecords: unknown[]): Promise<IngestResu
 // rule-noise.js so it is unit-tested without a database.
 // ---------------------------------------------------------------------------
 
-export interface RuleNoiseRow {
+interface RuleNoiseRow {
   ts: string;
   rules: Array<{ id: string; fired: number; silenced: number }>;
 }
 
-export type RuleNoiseRead =
+type RuleNoiseRead =
   | { ok: true; rows: RuleNoiseRow[]; windowDays: number }
   | { ok: false; reason: string; windowDays: number };
 

@@ -2,17 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { contentMetadata, breadcrumbSchema, jsonLd } from "../lib/seo/schema";
 import { readRuleNoiseRows } from "../lib/scan-telemetry-store";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { aggregateRuleNoise } = require("../lib/rule-noise") as {
-  aggregateRuleNoise: (rows: unknown[]) => {
-    scans: number;
-    minScans: number;
-    rules: Array<{
-      id: string; module: string; scans: number; scansSilenced: number; fired: number; silenced: number;
-      silencedRate: number; silencedScanRate: number; thin: boolean;
-    }>;
-  };
-};
+import { aggregateRuleNoise } from "../lib/rule-noise";
 
 // Every number on this page is an aggregate over the anonymized per-rule
 // counts CLI and MCP machines send to /api/telemetry/scan — rule ids and

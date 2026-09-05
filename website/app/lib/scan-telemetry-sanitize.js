@@ -97,4 +97,4 @@ function sanitizeRecord(raw) {
   };
 }
 
-module.exports = { sanitizeRecord, FORBIDDEN_KEYS, MAX_MODULES_PER_RECORD, MAX_RULES_PER_RECORD, RULE_ID_RE };
+module.exports = { sanitizeRecord };

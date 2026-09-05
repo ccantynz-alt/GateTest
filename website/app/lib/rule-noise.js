@@ -58,4 +58,4 @@ function candidatesForRetirement(agg, rate = DEFAULT_MIN_SILENCED_RATE) {
   return agg.rules.filter((r) => !r.thin && r.silencedRate > rate);
 }
 
-module.exports = { aggregateRuleNoise, candidatesForRetirement, MIN_SCANS, DEFAULT_MIN_SILENCED_RATE };
+module.exports = { aggregateRuleNoise, candidatesForRetirement, MIN_SCANS };

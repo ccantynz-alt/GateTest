@@ -14,7 +14,7 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf-8');
 test('/noise renders the aggregator over the store and has honest empty states', () => {
   const page = read('website/app/noise/page.tsx');
   assert.match(page, /readRuleNoiseRows/);
-  assert.match(page, /require\("\.\.\/lib\/rule-noise"\)/);
+  assert.match(page, /import \{ aggregateRuleNoise \} from "\.\.\/lib\/rule-noise"/);
   assert.match(page, /Not available/);
   assert.match(page, /No data yet/);
   assert.match(page, /export const revalidate = 3600/);
