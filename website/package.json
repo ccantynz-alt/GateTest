@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node ../scripts/generate-build-info.js",
+    "prebuild": "node ../scripts/generate-build-info.js && node ../scripts/generate-changelog.js --if-full-history",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

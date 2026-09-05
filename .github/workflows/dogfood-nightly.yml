@@ -100,6 +100,14 @@ jobs:
             --ratchet --write-json website/app/data/precision.json
           cp website/app/data/precision.json .dogfood/precision.json || true
 
+      - name: Regenerate the public changelog
+        # website/app/data/changelog.json feeds /changelog — the main branch's
+        # first-parent history (PR, date, areas, modules touched, version).
+        # Same contract as the two files above: written by the script from
+        # the repository, never typed. fetch-depth is 0 on this job, so the
+        # history is complete.
+        run: node scripts/generate-changelog.js --ref origin/main
+
       - name: Self-scan — dependencies module
         run: |
           mkdir -p .dogfood
@@ -222,7 +230,7 @@ jobs:
           # Both generated files ride the same rolling PR. precision.json is
           # only rewritten by a fully-passing corpus run, so a red corpus
           # night still ships the site-stats refresh and nothing stale.
-          GENERATED="website/app/data/site-stats.json website/app/data/precision.json reliability-corpus/real-world.json"
+          GENERATED="website/app/data/site-stats.json website/app/data/precision.json reliability-corpus/real-world.json website/app/data/changelog.json"
           if git diff --quiet -- $GENERATED; then
             echo "generated site data unchanged — nothing to ship"
             exit 0
