@@ -209,3 +209,40 @@ describe('data-integrity — PII: a request body is not a leak, a log is', () =>
     assert.ok(found.length > 0, '`nobody =` must not be read as `body =`');
   });
 });
+
+// Move 11 (2026-09-05): "is this a handler file" comes from the shared route
+// grammar, not a hand-spelled `app.post`. A Fastify/Hono/Nest handler reading
+// req.body with no validation used to pass untouched.
+describe('data-integrity — handler detection is framework-agnostic', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-di-routes-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function scan(rel, source) {
+    const abs = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, source);
+    fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    const mod = new DataIntegrityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && c.name.startsWith('data:no-validation'));
+  }
+
+  for (const [label, src] of [
+    ['fastify', "fastify.post('/users', async (req, reply) => { await db.insert(req.body); return {}; });"],
+    ['hono', "hono.put('/users/:id', async (c) => { const req = c.req; return db.update(req.body); });"],
+    ['nest', "@Post('/users')\ncreate(@Req() req) { return this.svc.save(req.body); }"],
+    ['next app router', 'export async function PUT(req) { const body = await req.json(); return save(req.body || body); }'],
+  ]) {
+    it(`flags an unvalidated body in a ${label} handler`, async () => {
+      const found = await scan('src/handler.js', src);
+      assert.strictEqual(found.length, 1, label);
+    });
+  }
+
+  it('still ignores a utility that merely reads req.body', async () => {
+    const found = await scan('src/util.js', 'function pick(req) { return req.body.name; }\nmodule.exports = { pick };');
+    assert.deepStrictEqual(found, []);
+  });
+});

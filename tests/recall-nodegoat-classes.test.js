@@ -294,3 +294,31 @@ describe('recall — IDOR identity shadowing', () => {
     assert.strictEqual(failedNames(r, /idor-shadow:app\/r2\.js/).length, 0);
   });
 });
+
+// Move 11 (2026-09-05): the CSRF rule's precondition — "a cookie-session app"
+// — only recognised CommonJS `require('express-session')`. An ESM app with
+// state-changing routes and no CSRF middleware was never reported.
+describe('recall — CSRF precondition sees ESM session imports', () => {
+  const SecurityModule = require('../src/modules/security');
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-csrf-esm-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  async function run(root) {
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: root });
+    return result;
+  }
+  it('POSITIVE: ESM express-session app with a POST route and no csrf flags', async () => {
+    write(tmp, 'server.mjs', [
+      "import express from 'express';",
+      "import session from 'express-session';",
+      'const app = express();',
+      'app.use(session({ secret: "s" }));',
+      'app.post("/allocations", (req, res) => res.send("ok"));',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.strictEqual(failedNames(r, /security:no-csrf-protection/).length, 1);
+  });
+});

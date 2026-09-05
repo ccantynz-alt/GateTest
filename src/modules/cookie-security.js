@@ -71,6 +71,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { SESSION_MIDDLEWARE_RE } = require('../core/route-grammar');
 const fs = require('fs');
 const path = require('path');
 
@@ -173,7 +174,9 @@ class CookieSecurityModule extends BaseModule {
    * the check — a commented-out flag is an absent flag.
    */
   _checkSessionCookieConfig(rel, text, result) {
-    if (!/require\s*\(\s*['"](?:express-session|cookie-session)['"]\s*\)/.test(text)) return 0;
+    // Both module systems: the CommonJS-only test let every ESM
+    // `import session from 'express-session'` skip this rule (2026-09-05).
+    if (!SESSION_MIDDLEWARE_RE.test(text)) return 0;
     const live = text
       .replace(/\/\*[\s\S]*?\*\//g, (s) => s.replace(/[^\n]/g, ' '))
       .replace(/\/\/[^\n]*/g, ' ');

@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { SESSION_MIDDLEWARE_RE } = require('../core/route-grammar');
 const { JS_SOURCE_EXTS } = require('../core/source-extensions');
 const { innerHtmlAssignmentIsSafe, splitTopLevel } = require('../core/inner-html-safety');
 const fs = require('fs');
@@ -366,7 +367,7 @@ class SecurityModule extends BaseModule {
           .replace(/\/\*[\s\S]*?\*\//g, '')
           .replace(/^[ \t]*\/\/[^\n]*/gm, '');
         if (/require\s*\(\s*['"]express['"]\s*\)|from\s+['"]express['"]/.test(live)) posture.express = true;
-        if (/require\s*\(\s*['"](?:express-session|cookie-session)['"]\s*\)/.test(live)) posture.sessionMw = true;
+        if (SESSION_MIDDLEWARE_RE.test(live)) posture.sessionMw = true; // CJS or ESM — the CJS-only form hid ESM apps from the CSRF rule
         if (/\.(post|put|delete|patch)\s*\(\s*['"`]/.test(live)) posture.mutatingRoute = true;
         // Middleware SHAPES, not substrings: require of a CSRF package, a
         // csrf() mount, or a csrfToken() call in live code.
