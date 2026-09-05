@@ -588,3 +588,22 @@ test('docs/ change does not disturb real doc files or examples/', () => {
   assert.ok(scoreFinding({ filePath: 'docs/GUIDE.md', ruleKey: 'x' }).confidence <= 0.3);
   assert.ok(scoreFinding({ filePath: 'examples/basic.js', ruleKey: 'x' }).confidence <= 0.4);
 });
+
+// Doctrine §4: isTestFile was a private copy of TEST_PATH_RE that knew only
+// tests/, __tests__/ and .test./.spec. — e2e/, smoke-test/, js_tests/ and
+// __mocks__/ kept full confidence while every module treated them as harness
+// (2026-09-05). Fixture-only paths are still priced once, by isFixtureFile.
+{
+  const { _signals: { isTestFile, isFixtureFile } } = require('../src/core/confidence');
+  test('isTestFile: compound test dirs and e2e are test paths', () => {
+    for (const p of ['smoke-test/x.ts', 'e2e/login.ts', 'js_tests/q.js', 'src/__mocks__/m.js', 'runtime-tests/a.ts']) assert.ok(isTestFile(p), p);
+  });
+  test('isTestFile: a fixture dir outside tests/ is a fixture, not additionally a test; under tests/ it is both', () => {
+    assert.equal(isTestFile('src/fixtures/k.pem'), null);
+    assert.ok(isFixtureFile('src/fixtures/k.pem'));
+    assert.ok(isTestFile('tests/fixtures/k.pem') && isFixtureFile('tests/fixtures/k.pem'));
+  });
+  test('isTestFile POSITIVE CONTROL: application code keeps full confidence', () => {
+    for (const p of ['src/latest/x.js', 'contest/x.js', 'src/attestation.js', 'src/app.js']) assert.equal(isTestFile(p), null, p);
+  });
+}
