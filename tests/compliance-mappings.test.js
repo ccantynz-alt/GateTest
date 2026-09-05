@@ -27,7 +27,7 @@ const {
   CIS_CONTROLS,
   FALLBACK_MAPPING,
   MODULE_COMPLIANCE,
-} = require('../website/app/lib/compliance-mappings');
+} = require('../src/core/compliance-mappings');
 
 // ─── Canonical module list the Nuclear tier customer is likely to hit ────
 // The brief names these explicitly as the minimum coverage bar.
@@ -254,5 +254,24 @@ describe('compliance-mappings — high-signal correctness', () => {
   it('moneyFloat maps to SOC2 PI1.1 (Processing Integrity) — money correctness is processing integrity', () => {
     const m = getComplianceMapping('moneyFloat');
     assert.ok(m.soc2.includes('PI1.1'));
+  });
+});
+
+// ─── one table, three readers (Doctrine §4) ───────────────────────────────
+
+describe('compliance-mappings — one definition', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  it('the website shim re-exports the engine table, the same object', () => {
+    const web = require('../website/app/lib/compliance-mappings');
+    const core = require('../src/core/compliance-mappings');
+    assert.equal(web, core);
+  });
+
+  it('the SARIF reporter carries no OWASP list of its own', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'reporters', 'sarif-reporter.js'), 'utf-8');
+    assert.doesNotMatch(src, /^\s+owasp:\s*'/m, 'sarif-reporter.js re-declares an OWASP category');
+    assert.match(src, /require\('\.\.\/core\/compliance-mappings'\)/);
   });
 });

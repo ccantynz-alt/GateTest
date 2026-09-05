@@ -4,7 +4,8 @@
  * Central ingest for anonymized per-scan finding signal. CLI/MCP machines
  * flush their local buffer here (see src/core/telemetry-uploader.js); the
  * body is { records: [...] } where each record is module names + integer
- * counts + gate status. NEVER code, paths, finding text, or repo identity.
+ * counts + gate status, plus per-rule ids with fired / silenced integers
+ * (the /noise leaderboard). NEVER code, paths, finding text, or repo identity.
  *
  * Defense in depth: the recorder already strips PII, and sanitizeRecord here
  * REJECTS any record carrying a path/content/message-shaped key. The store
