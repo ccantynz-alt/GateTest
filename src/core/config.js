@@ -706,6 +706,10 @@ const DEFAULT_CONFIG = {
       '.json', '.yaml', '.yml', '.toml', '.env', '.md', '.sh', '.bash',
       '.tf', '.hcl', '.dockerfile', 'dockerfile',
       '.sql', '.graphql',
+      // The gate's own policy file: extensionless, so it is matched by name.
+      // Without it a PR that only adds a suppression is "no source changed"
+      // and the policy-change finding is scoped out (move 26).
+      '.gatetestignore',
     ],
   },
 

@@ -159,6 +159,8 @@ function isWholeLineComment(sourceLine) {
  * failing test) blocks (the Fifty, move 30).
  */
 const TEST_DISABLING_RULES = new Set(['test-skip-added', 'test-xit-added']);
+/** The files that ARE the gate policy — reviewed as policy, never as code. */
+const POLICY_FILE_RE = /(?:^|\/)\.gatetest(?:\.json|ignore)$/;
 const FIX_SUBJECT_RE = /\b(?:fix(?:es|ed|ing)?|bug(?:fix)?|hotfix|patch(?:es|ed)?|repair(?:s|ed)?|resolv(?:e|es|ed))\b/i;
 
 const PATTERN_RULES = [
@@ -343,6 +345,33 @@ const PATTERN_RULES = [
     title: 'Threshold value changed',
     explanation: 'A quality threshold was modified. Confirm the new value is justified, not loosened.',
   },
+
+  // --- Gate policy (the Fifty, move 26) ---
+  // The policy a team reviews IS the config: .gatetest.json and
+  // .gatetestignore. A PR that widens a suppression, disables a module,
+  // raises the block threshold or turns the gate advisory changes what
+  // every later PR is judged by, and the review must see it as such — so
+  // it is a finding on THIS PR, keyed by file, quiet on comments. Warning,
+  // not error: a policy change can be right; an unreviewed one cannot.
+  {
+    id: 'policy-ignore-line-added',
+    direction: 'added',
+    file: /(?:^|\/)\.gatetestignore$/,
+    pattern: /^\+\s*[^#\s]/,
+    severity: 'warning',
+    title: 'Gate policy changed: a suppression was added to .gatetestignore',
+    explanation: 'This PR silences a rule, module or path for every future scan. Review the line as a policy decision, not as code.',
+  },
+  {
+    id: 'policy-gate-softened',
+    direction: 'added',
+    file: /(?:^|\/)\.gatetest\.json$/,
+    pattern: /^\+.*"(?:reportOnly|report-only)"\s*:\s*true|^\+.*"enabled"\s*:\s*false|^\+.*"confidenceThreshold"\s*:\s*(?:0\.[89]\d*|1(?:\.0+)?)\b|^\+.*"strict"\s*:\s*false/,
+    severity: 'warning',
+    title: 'Gate policy changed: .gatetest.json makes the gate less strict',
+    explanation: 'A module is disabled, the gate is set to report-only, or the block threshold is raised. Every later PR is judged by this line.',
+  },
+
 ];
 
 class FakeFixDetectorModule extends BaseModule {
@@ -553,7 +582,9 @@ class FakeFixDetectorModule extends BaseModule {
       // pattern below — a doc table that says "flags `@ts-ignore` and
       // `as any`" lit up five rules on 2026-09-05 when a line-ending change
       // made the whole file a hunk. Same file set the AI engine uses.
-      if (!this._isSourceFile(hunk.file)) continue;
+      // The two POLICY files are the exception: not source, but what the
+      // gate is judged by, and only the policy rules read them (move 26).
+      if (!this._isSourceFile(hunk.file) && !POLICY_FILE_RE.test(hunk.file)) continue;
       // Files that INTENTIONALLY contain bug-shape patterns and must never
       // hard-error:
       //   - website/app/for/* — marketing demo pages showing the patterns
@@ -590,6 +621,10 @@ class FakeFixDetectorModule extends BaseModule {
           if (rule.direction === 'added' && !line.startsWith('+')) continue;
           if (rule.direction === 'removed' && !line.startsWith('-')) continue;
           if (rule.direction === 'changed') continue; // handled below
+          // A rule scoped to a policy file never reads code, and a code
+          // rule never reads a policy file.
+          if (rule.file && !rule.file.test(hunk.file)) continue;
+          if (!rule.file && POLICY_FILE_RE.test(hunk.file)) continue;
 
           if (isDemo && rule.severity === 'error') continue; // never hard-error on demo pages
 

@@ -497,6 +497,55 @@ describe('fakeFixDetector — a skipped test blocks only when the commit calls i
   });
 });
 
+// ─── the gate policy is reviewed as policy (the Fifty, move 26) ─────────────
+
+describe('fakeFixDetector — a PR that changes the gate policy says so', () => {
+  const hunk = (file, added) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1,1 +1,${1 + added.length} @@\n line\n${added.map((l) => `+${l}`).join('\n')}\n`;
+  const runOn = async (diff) => { const result = new TestResult('fakeFixDetector'); await new FakeFixDetector().run(result, makeConfig(diff)); return result; };
+
+  it('POSITIVE: a suppression line added to .gatetestignore is a warning, once per line', async () => {
+    const result = await runOn(hunk('.gatetestignore', ['# why: fixtures', 'secrets@tests/fixtures/**', 'hardcodedUrl:localhost']));
+    const hits = result.checks.filter((c) => !c.passed && c.name.includes('policy-ignore-line-added'));
+    assert.strictEqual(hits.length, 2, failedCheckNames(result).join(', '));
+    assert.strictEqual(hits[0].severity, 'warning');
+  });
+
+  it('NEGATIVE: a comment or blank line in .gatetestignore is not a policy change', async () => {
+    const result = await runOn(hunk('.gatetestignore', ['# reliability-corpus is the known-bad corpus', '']));
+    assert.ok(!findFailure(result, 'policy-ignore-line-added'), failedCheckNames(result).join(', '));
+  });
+
+  it('POSITIVE: report-only, a disabled module, a raised threshold or strict:false in .gatetest.json', async () => {
+    for (const line of ['  "reportOnly": true,', '    "enabled": false', '  "confidenceThreshold": 0.9,', '  "strict": false']) {
+      const result = await runOn(hunk('.gatetest.json', [line]));
+      assert.ok(findFailure(result, 'policy-gate-softened'), `expected on ${line}: ${failedCheckNames(result).join(', ')}`);
+    }
+  });
+
+  it('NEGATIVE: tightening the gate, or an ordinary key, is not flagged', async () => {
+    for (const line of ['  "confidenceThreshold": 0.6,', '    "enabled": true', '  "owner": "crclabs-hq",', '  "reportOnly": false,']) {
+      const result = await runOn(hunk('.gatetest.json', [line]));
+      assert.ok(!findFailure(result, 'policy-gate-softened'), `unexpected on ${line}: ${failedCheckNames(result).join(', ')}`);
+    }
+  });
+
+  it('CONTROL: a policy file never trips a CODE rule, and a code file never trips a policy rule', async () => {
+    const a = await runOn(hunk('.gatetestignore', ['moneyFloat:cents-display@src/**   # return true']));
+    assert.ok(!a.checks.some((c) => !c.passed && !c.name.includes('policy-')), failedCheckNames(a).join(', '));
+    const b = await runOn(hunk('src/config.js', ['  "reportOnly": true,']));
+    assert.ok(!findFailure(b, 'policy-gate-softened'), failedCheckNames(b).join(', '));
+  });
+});
+
+describe('fakeFixDetector — the policy finding survives --pr scoping', () => {
+  it('.gatetestignore counts as a changed source file in incremental mode', () => {
+    const { GateTestConfig } = require('../src/core/config');
+    const exts = new GateTestConfig(require('node:os').tmpdir()).get('incremental.sourceExtensions');
+    assert.ok(exts.includes('.gatetestignore'), 'a suppression-only PR must not read as "nothing changed"');
+    assert.ok(exts.includes('.json'), '.gatetest.json is matched by extension');
+  });
+});
+
 describe('fakeFixDetector — a threshold in a TEST file is fixture data (PR #433 bot finding)', () => {
   const hunk = (file, line) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1,1 +1,2 @@\n line\n+${line}\n`;
   it('NEGATIVE: confidenceThreshold: 0.7 inside tests/x.test.js is not a policy change', async () => {
