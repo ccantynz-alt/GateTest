@@ -87,7 +87,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | # | Move | Status | Evidence |
 |---|---|---|---|
 | 41 | A security page that answers the questionnaire | **Craig** | — |
-| 42 | Self-hosted / air-gapped mode | open | engine is already offline-capable; signed reports make it auditable |
+| 42 | Self-hosted / air-gapped mode | done | `gatetest --offline` / `GATETEST_OFFLINE=1` (`src/core/offline.js`): no telemetry upload (flush returns before fetch), `--fix` / `--auto-pr` refused out loud and the scan continues, `gatetest fix` exits 2, `--doctor` skips the API ping; the summary, console line and signed provenance record the mode; measured end to end with a dead proxy. README section + trust page |
 | 43 | SSO, roles, audit log | **Craig** | — |
 | 44 | DPA, subprocessor list, SOC 2 roadmap | **Craig** | — |
 | 45 | Invoicing, POs, annual terms | **Craig** | — |
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-09 (recalibrate confidence against the corpus), 20, 39, 42, 48, 49, 50.
+09 (recalibrate confidence against the corpus), 39, 48, 49, 50.
 Waiting on Craig: 15, 29, 35, 41.

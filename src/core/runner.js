@@ -55,6 +55,7 @@ function _loadBaselineMatcher(projectRoot) {
  */
 const { readPathFilter: _readPathFilter, pathInScope: _pathInScope } = require('./scan-paths');
 const { ruleIdentity: _ruleIdentity } = require('./rule-identity');
+const { isOffline: _isOffline } = require('./offline');
 
 function _loadIgnoreMatcher(projectRoot) {
   try { return _ignoreFile ? _ignoreFile.load(projectRoot) : null; }
@@ -1088,6 +1089,8 @@ class GateTestRunner extends EventEmitter {
       duration: endTime - startTime,
       diffOnly: this.options.diffOnly,
       changedFiles: this.options.changedFiles,
+      // Air-gapped mode (src/core/offline.js): nothing left the machine.
+      offline: _isOffline(),
       // The repository's path filter, so every report can say what was
       // deliberately out of scope (Doctrine §6). Null when none is set.
       pathFilter: this._pathFilter
