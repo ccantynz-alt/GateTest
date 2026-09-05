@@ -53,19 +53,8 @@ function _loadBaselineMatcher(projectRoot) {
  * @param {{name?: string, file?: string, filePath?: string}} check
  * @returns {string} the rule identity, e.g. `hardcoded-url:localhost`
  */
+const { ruleIdentity: _ruleIdentity } = require('./rule-identity');
 const { isOffline: _isOffline } = require('./offline');
-
-function _ruleIdentity(check) {
-  let key = String((check && check.name) || '');
-  const file = (check && (check.file || check.filePath)) || '';
-  if (file) {
-    const at = key.indexOf(`:${file}`);
-    if (at > 0) key = key.slice(0, at);
-  }
-  // Trailing `:<line>` survives when the name embedded a path we couldn't
-  // match verbatim (separator differences, relative vs absolute).
-  return key.replace(/:\d+$/, '');
-}
 
 function _loadIgnoreMatcher(projectRoot) {
   try { return _ignoreFile ? _ignoreFile.load(projectRoot) : null; }

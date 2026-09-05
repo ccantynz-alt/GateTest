@@ -53,6 +53,12 @@ function fingerprintFindings(results) {
   return out.sort();
 }
 
+/** `{present, sha256}` for a file that may not exist; never throws. */
+function fileDigest(p) {
+  if (!fs.existsSync(p)) return { present: false, sha256: null };
+  try { return { present: true, sha256: sha256(fs.readFileSync(p, 'utf8')) }; } catch { return { present: true, sha256: null }; } // error-ok — unreadable: present, digest unknown
+}
+
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
 }
@@ -77,15 +83,12 @@ function buildProvenance(summary, opts = {}) {
   const skipped = results.filter((r) => r && r.status === 'skipped').map((r) => r.module);
   const deferred = (summary.deferred || []).map((d) => ({ module: d.module, reason: d.reason || null, runsIn: d.runsIn || null }));
 
-  let ignoreFile = null;
-  if (opts.projectRoot) {
-    const p = path.join(opts.projectRoot, '.gatetestignore');
-    if (fs.existsSync(p)) {
-      try { ignoreFile = { present: true, sha256: sha256(fs.readFileSync(p, 'utf8')) }; } catch { ignoreFile = { present: true, sha256: null }; }
-    } else {
-      ignoreFile = { present: false, sha256: null };
-    }
-  }
+  // The policy files, hashed: a report can be matched to the exact
+  // .gatetest.json and .gatetestignore it was judged under, and two
+  // reports that disagree can be told apart by policy rather than by
+  // engine (the Fifty, move 26).
+  const ignoreFile = opts.projectRoot ? fileDigest(path.join(opts.projectRoot, '.gatetestignore')) : null;
+  const configFile = opts.projectRoot ? fileDigest(path.join(opts.projectRoot, '.gatetest.json')) : null;
 
   const fingerprints = fingerprintFindings(results);
   return {
@@ -108,6 +111,7 @@ function buildProvenance(summary, opts = {}) {
     },
     modules: { ran, skipped, deferred },
     suppression: { ignoreFile, suppressedRules: summary.suppressedRules || null },
+    policy: { configFile, ignoreFile },
     findings: { count: fingerprints.length, sha256: sha256(fingerprints.join('\n')) },
   };
 }

@@ -187,10 +187,15 @@ export default function TrustPage() {
               state="now"
               body={
                 <>
-                  Every scan emits a signed SARIF report. Every auto-fix PR
-                  links to the workflow run that produced it. You can
-                  reproduce any fix locally with{" "}
-                  <code className="text-foreground">node bin/gatetest.js --replay &lt;run-id&gt;</code>.
+                  Every scan emits a signed JSON report (and SARIF for the
+                  Security tab); <code className="text-foreground">gatetest verify-report</code>{" "}
+                  proves it was not edited afterwards. With{" "}
+                  <code className="text-foreground">--compliance</code> the same run writes an
+                  evidence pack that files every finding under OWASP Top 10, SOC 2 and
+                  CIS Controls, control by control, and prints &quot;not checked&quot; instead
+                  of hiding it. Every auto-fix PR links to the workflow run that produced
+                  it; reproduce any run locally with{" "}
+                  <code className="text-foreground">gatetest replay &lt;run-url&gt;</code>.
                 </>
               }
             />

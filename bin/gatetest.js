@@ -141,6 +141,12 @@ const HELP = `
                        refused with a message, not silently skipped), no
                        live API ping from --doctor. The summary and the signed
                        provenance record it. Same as GATETEST_OFFLINE=1.
+    --compliance       Write the compliance evidence pack: findings filed
+                       under OWASP Top 10 / SOC 2 / CIS Controls, control by
+                       control, with the raw results and the signed
+                       provenance (.gatetest/reports/gatetest-compliance-*).
+                       A control is PASS only when a mapped module ran and
+                       found nothing; "not checked" is printed, never hidden.
     --github-annotations
                        Emit GitHub Actions workflow commands so findings
                        appear as inline annotations on the PR diff (red
@@ -254,6 +260,12 @@ async function main() {
     const p = report.provenance || {};
     console.log(`${v.ok ? 'VERIFIED' : 'NOT VERIFIED'}: ${v.reason}`);
     if (p.engine) console.log(`  engine ${p.engine.name} v${p.engine.version}${p.engine.commit ? ` @ ${p.engine.commit}` : ''} · gate ${p.gateStatus} · ${p.findings ? p.findings.count : '?'} findings · digest ${p.findings ? p.findings.sha256.slice(0, 12) : '?'}…`);
+    // The policy the run was judged under — so two reports that disagree
+    // can be told apart by policy, not only by engine (move 26).
+    if (p.policy) {
+      const d = (f) => (!f || !f.present ? 'absent' : f.sha256 ? `${f.sha256.slice(0, 12)}…` : 'unreadable');
+      console.log(`  policy .gatetest.json ${d(p.policy.configFile)} · .gatetestignore ${d(p.policy.ignoreFile)}`);
+    }
     process.exit(v.ok ? 0 : 1);
   }
   if (first === 'sweep') {
@@ -423,6 +435,7 @@ async function main() {
     // developer stops running the tool.
     showAll: args.all || false,
     junit: args.junit || false,
+    compliance: args.compliance || false,
     githubAnnotations: args.githubAnnotations || false,
     // Report-only mode — gate reports findings but never fails the
     // workflow on them. Strict mode (default OFF) reverses this and
