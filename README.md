@@ -116,6 +116,15 @@ Suppressed findings are excluded from the gate decision and every failure count,
 - `gatetest --noise` — ranks your noisiest modules and prints the exact ignore line to copy. The same signal, aggregated across every opted-in scan, is published rule by rule at [gatetest.io/noise](https://gatetest.io/noise).
 - **Auto-softening** — a module you chronically dismiss stops blocking the gate on its own (never on thin evidence: it takes repeated dismissals at a high fire-rate).
 
+**The policy is reviewed as policy.** `.gatetest.json` and `.gatetestignore` are what
+every later PR is judged by, so a PR that changes them says so: a suppression added
+to `.gatetestignore`, a module disabled, the gate set to report-only or the block
+threshold raised in `.gatetest.json` each produce a `Gate policy changed` warning on
+that PR — reported, never blocking, quiet on comments and on tightening. Every
+signed report records the SHA-256 of both files (`gatetest verify-report` prints
+them), so two reports that disagree can be told apart by policy, not only by
+engine.
+
 Project-wide options live in `.gatetest.json` (suites, per-module config, severity overrides) — run `gatetest --init` to scaffold one.
 
 ### Onboarding a mature repo — baseline mode
