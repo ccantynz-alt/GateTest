@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-09 (recalibrate confidence against the corpus), 20, 39, 42, 48, 49, 50.
+09 (recalibrate confidence against the corpus), 39, 48, 49, 50.
 Waiting on Craig: 15, 29, 35, 41.
