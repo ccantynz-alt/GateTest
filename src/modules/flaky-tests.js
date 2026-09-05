@@ -71,6 +71,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
+const { stripStringsAndComments } = require('../core/source-strip');
 
 // Directory excludes beyond what `BaseModule._collectFiles` already skips
 // (node_modules, .git, dist, build, coverage, .next, out, …). The old
@@ -151,36 +152,19 @@ const MOCK_NETWORK_HINTS = [
 
 const SELF_ADMIT_TITLE_RE = /\b(?:flak(?:y|iness)|intermittent|sometimes\s+fails?|randomly\s+fails?|eventually\s+works?)\b/i;
 
-// Line-level "inside a string literal" check. Walks the line up to
-// `idx` counting unescaped quotes of each kind. If any kind has an odd
-// count, the position is inside a string and the match should be
-// ignored (e.g. fixture diffs that embed `.skip` as a literal).
-function isInString(line, idx) {
-  let inSingle = false;
-  let inDouble = false;
-  let inTick = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inDouble && !inTick && ch === '\'') inSingle = !inSingle;
-    else if (!inSingle && !inTick && ch === '"') inDouble = !inDouble;
-    else if (!inSingle && !inDouble && ch === '`') inTick = !inTick;
-  }
-  return inSingle || inDouble || inTick;
-}
-
-// Search a line for a regex match that's NOT inside a string literal.
-// Returns the match object or null.
-function matchOutsideString(line, re) {
-  // Force global flag so we can iterate matches
-  const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-  const gre = new RegExp(re.source, flags);
-  let m;
-  while ((m = gre.exec(line)) !== null) {
-    if (!isInString(line, m.index)) return m;
-    if (m.index === gre.lastIndex) gre.lastIndex += 1;
-  }
-  return null;
+// Every pattern below is matched on the MASKED source — comments gone,
+// string contents blanked, offsets preserved (src/core/source-strip.js, the
+// one definition of where a string or comment begins and ends). A
+// `setTimeout(` inside a fixture string, a `Date.now()` in a template a
+// test writes to disk, or a `.only` in a quoted diff is data, not a test
+// smell. Before 2026-09-05 only the `.only` / `.skip` / network rules had a
+// guard, and it was a per-line quote counter of this module's own; the
+// timer and clock rules had none and reported our own tests/run-tests.test.js
+// for the fixture text it writes (found by our scanner on PR #456).
+/** `re` ends at an opening quote on the masked line; does the raw line hold an http(s) URL there? */
+function callsUrl(code, line, re) {
+  const m = re.exec(code);
+  return !!m && /^https?:\/\//.test(line.slice(m.index + m[0].length));
 }
 
 class FlakyTestsModule extends BaseModule {
@@ -235,6 +219,7 @@ class FlakyTestsModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const lines = content.split(/\r?\n/);
+    const masked = stripStringsAndComments(content).split(/\r?\n/);
     let issues = 0;
 
     const hasFakeTimers = FAKE_TIMER_HINTS.some((re) => re.test(content));
@@ -245,12 +230,12 @@ class FlakyTestsModule extends BaseModule {
     const envRestores = new Set(); // varNames with a restore call afterwards
 
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
+      const line = lines[i];      // raw: messages, titles, URL literals
+      const code = masked[i] || ''; // masked: every pattern match
+      if (!code.trim()) continue;
 
-      // 1. Focus / skip modifiers (skip matches inside string fixtures)
-      if (matchOutsideString(line, /\b(?:it|test|describe)\.only\s*\(|\bfit\s*\(|\bfdescribe\s*\(/)) {
+      // 1. Focus / skip modifiers (a `.only` inside a string fixture is data)
+      if (/\b(?:it|test|describe)\.only\s*\(|\bfit\s*\(|\bfdescribe\s*\(/.test(code)) {
         issues += this._flag(result, `flaky-tests:only-committed:${rel}:${i + 1}`, {
           severity: 'error',
           file: rel,
@@ -260,7 +245,7 @@ class FlakyTestsModule extends BaseModule {
         });
       }
 
-      if (matchOutsideString(line, /\b(?:it|test|describe)\.skip\s*\(|\bxit\s*\(|\bxdescribe\s*\(|\bxtest\s*\(/)) {
+      if (/\b(?:it|test|describe)\.skip\s*\(|\bxit\s*\(|\bxdescribe\s*\(|\bxtest\s*\(/.test(code)) {
         issues += this._flag(result, `flaky-tests:skip-committed:${rel}:${i + 1}`, {
           severity: 'warning',
           file: rel,
@@ -271,8 +256,7 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 2. `.todo` with no issue link in the title
-      const todoMatchOutside = matchOutsideString(line, /\b(?:it|test)\.todo\s*\(/);
-      const todoMatch = todoMatchOutside ? line.match(/\b(?:it|test)\.todo\s*\(\s*(['"`])([^'"`]*?)\1/) : null;
+      const todoMatch = /\b(?:it|test)\.todo\s*\(/.test(code) ? line.match(/\b(?:it|test)\.todo\s*\(\s*(['"`])([^'"`]*?)\1/) : null;
       if (todoMatch) {
         const title = todoMatch[2];
         const hasLink = /(?:issue|#\d+|https?:\/\/|gh\/|pr[-/]?\d+|bug[-\s]?\d+)/i.test(title);
@@ -288,11 +272,11 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 3. Nondeterminism: Math.random
-      if (/\bMath\.random\s*\(/.test(line)) {
+      if (/\bMath\.random\s*\(/.test(code)) {
         // Skip jitter/backoff context: `Math.random() * DELAY` or `* Math.random()`
         // These are legitimate uses in retry/timing tests, not nondeterministic data.
-        const isJitterContext = /Math\.random\s*\(\s*\)\s*[*+]/.test(line)
-          || /[*+]\s*Math\.random\s*\(\s*\)/.test(line);
+        const isJitterContext = /Math\.random\s*\(\s*\)\s*[*+]/.test(code)
+          || /[*+]\s*Math\.random\s*\(\s*\)/.test(code);
         if (!isJitterContext) {
           issues += this._flag(result, `flaky-tests:math-random:${rel}:${i + 1}`, {
             severity: 'warning',
@@ -312,14 +296,14 @@ class FlakyTestsModule extends BaseModule {
       // the same line, or via a variable that later appears inside one.
       // (2026-08-18 audit residue: the unconditional form was a tautology —
       // "test reads clock, therefore flaky" — and mostly noise.)
-      if ((/\bDate\.now\s*\(/.test(line) || /\bnew\s+Date\s*\(\s*\)/.test(line)) && !hasFakeTimers) {
-        const assertedInline = /\b(?:expect|assert(?:\.\w+)*|should)\s*\(?[^;\n]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/.test(line);
+      if ((/\bDate\.now\s*\(/.test(code) || /\bnew\s+Date\s*\(\s*\)/.test(code)) && !hasFakeTimers) {
+        const assertedInline = /\b(?:expect|assert(?:\.\w+)*|should)\s*\(?[^;\n]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/.test(code);
         let assertedViaVar = false;
         if (!assertedInline) {
-          const assign = line.match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^;]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/);
+          const assign = code.match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=[^;]*(?:\bDate\.now\s*\(|\bnew\s+Date\s*\(\s*\))/);
           if (assign) {
             const varRe = new RegExp(`\\b(?:expect|assert(?:\\.\\w+)*|should)\\s*\\(?[^;\\n]*\\b${assign[1]}\\b`);
-            assertedViaVar = lines.some((l, k) => k > i && varRe.test(l));
+            assertedViaVar = masked.some((l, k) => k > i && varRe.test(l));
           }
         }
         if (assertedInline || assertedViaVar) {
@@ -334,14 +318,15 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 5. Real network
-      // Matched OUTSIDE string literals: a test that writes source fixtures
-      // (`write(tmp, 'src/gateway.ts', 'fetch("https://api.openai.com…')`)
-      // contains the call as DATA — three such lines in our own
-      // tests/prompt-safety.test.js were reported as real network calls
-      // (2026-09-05, PR #431). Same guard the .skip rule already uses.
-      const fetchCall = matchOutsideString(line, /\bfetch\s*\(\s*['"`]https?:\/\//) !== null;
-      const axiosCall = matchOutsideString(line, /\baxios\.(?:get|post|put|delete|patch|head)\s*\(\s*['"`]https?:\/\//) !== null;
-      const httpCall = matchOutsideString(line, /\b(?:https?)\.request\s*\(/) !== null;
+      // The call is matched on the masked line (a test that writes source
+      // fixtures — `write(tmp, 'src/gateway.ts', 'fetch("https://api…')` —
+      // contains the call as DATA; three such lines in our own
+      // tests/prompt-safety.test.js were reported, 2026-09-05, PR #431); the
+      // URL is by definition inside the string, so it is read from the raw
+      // line at the offset where the masked line kept the opening quote.
+      const fetchCall = callsUrl(code, line, /\bfetch\s*\(\s*['"`]/);
+      const axiosCall = callsUrl(code, line, /\baxios\.(?:get|post|put|delete|patch|head)\s*\(\s*['"`]/);
+      const httpCall = /\b(?:https?)\.request\s*\(/.test(code);
       // A LOOPBACK request is not a real-network call. There is no DNS to
       // hiccup and no third party to return a 5xx — the two failures this
       // rule's own message names. It is a test talking to a server the test
@@ -367,7 +352,7 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 6. Real timers
-      if (/\b(?:setTimeout|setInterval)\s*\(/.test(line) && !hasFakeTimers) {
+      if (/\b(?:setTimeout|setInterval)\s*\(/.test(code) && !hasFakeTimers) {
         issues += this._flag(result, `flaky-tests:real-timer:${rel}:${i + 1}`, {
           severity: 'warning',
           file: rel,
@@ -378,17 +363,17 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 7. process.env mutations (record for later restore check)
-      const envMatch = line.match(/\bprocess\.env\.([A-Z_][A-Z0-9_]*)\s*=/);
+      const envMatch = code.match(/\bprocess\.env\.([A-Z_][A-Z0-9_]*)\s*=/);
       if (envMatch) {
         envMutations.push({ line: i + 1, varName: envMatch[1] });
       }
       // Track restores: `delete process.env.X`, or later assignment to a
       // saved `originalX` inside afterEach/afterAll.
-      const restoreMatch = line.match(/\bdelete\s+process\.env\.([A-Z_][A-Z0-9_]*)/);
+      const restoreMatch = code.match(/\bdelete\s+process\.env\.([A-Z_][A-Z0-9_]*)/);
       if (restoreMatch) envRestores.add(restoreMatch[1]);
 
       // 8. Self-admission — test titles with flaky keywords
-      const titleMatch = line.match(/\b(?:it|test)\s*\(\s*(['"`])([^'"`]+?)\1/);
+      const titleMatch = /\b(?:it|test)\s*\(\s*['"`]/.test(code) ? line.match(/\b(?:it|test)\s*\(\s*(['"`])([^'"`]+?)\1/) : null;
       if (titleMatch && SELF_ADMIT_TITLE_RE.test(titleMatch[2])) {
         issues += this._flag(result, `flaky-tests:self-admitted:${rel}:${i + 1}`, {
           severity: 'warning',

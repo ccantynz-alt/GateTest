@@ -1,6 +1,6 @@
 'use strict';
 
-const { test, describe, before } = require('node:test');
+const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
@@ -12,9 +12,20 @@ const os = require('os');
 // ---------------------------------------------------------------------------
 
 let mcp;
+// A real, tiny project for the handler to run — NOT this repository. Running
+// this repo's own `npm test` from inside its own suite was recursive; it
+// only ever "worked" because a nested `node --test` used to refuse to run,
+// and once the suite runner stripped that refusal it ran all 468 files
+// inside one test (found 2026-09-05 by scripts/run-tests.js).
+let project;
 before(async () => {
   mcp = await import('../bin/gatetest-mcp.mjs');
+  project = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-mcp-run-tests-'));
+  fs.mkdirSync(path.join(project, 'tests'));
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'fixture', scripts: { test: 'node --test tests/' } }));
+  fs.writeFileSync(path.join(project, 'tests', 'a.test.js'), "const { test } = require('node:test'); const assert = require('node:assert');\ntest('adds', () => assert.strictEqual(1 + 1, 2));\n");
 });
+after(() => { if (project) fs.rmSync(project, { recursive: true, force: true }); });
 
 describe('test-runner core', () => {
   const { runTests } = require('../src/core/test-runner.js');
@@ -102,19 +113,18 @@ describe('MCP run_tests handler', () => {
   });
 
   test('result contains text content type', async () => {
-    const result = await mcp.handleRunTests({ path: process.cwd(), timeout: 5 });
+    const result = await mcp.handleRunTests({ path: project, timeout: 30 });
     for (const c of result.content) {
       assert.strictEqual(c.type, 'text');
       assert.strictEqual(typeof c.text, 'string');
     }
   });
 
-  test('result text mentions test runner or error', async () => {
-    const result = await mcp.handleRunTests({ path: process.cwd(), timeout: 30 });
+  test('runs the project\'s own suite and reports its pass', async () => {
+    const result = await mcp.handleRunTests({ path: project, timeout: 30 });
     const text = result.content.map(c => c.text).join('\n');
-    // Should mention "Test run", "passed", "failed", or "failed"
-    const hasRunnerInfo = /test run|passed|failed|error|no test/i.test(text);
-    assert.ok(hasRunnerInfo, `expected test result info in: ${text.slice(0, 200)}`);
+    assert.match(text, /passed/i, `expected the fixture's passing test to be reported in: ${text.slice(0, 300)}`);
+    assert.doesNotMatch(text, /recursively|skipping running files/i, 'the nested run must actually run');
   });
 
   test('explicit command override is accepted', async () => {
@@ -129,7 +139,7 @@ describe('MCP run_tests handler', () => {
   });
 
   test('timeout parameter is accepted without crash', async () => {
-    const result = await mcp.handleRunTests({ path: process.cwd(), timeout: 5 });
+    const result = await mcp.handleRunTests({ path: project, timeout: 5 });
     assert.ok(Array.isArray(result.content));
   });
 });

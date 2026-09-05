@@ -97,9 +97,19 @@ function spawnCapture(cmd, args, options, timeoutMs) {
     let totalBytes = 0;
     let truncated = false;
 
+    // NODE_TEST_CONTEXT is stamped by a `node --test` parent on its children;
+    // inherited by a customer's `node --test` it makes that run refuse
+    // ("called recursively") and report nothing. The suite we run is theirs.
+    const inherited = { ...process.env };
+    delete inherited.NODE_TEST_CONTEXT;
+    const posix = process.platform !== 'win32';
     const child = spawn(cmd, args, {
       cwd: options.cwd,
-      env: { ...process.env, ...(options.env || {}) },
+      env: { ...inherited, ...(options.env || {}) },
+      // Own process group on POSIX so a timeout kills the whole tree — a
+      // test suite that forks workers or spawns a server otherwise outlives
+      // the kill of its `npm` parent and keeps running on the MCP host.
+      detached: posix,
       // Windows can't exec .cmd/.bat (npm.cmd) without a shell — but Node
       // deprecated args+shell:true in general (DEP0190): with a shell, args
       // are concatenated but NOT re-escaped, so any quoted argument
@@ -123,9 +133,15 @@ function spawnCapture(cmd, args, options, timeoutMs) {
     child.stdout.on('data', (b) => absorb('stdout', b));
     child.stderr.on('data', (b) => absorb('stderr', b));
 
+    const killTree = (signal) => {
+      try {
+        if (posix && child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch { /* error-ok: already gone */ }
+    };
     const timer = setTimeout(() => {
-      child.kill('SIGTERM');
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 3000); // error-ok: best-effort output parse; falls through to the next detection strategy
+      killTree('SIGTERM');
+      setTimeout(() => killTree('SIGKILL'), 3000).unref(); // error-ok: best-effort output parse; falls through to the next detection strategy
     }, timeoutMs);
 
     child.on('close', (code) => {

@@ -26,9 +26,9 @@
   },
   "scripts": {
     "lint": "eslint src bin lib integrations",
-    "test": "node --test --test-force-exit --test-timeout=60000 tests/*.test.js",
-    "test:heavy": "node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js",
-    "test:all": "node --test --test-force-exit --test-timeout=120000 tests/*.test.js tests/heavy/*.test.js",
+    "test": "node scripts/run-tests.js --timeout 60000 tests/*.test.js",
+    "test:heavy": "node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js",
+    "test:all": "node scripts/run-tests.js --timeout 120000 tests/*.test.js tests/heavy/*.test.js",
     "app": "node src/app-server.js",
     "sweep": "node bin/gatetest-sweep.js",
     "gatetest": "node bin/gatetest.js",

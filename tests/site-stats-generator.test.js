@@ -28,7 +28,7 @@ describe('parseTapSummary', () => {
       '# tests 6234',
       '# pass 6233',
       '# fail 1',
-      '# skip 1',
+      '# skipped 1', // Node's label is `skipped`; the fixture said `skip` and the parser matched the fixture, so the real suite's skipped count was always 0 (2026-09-05)
       '# todo 0',
     ].join('\n'));
     assert.strictEqual(tap.total, 6234);

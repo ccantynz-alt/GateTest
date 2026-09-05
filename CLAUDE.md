@@ -169,9 +169,9 @@ While working on any task in this repo, if you observe any of the following, **a
 ### The loop
 
 Every turn ends with the **sweep checklist**, in this order — the self-scan and the corpus go LAST because they judge the tree as it will be pushed:
-1. `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` — all pass (the bare `node --test` form hangs for HOURS locally — a leaked timer/socket keeps the runner alive; CI got the same force-exit fix in `180bf7c`)
-2. The same suite under the Actions environment — `GITHUB_ACTIONS=true CI=true GITHUB_REPOSITORY=crclabs-hq/GateTest GITHUB_RUN_ID=1 node --test …` — `src/index.js` auto-attaches two reporters under that env and anything keyed on it is invisible locally (2026-09-05: four reporter tests green here, red in CI)
-3. `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` — heavy suite; non-blocking in CI but green before shipping
+1. `node scripts/run-tests.js --timeout 60000 tests/*.test.js` — `SUITE: PASSED`, every file reported its summary (2026-09-05: the `node --test --test-force-exit` form this replaces exited as soon as the tests it had heard of were done — the same tree reported 50, 77 and 61 tests on three runs, exit 0 each time; the bare `node --test` form hangs for hours on a leaked handle. The runner runs one plain `node --test` per file and ends it after its summary line, so a leak cannot hang it and a file that ends before its summary is a failure)
+2. The same suite under the Actions environment — `GITHUB_ACTIONS=true CI=true GITHUB_REPOSITORY=crclabs-hq/GateTest GITHUB_RUN_ID=1 node scripts/run-tests.js …` — `src/index.js` auto-attaches two reporters under that env and anything keyed on it is invisible locally (2026-09-05: four reporter tests green here, red in CI)
+3. `node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js` — heavy suite; non-blocking in CI but green before shipping
 4. `npx eslint .` — exit 0 (the root config ignores `website/`; `cd website && npx eslint` covers it)
 5. `cd website && npx tsc --noEmit && npx next build` — zero errors
 6. `node bin/gatetest.js --list` — 121 modules, matches `src/core/registry.js`
@@ -280,8 +280,8 @@ Build the most advanced, most aggressive, most beautiful QA testing platform eve
 
 ### 1. Tests & Build
 
-- [ ] All fast tests pass (`node --test --test-force-exit --test-timeout=60000 tests/*.test.js`)
-- [ ] Heavy tests pass (`node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js`) — non-blocking in CI but green before shipping
+- [ ] All fast tests pass (`node scripts/run-tests.js --timeout 60000 tests/*.test.js` — `SUITE: PASSED`)
+- [ ] Heavy tests pass (`node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js`) — non-blocking in CI but green before shipping
 - [ ] Website builds clean (`cd website && npx next build`)
 - [ ] All modules load (`node bin/gatetest.js --list`)
 - [ ] Fake-fix detector flags symptom patches on diffs
@@ -434,8 +434,8 @@ Before writing a single line of new code:
 
 After writing the code:
 
-1. `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` — ALL pass
-1b. `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` — heavy suite green
+1. `node scripts/run-tests.js --timeout 60000 tests/*.test.js` — `SUITE: PASSED`
+1b. `node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js` — heavy suite green
 2. `cd website && npx next build` — ZERO errors
 3. `node bin/gatetest.js --list` — all modules load
 4. No `console.log` left in library code
@@ -501,7 +501,7 @@ When something breaks:
 6. If unclear, ask Craig
 
 ### At the END of every session:
-1. Run ALL tests — `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` (fast) + `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` (heavy)
+1. Run ALL tests — `node scripts/run-tests.js --timeout 60000 tests/*.test.js` (fast) + `node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js` (heavy)
 2. Build website — `cd website && npx next build`
 3. Verify all modules load — `node bin/gatetest.js --list`
 4. Update Known Issues in `docs/ROADMAP.md` if anything found (resolved ones move to `docs/HISTORY.md`); update `docs/THE-FIFTY.md` status for any move that landed
@@ -652,6 +652,7 @@ a claim.
 - **Diff scans report only the diff** (runner-level `_scopeResultToChangedFiles`), one file walk for 36 modules, quick `--diff` on a PR ≈ 8s; full self-scan ≈ 65s with mutation deferred to `mutation-nightly.yml`.
 - **Every JSON report carries provenance and a signature** (`src/core/report-provenance.js`, `GATETEST_REPORT_SIGNING_KEY`, `gatetest verify-report`). SARIF reports the level the gate used. A CI job asserts same tree → same findings. **`gatetest --compliance` writes the compliance evidence pack** (OWASP / SOC 2 / CIS control by control, three-state, signed the same way; `src/core/compliance-evidence.js`); the mapping table lives in `src/core/compliance-mappings.js` and the website + SARIF import it.
 - **Hosted PR comments** attribute findings by line (`inDiff` / `inChangedFile`), say what was not checked, and carry the exact `@gatetest ignore …` reply per finding. The CLI prints the exact `.gatetestignore` line and, in CI, the `gatetest replay` command under a blocked gate.
+- **The test suite is run by `scripts/run-tests.js` (2026-09-05).** One plain `node --test` per file, ended after its summary is read; a file that ends without a summary, reports zero tests, fails or is cancelled (its event loop never drained — a leaked timer, socket or child) fails the suite, and the total says how many files did not finish. The `node --test --test-force-exit` form it replaces exited before every file had reported and counted only what had finished (the same tree: 50, 77, 61 tests on three runs, exit 0 each) — every green suite between `180bf7c` and this fix was evidence about the tests that finished first. `npm test`, CI, publish, the nightly dogfood sweep and the site-stats generator all call the runner; `tests/run-tests.test.js` is its control pair.
 - **KI #106 closed (2026-09-05):** no module decides "nothing to check" from a framework marker its rules do not need — 15 of 15 fixed, three new one-definition homes (`src/core/workspaces.js`, `migration-dirs.js`, `shell-files.js`), corpus 20/20 at ceilings. **Open, measured:** KI #105 — stale Code Scanning categories need an API delete; KI #107 — prSize on the Dogfood job's depth-1 checkout.
 
 The narratives for 2026-09-04/05 (how each number was reached, which fixes regressed and were caught) live in `docs/HISTORY.md` under "VERSION CHANGELOGS".

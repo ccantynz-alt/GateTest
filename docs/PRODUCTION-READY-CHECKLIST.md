@@ -135,8 +135,8 @@ Started 2026-08-21 (this session). Check off with commit SHAs.
 
 ## 7. Standing bar (per-release, mostly automated)
 
-- [ ] Fast suite: `node --test --test-force-exit --test-timeout=60000 tests/*.test.js`
-- [ ] Heavy suite: `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js`
+- [ ] Fast suite: `node scripts/run-tests.js --timeout 60000 tests/*.test.js` — `SUITE: PASSED`
+- [ ] Heavy suite: `node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js`
 - [ ] `cd website && npx next build` — zero errors
 - [ ] `node bin/gatetest.js --list` — all 121 modules load
 - [x] Next.js security patch level current (2026-08-21) — KI #59 RESOLVED:
