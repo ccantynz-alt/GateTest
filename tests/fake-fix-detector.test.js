@@ -253,3 +253,53 @@ describe('FakeFixDetectorModule', () => {
     }
   });
 });
+
+// strict-to-loose: `/==[^=]/` matched INSIDE `=== 'x'` (the last two `=`
+// plus the space), so a hunk that merely moved a strict comparison
+// reported it as relaxed (2026-09-05, a file-walk replacement in
+// typescript-strictness.js). Control pair: the real relaxation must still
+// fire; a moved `===` must not.
+describe('FakeFixDetectorModule — strict-to-loose is a token, not a substring', () => {
+  async function run(diff) {
+    const mod = new FakeFixDetector();
+    const result = new TestResult('fakeFixDetector');
+    result.start();
+    await mod.run(result, makeConfig(diff));
+    return result;
+  }
+  const hunk = (lines) => [
+    'diff --git a/src/a.js b/src/a.js', '--- a/src/a.js', '+++ b/src/a.js', '@@ -1,4 +1,4 @@', ...lines,
+  ].join('\n');
+
+  it('fires when === becomes ==', async () => {
+    const result = await run(hunk([
+      ' function isTs(name) {',
+      "-  return name === 'tsconfig.json';",
+      "+  return name == 'tsconfig.json';",
+      ' }',
+    ]));
+    assert.ok(findFailure(result, 'strict-to-loose'), 'a real relaxation must be reported');
+  });
+
+  it('stays quiet when a === line only moves', async () => {
+    const result = await run(hunk([
+      ' function isTs(name) {',
+      "-  if (name === 'tsconfig.json') return true;",
+      '+  const base = path.basename(name);',
+      "+  if (base === 'tsconfig.json') return true;",
+      ' }',
+    ]));
+    assert.ok(!findFailure(result, 'strict-to-loose'), `moved strict comparison reported as relaxed: ${failedCheckNames(result).join(', ')}`);
+  });
+
+  it('stays quiet when == is added beside a === that stays', async () => {
+    const result = await run(hunk([
+      ' function f(a, b) {',
+      '-  if (a === b) return 1;',
+      '+  if (a === b) return 1;',
+      '+  if (a == null) return 0;',
+      ' }',
+    ]));
+    assert.ok(!findFailure(result, 'strict-to-loose'));
+  });
+});

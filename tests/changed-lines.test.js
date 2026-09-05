@@ -60,22 +60,20 @@ describe('changedLines', () => {
     assert.deepStrictEqual(sorted(changed), [5, 21, 28]);
   });
 
-  it('a rewrite past the edit cap is all change, and finishes fast', () => {
+  // No wall-clock assertions here — our own flakyTests module flags them,
+  // and it is right: a timing bound is a CI-load lottery. The cap IS the
+  // bound: past REWRITE_EDIT_CAP edits the diff stops and answers ALL.
+  it('a rewrite past the edit cap is all change', () => {
     const before = Array.from({ length: REWRITE_EDIT_CAP + 500 }, (_, i) => `old ${i}`).join('\n');
     const after = Array.from({ length: REWRITE_EDIT_CAP + 500 }, (_, i) => `new ${i}`).join('\n');
-    const t0 = Date.now();
     assert.strictEqual(changedLines(before, after), ALL);
-    assert.ok(Date.now() - t0 < 5000, 'capped diff must not go quadratic');
   });
 
-  it('a large file with a small edit is exact and fast', () => {
+  it('a large file with a small edit is exact', () => {
     const lines = Array.from({ length: 20000 }, (_, i) => `const v${i} = ${i};`);
     const before = lines.join('\n');
     lines[12345] = 'const v12345 = eval(input);';
-    const t0 = Date.now();
-    const changed = changedLines(before, lines.join('\n'));
-    assert.deepStrictEqual(sorted(changed), [12346]);
-    assert.ok(Date.now() - t0 < 2000);
+    assert.deepStrictEqual(sorted(changedLines(before, lines.join('\n'))), [12346]);
   });
 });
 

@@ -249,7 +249,16 @@ const PATTERN_RULES = [
     id: 'strict-to-loose',
     direction: 'changed',
     pattern: /===/,
-    replacement: /==[^=]/,
+    // A loose `==` that is not the tail of `===` or `!==`. The previous
+    // `/==[^=]/` matched inside `=== 'x'` — the last two `=` plus the
+    // space — so any hunk that moved a strict comparison reported it as
+    // relaxed (found on 2026-09-05 when a file walk was replaced and its
+    // untouched `name === 'tsconfig.json'` line moved). Substring-vs-token,
+    // the same shape as `.git` matching `.github`.
+    replacement: /(?<![=!])==(?!=)/,
+    // And a strict comparison must actually have LEFT the hunk: an added
+    // `==` beside a removed `===` that also reappears is a move, not a fix.
+    strictCountMustDrop: true,
     severity: 'warning',
     title: 'Strict equality relaxed to loose equality',
     explanation: '=== was changed to == — type coercion masks bugs rather than fixing them.',
@@ -524,7 +533,14 @@ class FakeFixDetectorModule extends BaseModule {
         if (isDemo && rule.severity === 'error') continue; // same fixture exemption
         const removed = hunk.lines.filter(l => l.startsWith('-') && rule.pattern.test(l));
         const added = hunk.lines.filter(l => l.startsWith('+') && rule.replacement.test(l));
-        if (removed.length > 0 && added.length > 0) {
+        let dropped = true;
+        if (rule.strictCountMustDrop) {
+          const count = (prefix) => hunk.lines
+            .filter(l => l.startsWith(prefix))
+            .reduce((n, l) => n + (l.match(/===/g) || []).length, 0);
+          dropped = count('+') < count('-');
+        }
+        if (removed.length > 0 && added.length > 0 && dropped) {
           findings.push({
             ruleId: rule.id,
             file: hunk.file,
