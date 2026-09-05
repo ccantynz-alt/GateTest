@@ -8,9 +8,14 @@
  * lives under a recognised migration directory and flags the classic
  * production-breaking patterns, zero network, zero dependencies.
  *
- * Recognised migration roots:
- *   migrations/ · db/migrate/ · db/migration/ · prisma/migrations/
- *   supabase/migrations/ · sql/migrations/ · src/db/migrations/
+ * Recognised migration roots: the shared convention in
+ * `src/core/migration-dirs.js` (any `migrations/` segment, Rails
+ * `db/migrate`, Flyway `db/migration`, Liquibase `db/changelog`, Alembic
+ * `alembic/versions`, Drizzle `drizzle/` beside its config, any dir holding
+ * `atlas.sum`) — one definition with `dataIntegrity`, Doctrine §4. Before
+ * 2026-09-05 this module kept a private copy that also treated ANY bare
+ * `migration`/`migrate` segment as a migration tree, which is the name of a
+ * framework's migration implementation far more often than of a migration.
  *
  * Rules:
  *   error:   DROP COLUMN / DROP TABLE               — data loss
@@ -35,23 +40,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
-
-// Any ancestor directory whose name matches one of these = migration file.
-const MIGRATION_DIR_NAMES = new Set([
-  'migrations', 'migration', 'migrate',
-]);
-
-// Or: one of these exact relative-path prefixes.
-const MIGRATION_PREFIXES = [
-  'db/migrate',
-  'db/migration',
-  'db/migrations',
-  'prisma/migrations',
-  'supabase/migrations',
-  'sql/migrations',
-  'src/db/migrations',
-  'migrations',
-];
+const { findMigrationDirs, isUnderMigrationDir } = require('../core/migration-dirs');
 
 class SqlMigrationsModule extends BaseModule {
   constructor() {
@@ -88,16 +77,12 @@ class SqlMigrationsModule extends BaseModule {
 
   _findMigrations(projectRoot) {
     // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    // The directory set comes from the shared convention; the file set from
+    // the shared walk, so `--diff` still narrows it.
+    const dirs = findMigrationDirs(projectRoot);
+    if (dirs.length === 0) return [];
     return this._collectFiles(projectRoot, ['.sql'])
-      .filter((full) => this._isMigrationFile(projectRoot, full));
-  }
-
-  _isMigrationFile(projectRoot, full) {
-    const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
-    const segments = rel.split('/');
-    if (segments.some((s) => MIGRATION_DIR_NAMES.has(s.toLowerCase()))) return true;
-    const normalized = rel.toLowerCase();
-    return MIGRATION_PREFIXES.some((p) => normalized.startsWith(p + '/') || normalized === p);
+      .filter((full) => isUnderMigrationDir(full, dirs));
   }
 
   _scanFile(file, projectRoot, result) {
