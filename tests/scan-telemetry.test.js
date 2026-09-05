@@ -259,3 +259,70 @@ describe('scan-telemetry store + route — wiring', () => {
     assert.match(src, /recordScanBatch/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-rule fired / silenced counts — the flywheel leaderboard's input
+// (the Fifty, move 07). Rule IDS and integers only.
+// ---------------------------------------------------------------------------
+describe('scan-telemetry — per-rule counts', () => {
+  const withRules = () => ({
+    gateStatus: 'BLOCKED', duration: 1, suite: 'quick', checks: { errors: 2, warnings: 1 },
+    results: [{
+      module: 'hardcodedUrl', status: 'failed', errors: 2, warnings: 1, softErrors: 0, checks: [
+        { name: 'hardcoded-url:localhost:src/cfg.js:1', file: 'src/cfg.js', line: 1, passed: false, severity: 'error' },
+        { name: 'hardcoded-url:localhost:src/other.js:9', file: 'src/other.js', line: 9, passed: false, severity: 'error' },
+        { name: 'hardcoded-url:ip:src/net.js:3', file: 'src/net.js', line: 3, passed: false, severity: 'warning', suppressed: true, suppressReason: 'ignore-file' },
+        { name: 'hardcoded-url:ip:src/net2.js:4', file: 'src/net2.js', line: 4, passed: false, severity: 'warning', suppressed: true, suppressReason: 'baseline' },
+        { name: 'hardcoded-url:ok', passed: true },
+        { name: 'weird rule with a space:src/x.js:2', file: 'src/x.js', line: 2, passed: false },
+        { name: 'unmatched:src\\win\\path.js:7', file: 'src/win/path.js', line: 7, passed: false },
+      ],
+    }],
+  });
+
+  it('counts fired and silenced per rule id, with the file:line stripped', () => {
+    const rec = scanTelemetry._buildRecord(withRules(), { source: 'cli' });
+    assert.deepEqual(rec.rules, [
+      { id: 'hardcoded-url:ip', fired: 0, silenced: 1 },
+      { id: 'hardcoded-url:localhost', fired: 2, silenced: 0 },
+    ]);
+  });
+
+  it('a baselined finding is "real, fix later", not a dismissal — never counted as silenced', () => {
+    const rec = scanTelemetry._buildRecord(withRules(), { source: 'cli' });
+    assert.equal(rec.rules.find((r) => r.id === 'hardcoded-url:ip').silenced, 1, 'only the ignore-file suppression');
+  });
+
+  it('an id that still carries a path separator or whitespace is dropped, not shipped', () => {
+    const rec = scanTelemetry._buildRecord(withRules(), { source: 'cli' });
+    const serialized = JSON.stringify(rec.rules);
+    assert.ok(!/src[/\\]/.test(serialized), serialized);
+    assert.ok(!serialized.includes('weird rule'), serialized);
+  });
+
+  it('a summary with no checks has an empty rules array, not a missing field', () => {
+    assert.deepEqual(scanTelemetry._buildRecord(makeSummary(), { source: 'cli' }).rules, []);
+  });
+});
+
+describe('scan-telemetry-sanitize — per-rule counts', () => {
+  const base = { source: 'cli', suite: 'quick', gateStatus: 'BLOCKED', durationMs: 1, totalErrors: 1, totalWarnings: 0, modules: [] };
+
+  it('accepts identifier-shaped rule ids with integer counts', () => {
+    const r = sanitizeRecord({ ...base, rules: [{ id: 'secrets:aws-key', fired: 2, silenced: 1 }, { id: 'hardcoded-url:localhost', fired: '3', silenced: -1 }] });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.record.rules, [{ id: 'secrets:aws-key', fired: 2, silenced: 1 }, { id: 'hardcoded-url:localhost', fired: 0, silenced: 0 }]);
+  });
+
+  it('REJECTS a rule id that looks like a path or prose, and a rule carrying a forbidden key', () => {
+    assert.equal(sanitizeRecord({ ...base, rules: [{ id: 'secrets:aws-key:src/db.js', fired: 1, silenced: 0 }] }).reason, 'rule-id-not-an-identifier');
+    assert.equal(sanitizeRecord({ ...base, rules: [{ id: 'has a space', fired: 1, silenced: 0 }] }).reason, 'rule-id-not-an-identifier');
+    assert.equal(sanitizeRecord({ ...base, rules: [{ id: 'secrets:aws-key', fired: 1, silenced: 0, file: 'x' }] }).reason, 'forbidden-key-in-rule');
+  });
+
+  it('a record without rules is still accepted (older clients) and gets an empty array', () => {
+    const r = sanitizeRecord(base);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.record.rules, []);
+  });
+});

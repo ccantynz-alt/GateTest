@@ -573,9 +573,12 @@ paths default to Sonnet (flat-rate / no per-scan payment — Fable isn't funded
 there, but BYOK users may pick it since the spend is theirs).
 MCP server: `bin/gatetest-mcp.mjs`, 24 tools (run_tests / stream_logs / query_db / http_request restored to tools/list 2026-07-11 — they had handlers but were never registered).
 **Flywheel (v1.59.0, 2026-07-11):** EVERY scan (not just fixes) now feeds the
-flywheel — anonymized module+count signal to `~/.gatetest/telemetry/scan-findings.jsonl`
-+ best-effort upload to `POST /api/telemetry/scan` (opt-out: `GATETEST_NO_TELEMETRY=1`
-or `.gatetest.json {telemetry:false}`; NEVER code/paths/findings). **False-positive
+flywheel — anonymized module+count signal, and since 2026-09-05 per-rule
+`fired` / `silenced` counts (rule IDS only, `src/core/rule-identity.js`), to
+`~/.gatetest/telemetry/scan-findings.jsonl` + best-effort upload to
+`POST /api/telemetry/scan` (opt-out: `GATETEST_NO_TELEMETRY=1` or `.gatetest.json
+{telemetry:false}`; NEVER code/paths/findings/repo names). The silenced rate is
+published rule by rule at `/noise` (the Fifty, move 07). **False-positive
 control:** repo-root `.gatetestignore` suppresses findings (`module:rule` | `module`
 | `*:rule` | `module:rule@glob` | `path/**`); `gatetest --noise` shows noisy modules;
 chronically-dismissed high-fire modules auto-soften below the block threshold. See

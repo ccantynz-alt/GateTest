@@ -106,8 +106,9 @@ export default function HomeCode() {
         </div>
 
         <p className="text-xs text-muted text-center mt-6">
-          Four small runtime dependencies. Anonymized module-count telemetry only
-          (never code or file paths) — opt out with GATETEST_NO_TELEMETRY=1. Source is{" "}
+          Four small runtime dependencies. Anonymized telemetry only — module and
+          rule ids with integer counts, never code, file paths or repository names;
+          opt out with GATETEST_NO_TELEMETRY=1. Source is{" "}
           <a
             href="https://github.com/crclabs-hq/GateTest"
             target="_blank"
