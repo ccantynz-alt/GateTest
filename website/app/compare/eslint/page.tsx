@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import ComparisonReviewed from "@/app/components/ComparisonReviewed";
 import { TOTAL_MODULES } from "@/app/lib/module-count";
 
 export const metadata: Metadata = {
@@ -296,6 +297,7 @@ export default function EsLintPage() {
             One-time payment per scan via Stripe. No subscription, no auto-renew.
           </p>
         </section>
+              <ComparisonReviewed slug="eslint" />
       </main>
 
       <footer className="border-t border-white/[0.06] px-6 py-8 mt-16">
