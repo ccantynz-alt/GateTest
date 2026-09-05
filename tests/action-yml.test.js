@@ -386,3 +386,25 @@ test('action.yml never fails the threshold gate when no grade was computed (miss
   // never fail on missing data.
   assert.match(enforce[0], /\[ -n "\$THRESHOLD" \] && \[ -n "\$GRADE" \]/);
 });
+
+// KI #108 (2026-09-05): action.yml carried nine `|| true` swallows that
+// bash-safety could not see while it read only the first line of each
+// run: block. The non-blocking steps stay non-blocking (`exit 0`), but a
+// crashed poster is now a ::warning:: annotation, never silence.
+test('action.yml swallows no exit code — no `|| true` in any run: block (KI #108)', () => {
+  const text = RAW;
+  const offenders = text.split(/\r?\n/).map((l, i) => [i + 1, l]).filter(([, l]) => /\|\|\s*true\b/.test(l) && !/^\s*#/.test(l));
+  assert.deepStrictEqual(offenders, []);
+});
+
+test('action.yml: the three PR-comment / issue posters still exit 0 and record a crash as a warning', () => {
+  const text = RAW;
+  for (const script of ['post-scan-summary-comment.js', 'post-suggestions-from-snapshot.js', 'track-non-fixable.js']) {
+    const at = text.indexOf(`node "$GATETEST_HOME/scripts/${script}"`); // the invocation, not the SCRIPT= probe above it
+    assert.ok(at > 0, script);
+    const after = text.slice(at, at + 600);
+    assert.match(after, /&& rc=0 \|\| rc=\$\?/, `${script}: exit code captured`);
+    assert.match(after, /::warning::/, `${script}: a crash is annotated`);
+    assert.match(after, /\n\s*exit 0\n/, `${script}: still non-blocking`);
+  }
+});
