@@ -76,4 +76,4 @@ function removeTree(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* error-ok — a leftover temp dir is not a scan failure */ }
 }
 
-module.exports = { copyTreeForSandbox, removeTree, MAX_FILES, MAX_BYTES };
+module.exports = { copyTreeForSandbox, removeTree, MAX_FILES };
