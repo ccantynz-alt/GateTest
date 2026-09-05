@@ -158,9 +158,19 @@ function loadPathAliases(dir) {
     if (baseUrlEntry) entries.push(baseUrlEntry);
     break;
   }
+  // Docusaurus resolves `@site/*` to the site root by convention; the tsconfig
+  // that declares it lives in node_modules (`@docusaurus/tsconfig`), so no
+  // project file says so. trpc's www/: five components imported only from
+  // .mdx docs through `@site/src/components/…` were "unreachable" for this.
+  // `@theme/*` and `@docusaurus/*` are package internals and stay external.
+  if (DOCUSAURUS_CONFIG.some((n) => fs.existsSync(path.join(dir, n)))) {
+    entries = entries || [];
+    entries.push({ prefix: '@site/', wildcard: true, targets: [dir] });
+  }
   aliasCache.set(dir, entries);
   return entries;
 }
+const DOCUSAURUS_CONFIG = ['docusaurus.config.js', 'docusaurus.config.ts', 'docusaurus.config.mjs', 'docusaurus.config.cjs'];
 
 const BUILD_DIRS = new Set(['out', 'dist', 'build', 'lib', 'es', 'esm', 'cjs', '.next']);
 const SOURCE_EXTS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];

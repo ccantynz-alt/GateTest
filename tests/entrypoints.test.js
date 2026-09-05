@@ -98,3 +98,25 @@ describe('manifestEntrypoints — what a package.json names is run, not imported
     assert.equal(manifestEntrypoints([abs('nowhere'), abs('bad')]).size, 0);
   });
 });
+
+describe('entrypoints — angular.json names files package.json never does (2026-09-05)', () => {
+  const { manifestEntrypoints } = require('../src/core/entrypoints');
+  it('a fileReplacements target, the browser entry, polyfills and global scripts are entrypoints; an unnamed sibling is not', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-entrypoints-angular-'));
+    const w = (rel, body) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), body); };
+    w('angular.json', JSON.stringify({ projects: { app: { architect: {
+      build: {
+        options: { browser: 'src/main.ts', polyfills: ['src/polyfills.ts'], scripts: [{ input: 'src/vendor.js' }], styles: ['src/styles.css'], tsConfig: 'tsconfig.app.json', assets: ['src/assets/**/*'] },
+        configurations: { production: { fileReplacements: [{ replace: 'src/environments/environment.ts', with: 'src/environments/environment.prod.ts' }] } },
+      },
+    } } } }));
+    for (const f of ['src/main.ts', 'src/polyfills.ts', 'src/vendor.js', 'src/environments/environment.ts', 'src/environments/environment.prod.ts', 'src/environments/environment.staging.ts']) w(f, 'export const x = 1;\n');
+    const refs = manifestEntrypoints([root]);
+    fs.rmSync(root, { recursive: true, force: true });
+    const has = (rel) => refs.has(path.resolve(root, rel));
+    assert.ok(has('src/environments/environment.prod.ts'), 'POSITIVE CONTROL — fileReplacements target');
+    assert.ok(has('src/main.ts') && has('src/polyfills.ts') && has('src/vendor.js'), 'browser entry, polyfills, scripts');
+    assert.ok(!has('src/environments/environment.staging.ts'), 'NEGATIVE CONTROL — an unnamed sibling is not an entrypoint');
+    assert.ok(!has('tsconfig.app.json') && !has('src/styles.css'), 'non-source strings are ignored');
+  });
+});
