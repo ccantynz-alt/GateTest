@@ -20,6 +20,7 @@
  *   node scripts/real-world-precision.js                  # all repos
  *   node scripts/real-world-precision.js --repo express   # one repo
  *   node scripts/real-world-precision.js --update         # print measured counts
+ *   node scripts/real-world-precision.js --ratchet        # lower any ceiling to this run's count (never raise; floors untouched)
  */
 
 'use strict';
@@ -37,10 +38,11 @@ const GATETEST = path.join(ROOT, 'bin', 'gatetest.js');
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 function parseArgs(argv) {
-  const opts = { repo: null, update: false, keep: false, writeJson: null };
+  const opts = { repo: null, update: false, keep: false, writeJson: null, ratchet: false };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--repo') { opts.repo = argv[i + 1]; i += 1; }
     else if (argv[i] === '--update') opts.update = true;
+    else if (argv[i] === '--ratchet') opts.ratchet = true;
     else if (argv[i] === '--keep') opts.keep = true;
     else if (argv[i] === '--write-json') { opts.writeJson = argv[i + 1]; i += 1; }
   }
@@ -104,6 +106,28 @@ function removeTmp(dir) {
     process.stderr.write(`(cleanup) could not remove ${dir}: ${err.message} — the verdict above stands\n`);
     return false;
   }
+}
+
+/**
+ * Lower every ceiling above its measured count to that count. Pure: mutates
+ * the manifest object it is given and returns the changes. Never raises a
+ * ceiling (a higher count is a FAIL the caller must not have swallowed),
+ * never touches a floor (recall is a floor, not a target).
+ * @param {{repos: Array<{name:string, maxBlocking?:number, minBlocking?:number}>}} manifest
+ * @param {Array<{name:string, blocking:number}>} measured
+ * @returns {Array<{name:string, from:number, to:number}>}
+ */
+function ratchetManifest(manifest, measured) {
+  const byName = new Map(measured.map((m) => [m.name, m.blocking]));
+  const changes = [];
+  for (const repo of manifest.repos) {
+    if (typeof repo.maxBlocking !== 'number') continue;
+    const count = byName.get(repo.name);
+    if (typeof count !== 'number' || count >= repo.maxBlocking) continue;
+    changes.push({ name: repo.name, from: repo.maxBlocking, to: count });
+    repo.maxBlocking = count;
+  }
+  return changes;
 }
 
 function main() {
@@ -172,6 +196,27 @@ function main() {
     for (const m of measured) console.log(`  ${m.name.padEnd(10)} ${m.blocking}`);
   }
 
+  // --ratchet: the Fifty, move 06. Ceilings only go down, and a run that
+  // measured every repo and breached nothing is the evidence. Lower each
+  // ceiling to this run's count, never raise one, never touch a floor, and
+  // write the manifest — the nightly ships it on the rolling PR so a human
+  // still names each drop before it merges.
+  if (opts.ratchet) {
+    if (measured.length !== repos.length || failures.length) {
+      console.log('\nNOT ratcheting: a repo could not be measured or a ceiling/floor was breached.');
+    } else {
+      const changes = ratchetManifest(manifest, measured);
+      if (changes.length === 0) {
+        console.log('\nRatchet: every ceiling already equals its measured count.');
+      } else {
+        fs.writeFileSync(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
+        console.log(`\nRatchet: ${changes.length} ceiling(s) lowered in ${path.relative(ROOT, MANIFEST)}:`);
+        for (const c of changes) console.log(`  ${c.name.padEnd(18)} ${c.from} -> ${c.to}`);
+        for (const m of measured) if (typeof m.ceiling === 'number') m.ceiling = manifest.repos.find((r) => r.name === m.name).maxBlocking;
+      }
+    }
+  }
+
   // --write-json <path>: the public precision table. Same contract as
   // scripts/generate-site-stats.js — every number here is this run's own
   // measurement, the page imports the file at build time, and nothing is
@@ -212,4 +257,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { removeTmp };
+module.exports = { removeTmp, ratchetManifest };

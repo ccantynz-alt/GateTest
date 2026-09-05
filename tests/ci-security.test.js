@@ -632,3 +632,223 @@ describe('CiSecurityModule — shell injection: SHA and numeric leaves are not i
     assert.strictEqual(hits(await run(tmp)).length, 4);
   });
 });
+
+// ── KI #106: shell injection + secrets-in-logs are generic, not GitHub-only ──
+//
+// The injection surface is TEMPLATE EXPANSION: the host substitutes the
+// value into the script text before the shell runs (`${{ }}`, `<< pipeline
+// .git.branch >>`, `$(Build.SourceBranchName)`, Buildkite's `$BUILDKITE_*`
+// at `pipeline upload`). A host env var read by the shell (`$CIRCLE_BRANCH`,
+// `$BITBUCKET_BRANCH`) is the safe idiom the GitHub suggestion recommends
+// and must stay quiet — unless the script re-parses it as code.
+describe('CiSecurityModule — CircleCI, Azure, Bitbucket, Buildkite, GitLab shell text', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-hosts-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const put = (rel, lines) => {
+    const full = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, lines.join('\n') + '\n');
+  };
+  const names = (r, prefix) => r.checks.filter((c) => !c.passed && c.name.startsWith(`ci-security:${prefix}:`)).map((c) => c.name.replace(/^ci-security:[a-z-]+:/, ''));
+
+  it('discovers every host file shape', async () => {
+    put('.circleci/config.yml', ['version: 2.1']);
+    put('.circleci/continue_config.yml', ['version: 2.1']);
+    put('azure-pipelines.yml', ['trigger: [main]']);
+    put('bitbucket-pipelines.yml', ['pipelines: {}']);
+    put('.buildkite/pipeline.yml', ['steps: []']);
+    put('.buildkite/release.yaml', ['steps: []']);
+    put('.gitlab-ci.yml', ['stages: [build]']);
+    const r = await run(tmp);
+    assert.match(r.checks.find((c) => c.name === 'ci-security:scanning').message, /7 CI workflow/);
+  });
+
+  it('CircleCI POSITIVE: << pipeline.git.branch >> in run: / command: fires; a secret echoed fires', async () => {
+    put('.circleci/config.yml', [
+      'jobs:', '  build:', '    steps:',
+      '      - run: git checkout << pipeline.git.branch >>',
+      '      - run:',
+      '          name: Tag',
+      '          command: |',
+      '            git tag "rel-<< pipeline.git.tag >>"',
+      '            echo "$NPM_TOKEN"',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['.circleci/config.yml:4', '.circleci/config.yml:8']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['.circleci/config.yml:9']);
+  });
+
+  it('CircleCI NEGATIVE: a SHA/number value, a maintainer-typed pipeline parameter (nest line 115), $CIRCLE_BRANCH read by the shell, a step name, and a secret written to a file stay quiet', async () => {
+    put('.circleci/config.yml', [
+      'jobs:', '  build:', '    steps:',
+      '      - run: git diff << pipeline.git.base_revision >>..<< pipeline.git.revision >>',
+      '      - run: echo "build << pipeline.number >>"',
+      '      - run: nvm install << pipeline.parameters.maintenance-node-version >>',
+      '      - run: echo "on $CIRCLE_BRANCH from ${CIRCLE_PR_USERNAME} sha $CIRCLE_SHA1"',
+      '      - run:',
+      '          name: Deploy << pipeline.git.branch >>',
+      '          command: ./deploy.sh',
+      '      - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc',
+      '      - run: echo "$DOCKER_PASSWORD" | docker login -u x --password-stdin',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), []);
+    assert.deepStrictEqual(names(r, 'secret-echo'), []);
+    // The GitHub-only rules do not run on a CircleCI file.
+    assert.ok(!r.checks.some((c) => /no-permissions|branch-pin|pr-target/.test(c.name)));
+  });
+
+  it('Azure POSITIVE: $(Build.SourceBranchName) / $(System.PullRequest.SourceBranch) in script: / bash: / inline task fire; $(MY_SECRET) echoed fires', async () => {
+    put('azure-pipelines.yml', [
+      'steps:',
+      '- script: git checkout $(Build.SourceBranchName)',
+      '- bash: |',
+      '    echo "PR from $(System.PullRequest.SourceBranch)"',
+      '- task: Bash@3',
+      '  inputs:',
+      '    targetType: inline',
+      '    script: |',
+      '      git log -1 --format=%s $(Build.SourceVersionMessage)',
+      '      echo $(DEPLOY_TOKEN)',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['azure-pipelines.yml:2', 'azure-pipelines.yml:4', 'azure-pipelines.yml:9']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['azure-pipelines.yml:10']);
+  });
+
+  it('Azure NEGATIVE: $(Build.SourceVersion) / $(Build.BuildId) / PullRequestId, and a value mapped through env: then read as $VAR, stay quiet', async () => {
+    put('azure-pipelines.yml', [
+      'steps:',
+      '- script: echo "$(Build.SourceVersion) #$(Build.BuildId) pr $(System.PullRequest.PullRequestId)"',
+      '- bash: |',
+      '    git checkout "$BRANCH"',
+      '  env:',
+      '    BRANCH: $(Build.SourceBranchName)',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), []);
+  });
+
+  it('Bitbucket POSITIVE: $BITBUCKET_BRANCH re-parsed via eval / sh -c fires; echoing a secret fires', async () => {
+    put('bitbucket-pipelines.yml', [
+      'pipelines:', '  default:', '    - step:', '        script:',
+      '          - eval "git checkout $BITBUCKET_BRANCH"',
+      '          - sh -c "echo ${BITBUCKET_PR_DESTINATION_BRANCH}"',
+      '          - echo "$AWS_SECRET_ACCESS_KEY"',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['bitbucket-pipelines.yml:5', 'bitbucket-pipelines.yml:6']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['bitbucket-pipelines.yml:7']);
+  });
+
+  it('Bitbucket NEGATIVE: $BITBUCKET_BRANCH read by the shell, $BITBUCKET_COMMIT / $BITBUCKET_PR_ID, and a plain step stay quiet', async () => {
+    put('bitbucket-pipelines.yml', [
+      'pipelines:', '  default:', '    - step:', '        script:',
+      '          - echo "Building $BITBUCKET_BRANCH at $BITBUCKET_COMMIT (PR $BITBUCKET_PR_ID)"',
+      '          - git checkout "$BITBUCKET_BRANCH"',
+      '          - npm ci && npm test',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), []);
+    assert.deepStrictEqual(names(r, 'secret-echo'), []);
+  });
+
+  it('Buildkite POSITIVE: $BUILDKITE_BRANCH / $BUILDKITE_MESSAGE / ${BUILDKITE_PULL_REQUEST_BASE_BRANCH} in command(s): are interpolated at upload and fire', async () => {
+    put('.buildkite/pipeline.yml', [
+      'steps:',
+      '  - label: build',
+      '    command: git checkout $BUILDKITE_BRANCH',
+      '  - label: notify',
+      '    commands:',
+      '      - echo "commit: $BUILDKITE_MESSAGE"',
+      '      - git diff ${BUILDKITE_PULL_REQUEST_BASE_BRANCH}',
+      '      - echo $SLACK_TOKEN',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['.buildkite/pipeline.yml:3', '.buildkite/pipeline.yml:6', '.buildkite/pipeline.yml:7']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['.buildkite/pipeline.yml:8']);
+  });
+
+  it('Buildkite NEGATIVE: the $$VAR escape (shell expands at run time), $BUILDKITE_COMMIT, $BUILDKITE_BUILD_NUMBER, and a label mentioning the branch stay quiet', async () => {
+    put('.buildkite/pipeline.yml', [
+      'steps:',
+      '  - label: "build $BUILDKITE_BRANCH"',
+      '    command: |',
+      '      git checkout "$$BUILDKITE_BRANCH"',
+      '      echo "$BUILDKITE_COMMIT build $BUILDKITE_BUILD_NUMBER pr $BUILDKITE_PULL_REQUEST"',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), []);
+  });
+
+  it('GitLab: script: lists are read (they never were) — $CI_COMMIT_REF_NAME via eval fires, read as $VAR stays quiet, secret echoed fires', async () => {
+    put('.gitlab-ci.yml', [
+      'build:',
+      '  before_script:',
+      '    - echo "on $CI_COMMIT_REF_NAME"',
+      '  script:',
+      '    - eval "git checkout $CI_COMMIT_REF_NAME"',
+      '    - echo "$CI_REGISTRY_PASSWORD" | docker login --password-stdin',
+      '    - echo $DEPLOY_TOKEN',
+    ]);
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['.gitlab-ci.yml:5']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['.gitlab-ci.yml:7']);
+  });
+
+  it('GitHub NEGATIVE: an env: mapping that follows `- run: |` is not part of the script', async () => {
+    writeWorkflow(tmp, 'ci.yml', [
+      'name: ci', 'permissions: { contents: read }', 'on: pull_request', 'jobs:', '  go:', '    runs-on: ubuntu-latest', '    steps:',
+      '      - run: |',
+      '          git checkout "$BRANCH"',
+      '        env:',
+      '          BRANCH: ${{ github.event.pull_request.head.ref }}',
+      '          TITLE: ${{ github.event.pull_request.title }}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), []);
+  });
+
+  it('GitHub POSITIVE: $GITHUB_HEAD_REF re-parsed with eval fires; a $NPM_TOKEN echoed to stdout fires', async () => {
+    writeWorkflow(tmp, 'ci.yml', [
+      'name: ci', 'permissions: { contents: read }', 'on: pull_request', 'jobs:', '  go:', '    runs-on: ubuntu-latest', '    steps:',
+      '      - run: |',
+      '          eval "git checkout $GITHUB_HEAD_REF"',
+      '          echo "token is $NPM_TOKEN"',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(names(r, 'shell-injection'), ['.github/workflows/ci.yml:9']);
+    assert.deepStrictEqual(names(r, 'secret-echo'), ['.github/workflows/ci.yml:10']);
+  });
+});
+
+// django .github/workflows/postgis.yml:63 (2026-09-05): `initdb …
+// --pwfile=<(echo "$PGPASSWORD")` was "secret piped to echo". A process
+// substitution, a command substitution or a backtick captures the output
+// for another command — it never reaches the log.
+describe('CiSecurityModule — secret-echo: captured echo output is not stdout', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-echo-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const wf = (runLines) => writeWorkflow(tmp, 'ci.yml', [
+    'name: ci', 'permissions: { contents: read }', 'on: push', 'jobs:', '  db:', '    runs-on: ubuntu-latest', '    steps:', '      - run: |', ...runLines.map((l) => `          ${l}`), '',
+  ].join('\n'));
+  const hits = (r) => r.checks.filter((c) => c.name.startsWith('ci-security:secret-echo:')).map((c) => c.name);
+
+  it('NEGATIVE: <(echo "$PGPASSWORD"), $(echo "$TOKEN" | base64) and `echo $TOKEN` are quiet', async () => {
+    wf([
+      'initdb -D "$GITHUB_WORKSPACE/.tmp/pgdata" --username="user" --auth=scram-sha-256 --pwfile=<(echo "$PGPASSWORD")',
+      'AUTH=$(echo "$NPM_TOKEN" | base64)',
+      'AUTH=`echo $NPM_TOKEN`',
+    ]);
+    assert.deepStrictEqual(hits(await run(tmp)), []);
+  });
+
+  it('POSITIVE: the same variable echoed to stdout still fires', async () => {
+    wf(['echo "$PGPASSWORD"', 'echo token=$NPM_TOKEN']);
+    assert.strictEqual(hits(await run(tmp)).length, 2);
+  });
+});

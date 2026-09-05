@@ -124,3 +124,78 @@ describe('bash-safety — `VAR=$(cmd) || true` whose output is inspected below',
     assert.equal(hit.severity, 'error');
   });
 });
+
+describe('bash-safety — which files are shell is decided by src/core/shell-files.js (KI #106)', () => {
+  // The module's private list was `['.sh', '.bash']`: no `.zsh`, and an
+  // extensionless `bin/deploy` with `#!/usr/bin/env bash` on line one was
+  // never opened at all. Control pair: the same body fires from `bin/deploy`
+  // and from `x.zsh`, stays silent under `LICENSE` and under a node shebang.
+  const DEPLOY = '#!/usr/bin/env bash\nset -e\nrm -rf $DIR/ || true\n';
+  const swallowAt = (f, rel) => f.find((c) => c.name === `bash-safety:pipe-true:${rel}:3`);
+
+  it('POSITIVE: extensionless bin/deploy with a bash shebang FIRES', async () => {
+    const f = await scan({ 'bin/deploy': DEPLOY });
+    const hit = swallowAt(f, 'bin/deploy');
+    assert.ok(hit, names(f));
+    assert.equal(hit.severity, 'error');
+  });
+
+  it('POSITIVE: .zsh is scanned (it was not), and .sh still is', async () => {
+    const f = await scan({ 'scripts/x.zsh': DEPLOY, 'scripts/y.sh': DEPLOY });
+    assert.ok(swallowAt(f, 'scripts/x.zsh'), names(f));
+    assert.ok(swallowAt(f, 'scripts/y.sh'), names(f));
+  });
+
+  it('NEGATIVE: the same bytes under LICENSE, or a node-shebang script, are not shell', async () => {
+    const f = await scan({
+      LICENSE: DEPLOY,
+      'bin/cli': '#!/usr/bin/env node\n// noop\nrequire("child_process").execSync("rm -rf $DIR/ || true");\n',
+    });
+    assert.equal(f.length, 0, names(f));
+  });
+});
+
+describe('bash-safety — `cmd || true` whose OUTCOME is tested on the next line', () => {
+  // integrations/husky/pre-push:88-89, verbatim. The exit code is swallowed so
+  // the hook can decide on the artefact instead — and it does, on the next line.
+  const PRE_PUSH = [
+    '#!/bin/sh', 'GATETEST_CACHE="$HOME/.gatetest/cache"',
+    'if [ ! -d "$GATETEST_CACHE/.git" ]; then',
+    '  mkdir -p "$(dirname "$GATETEST_CACHE")"',
+    '  git clone --depth 1 https://github.com/crclabs-hq/gatetest.git "$GATETEST_CACHE" 2>/dev/null || true',
+    '  if [ ! -d "$GATETEST_CACHE/.git" ]; then',
+    '    echo "[GateTest] Clone unavailable — letting push through; CI gate is the source of truth."',
+    '    exit 0', '  fi', '  exit 0', 'fi', '',
+  ].join('\n');
+
+  it('NEGATIVE: the pre-push clone is a warning on both rules, with the reason', async () => {
+    const f = await scan({ '.githooks/pre-push': PRE_PUSH });
+    const hits = f.filter((c) => /^bash-safety:(pipe-true|devnull-swallow):/.test(c.name));
+    assert.equal(hits.length, 2, names(f));
+    for (const h of hits) {
+      assert.equal(h.severity, 'warning', h.name);
+      assert.match(h.message, /outcome is tested on the next line/);
+    }
+  });
+
+  it('POSITIVE: the same clone with nothing deciding on it afterwards is an error', async () => {
+    const f = await scan({ 'setup.sh': '#!/bin/bash\ngit clone --depth 1 https://example.com/x.git "$DIR" 2>/dev/null || true\necho "ready"\ncd "$DIR"\n' });
+    const hit = pipeTrue(f);
+    assert.ok(hit, names(f));
+    assert.equal(hit.severity, 'error');
+  });
+
+  it('POSITIVE: a test further than three code lines down does not count', async () => {
+    const f = await scan({ 'setup.sh': '#!/bin/bash\nmake build || true\necho a\necho b\necho c\nif [ -f out/bin ]; then echo ok; fi\n' });
+    const hit = pipeTrue(f);
+    assert.ok(hit, names(f));
+    assert.equal(hit.severity, 'error');
+  });
+
+  it('POSITIVE: integrations/husky/pre-push:97 — the capped cache refresh is a real swallow (defendant: code, suppressed in .gatetestignore with the reason)', async () => {
+    const f = await scan({ 'hook.sh': '#!/bin/sh\n( cd "$C" && timeout 5 git pull --ff-only --depth 1 origin HEAD >/dev/null 2>&1 || true )\nexit 0\n' });
+    const hit = pipeTrue(f);
+    assert.ok(hit, names(f));
+    assert.equal(hit.severity, 'error');
+  });
+});

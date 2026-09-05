@@ -5,6 +5,7 @@
 
 const BaseModule = require('./base-module');
 const { hasMutatingHandler } = require('../core/route-grammar');
+const { scanMigrationDirs, listMigrationFiles } = require('../core/migration-dirs');
 const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
@@ -17,96 +18,133 @@ class DataIntegrityModule extends BaseModule {
   async run(result, config) {
     const projectRoot = config.projectRoot;
 
-    this._checkMigrations(projectRoot, result);
+    // One walk for both migration rules, by the shared convention
+    // (src/core/migration-dirs.js). Until 2026-09-05 this module probed
+    // four literal root paths and read only the files directly inside, so
+    // Rails `db/migrate`, Alembic `alembic/versions`, Flyway, Django
+    // `<app>/migrations`, Supabase, Drizzle — and Prisma's own nested
+    // `prisma/migrations/<ts>/migration.sql` — all read as "no migrations".
+    // Fixture trees under test paths (django's `tests/migrations/`, rails'
+    // `test/dummy/db/migrate`) are not production migrations, and a dir
+    // merely NAMED like one (`django/db/migrations/` is Django's migration
+    // framework) is not a tree; both are reported as not checked
+    // (Doctrine §6) rather than silently passed.
+    const { dirs: allDirs, skipped } = scanMigrationDirs(projectRoot);
+    const migrationDirs = allDirs.filter((d) => !this._isTestPath(d.rel));
+    const notChecked = [
+      ...allDirs.filter((d) => this._isTestPath(d.rel)).map((d) => `${d.rel} (fixture)`),
+      ...skipped.map((d) => `${d.rel} (${d.reason})`),
+    ];
+
+    this._checkMigrations(projectRoot, result, migrationDirs, notChecked);
     this._checkModels(projectRoot, result);
     this._checkPiiHandling(projectRoot, result);
     this._checkDataValidation(projectRoot, result);
     this._checkSqlInjection(projectRoot, result);
-    this._checkIdempotency(projectRoot, result);
+    this._checkIdempotency(projectRoot, result, migrationDirs);
     this._checkBackupConfig(projectRoot, result);
   }
 
-  _checkMigrations(projectRoot, result) {
-    const migrationDirs = ['migrations', 'db/migrations', 'database/migrations', 'prisma/migrations'];
-    let migrationDir = null;
+  _checkMigrations(projectRoot, result, migrationDirs, notCheckedDirs) {
+    const notChecked = notCheckedDirs.length
+      ? ` — not checked: ${notCheckedDirs.join(', ')}`
+      : '';
 
-    for (const dir of migrationDirs) {
-      const fullPath = path.join(projectRoot, dir);
-      if (fs.existsSync(fullPath)) {
-        migrationDir = fullPath;
-        break;
-      }
-    }
-
-    if (!migrationDir) {
+    if (migrationDirs.length === 0) {
       result.addCheck('data:migrations', true, {
-        message: 'No migration directory found — skipping',
+        message: `No migration directory found — skipping${notChecked}`,
         severity: 'info',
       });
       return;
     }
 
-    const files = fs.readdirSync(migrationDir).filter(f => !f.startsWith('.'));
+    const perDir = migrationDirs.map((d) => ({ ...d, files: this._migrationStatements(d.abs) }));
+    const total = perDir.reduce((n, d) => n + d.files.length, 0);
     result.addCheck('data:migrations-exist', true, {
-      message: `${files.length} migration(s) found in ${path.relative(projectRoot, migrationDir)}`,
+      message: `${total} migration file(s) found in ${perDir.map((d) => d.rel).join(', ')}${notChecked}`,
       severity: 'info',
     });
 
-    // Check migration naming convention (should be sequential/timestamped)
-    const hasTimestamps = files.some(f => /^\d{4}|^\d{13,}/.test(f));
-    const hasSequential = files.some(f => /^\d{3,4}_/.test(f));
+    for (const dir of perDir) {
+      this._checkMigrationNaming(dir, result);
+      for (const filePath of dir.files) this._checkDestructiveMigration(projectRoot, filePath, result);
+    }
+  }
 
-    if (files.length > 1 && !hasTimestamps && !hasSequential) {
-      result.addCheck('data:migration-naming', false, {
-        severity: 'warning',
-        message: 'Migration files lack sequential or timestamp naming',
-        suggestion: 'Use timestamp or sequential naming: 001_create_users.sql, 002_add_email.sql',
+  /**
+   * The files in a tree an author WROTE. Tool state beside them — Drizzle's
+   * `_journal.json`, Prisma 8's `ops.json` / `migration.json` manifests —
+   * embeds the same DDL as data, and its `precheck` blocks are the tool's own
+   * idempotency; a substring rule reading "CREATE TABLE" out of that JSON
+   * reported "not idempotent" on a migration that checks before it creates
+   * (prisma corpus, 2026-09-05).
+   */
+  _migrationStatements(dirAbs) {
+    return listMigrationFiles(dirAbs).filter((f) => !/\.json$/i.test(f));
+  }
+
+  /**
+   * Migration ORDER should be visible in the name. Whether it is was decided
+   * by the shared convention (`ORDERED_NAME_RE` in src/core/migration-dirs.js
+   * — the entry in the migration root, since Prisma stamps the DIRECTORY, not
+   * the file): the only tree that reaches here unordered is a hand-named raw
+   * SQL set, which is exactly what this rule is for.
+   */
+  _checkMigrationNaming(dir, result) {
+    if (dir.ordered) return;
+    result.addCheck(`data:migration-naming:${dir.rel}`, false, {
+      file: dir.rel,
+      severity: 'warning',
+      message: `Migration files in ${dir.rel} lack sequential or timestamp naming`,
+      suggestion: 'Use timestamp or sequential naming: 001_create_users.sql, 002_add_email.sql',
+    });
+  }
+
+  /** Destructive operations without safeguards, in one migration file. */
+  _checkDestructiveMigration(projectRoot, filePath, result) {
+    const file = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8').toLowerCase();
+    } catch { return; /* error-ok — unreadable migration file, nothing to judge */ }
+
+    if (content.includes('drop table') && !content.includes('if exists')) {
+      result.addCheck(`data:migration-drop:${file}`, false, {
+        file,
+        severity: 'error',
+        message: 'DROP TABLE without IF EXISTS — dangerous in production',
+        suggestion: 'Use DROP TABLE IF EXISTS for safety',
       });
     }
 
-    // Check for destructive operations without safeguards
-    for (const file of files) {
-      const filePath = path.join(migrationDir, file);
-      if (!fs.statSync(filePath).isFile()) continue;
+    if (content.includes('truncate')) {
+      result.addCheck(`data:migration-truncate:${file}`, false, {
+        file,
+        severity: 'error',
+        message: 'TRUNCATE in migration — will destroy data in production',
+        suggestion: 'Avoid TRUNCATE in migrations; use conditional deletes instead',
+      });
+    }
 
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8').toLowerCase();
-
-        if (content.includes('drop table') && !content.includes('if exists')) {
-          result.addCheck(`data:migration-drop:${file}`, false, {
-            file: path.relative(projectRoot, filePath),
-            severity: 'error',
-            message: 'DROP TABLE without IF EXISTS — dangerous in production',
-            suggestion: 'Use DROP TABLE IF EXISTS for safety',
-          });
-        }
-
-        if (content.includes('truncate')) {
-          result.addCheck(`data:migration-truncate:${file}`, false, {
-            file: path.relative(projectRoot, filePath),
-            severity: 'error',
-            message: 'TRUNCATE in migration — will destroy data in production',
-            suggestion: 'Avoid TRUNCATE in migrations; use conditional deletes instead',
-          });
-        }
-
-        // Check for NOT NULL without DEFAULT on ALTER TABLE
-        if (content.includes('alter table') && content.includes('not null') && !content.includes('default')) {
-          result.addCheck(`data:migration-notnull:${file}`, false, {
-            file: path.relative(projectRoot, filePath),
-            severity: 'warning',
-            message: 'Adding NOT NULL column without DEFAULT — will fail on existing rows',
-            suggestion: 'Add DEFAULT value or make the migration multi-step',
-          });
-        }
-      } catch { /* skip unreadable files */ }
+    // Check for NOT NULL without DEFAULT on ALTER TABLE
+    if (content.includes('alter table') && content.includes('not null') && !content.includes('default')) {
+      result.addCheck(`data:migration-notnull:${file}`, false, {
+        file,
+        severity: 'warning',
+        message: 'Adding NOT NULL column without DEFAULT — will fail on existing rows',
+        suggestion: 'Add DEFAULT value or make the migration multi-step',
+      });
     }
   }
 
   _checkModels(projectRoot, result) {
-    // Prisma
+    // Prisma — and then the Mongoose sweep regardless. Until 2026-09-05 a
+    // Prisma schema `return`ed here, so a repo carrying both (the shape of
+    // every Mongo → Postgres migration in progress) never had its Mongoose
+    // schemas checked.
     const prismaSchema = path.join(projectRoot, 'prisma/schema.prisma');
-    if (fs.existsSync(prismaSchema)) {
+    const hasPrisma = fs.existsSync(prismaSchema);
+    if (hasPrisma) {
       // Never let `npx` DOWNLOAD prisma to validate with it: on a fresh
       // clone that spent 60 s fetching the CLI, then reported a blocking
       // "schema validation failed" (2026-08-18 audit). Not installed → skip.
@@ -145,8 +183,6 @@ class DataIntegrityModule extends BaseModule {
           suggestion: 'Add @unique to email fields to prevent duplicates',
         });
       }
-
-      return;
     }
 
     // Mongoose
@@ -170,7 +206,7 @@ class DataIntegrityModule extends BaseModule {
       }
     }
 
-    if (!hasMongoose) {
+    if (!hasMongoose && !hasPrisma) {
       result.addCheck('data:models', true, {
         message: 'No ORM schema detected — skipping',
         severity: 'info',
@@ -382,38 +418,24 @@ class DataIntegrityModule extends BaseModule {
     }
   }
 
-  _checkIdempotency(projectRoot, result) {
-    const migrationDirs = ['migrations', 'db/migrations', 'database/migrations', 'prisma/migrations'];
-    let migrationDir = null;
-
+  _checkIdempotency(projectRoot, result, migrationDirs) {
     for (const dir of migrationDirs) {
-      const fullPath = path.join(projectRoot, dir);
-      if (fs.existsSync(fullPath)) {
-        migrationDir = fullPath;
-        break;
+      for (const filePath of this._migrationStatements(dir.abs)) {
+        const file = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8').toLowerCase();
+
+          // Check CREATE TABLE without IF NOT EXISTS
+          if (content.includes('create table') && !content.includes('if not exists')) {
+            result.addCheck(`data:idempotent:${file}`, false, {
+              file,
+              severity: 'warning',
+              message: 'CREATE TABLE without IF NOT EXISTS — not idempotent',
+              suggestion: 'Use CREATE TABLE IF NOT EXISTS for idempotent migrations',
+            });
+          }
+        } catch { /* error-ok — unreadable migration file, nothing to judge */ }
       }
-    }
-
-    if (!migrationDir) return;
-
-    const files = fs.readdirSync(migrationDir).filter(f => !f.startsWith('.'));
-    for (const file of files) {
-      const filePath = path.join(migrationDir, file);
-      if (!fs.statSync(filePath).isFile()) continue;
-
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8').toLowerCase();
-
-        // Check CREATE TABLE without IF NOT EXISTS
-        if (content.includes('create table') && !content.includes('if not exists')) {
-          result.addCheck(`data:idempotent:${file}`, false, {
-            file: path.relative(projectRoot, filePath),
-            severity: 'warning',
-            message: 'CREATE TABLE without IF NOT EXISTS — not idempotent',
-            suggestion: 'Use CREATE TABLE IF NOT EXISTS for idempotent migrations',
-          });
-        }
-      } catch { /* skip */ }
     }
   }
 

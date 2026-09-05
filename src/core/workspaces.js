@@ -151,6 +151,40 @@ function listWorkspacePackages(projectRoot) {
   return members;
 }
 
+/** Every field a package.json can declare a dependency in. */
+const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+
+/**
+ * Does the package.json in `dir` declare a package matching `matcher` in any
+ * dependency field? `matcher` is a Set of names, a RegExp over the name, or a
+ * predicate. No manifest / invalid JSON declares nothing. zodSchema and
+ * trpcContract each carried a private copy of this (KI #106, 2026-09-05).
+ */
+function manifestDeclares(dir, matcher) {
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8')); } catch { return false; } // error-ok — no manifest / invalid JSON: declares nothing
+  const test = matcher instanceof Set ? (k) => matcher.has(k)
+    : matcher instanceof RegExp ? (k) => matcher.test(k)
+      : matcher;
+  return DEP_FIELDS.some((f) => Object.keys(pkg[f] || {}).some((k) => test(k)));
+}
+
+/**
+ * The workspace member that contains `rel` (`/`-joined, relative to root),
+ * deepest first so `examples/minimal/client` wins over `examples/minimal`.
+ * Segment-anchored: `packages/a` must not claim `packages/ab/x.tsx`. Null
+ * when no member contains it (the root manifest governs).
+ */
+function nearestWorkspacePackage(members, rel) {
+  let best = null;
+  for (const m of members) {
+    if (rel === m.rel || rel.startsWith(m.rel + '/')) {
+      if (!best || m.rel.length > best.rel.length) best = m;
+    }
+  }
+  return best;
+}
+
 /** `name → absolute dir` for every named member (deadCodeIndex's shape). */
 function workspacePackageMap(projectRoot) {
   const map = new Map();
@@ -171,4 +205,7 @@ module.exports = {
   listWorkspacePackages,
   workspacePackageMap,
   workspacePackageNames,
+  DEP_FIELDS,
+  manifestDeclares,
+  nearestWorkspacePackage,
 };

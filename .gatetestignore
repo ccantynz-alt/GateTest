@@ -29,3 +29,12 @@ benchmarks/bench-target/**
 # money-named in the same statement) — that's the demo working as intended,
 # not a real bug in this file.
 money-float:arithmetic@website/app/preview/_components/Playground.tsx
+
+# integrations/husky/pre-push:97 — `( cd … && timeout 5 git pull … >/dev/null 2>&1 || true )`
+# is the hook's best-effort cache refresh: capped at 5s, documented as "never
+# blocks the push", and the push goes ahead on the previous cache either way.
+# bashSafety is right that nothing tests the outcome; the outcome is
+# deliberately irrelevant. Surfaced 2026-09-05 when bashSafety learned to open
+# extensionless shell scripts (KI #106). Line 88's clone is NOT here — its
+# outcome is tested on the next line and the rule downgrades it itself.
+bashSafety:pipe-true@integrations/husky/pre-push
