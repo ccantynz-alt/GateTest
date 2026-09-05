@@ -249,6 +249,12 @@ async function main() {
     const p = report.provenance || {};
     console.log(`${v.ok ? 'VERIFIED' : 'NOT VERIFIED'}: ${v.reason}`);
     if (p.engine) console.log(`  engine ${p.engine.name} v${p.engine.version}${p.engine.commit ? ` @ ${p.engine.commit}` : ''} · gate ${p.gateStatus} · ${p.findings ? p.findings.count : '?'} findings · digest ${p.findings ? p.findings.sha256.slice(0, 12) : '?'}…`);
+    // The policy the run was judged under — so two reports that disagree
+    // can be told apart by policy, not only by engine (move 26).
+    if (p.policy) {
+      const d = (f) => (!f || !f.present ? 'absent' : f.sha256 ? `${f.sha256.slice(0, 12)}…` : 'unreadable');
+      console.log(`  policy .gatetest.json ${d(p.policy.configFile)} · .gatetestignore ${d(p.policy.ignoreFile)}`);
+    }
     process.exit(v.ok ? 0 : 1);
   }
   if (first === 'sweep') {

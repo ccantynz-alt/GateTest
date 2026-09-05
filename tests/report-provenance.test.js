@@ -139,3 +139,25 @@ describe('gatetest verify-report (CLI)', () => {
     assert.strictEqual(code, 1);
   });
 });
+
+// ─── the policy the run was judged under (the Fifty, move 26) ───────────────
+
+it('provenance carries the digests of .gatetest.json and .gatetestignore, and says when they are absent', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const crypto = require('node:crypto');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-policy-'));
+  try {
+    const none = buildProvenance({ results: [] }, { projectRoot: root });
+    assert.deepEqual(none.policy, { configFile: { present: false, sha256: null }, ignoreFile: { present: false, sha256: null } });
+    fs.writeFileSync(path.join(root, '.gatetest.json'), '{ "modules": {} }\n');
+    fs.writeFileSync(path.join(root, '.gatetestignore'), 'secrets@tests/fixtures/**\n');
+    const p = buildProvenance({ results: [] }, { projectRoot: root });
+    assert.equal(p.policy.configFile.sha256, crypto.createHash('sha256').update('{ "modules": {} }\n').digest('hex'));
+    assert.equal(p.policy.ignoreFile.sha256, crypto.createHash('sha256').update('secrets@tests/fixtures/**\n').digest('hex'));
+    assert.deepEqual(p.suppression.ignoreFile, p.policy.ignoreFile, 'one digest, two views');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

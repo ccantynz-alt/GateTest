@@ -61,7 +61,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 23 | Make the baseline a first-class onboarding step | done | blocked full scan with no baseline leads its recap with `gatetest --baseline` (`src/core/plain-summary.js`, controls: diff-scoped and already-baselined runs stay quiet); README Action quickstart and `integrations/README.md` say what the first run does |
 | 24 | PR comments show only what's new | done | line-level attribution, `changed-lines.js` (PR #423) |
 | 25 | Suggest the `.gatetestignore` line | done | `suggestLine`, CLI + PR reply (PR #423) |
-| 26 | A policy file teams can review in a PR | open | — |
+| 26 | A policy file teams can review in a PR | done | the policy IS `.gatetest.json` + `.gatetestignore`; fakeFixDetector now reads those two files (and only the policy rules read them): `policy-ignore-line-added` and `policy-gate-softened` warn on the PR that widens a suppression, disables a module, sets report-only or raises the threshold — quiet on comments and on tightening; a suppression-only PR is no longer scoped out as "nothing changed"; provenance carries both files' SHA-256 and `verify-report` prints them |
 | 27 | Merge-queue and monorepo path filters | open | — |
 | 28 | One-command local reproduction of a CI failure | done | blocked gate leads with `gatetest replay <run-url>` (PR #423) |
 | 29 | Lead with the fake-fix detector | **Craig** | positioning |
