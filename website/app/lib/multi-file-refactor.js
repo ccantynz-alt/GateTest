@@ -196,11 +196,12 @@ async function applyRefactor(match, contextSummary, askClaude, opts = {}) {
   const prompt = detector.prompt(filePath, content, contextSummary);
 
   let refactoredContent;
+  let timer = null;
   try {
     const callPromise = askClaude(prompt);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Claude timeout')), timeoutMs)
-    );
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Claude timeout')), timeoutMs);
+    });
     refactoredContent = await Promise.race([callPromise, timeoutPromise]);
   } catch (err) {
     return {
@@ -211,6 +212,12 @@ async function applyRefactor(match, contextSummary, askClaude, opts = {}) {
       original: content,
       refactored: null,
     };
+  } finally {
+    // The losing side of the race must not outlive it: an uncleared 90 s
+    // timer kept every caller's process alive after the answer was in
+    // (tests/multi-file-refactor.test.js was cancelled by its own timeout
+    // because of it — found 2026-09-05 by scripts/run-tests.js).
+    clearTimeout(timer);
   }
 
   // Strip code fences

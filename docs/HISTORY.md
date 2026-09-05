@@ -417,6 +417,33 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-05 — the test runner counted whatever finished first
+
+Noticed because the same four test files reported 59, 48 and 55 passes on
+three consecutive runs with zero failures. `node --test --test-force-exit`
+(adopted in `180bf7c` because one file leaked a handle and the bare runner hung
+for hours) exits the runner as soon as the tests it has heard of are done: a
+child still streaming its later suites is cut off, its tests are never counted,
+and the exit code is 0. Measured on one tree: four files → 50, 77, 61 tests;
+one file alone → 63, 40, 33, 63 test names, with whole `describe` blocks
+missing from the middle of the file. CI's "All tests pass" step, `npm test`,
+the publish workflow, the nightly dogfood sweep and the website's test count
+all used that form, so every green suite since `180bf7c` was evidence about
+the tests that happened to finish first.
+
+`scripts/run-tests.js` replaces it everywhere: one plain `node --test` per file,
+its TAP stream read line by line, the child ended only after its `# duration_ms`
+summary — a leaked handle is killed on our terms after every result is in. A
+file that ends without its summary, reports zero tests, fails, or is cancelled
+(Node cancels a file whose event loop never drains after `--test-timeout`)
+fails the suite; the totals say how many files did not finish. First run on
+the full fast suite: 468 files, 9,228 tests, 0 failing, 2 cancelled in 83 s —
+`tests/mcp-http-request.test.js` registered its server teardown on
+`process.on('exit')`, which never fires while that server keeps the loop
+alive, and `website/app/lib/multi-file-refactor.js` raced Claude against a
+90 s timer it never cleared. Both fixed at the root. Control pairs in
+`tests/run-tests.test.js`; the method is in Doctrine §8.
+
 ### 2026-09-05 — confidence calibrated on the corpus (the Fifty, move 09)
 
 The block threshold was 0.7 because 0.7 sounded right. A full corpus run
