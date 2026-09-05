@@ -236,3 +236,34 @@ describe('HomoglyphModule — summary', () => {
     assert.match(s.message, /file\(s\).*issue\(s\)/);
   });
 });
+
+describe('homoglyph — one definition of strings and comments for JS/TS (2026-09-05)', () => {
+  let root;
+  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-homoglyph-strip-')); });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('NEGATIVE CONTROL — a mixed-script word on the second line of a template literal or a block comment is not an identifier', async () => {
+    // The old line-level stripper reset its state on every line, so it read
+    // line two of a template / block comment as code and flagged `p\u0430yload`.
+    write(root, 'src/tpl.js', 'const t = `line one\n  p\u0430yload here\n`;\n/* block\n  \u0430dmin in a comment\n*/\nconst ok = 1;\n');
+    const r = await run(root);
+    const mixed = r.checks.filter((c) => !c.passed && c.name.startsWith('homoglyph:mixed-script'));
+    assert.deepStrictEqual(mixed, [], 'nothing inside a multi-line literal or comment is an identifier');
+  });
+
+  it('POSITIVE CONTROL — the same word as code right after the template is still flagged', async () => {
+    write(root, 'src/code.js', 'const t = `x\n  y\n`;\nconst p\u0430yload = 2;\n');
+    const r = await run(root);
+    const mixed = r.checks.filter((c) => !c.passed && c.name.startsWith('homoglyph:mixed-script'));
+    assert.strictEqual(mixed.length, 1, 'the identifier outside the literal is reported');
+    assert.strictEqual(mixed[0].line, 4);
+  });
+
+  it('other languages keep the line-level fallback: a `#` comment and a string in Python are still not identifiers', async () => {
+    write(root, 'src/py.py', 'x = 1  # p\u0430yload comment\ny = "p\u0430yload"\nz\u0430 = 3\n');
+    const r = await run(root);
+    const mixed = r.checks.filter((c) => !c.passed && c.name.startsWith('homoglyph:mixed-script'));
+    assert.strictEqual(mixed.length, 1, JSON.stringify(mixed.map((m) => m.line)));
+    assert.strictEqual(mixed[0].line, 3);
+  });
+});
