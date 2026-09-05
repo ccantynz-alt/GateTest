@@ -168,3 +168,86 @@ describe('SEO — Open Graph / Twitter / canonical / structured-data absence is 
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });
+
+// ── KI #106: looksLikeWebsite decides from a marker list that lacked most
+// frameworks. Each new marker is a positive control; a plain library, a
+// Vite/Svelte LIBRARY (config without an app tree) and a bare config.toml
+// are the negatives — the sitemap/robots warnings must not return to
+// express/flask/gin-shaped repos. Root-only by design: the sitemap/robots
+// probes are root-relative, so a docs site in a subfolder is not a marker.
+describe('SeoModule — looksLikeWebsite recognises every deployable-site framework', () => {
+  const withRoot = (files, fn) => {
+    const r = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-mk-'));
+    try {
+      for (const f of files) {
+        if (f.endsWith('/')) fs.mkdirSync(path.join(r, f), { recursive: true });
+        else write(r, f, f.endsWith('.json') ? '{}' : '// config\n');
+      }
+      return fn(r);
+    } finally { fs.rmSync(r, { recursive: true, force: true }); }
+  };
+  const SITES = {
+    'Remix app/root.tsx': ['app/root.tsx'],
+    'Remix remix.config.js': ['remix.config.js'],
+    'Angular angular.json': ['angular.json', 'src/index.html'],
+    'Vite with src/index.html': ['vite.config.ts', 'src/index.html'],
+    'Vite with web/index.html': ['vite.config.mjs', 'web/index.html'],
+    'SvelteKit svelte.config.js + src/routes': ['svelte.config.js', 'src/routes/'],
+    'Astro astro.config.mjs': ['astro.config.mjs'],
+    'Astro astro.config.ts': ['astro.config.ts'],
+    'Nuxt nuxt.config.ts': ['nuxt.config.ts'],
+    'Gatsby gatsby-config.ts': ['gatsby-config.ts'],
+    'Docusaurus docusaurus.config.ts': ['docusaurus.config.ts'],
+    'Hugo hugo.toml': ['hugo.toml'],
+    'Hugo config.toml + content/': ['config.toml', 'content/'],
+    'Jekyll _config.yml': ['_config.yml'],
+    'Eleventy .eleventy.js': ['.eleventy.js'],
+    'Eleventy eleventy.config.cjs': ['eleventy.config.cjs'],
+  };
+  for (const [label, files] of Object.entries(SITES)) {
+    it(`POSITIVE: ${label}`, () => withRoot(files, (r) => assert.equal(SeoModule.looksLikeWebsite(r), true)));
+  }
+  const NOT_SITES = {
+    'a plain library (README.md + src/)': ['README.md', 'src/index.js'],
+    'a Vite library (vite.config without an entry document)': ['vite.config.ts', 'src/index.ts'],
+    'a Svelte component library (svelte.config without src/routes)': ['svelte.config.js', 'src/lib/Button.svelte'],
+    'a bare config.toml (Rust/tool config, not Hugo)': ['config.toml', 'src/main.rs'],
+    'a docs site in a subfolder of a library': ['README.md', 'src/index.js', 'docs/astro.config.mjs', 'website/docusaurus.config.js'],
+  };
+  for (const [label, files] of Object.entries(NOT_SITES)) {
+    it(`NEGATIVE: ${label}`, () => withRoot(files, (r) => assert.equal(SeoModule.looksLikeWebsite(r), false)));
+  }
+
+  it('an Angular workspace is asked for sitemap/robots even though its only page is a SPA shell; src/robots.txt satisfies robots', async () => {
+    const r = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-ng-'));
+    try {
+      write(r, 'angular.json', '{}');
+      write(r, 'src/index.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>App</title></head><body><app-root></app-root></body></html>\n');
+      write(r, 'src/robots.txt', 'User-agent: *\n');
+      const checks = await runOn(r);
+      assert.ok(checks.some((c) => c.id === 'seo:sitemap' && !c.passed && c.meta.severity === 'warning'), 'sitemap warning fires');
+      assert.ok(checks.some((c) => c.id === 'seo:robots-txt' && c.passed), 'src/robots.txt is found');
+    } finally { fs.rmSync(r, { recursive: true, force: true }); }
+  });
+
+  it('a build-time declaration counts: @astrojs/sitemap in astro.config, Docusaurus always, Hugo enableRobotsTXT; an Astro config without it still warns', async () => {
+    const r = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-gen-'));
+    try {
+      write(r, 'astro.config.mjs', "import sitemap from '@astrojs/sitemap';\nexport default { integrations: [sitemap()] };\n");
+      let checks = await runOn(r);
+      assert.ok(checks.some((c) => c.id === 'seo:sitemap' && c.passed), 'integration satisfies sitemap');
+      assert.ok(checks.some((c) => c.id === 'seo:robots-txt' && !c.passed), 'robots still warns');
+      fs.writeFileSync(path.join(r, 'astro.config.mjs'), 'export default {};\n');
+      checks = await runOn(r);
+      assert.ok(checks.some((c) => c.id === 'seo:sitemap' && !c.passed), 'negative: no integration, sitemap warns');
+    } finally { fs.rmSync(r, { recursive: true, force: true }); }
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-docu-'));
+    try {
+      write(d, 'docusaurus.config.ts', 'export default { title: "x" };\n');
+      assert.equal(SeoModule.generatedAtBuild(d, 'sitemap'), true);
+      assert.equal(SeoModule.generatedAtBuild(d, 'robots'), false);
+      write(d, 'hugo.toml', 'baseURL = "https://x"\nenableRobotsTXT = true\n');
+      assert.equal(SeoModule.generatedAtBuild(d, 'robots'), true);
+    } finally { fs.rmSync(d, { recursive: true, force: true }); }
+  });
+});
