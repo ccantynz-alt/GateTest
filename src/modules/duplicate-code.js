@@ -45,26 +45,15 @@ function normaliseLine(line) {
     .trim();
 }
 
+// Directories by SEGMENT and test trees by base-module's TEST_PATH_RE —
+// `lower.includes('test')` skipped src/latest/ and attestation.js from
+// duplicate detection, and `'dist/'` matched mydist/ (Move 10, 2026-09-05).
+const SKIP_DIR_RE = /(?:^|\/)(?:node_modules|\.next|dist|build|vendor|coverage|migrations)(?:\/|$)/;
+const GENERATED_RE = /\.d\.ts$|\.(?:gen|generated|min)\.|\.lock$/;
+
 function shouldSkipFile(rel) {
   const lower = rel.toLowerCase();
-  return (
-    lower.includes('node_modules') ||
-    lower.includes('.next') ||
-    lower.includes('dist/') ||
-    lower.includes('build/') ||
-    lower.includes('vendor/') ||
-    lower.includes('coverage/') ||
-    lower.includes('.d.ts') ||
-    lower.includes('.gen.') ||
-    lower.includes('.generated.') ||
-    lower.includes('.min.') ||
-    lower.includes('test') ||
-    lower.includes('spec') ||
-    lower.includes('fixture') ||
-    lower.includes('__tests__') ||
-    lower.includes('migrations/') || // SQL migrations are often similar
-    lower.endsWith('.lock')
-  );
+  return SKIP_DIR_RE.test(lower) || GENERATED_RE.test(lower) || BaseModule.TEST_PATH_RE.test(lower);
 }
 
 // Simple rolling hash: FNV-1a over the normalised window

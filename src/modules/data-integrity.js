@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { hasMutatingHandler } = require('../core/route-grammar');
 const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
@@ -291,9 +292,11 @@ class DataIntegrityModule extends BaseModule {
           !content.includes('schema') && !content.includes('zod') &&
           !content.includes('joi') && !content.includes('yup')) {
 
-        // Only flag handler files, not utility files
-        if (content.includes('app.post') || content.includes('router.post') ||
-            content.includes('export async function POST')) {
+        // Only flag handler files, not utility files — by the shared route
+        // grammar, not a hand-spelled Express test: a Fastify / Hono / Koa /
+        // NestJS handler reading req.body unvalidated passed here until
+        // 2026-09-05 (the Fifty, move 11).
+        if (hasMutatingHandler(content)) {
           result.addCheck(`data:no-validation:${relPath}`, false, {
             file: relPath,
             severity: 'warning',

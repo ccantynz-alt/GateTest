@@ -23,6 +23,7 @@
  */
 
 const { BLOCK_THRESHOLD, isBlockingFinding } = require('./confidence');
+const { suggestLine } = require('./ignore-file');
 
 const SEVERITY_RANK = { error: 0, warning: 1, info: 2 };
 
@@ -124,6 +125,10 @@ function normalizeFindings(results, opts = {}) {
         // `taint:sink:eval` while its message talks about flows, not eval()
         class: classify(`${c.message || ''} ${c.name || ''}`),
         duplicateOf: null,
+        // The exact .gatetestignore line for this one finding (move 25) —
+        // computed once here so the CLI, the PR comment and the report all
+        // offer the same line, and one the matcher is known to honour.
+        ignoreLine: suggestLine({ module: mod, name: c.name, ruleKey: ruleKeyOf(c.name, c.file), file }),
       });
     }
   }

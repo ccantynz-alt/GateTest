@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { APP_PERMISSIONS } from "@/app/lib/github-app-permissions";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: "Install GateTest — GitHub App · Private repo scanning",
@@ -79,7 +80,7 @@ export default function GitHubSetup() {
             <span className="text-teal-400">install once, forget about config.</span>
           </h1>
           <p className="text-white/50 text-base leading-relaxed max-w-xl mx-auto">
-            Free the moment you install: every push and PR gets a quick quality gate — syntax, lint, and hardcoded-secret detection — with results posted as commit statuses and PR comments. Want the full 121-module scan, AI code review, and auto-fix PRs? Run a deeper scan or subscribe to Continuous at <a href="https://gatetest.io" className="text-teal-400 hover:underline">gatetest.io</a>.
+            Free the moment you install: every push and PR gets a quick quality gate — syntax, lint, and hardcoded-secret detection — with results posted as commit statuses and PR comments. Want the full 121-module scan, AI code review, and auto-fix PRs? Run a deeper scan or subscribe to Continuous at <a href={SITE_URL} className="text-teal-400 hover:underline">gatetest.io</a>.
           </p>
         </div>
 

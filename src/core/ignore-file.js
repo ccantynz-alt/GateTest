@@ -164,4 +164,50 @@ function load(projectRoot) {
   }
 }
 
-module.exports = { parse, load, IGNORE_FILENAME, _globToRegExp };
+/**
+ * The exact .gatetestignore line that silences ONE finding — and nothing
+ * broader than it has to be.
+ *
+ * The Fifty, move 25: when a developer decides a finding is wrong, the cost
+ * of silencing it is the difference between a shrug and a rip-out. Reporters
+ * print this beside the finding; the PR comment offers it as the
+ * `@gatetest ignore …` reply. Most specific first, and every candidate is
+ * checked against the real matcher before it is offered, so the line shown
+ * is one that actually works:
+ *
+ *   module:rule@file   the rule, in this file only
+ *   module:rule        the rule everywhere
+ *   module@file        the whole module, in this file only (rule is path-shaped)
+ *   module             the whole module
+ *
+ * @param {{module?:string, name?:string, ruleKey?:string, file?:string}} finding
+ * @returns {string|null}
+ */
+function suggestLine(finding) {
+  if (!finding || !finding.module) return null;
+  const mod = String(finding.module);
+  const file = _normPath(finding.file || finding.filePath) || null;
+
+  // The rule segment right after the module prefix — the same segment the
+  // matcher tries (`ruleKeyMatches`), so anything finer would not match. A
+  // path-shaped segment (`secrets:src/x.js`) is not a rule.
+  const key = String(finding.ruleKey || finding.name || '');
+  const segs = key.split(':');
+  const first = segs.length > 1 && _normToken(segs[0]) === _normToken(mod) ? 1 : 0;
+  const seg = segs[first] || '';
+  const pathLike = /[\\/]/.test(seg) || /^\d+$/.test(seg) || /\.[a-z0-9]{1,5}$/i.test(seg) || seg === '';
+  const rule = segs.length > first && !pathLike && _normToken(seg) !== _normToken(mod) ? seg : null;
+
+  const candidates = [];
+  if (rule && file) candidates.push(`${mod}:${rule}@${file}`);
+  if (rule) candidates.push(`${mod}:${rule}`);
+  if (file) candidates.push(`${mod}@${file}`);
+  candidates.push(mod);
+  const probe = { module: mod, ruleKey: finding.ruleKey, name: finding.name, file };
+  for (const line of candidates) {
+    if (parse(line).matches(probe)) return line;
+  }
+  return null;
+}
+
+module.exports = { parse, load, suggestLine, IGNORE_FILENAME, _globToRegExp };

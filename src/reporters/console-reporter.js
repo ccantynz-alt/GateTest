@@ -19,6 +19,9 @@ const COLORS = {
 };
 
 const { triageFindings, countFoldedDuplicates } = require('../core/finding-triage');
+const { suggestLine } = require('../core/ignore-file');
+const { replayCommand } = require('../core/ci-run-url');
+const { ruleKeyOf } = require('../core/finding-registry');
 const { siteUrl } = require('../core/site-url');
 
 class ConsoleReporter {
@@ -79,6 +82,11 @@ class ConsoleReporter {
       const msg = c.message || c.name;
       if (msg) console.log(`      ${msg}`);
       if (c.suggestion) console.log(`      ${COLORS.dim}→ ${c.suggestion}${COLORS.reset}`);
+      // The exact line that silences THIS finding, verified against the
+      // matcher (move 25). Friction on a false positive is what turns a
+      // shrug into a rip-out.
+      const ignore = suggestLine({ module: f.module, name: c.name, ruleKey: ruleKeyOf(c.name, c.file), file: c.file });
+      if (ignore) console.log(`      ${COLORS.dim}wrong? add to .gatetestignore: ${COLORS.reset}${ignore}`);
     };
 
     // A repo with 200 blockers should not open with 200 lines of scroll —
@@ -201,6 +209,11 @@ class ConsoleReporter {
       console.log(`${COLORS.bold}${COLORS.bgGreen}${COLORS.white}  GATE: PASSED  ${COLORS.reset}`);
     } else {
       console.log(`${COLORS.bold}${COLORS.bgRed}${COLORS.white}  GATE: BLOCKED  ${COLORS.reset}`);
+      // First line under a red gate in CI: the command that reproduces it
+      // on the developer's machine (move 28). "Couldn't reproduce it
+      // locally" is the most expensive sentence in CI.
+      const replay = replayCommand();
+      if (replay) console.log(`  ${COLORS.bold}Reproduce locally:${COLORS.reset} ${replay}`);
     }
 
     console.log('');

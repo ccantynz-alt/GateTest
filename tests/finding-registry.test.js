@@ -94,3 +94,13 @@ describe('finding-registry — ranking and summary', () => {
     assert.equal(results[1].errors, 1, 'gate counts untouched');
   });
 });
+
+describe('finding-registry — ignoreLine is stamped on every ranked finding (move 25)', () => {
+  it('carries a matcher-verified .gatetestignore line', () => {
+    const [f] = normalizeFindings([{
+      module: 'hardcodedUrl',
+      checks: [{ name: 'hardcoded-url:localhost:src/x.ts:12', passed: false, severity: 'error', confidence: 1, file: 'src/x.ts', line: 12, message: 'm' }],
+    }]);
+    assert.equal(f.ignoreLine, 'hardcodedUrl:localhost@src/x.ts');
+  });
+});

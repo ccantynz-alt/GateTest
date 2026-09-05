@@ -17,6 +17,7 @@ import { getDb } from "./db";
 import { loadRepoFiles, resolveRepoAuth } from "./gluecron-client";
 import { type RepoFile, TIERS } from "./scan-modules";
 import { runEngineForTier, CLI_ENGINE_TIERS, type RankedFinding, type FindingSummary } from "./scan-engine-dispatch";
+import { changedLines, lineInChange } from "./changed-lines";
 
 /** Safe set of tier names — anything outside this set falls back to "quick". */
 const KNOWN_TIERS = new Set(Object.keys(TIERS));
@@ -66,7 +67,7 @@ export interface ScanResult {
   coverageTruncated?: boolean;
   engine?: "cli" | "runTier";
   /** ranked + cross-module-deduped findings (CLI engine tiers) */
-  findings?: Array<RankedFinding & { inDiff?: boolean }>;
+  findings?: Array<RankedFinding & { inDiff?: boolean; inChangedFile?: boolean }>;
   findingSummary?: FindingSummary | null;
   /** number of files this push/PR changed vs baseRef (null = no base known) */
   changedFiles?: number | null;
@@ -237,12 +238,16 @@ export async function runScan(
   // "Is this finding in code THIS change touched?" — the loudest complaint
   // about quality gates is failing on old code counted as new. When the
   // event carried a base commit, load its tree too (one more archive read)
-  // and diff by content; findings in changed files are tagged `inDiff`.
+  // and diff by content. Attribution is LINE-level (changed-lines.js): a
+  // finding is `inDiff` when it sits on a line the change inserted or
+  // modified, `inChangedFile` when the file moved at all. File-level alone
+  // was the same complaint one level down — touch one line of a 900-line
+  // file and every old finding in it read as new (2026-09-05).
   // gate-verdict.js enforces on `inDiff` in strict/admin mode: a blocking
-  // finding in a file this change did not touch is reported, not enforced.
+  // finding on a line this change did not touch is reported, not enforced.
   // With no base (first push, force-push, unreadable base) the whole repo
   // is enforced and the verdict says so.
-  let changedFiles: Set<string> | null = null;
+  let changedFiles: Map<string, ReturnType<typeof changedLines>> | null = null;
   if (baseRef && engineTier) {
     try {
       const baseLoaded = await loadRepoFiles(owner, repo, baseRef, token, {
@@ -251,16 +256,22 @@ export async function runScan(
         deadlineMs,
       });
       const baseByPath = new Map(baseLoaded.fileContents.map((f) => [f.path, f.content]));
-      changedFiles = new Set<string>();
+      changedFiles = new Map();
       for (const f of fileContents) {
         const before = baseByPath.get(f.path);
-        if (before === undefined || before !== f.content) changedFiles.add(f.path);
+        if (before === undefined || before !== f.content) changedFiles.set(f.path, changedLines(before, f.content));
       }
     } catch (err) { // error-ok — attribution is a refinement; a base read failure must not fail the scan
       console.warn(`[scan-executor] ${owner}/${repo}: base ${baseRef.slice(0, 7)} unreadable, findings not attributed:`, err instanceof Error ? err.message : String(err));
       changedFiles = null;
     }
   }
+  const attribute = (f: RankedFinding) => {
+    if (!changedFiles) return f;
+    const lines = f.file ? changedFiles.get(f.file) : undefined;
+    const inChangedFile = lines !== undefined;
+    return { ...f, inChangedFile, inDiff: inChangedFile && lineInChange(lines, f.line) };
+  };
 
   const { modules, totalIssues, engineUsed, findings, findingSummary } = await runEngineForTier({
     tier: normalisedTier,
@@ -289,7 +300,7 @@ export async function runScan(
     filesInRepo: files.length,
     coverageTruncated: loaded.truncated,
     engine: engineUsed,
-    findings: changedFiles && findings ? findings.map((f) => ({ ...f, inDiff: f.file ? changedFiles!.has(f.file) : false })) : findings,
+    findings: findings ? findings.map(attribute) : findings,
     findingSummary,
     changedFiles: changedFiles ? changedFiles.size : null,
     baseRef,

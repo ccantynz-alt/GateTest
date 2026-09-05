@@ -75,6 +75,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  determinism:
+    name: same tree, same findings
+    # Move 19: non-determinism in a gate is indistinguishable from
+    # flakiness, and flakiness is how gates get switched off. The full
+    # suite runs twice on this repo and the two finding sets must be
+    # identical — module, rule, file, line, severity, confidence, message.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Scan twice, diff the findings
+        run: node scripts/determinism-check.js
+
   real-world:
     name: real repos must not be blocked
     runs-on: ubuntu-latest

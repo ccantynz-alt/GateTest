@@ -29,12 +29,13 @@ import {
   postToWebhook,
   buildScanCompleteBlocks,
 } from "@/app/lib/slack-notifier";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET || "";
-const BASE_URL       = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+const BASE_URL       = SITE_URL;
 
 // Respond immediately (within Slack's 3s window) then fire async work
 export async function POST(req: NextRequest): Promise<NextResponse> {

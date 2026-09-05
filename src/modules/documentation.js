@@ -5,6 +5,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { hasRouteHandler } = require('../core/route-grammar');
 const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
@@ -243,12 +244,9 @@ class DocumentationModule extends BaseModule {
     const jsFiles = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     for (const file of jsFiles) {
       const content = fs.readFileSync(file, 'utf-8');
-      if (content.includes('app.get(') || content.includes('app.post(') ||
-          content.includes('router.get(') || content.includes('router.post(') ||
-          content.includes('export async function GET') ||
-          content.includes('export async function POST')) {
-        return true;
-      }
+      // Shared route grammar (src/core/route-grammar.js): a Fastify, Hono,
+      // Koa or NestJS API with no docs used to pass as "no API here".
+      if (hasRouteHandler(content)) return true;
     }
     return false;
   }

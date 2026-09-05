@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { siteUrl, badgeUrl as badgeUrlFor } from "@/app/lib/site-url";
 
 interface ModuleSummary {
   module: string;
@@ -70,6 +71,16 @@ interface Props {
 }
 
 export function PreviewResults({ result, repoUrl, onTryAnother, exampleRepos }: Props) {
+  // owner/repo for the badge: from the scan result when the engine echoed
+  // it, else parsed from the URL the user typed. Null → no badge block.
+  const repoSlug = (() => {
+    const fromResult = typeof result.repo === "string" ? result.repo.trim() : "";
+    const fromUrl = (repoUrl.match(/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:[/?#]|$)/) || []).slice(1, 3).join("/");
+    const slug = /^[\w.-]+\/[\w.-]+$/.test(fromResult) ? fromResult : fromUrl;
+    return /^[\w.-]+\/[\w.-]+$/.test(slug) ? slug : null;
+  })();
+  const badgeImage = repoSlug ? badgeUrlFor(`/badge/${repoSlug}.svg`) : "";
+  const badgeMarkdown = repoSlug ? `[![GateTest](${badgeImage})](${siteUrl(`/score/${repoSlug}`)})` : "";
   const hasErrors = result.findings?.some((f) => f.severity === "error");
   const issueCount = result.total ?? 0;
 
@@ -230,6 +241,36 @@ export function PreviewResults({ result, repoUrl, onTryAnother, exampleRepos }: 
           </p>
         </div>
       </div>
+
+      {/* Your badge — the end of the free scan is a README badge (the Fifty,
+          move 36): a permanent backlink someone else maintains, and the one
+          artefact of this scan that keeps working after the tab closes. */}
+      {repoSlug && (
+        <div className="rounded-xl bg-[#161b22] border border-white/[0.08] overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between">
+            <span className="text-xs font-mono text-white/50">your badge</span>
+            <span className="text-xs text-teal-400/80 font-mono">updates after every scan</span>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-white/60">
+              Put <span className="font-mono text-white">{repoSlug}</span>&rsquo;s live GateTest grade in its README. It reads
+              &ldquo;not scanned&rdquo; until a full scan is on record, then shows the grade and issue count.
+            </p>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- SVG from our own badge origin */}
+              <img src={badgeImage} alt={`GateTest badge for ${repoSlug}`} height={20} />
+            </div>
+            <div className="rounded-lg bg-black/40 border border-white/[0.06] px-4 py-3 font-mono text-xs text-emerald-300 flex items-start justify-between gap-3">
+              <span className="break-all">{badgeMarkdown}</span>
+              <CopyButton text={badgeMarkdown} />
+            </div>
+            <p className="text-xs text-white/30">
+              Markdown shown; HTML and reStructuredText embeds are on the{" "}
+              <Link href="/badge" className="text-teal-400 hover:underline">badge page</Link>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Try another */}
       <div className="pt-2">

@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import ComparisonReviewed from "@/app/components/ComparisonReviewed";
 
 export const metadata: Metadata = {
   title: "GateTest vs CodeQL — minutes, not 30, in 2026",
@@ -317,6 +318,7 @@ export default function CodeQLPage() {
             One-time payment per scan via Stripe. No subscription, no auto-renew.
           </p>
         </section>
+              <ComparisonReviewed slug="codeql" />
       </main>
 
       <footer className="border-t border-white/[0.06] px-6 py-8 mt-16">

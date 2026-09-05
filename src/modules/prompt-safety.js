@@ -44,11 +44,6 @@ try {
   ({ CHEAP_MODEL: RECOMMENDED_MODEL } = require('../core/engine-models'));
 } catch { /* keep the literal default */ }
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor',
-];
-
 // Paths that define detection patterns — scanning them would produce FPs
 // because the pattern strings match the very rules they implement.
 const MODULE_SOURCE_RE = /(?:^|\/)src[\\/]modules[\\/]/;
@@ -183,29 +178,11 @@ class PromptSafetyModule extends BaseModule {
     });
   }
 
+  // KI #104: the shared walk replaces a private readdir copy so `--diff` /
+  // `--pr` scans only touch changed files. Every exclude the old walk had
+  // is already a shared default.
   _findFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SCAN_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    return this._collectFiles(projectRoot, [...SCAN_EXTS]);
   }
 
   _looksAiAdjacent(file) {

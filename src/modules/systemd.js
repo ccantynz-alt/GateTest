@@ -219,25 +219,10 @@ class SystemdModule extends BaseModule {
   }
 
   _findServiceFiles(root) {
-    const results = [];
-    const searchDirs = ['infra', 'deploy', 'systemd', 'services', '.'];
-    for (const dir of searchDirs) {
-      const fullDir = path.join(root, dir);
-      if (!fs.existsSync(fullDir)) continue;
-      this._walkForServices(fullDir, results);
-    }
-    return [...new Set(results)];
-  }
-
-  _walkForServices(dir, results) {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (['node_modules', '.git', '.claude', '.next'].includes(e.name)) continue;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) this._walkForServices(full, results);
-      else if (e.name.endsWith('.service')) results.push(full);
-    }
+    // KI #104: shared walk replaces the private one. The old search list
+    // (`infra`, `deploy`, `systemd`, `services`, `.`) ended in the root, so
+    // it was already a full sweep that walked the named dirs a second time.
+    return this._collectFiles(root, ['.service']);
   }
 }
 

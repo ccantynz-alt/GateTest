@@ -12,6 +12,8 @@
  * findings always land within budget.
  */
 
+const { replayCommand } = require('../core/ci-run-url');
+
 const ANNOTATION_BUDGET_PER_LEVEL = 10;
 
 class GithubAnnotationsReporter {
@@ -25,6 +27,14 @@ class GithubAnnotationsReporter {
   }
 
   _onSuiteEnd(summary) {
+    // A blocked gate leads with the command that reproduces it locally
+    // (move 28) — one notice, in the checks tab where the red X is read.
+    if (summary && summary.gateStatus === 'BLOCKED') {
+      const replay = replayCommand();
+      if (replay) {
+        process.stdout.write(`::notice title=GateTest — reproduce locally::${this._escapeData(replay)}\n`);
+      }
+    }
     const annotations = this._collectAnnotations(summary);
     const byLevel = { error: [], warning: [], notice: [] };
     for (const a of annotations) byLevel[a.level].push(a);

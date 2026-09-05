@@ -124,7 +124,7 @@ export default async function ScorePage({
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <a
-                    href={`https://gatetest.io?repo=${encodeURIComponent(`${owner}/${repo}`)}`}
+                    href={`${SITE_URL}?repo=${encodeURIComponent(`${owner}/${repo}`)}`}
                     className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition-colors"
                   >
                     Improve this score →
@@ -188,7 +188,7 @@ export default async function ScorePage({
               {owner}/{repo} hasn&apos;t been scanned yet. Run a GateTest scan to get a public score.
             </p>
             <a
-              href={`https://gatetest.io#pricing`}
+              href={`${SITE_URL}#pricing`}
               className="inline-block px-8 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold transition-colors"
             >
               Scan this repo →

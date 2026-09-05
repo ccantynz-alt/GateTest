@@ -253,3 +253,80 @@ describe('FakeFixDetectorModule', () => {
     }
   });
 });
+
+// strict-to-loose: `/==[^=]/` matched INSIDE `=== 'x'` (the last two `=`
+// plus the space), so a hunk that merely moved a strict comparison
+// reported it as relaxed (2026-09-05, a file-walk replacement in
+// typescript-strictness.js). Control pair: the real relaxation must still
+// fire; a moved `===` must not.
+describe('FakeFixDetectorModule — strict-to-loose is a token, not a substring', () => {
+  async function run(diff) {
+    const mod = new FakeFixDetector();
+    const result = new TestResult('fakeFixDetector');
+    result.start();
+    await mod.run(result, makeConfig(diff));
+    return result;
+  }
+  const hunk = (lines) => [
+    'diff --git a/src/a.js b/src/a.js', '--- a/src/a.js', '+++ b/src/a.js', '@@ -1,4 +1,4 @@', ...lines,
+  ].join('\n');
+
+  it('fires when === becomes ==', async () => {
+    const result = await run(hunk([
+      ' function isTs(name) {',
+      "-  return name === 'tsconfig.json';",
+      "+  return name == 'tsconfig.json';",
+      ' }',
+    ]));
+    assert.ok(findFailure(result, 'strict-to-loose'), 'a real relaxation must be reported');
+  });
+
+  it('stays quiet when a === line only moves', async () => {
+    const result = await run(hunk([
+      ' function isTs(name) {',
+      "-  if (name === 'tsconfig.json') return true;",
+      '+  const base = path.basename(name);',
+      "+  if (base === 'tsconfig.json') return true;",
+      ' }',
+    ]));
+    assert.ok(!findFailure(result, 'strict-to-loose'), `moved strict comparison reported as relaxed: ${failedCheckNames(result).join(', ')}`);
+  });
+
+  it('stays quiet when == is added beside a === that stays', async () => {
+    const result = await run(hunk([
+      ' function f(a, b) {',
+      '-  if (a === b) return 1;',
+      '+  if (a === b) return 1;',
+      '+  if (a == null) return 0;',
+      ' }',
+    ]));
+    assert.ok(!findFailure(result, 'strict-to-loose'));
+  });
+});
+
+// A fix lives in source: documentation hunks are not scanned by the pattern
+// engine. A docs table naming `@ts-ignore` / `as any` lit up five rules on
+// 2026-09-05 when a CRLF→LF rewrite made docs/ARCHITECTURE.md one big hunk.
+describe('FakeFixDetectorModule — documentation is not source', () => {
+  async function run(diff) {
+    const mod = new FakeFixDetector();
+    const result = new TestResult('fakeFixDetector');
+    result.start();
+    await mod.run(result, makeConfig(diff));
+    return result;
+  }
+  const PROSE = [
+    ' | module | what it flags |',
+    '-| ts | flags `@ts-ignore` and `as any` |',
+    '+| ts | flags `@ts-ignore`, `as any`, and `if (false)` dead-code guards; unreasoned `@ts-ignore` is a warning |',
+    '+Also: `catch (err) {}` and `test.skip(` are symptom patches, and `!==` becoming `==` is a relaxed check.',
+  ];
+  it('ignores a Markdown hunk that names every pattern', async () => {
+    const r = await run(['diff --git a/docs/ARCH.md b/docs/ARCH.md', '--- a/docs/ARCH.md', '+++ b/docs/ARCH.md', '@@ -1,3 +1,4 @@', ...PROSE].join('\n'));
+    assert.deepStrictEqual(failedCheckNames(r), [], 'prose in docs must not read as a fake fix');
+  });
+  it('still fires on the same text inside a source file', async () => {
+    const r = await run(['diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,2 @@', ' const x = 1;', '-const y: number = load();', '+// @ts-ignore', '+const y = load() as any;'].join('\n'));
+    assert.ok(failedCheckNames(r).length > 0, 'positive control');
+  });
+});

@@ -174,19 +174,30 @@ describe('KI #77 — the drift cannot come back', () => {
 describe('path filters are segment-anchored, not substring', () => {
   // A path variable — not file CONTENT, which may legitimately be searched
   // for the word "test". Only the identifiers that hold a path are checked.
-  const PATH_VAR = String.raw`(?:rel|relPath|relFwd|filePath|fullPath|p)`;
-  const BAD_WORD = String.raw`(?:test|spec|\.git|node_modules)`;
+  const PATH_VAR = String.raw`(?:rel|relPath|relFwd|filePath|fullPath|filename|fileName|dir|lower|p)`;
+  const BAD_WORD = String.raw`(?:test|tests|spec|\.git|\.gatetest|node_modules|dist|build|vendor)`;
   const SUBSTRING_PATH_FILTER = new RegExp(
     String.raw`\b${PATH_VAR}\.includes\((['"])${BAD_WORD}\1\)`,
   );
 
-  const files = fs
-    .readdirSync(MODULES_DIR)
-    .filter((f) => f.endsWith('.js'));
+  // Extended past src/modules on 2026-09-05 (the Fifty, move 10): the same
+  // shape had survived in src/core, the website's own analysers and the
+  // CLI watcher, and fake-fix-detector's `/==[^=]/` matching inside `===`
+  // was the same bug in a different alphabet.
+  const ROOT = path.join(__dirname, '..');
+  const SCAN_DIRS = ['src/modules', 'src/core', 'src/reporters', 'src', 'bin', 'website/app/lib'];
+  const files = [];
+  for (const d of SCAN_DIRS) {
+    const abs = path.join(ROOT, d);
+    if (!fs.existsSync(abs)) continue;
+    for (const f of fs.readdirSync(abs)) {
+      if (/\.(?:js|ts|mjs|cjs)$/.test(f) && fs.statSync(path.join(abs, f)).isFile()) files.push(path.join(d, f));
+    }
+  }
 
   for (const f of files) {
     it(`${f} uses no substring path filter`, () => {
-      const src = fs.readFileSync(path.join(MODULES_DIR, f), 'utf8');
+      const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
       const offending = src
         .split('\n')
         .map((line, i) => [i + 1, line])

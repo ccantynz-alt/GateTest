@@ -9,6 +9,7 @@ const path = require('path');
 // (consumers read gateStatus/timestamp) and no schema version is documented,
 // so deriving it makes it meaningful rather than decorative.
 const PKG_VERSION = require('../../package.json').version;
+const { buildProvenance, signatureFor } = require('../core/report-provenance');
 
 class JsonReporter {
   constructor(runner, config) {
@@ -53,6 +54,13 @@ class JsonReporter {
       findings: Array.isArray(summary.findings) ? summary.findings : [],
       findingSummary: summary.findingSummary || null,
     };
+    // Provenance + signature (move 21): which engine, which modules ran,
+    // what was skipped, deferred or suppressed, and a digest of the
+    // findings — signed with GATETEST_REPORT_SIGNING_KEY when set, and
+    // explicitly unsigned otherwise. `gatetest verify-report <file>` checks
+    // both the signature and that the findings match the digest.
+    report.provenance = buildProvenance(summary, { projectRoot: this.config.projectRoot });
+    report.signature = signatureFor(report.provenance);
 
     fs.writeFileSync(filepath, JSON.stringify(report, null, 2));
 

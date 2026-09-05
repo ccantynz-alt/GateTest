@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { siteUrl, badgeUrl as badgeUrlFor } from "@/app/lib/site-url";
 import CopyButton from "@/app/components/CopyButton";
 
 export const metadata: Metadata = {
@@ -47,11 +48,14 @@ function BadgePreview({ grade, score, color }: { grade: string; score: number; c
 }
 
 export default function BadgePage() {
+  // These snippets get pasted into READMEs we can never edit — the domain
+  // comes from site-url, never a literal (the Bible: THE DOMAIN).
   const exampleRepo = "crclabs-hq/GateTest";
-  const badgeUrl    = `https://gatetest.io/api/badge?repo=${exampleRepo}`;
-  const markdownEmbed = `[![GateTest](${badgeUrl})](https://gatetest.io/playground)`;
-  const htmlEmbed     = `<a href="https://gatetest.io/playground"><img src="${badgeUrl}" alt="GateTest"></a>`;
-  const rstEmbed      = `.. image:: ${badgeUrl}\n   :target: https://gatetest.io/playground\n   :alt: GateTest`;
+  const badgeUrl    = badgeUrlFor(`/badge/${exampleRepo}.svg`);
+  const target      = siteUrl("/playground");
+  const markdownEmbed = `[![GateTest](${badgeUrl})](${target})`;
+  const htmlEmbed     = `<a href="${target}"><img src="${badgeUrl}" alt="GateTest"></a>`;
+  const rstEmbed      = `.. image:: ${badgeUrl}\n   :target: ${target}\n   :alt: GateTest`;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
@@ -128,7 +132,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">Markdown (README.md)</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 break-all">
-                      {`[![GateTest](https://gatetest.io/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`)](https://gatetest.io/playground)`}
+                      {`[![GateTest](${badgeUrlFor("/badge/")}`}<span className="text-emerald-400">owner/repo</span>{`.svg)](${target})`}
                     </code>
                     <CopyButton text={markdownEmbed} />
                   </div>
@@ -139,7 +143,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">HTML</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 break-all">
-                      {`<a href="https://gatetest.io/playground"><img src="https://gatetest.io/api/badge?repo=`}
+                      {`<a href="${target}"><img src="${badgeUrlFor("/badge/")}`}
                       <span className="text-emerald-400">owner/repo</span>
                       {`" alt="GateTest"></a>`}
                     </code>
@@ -152,7 +156,7 @@ export default function BadgePage() {
                   <p className="text-xs text-white/30 font-mono uppercase tracking-widest">reStructuredText</p>
                   <div className="flex items-start gap-2">
                     <code className="flex-1 block rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 whitespace-pre-wrap break-all">
-                      {`.. image:: https://gatetest.io/api/badge?repo=`}<span className="text-emerald-400">owner/repo</span>{`\n   :target: https://gatetest.io/playground\n   :alt: GateTest`}
+                      {`.. image:: ${badgeUrlFor("/badge/")}`}<span className="text-emerald-400">owner/repo</span>{`.svg\n   :target: ${target}\n   :alt: GateTest`}
                     </code>
                     <CopyButton text={rstEmbed} />
                   </div>
@@ -197,7 +201,7 @@ export default function BadgePage() {
             </table>
           </div>
           <p className="text-xs text-white/30 font-mono">
-            Endpoint: <span className="text-white/50">GET https://gatetest.io/api/badge?repo=owner/repo</span>
+            Endpoint: <span className="text-white/50">GET {badgeUrlFor("/badge/owner/repo.svg")}</span>
           </p>
           <p className="text-xs text-white/30 font-mono">
             Cache: <span className="text-white/50">5 minutes (CDN) · Stale-while-revalidate</span>

@@ -24,8 +24,17 @@ const HONO_BASE     = /\.basePath\s*\(\s*['"`]([^'"`]+)/g;
 const EXPRESS_USE   = /(?:app|server)\.use\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*(?:router|[a-zA-Z]+Router)/g;
 const FASTIFY_PRE   = /fastify\.register\s*\([^,]+,\s*\{[^}]*prefix\s*:\s*['"`]([^'"`]+)/g;
 
+// Next.js App Router handler — `app/api/**/route.{js,ts,jsx,tsx}`.
+const APP_ROUTE_RE  = /app\/api\/.+\/route\.[jt]sx?$/;
+
 class DeployContractModule extends BaseModule {
-  constructor() { super('deployContract', 'Deploy Contract Validator'); }
+  constructor() {
+    super('deployContract', 'Deploy Contract Validator');
+    // Opt out of incremental: a health-check URL in a changed deploy script
+    // is validated against routes declared in files the diff never touched.
+    // A diff-scoped route set would report every one of them as missing.
+    this._respectsIncremental = false;
+  }
 
   async run(result, config) {
     const root = config.projectRoot;
@@ -83,8 +92,10 @@ class DeployContractModule extends BaseModule {
   }
 
   _findHealthCheckUrls(root) {
-    // Shell scripts + CI YAML files
-    const files = this._glob(root, /\.(sh|yml|yaml|bash)$/, ['node_modules', '.git', '.claude', '.next', 'dist']);
+    // Shell scripts + CI YAML files. KI #104: shared walk replaces the
+    // private `_glob`, which also excluded on path segments ABOVE the
+    // project root (a checkout under `.../dist/app` saw no files at all).
+    const files = this._collectFiles(root, ['.sh', '.yml', '.yaml', '.bash']);
     const found = [];
 
     for (const file of files) {
@@ -121,7 +132,7 @@ class DeployContractModule extends BaseModule {
 
   _findBasePaths(root) {
     const bases = new Set();
-    const files = this._glob(root, /\.(js|ts|mjs)$/, ['node_modules', '.next', 'dist', '.git', 'tests', '__tests__']);
+    const files = this._collectFiles(root, ['.js', '.ts', '.mjs'], ['tests', '__tests__']);
 
     for (const file of files) {
       let content;
@@ -142,13 +153,15 @@ class DeployContractModule extends BaseModule {
     const routes = new Set();
 
     // Next.js App Router
-    for (const file of this._glob(root, /app\/api\/.+\/route\.[jt]sx?$/, ['node_modules'])) {
+    const routeFiles = this._collectFiles(root, ['.js', '.ts', '.jsx', '.tsx'])
+      .filter(f => APP_ROUTE_RE.test(f.replace(/\\/g, '/')));
+    for (const file of routeFiles) {
       const m = file.replace(/\\/g, '/').match(/app\/api\/(.+)\/route\.[jt]sx?$/);
       if (m) routes.add('/api/' + m[1].replace(/\[([^\]]+)\]/g, ':$1'));
     }
 
     // Express / Fastify / Hono source
-    const sourceFiles = this._glob(root, /\.(js|ts|mjs)$/, ['node_modules', '.next', 'dist', '.git']);
+    const sourceFiles = this._collectFiles(root, ['.js', '.ts', '.mjs']);
     for (const file of sourceFiles) {
       let content;
       try { content = fs.readFileSync(file, 'utf8'); } catch { continue; }
@@ -178,26 +191,6 @@ class DeployContractModule extends BaseModule {
     if (rNorm === urlPath) return true;
     if (urlPath.startsWith(rNorm.replace(/\*$/, '').replace(/\/$/, ''))) return true;
     return false;
-  }
-
-  _glob(root, pattern, excludes = []) {
-    const results = [];
-    const walk = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      const dirSegments = new Set(dir.split(/[\\/]+/));
-      for (const e of entries) {
-        // Segment-anchored, not substring: `dir.includes('/.git')` also
-        // matched `/.github`, which made every GitHub Actions workflow
-        // invisible to this scanner — the exact files it exists to read.
-        if (excludes.some(x => e.name === x || dirSegments.has(x))) continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (pattern.test(full.replace(/\\/g, '/'))) results.push(full);
-      }
-    };
-    walk(root);
-    return results;
   }
 }
 

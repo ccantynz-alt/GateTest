@@ -60,6 +60,19 @@ function generateBadge(rawLabel: string, rawMessage: string, color: string): str
 }
 
 export async function GET(req: NextRequest) {
+  // `?repo=owner/name` was advertised on /badge as "shows your grade" while
+  // this handler never read it — every README that pasted it got the
+  // generic "quality gate" badge (found 2026-09-05). The graded badge lives
+  // at /badge/{owner}/{repo}.svg; send the pasted URL there so it starts
+  // telling the truth without anyone editing a README we cannot reach.
+  const repoParam = req.nextUrl.searchParams.get("repo");
+  if (repoParam && /^[\w.-]+\/[\w.-]+$/.test(repoParam)) {
+    const [owner, name] = repoParam.split("/");
+    return NextResponse.redirect(new URL(`/badge/${owner}/${name}.svg`, req.nextUrl.origin), {
+      status: 307,
+      headers: { "Cache-Control": "public, max-age=300, s-maxage=300" },
+    });
+  }
   const status = req.nextUrl.searchParams.get("status");
   const modules = req.nextUrl.searchParams.get("modules");
   const label = req.nextUrl.searchParams.get("label") || "GateTest";

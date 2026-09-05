@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getDb } from "../../../lib/db";
 import { deriveAdminToken } from "../../../lib/admin-auth";
+import { SITE_URL } from "@/app/lib/site-url";
 
 // Resolved through engine-models so GATETEST_CHEAP_MODEL reaches this
 // route — it was an inline literal, invisible to the override (KI #78).
@@ -263,7 +264,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+  const baseUrl = SITE_URL;
 
   // Find watches that are due for a check
   const due = (await sql`

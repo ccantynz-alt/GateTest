@@ -17,7 +17,10 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const OUT = path.join(__dirname, '..', 'website', 'app', 'data', 'build-info.json');
+// BUILD_INFO_OUT lets the test write somewhere else without touching the
+// committed file.
+const OUT = process.env.BUILD_INFO_OUT
+  || path.join(__dirname, '..', 'website', 'app', 'data', 'build-info.json');
 
 // No shell, fixed argv — nothing interpolated, so no command-injection surface.
 function tryGit(args, fallback) {
@@ -50,11 +53,45 @@ if (!version) {
   }
 }
 
+/**
+ * When was each comparison page last changed? (The Fifty, move 38.)
+ *
+ * The /compare pages make claims about other tools, and a claim with no
+ * date becomes the competitor's best asset the day it goes stale. The
+ * honest date is the one git already holds — the last commit that touched
+ * the page — so nobody types one and nobody forgets to bump it. The slug
+ * list is imported, not copied, so a new comparison page is dated the
+ * moment it exists.
+ *
+ * A shallow clone (fetch-depth: 1) knows only HEAD's date and would stamp
+ * every page "updated today" — that is worse than no date, so with fewer
+ * than two commits in history the map is left empty and the page says
+ * only which engine version it was built against.
+ */
+function pageUpdatedDates() {
+  const out = {};
+  const depth = Number(tryGit(['rev-list', '--count', 'HEAD'], '0'));
+  if (!(depth >= 2)) return out;
+  let slugs = [];
+  try {
+    ({ COMPARISON_SLUGS: slugs } = require(path.join(__dirname, '..', 'website', 'app', 'lib', 'seo', 'all-urls.js')));
+  } catch {
+    return out;
+  }
+  for (const slug of slugs) {
+    const rel = path.posix.join('website', 'app', 'compare', slug, 'page.tsx');
+    const date = tryGit(['log', '-1', '--format=%cs', '--', rel], '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) out[slug] = date;
+  }
+  return out;
+}
+
 const info = {
   version,
   commit,
   shortCommit,
   builtAt: new Date().toISOString(),
+  pageUpdated: pageUpdatedDates(),
 };
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });

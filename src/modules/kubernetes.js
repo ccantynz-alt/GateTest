@@ -38,10 +38,8 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform',
-];
+// Excludes beyond BaseModule._collectFiles' defaults (KI #104).
+const EXTRA_EXCLUDES = ['.terraform'];
 
 // Don't re-scan CI workflow files — that's ciSecurity's domain.
 const SKIPPED_DIRS = ['.github/workflows'];
@@ -82,29 +80,12 @@ class KubernetesModule extends BaseModule {
   }
 
   _findManifests(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
-        if (SKIPPED_DIRS.some((p) => rel.startsWith(p + '/') || rel === p)) continue;
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) {
-          if (this._looksLikeManifest(full)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    return this._collectFiles(projectRoot, ['.yaml', '.yml'], EXTRA_EXCLUDES).filter((full) => {
+      const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
+      if (SKIPPED_DIRS.some((p) => rel.startsWith(p + '/'))) return false;
+      return this._looksLikeManifest(full);
+    });
   }
 
   _looksLikeManifest(file) {

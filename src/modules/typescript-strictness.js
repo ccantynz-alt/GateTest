@@ -66,10 +66,10 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const TS_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 
@@ -171,33 +171,19 @@ class TypeScriptStrictnessModule extends BaseModule {
   }
 
   _findFiles(projectRoot) {
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104).
+    // `.json` is collected only to pick out tsconfig files; every other
+    // hit splits by TypeScript extension exactly as before.
     const tsconfigs = [];
     const sources = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
+    for (const full of this._collectFiles(projectRoot, ['.json', ...TS_EXTS], EXTRA_EXCLUDES)) {
+      const name = path.basename(full);
+      if (name === 'tsconfig.json' || /^tsconfig\.[^/]+\.json$/.test(name)) {
+        tsconfigs.push(full);
+      } else if (TS_EXTS.has(path.extname(name).toLowerCase())) {
+        sources.push(full);
       }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const name = entry.name;
-          if (name === 'tsconfig.json' || /^tsconfig\.[^/]+\.json$/.test(name)) {
-            tsconfigs.push(full);
-          } else {
-            const ext = path.extname(name).toLowerCase();
-            if (TS_EXTS.has(ext)) sources.push(full);
-          }
-        }
-      }
-    };
-    walk(projectRoot);
+    }
     return { tsconfigs, sources };
   }
 

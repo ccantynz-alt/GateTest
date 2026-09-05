@@ -48,12 +48,6 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage',
-  '.gatetest', '.next', 'out', 'target', 'vendor', '.terraform',
-  '__pycache__', '.cache', '.parcel-cache', '.turbo', '.vercel',
-]);
-
 const SCAN_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts', '.py',
 ]);
@@ -294,28 +288,13 @@ class ClaudeComplianceModule extends BaseModule {
   }
 
   _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name.startsWith('.') && e.name !== '.') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (SCAN_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(root);
-    return out;
+    // KI #104: shared walk replaces the private one. The old walk also
+    // skipped every dot-entry below the root (`.github/`, `.storybook/`,
+    // `.eslintrc.js`); kept as a filter so the file set is unchanged.
+    return this._collectFiles(root, [...SCAN_EXTS], ['.terraform']).filter((full) => {
+      const rel = path.relative(root, full);
+      return !rel.split(/[\\/]/).some((seg) => seg.startsWith('.'));
+    });
   }
 }
 

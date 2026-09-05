@@ -163,10 +163,11 @@ function traceFile(filePath, content) {
   const lines = content.split('\n');
 
   // Skip test files and generated files
+  // Segment-anchored, including at the start of a relative path —
+  // `tests/auth.test.js` has no leading slash, and `contest/` is not a
+  // test dir. Mirrors base-module's TEST_PATH_RE for the dirs it names.
   const isTest = /\.(test|spec)\.[jt]sx?$/.test(filePath)
-    || filePath.includes('__tests__')
-    || filePath.includes('/tests/')
-    || filePath.includes('/test/');
+    || /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?)(?:\/|$)/.test(filePath);
   const severity = isTest ? 'warning' : 'error';
 
   const aliases = buildAliasMap(lines);

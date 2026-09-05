@@ -253,3 +253,34 @@ describe('CookieSecurityModule — test path downgrade', () => {
     assert.strictEqual(hit.severity, 'warning');
   });
 });
+
+// Move 11 (2026-09-05): the session-cookie rule saw only CommonJS
+// `require('express-session')`; ESM apps skipped it entirely.
+describe('CookieSecurityModule — session middleware in both module systems', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cs-esm-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const APP = (importLine) => [
+    importLine,
+    'const app = express();',
+    'app.use(session({ secret: process.env.S, cookie: { httpOnly: true, maxAge: 3600 } }));',
+    '',
+  ].join('\n');
+
+  it('ESM import: a session cookie that never sets secure:true is reported', async () => {
+    write(tmp, 'src/server.mjs', APP("import session from 'express-session';"));
+    const r = await run(tmp);
+    assert.ok(r.checks.some((c) => !c.passed && /cookie-sec.*session/.test(c.name)), r.checks.map((c) => c.name).join(', '));
+  });
+  it('CommonJS require: unchanged', async () => {
+    write(tmp, 'src/server.js', APP("const session = require('express-session');"));
+    const r = await run(tmp);
+    assert.ok(r.checks.some((c) => !c.passed && /cookie-sec.*session/.test(c.name)));
+  });
+  it('no session middleware: quiet', async () => {
+    write(tmp, 'src/server.js', "const app = express();\napp.use(cors());\n");
+    const r = await run(tmp);
+    assert.ok(!r.checks.some((c) => !c.passed && /cookie-sec.*session/.test(c.name)));
+  });
+});

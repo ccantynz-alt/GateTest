@@ -249,7 +249,16 @@ const PATTERN_RULES = [
     id: 'strict-to-loose',
     direction: 'changed',
     pattern: /===/,
-    replacement: /==[^=]/,
+    // A loose `==` that is not the tail of `===` or `!==`. The previous
+    // `/==[^=]/` matched inside `=== 'x'` — the last two `=` plus the
+    // space — so any hunk that moved a strict comparison reported it as
+    // relaxed (found on 2026-09-05 when a file walk was replaced and its
+    // untouched `name === 'tsconfig.json'` line moved). Substring-vs-token,
+    // the same shape as `.git` matching `.github`.
+    replacement: /(?<![=!])==(?!=)/,
+    // And a strict comparison must actually have LEFT the hunk: an added
+    // `==` beside a removed `===` that also reappears is a move, not a fix.
+    strictCountMustDrop: true,
     severity: 'warning',
     title: 'Strict equality relaxed to loose equality',
     explanation: '=== was changed to == — type coercion masks bugs rather than fixing them.',
@@ -460,6 +469,12 @@ class FakeFixDetectorModule extends BaseModule {
     const hunks = this._parseDiff(diff);
 
     for (const hunk of hunks) {
+      // A fix lives in source. A Markdown, YAML or lock-file hunk cannot
+      // relax a comparison or skip a test, but its PROSE can name every
+      // pattern below — a doc table that says "flags `@ts-ignore` and
+      // `as any`" lit up five rules on 2026-09-05 when a line-ending change
+      // made the whole file a hunk. Same file set the AI engine uses.
+      if (!this._isSourceFile(hunk.file)) continue;
       // Files that INTENTIONALLY contain bug-shape patterns and must never
       // hard-error:
       //   - website/app/for/* — marketing demo pages showing the patterns
@@ -524,7 +539,14 @@ class FakeFixDetectorModule extends BaseModule {
         if (isDemo && rule.severity === 'error') continue; // same fixture exemption
         const removed = hunk.lines.filter(l => l.startsWith('-') && rule.pattern.test(l));
         const added = hunk.lines.filter(l => l.startsWith('+') && rule.replacement.test(l));
-        if (removed.length > 0 && added.length > 0) {
+        let dropped = true;
+        if (rule.strictCountMustDrop) {
+          const count = (prefix) => hunk.lines
+            .filter(l => l.startsWith(prefix))
+            .reduce((n, l) => n + (l.match(/===/g) || []).length, 0);
+          dropped = count('+') < count('-');
+        }
+        if (removed.length > 0 && added.length > 0 && dropped) {
           findings.push({
             ruleId: rule.id,
             file: hunk.file,

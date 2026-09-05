@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
+import ComparisonReviewed from "@/app/components/ComparisonReviewed";
 
 export const metadata: Metadata = {
   title: "GateTest vs Semgrep — 121 modules vs pattern matching in 2026",
@@ -291,6 +292,7 @@ export default function SemgrepPage() {
             One-time payment per scan via Stripe. No subscription, no auto-renew.
           </p>
         </section>
+              <ComparisonReviewed slug="semgrep" />
       </main>
 
       <footer className="border-t border-white/[0.06] px-6 py-8 mt-16">

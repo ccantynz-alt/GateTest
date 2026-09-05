@@ -47,10 +47,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Excludes beyond BaseModule._collectFiles' defaults (KI #104).
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const STALE_DAYS = 90;
 const AGING_DAYS = 30;
@@ -181,36 +179,18 @@ class SecretRotationModule extends BaseModule {
   }
 
   _findCodeFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    return this._collectFiles(projectRoot, ['*'], EXTRA_EXCLUDES).filter((full) => {
+      const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
+      if (SKIP_PATH_PARTS.some((p) => rel.includes(p))) return false;
+      if (SKIP_EXTENSIONS.has(path.extname(full).toLowerCase())) return false;
+      // Skip files > 1 MB — almost certainly generated/minified
       try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
+        return fs.statSync(full).size <= 1024 * 1024;
       } catch {
-        return;
+        return false;
       }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
-        if (SKIP_PATH_PARTS.some((p) => rel.includes(p))) continue;
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SKIP_EXTENSIONS.has(ext)) continue;
-          // Skip files > 1 MB — almost certainly generated/minified
-          try {
-            const st = fs.statSync(full);
-            if (st.size > 1024 * 1024) continue;
-          } catch { continue; }
-          out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    });
   }
 
   _scanForSecrets(file, projectRoot) {

@@ -958,4 +958,86 @@ describe('buildMarkdownComment — in-this-change attribution', () => {
     assert.match(items[0], /security:rule2.*`in this change`/);
     assert.match(items[1], /`pre-existing`/);
   });
+
+  // Line-level attribution (2026-09-05): a finding on an untouched line of
+  // a touched file is old code. It is ranked between the two, tagged so the
+  // reader knows the file moved, and counted as pre-existing — not as
+  // something this change did.
+  it('ranks an old finding in a changed file after in-change ones, before untouched files', () => {
+    const findings = [
+      mk(0, { inDiff: false, inChangedFile: false }),
+      mk(1, { inDiff: false, inChangedFile: true }),
+      mk(2, { inDiff: true, inChangedFile: true }),
+    ];
+    const body = buildMarkdownComment('o/r', 'abc1234def', {
+      status: 'complete', totalIssues: 3, duration: 100, modules: [{ name: 'security', status: 'failed', checks: 3, issues: 3, duration: 1, details: ['[error] x'] }],
+      findings, findingSummary: { total: 3, blocking: 3, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 },
+      changedFiles: 2, baseRef: 'b'.repeat(40),
+    }, null, 'strict');
+    assert.match(body, /### What matters — 1 in this change, 2 pre-existing/);
+    const items = body.split('\n').filter((l) => /^- 🔴/.test(l));
+    assert.match(items[0], /security:rule2.*`in this change`/);
+    assert.match(items[1], /security:rule1.*`pre-existing, in a changed file`/);
+    assert.match(items[2], /security:rule0\*\* `pre-existing` \[/);
+  });
+});
+
+// Move 25: each "What matters" item carries the exact `@gatetest ignore` reply
+// the engine computed for it; nothing is offered when the engine gave none.
+describe('buildMarkdownComment — exact suppression reply per finding', () => {
+  const mk = (i, over = {}) => ({
+    id: `m:r${i}`, module: 'hardcodedUrl', rule: `hardcoded-url:localhost`, severity: 'error', confidence: 1, blocking: true,
+    file: `src/f${i}.ts`, line: 1, message: `finding ${i}`, suggestion: null, class: null, duplicateOf: null, ...over,
+  });
+  const summary = { total: 2, blocking: 2, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 };
+  it('offers the engine-computed line as a reply', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', {
+      status: 'complete', totalIssues: 2, duration: 1, modules: [{ name: 'hardcodedUrl', status: 'failed', checks: 2, issues: 2, duration: 1, details: [] }],
+      findings: [mk(0, { ignoreLine: 'hardcodedUrl:localhost@src/f0.ts' }), mk(1)], findingSummary: summary,
+    }, null, 'strict');
+    assert.match(body, /<sub>wrong\? reply `@gatetest ignore hardcodedUrl:localhost@src\/f0\.ts`<\/sub>/);
+    assert.strictEqual((body.match(/@gatetest ignore hardcodedUrl/g) || []).length, 1, 'only the finding with a computed line gets one');
+  });
+});
+
+// Move 17 (2026-09-05): a report that only lists findings implies the rest
+// was verified. The comment now says what it did NOT check.
+describe('buildMarkdownComment — says what it did not check', () => {
+  const { notCheckedLines } = require('../website/app/lib/github-callback');
+  const base = (over = {}) => ({
+    status: 'complete', totalIssues: 0, duration: 100, engine: 'cli',
+    modules: [{ name: 'secrets', status: 'passed', checks: 3, issues: 0, duration: 1, details: [] }],
+    findings: [], findingSummary: { total: 0, blocking: 0, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 },
+    ...over,
+  });
+
+  it('a full CLI scan with full coverage adds nothing', () => {
+    assert.deepStrictEqual(notCheckedLines(base(), base().modules), []);
+    const body = buildMarkdownComment('o/r', 'abc1234def', base(), null, 'strict');
+    assert.match(body, /## ✅ GateTest — All checks passed/);
+    assert.doesNotMatch(body, /Partial scan|Not checked|Coverage:/);
+  });
+
+  it('an engine fallback cannot wear the green tick', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', base({ engine: 'runTier' }), null, 'strict');
+    assert.match(body, /## 🟡 GateTest — Passed — partial scan \(engine fallback\)/);
+    assert.match(body, /> ⚠️ \*\*Partial scan\.\*\* The full engine was unavailable/);
+  });
+
+  it('truncated coverage says how many files were not read', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', base({ coverageTruncated: true, filesAnalysed: 400, filesInRepo: 1250 }), null, 'strict');
+    assert.match(body, /> \*\*Coverage:\*\* 400 of 1250 files analysed — .* 850 files were not read\./);
+  });
+
+  it('deferred and skipped modules are named', () => {
+    const r = base({
+      engineMeta: { deferred: [{ module: 'mutation', reason: 'minutes, not seconds', runsIn: 'nightly CI' }] },
+      modules: [
+        { name: 'secrets', status: 'passed', checks: 3, issues: 0, duration: 1, details: [] },
+        { name: 'e2e', status: 'skipped', checks: 0, issues: 0, duration: 0, details: [] },
+      ],
+    });
+    const body = buildMarkdownComment('o/r', 'abc1234def', r, null, 'strict');
+    assert.match(body, /> \*\*Not checked:\*\* `mutation` \(runs in nightly CI\), `e2e`/);
+  });
 });

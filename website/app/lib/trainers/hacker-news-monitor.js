@@ -41,6 +41,8 @@
 
 "use strict";
 
+const { SITE_URL } = require("../site-url");
+
 const HN_ALGOLIA_BASE = "https://hn.algolia.com/api/v1/search_by_date";
 
 // Queries we always run on the nightly sweep
@@ -282,7 +284,7 @@ function draftResponse(mention) {
       break;
     case "question":
       body = `${handle}, happy to help. Short version: ${mention.text.slice(0, 60)}... — ` +
-        `the long version is in the docs at https://gatetest.io. Want a more specific answer? ` +
+        `the long version is in the docs at ${SITE_URL}. Want a more specific answer? ` +
         `Drop the exact use case and we'll come back with a concrete walk-through.`;
       break;
     case "praise":

@@ -9,8 +9,17 @@ const BaseModule = require('./base-module');
 const fs   = require('fs');
 const path = require('path');
 
+// Next.js App Router handler — `app/api/**/route.{js,ts,jsx,tsx}`.
+const APP_ROUTE_RE = /app\/api\/.+\/route\.[jt]sx?$/;
+
 class CacheHeadersModule extends BaseModule {
-  constructor() { super('cacheHeaders', 'Cache Headers & CDN Configuration'); }
+  constructor() {
+    super('cacheHeaders', 'Cache Headers & CDN Configuration');
+    // Opt out of incremental: `_checkExpressSource` pairs `express.static`
+    // in one file with a Cache-Control header set in another, so a
+    // diff-scoped file list would report a header that exists.
+    this._respectsIncremental = false;
+  }
 
   async run(result, config) {
     const root = config.projectRoot;
@@ -139,7 +148,9 @@ class CacheHeadersModule extends BaseModule {
   }
 
   _checkExpressSource(root, result) {
-    const sourceFiles = this._glob(root, /\.(js|ts|mjs)$/, ['node_modules', '.next', 'dist', '.git', 'tests', '__tests__']);
+    // KI #104: shared walk replaces the private `_glob`, whose exclude test
+    // was a substring match on the directory path (`.git` also hid `.github`).
+    const sourceFiles = this._collectFiles(root, ['.js', '.ts', '.mjs'], ['tests', '__tests__']);
     let foundExpressStatic = false;
     let foundCacheHeader = false;
 
@@ -159,7 +170,8 @@ class CacheHeadersModule extends BaseModule {
   }
 
   _checkApiRoutes(root, result) {
-    const routeFiles = this._glob(root, /app\/api\/.+\/route\.[jt]sx?$/, ['node_modules']);
+    const routeFiles = this._collectFiles(root, ['.js', '.ts', '.jsx', '.tsx'])
+      .filter(f => APP_ROUTE_RE.test(f.replace(/\\/g, '/')));
     let uncachedCount = 0;
 
     for (const file of routeFiles) {
@@ -176,22 +188,6 @@ class CacheHeadersModule extends BaseModule {
     } else if (routeFiles.length > 0) {
       result.addCheck('api-routes-cache', true, { severity: 'info', fix: 'API routes have cache headers configured' });
     }
-  }
-
-  _glob(root, pattern, excludes = []) {
-    const results = [];
-    const walk = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const e of entries) {
-        if (excludes.some(x => e.name === x || dir.includes(x))) continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (pattern.test(full.replace(/\\/g, '/'))) results.push(full);
-      }
-    };
-    walk(root);
-    return results;
   }
 }
 

@@ -31,12 +31,12 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform',
-];
+// Excludes beyond BaseModule._collectFiles' defaults (KI #104).
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const TF_EXTENSIONS = new Set(['.tf', '.tfvars', '.hcl']);
+// `.json` is only collected so `*.tf.json` can be picked out by filename.
+const COLLECT_EXTENSIONS = [...TF_EXTENSIONS, '.json'];
 
 // Ports that should never be open to 0.0.0.0/0 without a very good reason.
 const DANGER_PORTS = new Map([
@@ -93,31 +93,11 @@ class TerraformModule extends BaseModule {
   }
 
   _findTfFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          // .tf.json handled via .json check + filename
-          if (TF_EXTENSIONS.has(ext) || /\.tf\.json$/.test(entry.name)) {
-            out.push(full);
-          }
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    return this._collectFiles(projectRoot, COLLECT_EXTENSIONS, EXTRA_EXCLUDES).filter((full) => {
+      const name = path.basename(full);
+      return TF_EXTENSIONS.has(path.extname(name).toLowerCase()) || /\.tf\.json$/.test(name);
+    });
   }
 
   _scanFile(file, projectRoot, result) {

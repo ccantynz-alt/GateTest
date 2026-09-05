@@ -27,11 +27,6 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor',
-];
-
 const SHELL_EXTENSIONS = new Set(['.sh', '.bash', '.zsh']);
 
 // Hard-coded credentials baked into scripts — same catalogue as secrets
@@ -59,7 +54,8 @@ class ShellModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const scripts = this._findScripts(projectRoot);
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104).
+    const scripts = this._collectFiles(projectRoot, [...SHELL_EXTENSIONS]);
 
     if (scripts.length === 0) {
       result.addCheck('shell:no-files', true, {
@@ -83,31 +79,6 @@ class ShellModule extends BaseModule {
       severity: 'info',
       message: `Shell scan: ${scripts.length} file(s), ${totalIssues} issue(s)`,
     });
-  }
-
-  _findScripts(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 10) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SHELL_EXTENSIONS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
   }
 
   _scanFile(file, projectRoot, result) {

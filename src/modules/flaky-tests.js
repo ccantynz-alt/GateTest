@@ -72,10 +72,10 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const TEST_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 const TEST_FILE_RE = /\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
@@ -190,7 +190,10 @@ class FlakyTestsModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const files = this._findTestFiles(projectRoot);
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104);
+    // the test-file predicate is applied on top of it.
+    const files = this._collectFiles(projectRoot, [...TEST_EXTS], EXTRA_EXCLUDES)
+      .filter((f) => this._isTestFile(f));
 
     if (files.length === 0) {
       result.addCheck('flaky-tests:no-files', true, {
@@ -214,30 +217,6 @@ class FlakyTestsModule extends BaseModule {
       severity: 'info',
       message: `Flaky tests scan: ${files.length} file(s), ${issues} issue(s)`,
     });
-  }
-
-  _findTestFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          if (this._isTestFile(full)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
   }
 
   _isTestFile(full) {

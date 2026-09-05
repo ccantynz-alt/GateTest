@@ -798,3 +798,42 @@ describe('DeadCodeModule — barrel re-exports and test files', () => {
     assert.ok(r.checks.find((c) => c.export === 'real'), 'non-test dead code still flagged');
   });
 });
+
+// tsconfig `paths` aliases (2026-09-05): `@/app/components/X` is how every
+// Next.js app imports its own files; the resolver returned null for any bare
+// specifier, so an alias-only import read as an orphaned module.
+describe('DeadCodeModule — tsconfig path aliases', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-dc-alias-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a component imported only through @/ is neither orphaned nor unused', async () => {
+    write(tmp, 'website/tsconfig.json', [
+      '{',
+      '  // JSONC, like every real tsconfig',
+      '  "compilerOptions": {',
+      '    "baseUrl": ".",',
+      '    "paths": { "@/*": ["./*"] }, /* trailing comma tolerated */',
+      '  },',
+      '}',
+      '',
+    ].join('\n'));
+    write(tmp, 'website/app/components/Reviewed.tsx', 'export default function Reviewed() { return null; }\n');
+    write(tmp, 'website/app/components/Lonely.tsx', 'export default function Lonely() { return null; }\n');
+    write(tmp, 'website/app/compare/x/page.tsx', 'import Reviewed from "@/app/components/Reviewed";\nexport default function Page() { return Reviewed(); }\n');
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => !c.passed).map((c) => c.name);
+    assert.ok(!names.some((n) => n.includes('components/Reviewed')), `alias-imported file flagged: ${names.join(', ')}`);
+    assert.ok(names.some((n) => n.startsWith('dead-code:orphan-file:') && n.includes('Lonely')), 'positive control: a real orphan is still reported');
+  });
+
+  it('follows `extends` to the config that defines the paths', async () => {
+    write(tmp, 'tsconfig.base.json', '{ "compilerOptions": { "baseUrl": ".", "paths": { "~/*": ["src/*"] } } }\n');
+    write(tmp, 'tsconfig.json', '{ "extends": "./tsconfig.base.json", "compilerOptions": { "strict": true } }\n');
+    write(tmp, 'src/util/fmt.ts', 'export function fmt(x: number) { return String(x); }\n');
+    write(tmp, 'src/index.ts', 'import { fmt } from "~/util/fmt";\nexport const main = () => fmt(1);\n');
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => !c.passed).map((c) => c.name);
+    assert.ok(!names.some((n) => n.includes('util/fmt')), `extends-defined alias not honoured: ${names.join(', ')}`);
+  });
+});

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { consumeSseStream } from "@/app/components/url-scan-flow-sse";
 import { totalModuleCount } from "@/app/components/howitworks/modules-data";
+import { SITE_URL, badgeUrl } from "@/app/lib/site-url";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -690,9 +691,9 @@ export default function PlaygroundPage() {
                     Shows your live GateTest grade — updates after every scan.
                   </p>
                   <div className="rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs text-white/60 overflow-x-auto">
-                    {`[![GateTest](https://gatetest.io/badge/${
+                    {`[![GateTest](${badgeUrl(`/badge/${
                       result.repo_url.replace("https://github.com/", "")
-                    })](https://gatetest.io)`}
+                    }`)})](${SITE_URL})`}
                   </div>
                 </div>
 

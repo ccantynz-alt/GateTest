@@ -19,6 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { SITE_URL } from "@/app/lib/site-url";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createMcpCore } = require("@/app/lib/mcp-remote-core.cjs");
 
@@ -29,7 +30,7 @@ export const maxDuration = 300; // fix_issue opens a PR — generous ceiling
 // One core per warm instance. apiBase defaults to gatetest.io (this same
 // deployment), so the tools proxy the site's own /api routes.
 const core = createMcpCore({
-  apiBase: process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io",
+  apiBase: SITE_URL,
 });
 
 const CORS_HEADERS: Record<string, string> = {

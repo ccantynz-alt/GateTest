@@ -28,6 +28,7 @@ import https from "https";
 // stripe-checkout.js) can require() the tier data without pulling in
 // next/server (which isn't resolvable outside the Next.js build).
 import { TIERS } from "@/app/lib/checkout-tiers";
+import { SITE_URL } from "@/app/lib/site-url";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
   createLimiter: (opts: { windowMs: number; maxRequests: number }) => {
@@ -39,7 +40,7 @@ const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
 const _checkoutLimiter = createLimiter(PRESETS.checkout);
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+const BASE_URL = SITE_URL;
 
 function stripeRequest(
   method: string,

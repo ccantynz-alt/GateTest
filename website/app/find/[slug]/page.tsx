@@ -103,7 +103,7 @@ export default async function CwePage({ params }: PageParams) {
     description: cwe.shortDesc,
     author: { "@type": "Organization", name: "GateTest" },
     publisher: { "@type": "Organization", name: "GateTest", url: SITE_URL },
-    mainEntityOfPage: `https://gatetest.io/find/${cwe.slug}`,
+    mainEntityOfPage: `${SITE_URL}/find/${cwe.slug}`,
   };
 
   return (

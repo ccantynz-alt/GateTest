@@ -39,6 +39,7 @@ const HELP = `
                                      (same as running gatetest with no
                                      subcommand). Useful for unambiguous
                                      scripts.
+    gatetest verify-report <file>    Check a report's signature + findings digest
     gatetest replay <run-url>        Reproduce a failing CI run locally
                                      (run 'gatetest replay --help' for detail)
     gatetest fix --apply [options]   Run AI fix engine and apply changes directly
@@ -231,7 +232,25 @@ async function main() {
   //                            every existing invocation keeps working.
   const rawArgs = process.argv.slice(2);
   const first = rawArgs[0];
-  const KNOWN_SUBCOMMANDS = new Set(['sweep', 'replay', 'scan', 'train', 'fix', 'trace', 'blame']);
+  const KNOWN_SUBCOMMANDS = new Set(['sweep', 'replay', 'scan', 'train', 'fix', 'trace', 'blame', 'verify-report']);
+  if (first === 'verify-report') {
+    // gatetest verify-report <report.json> [--key <key>]
+    // Checks the HMAC signature over the provenance block and that the
+    // findings still match the digest the provenance recorded (move 21).
+    const { verifyReport } = require('../src/core/report-provenance');
+    const file = rawArgs.slice(1).find((a) => !a.startsWith('--'));
+    const kidx = rawArgs.indexOf('--key');
+    const key = kidx >= 0 ? rawArgs[kidx + 1] : process.env.GATETEST_REPORT_SIGNING_KEY;
+    if (!file) { console.error('usage: gatetest verify-report <report.json> [--key <key>]  (or GATETEST_REPORT_SIGNING_KEY)'); process.exit(2); }
+    if (!key) { console.error('verify-report: no key — pass --key or set GATETEST_REPORT_SIGNING_KEY'); process.exit(2); }
+    let report;
+    try { report = JSON.parse(require('fs').readFileSync(file, 'utf8')); } catch (err) { console.error(`verify-report: cannot read ${file}: ${err.message}`); process.exit(2); }
+    const v = verifyReport(report, key);
+    const p = report.provenance || {};
+    console.log(`${v.ok ? 'VERIFIED' : 'NOT VERIFIED'}: ${v.reason}`);
+    if (p.engine) console.log(`  engine ${p.engine.name} v${p.engine.version}${p.engine.commit ? ` @ ${p.engine.commit}` : ''} · gate ${p.gateStatus} · ${p.findings ? p.findings.count : '?'} findings · digest ${p.findings ? p.findings.sha256.slice(0, 12) : '?'}…`);
+    process.exit(v.ok ? 0 : 1);
+  }
   if (first === 'sweep') {
     const { runSweep } = require('./gatetest-sweep');
     const code = await runSweep(rawArgs.slice(1));
@@ -1283,8 +1302,11 @@ async function runWatchMode(gatetest, args) {
     try {
       fs.watch(fullPath, { recursive: true }, (eventType, filename) => {
         if (!filename) return;
-        // Ignore generated files
-        if (filename.includes('.gatetest') || filename.includes('node_modules')) return;
+        // Ignore generated files — by path segment, not substring: an edit
+        // to `.gatetestignore` SHOULD trigger a rescan, and `.gatetest`
+        // matched it (2026-09-05).
+        const segments = String(filename).split(/[\\/]/);
+        if (segments.includes('.gatetest') || segments.includes('node_modules')) return;
         if (filename.endsWith('.map') || filename.endsWith('.d.ts')) return;
 
         if (timer) clearTimeout(timer);

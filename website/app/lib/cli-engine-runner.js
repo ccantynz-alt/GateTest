@@ -315,6 +315,10 @@ async function runFullEngine({ fileContents, suite = DEFAULT_SUITE, deadlineMs, 
         filesSkipped: writeStats.filesSkipped,
         workspaceBytes: writeStats.bytesWritten,
         gateStatus: summary.gateStatus,
+        // Modules the suite held back (mutation on `full`, etc.). Carried
+        // so the PR comment can say what was NOT checked (move 17) instead
+        // of letting "86 modules" read as "the whole engine ran".
+        deferred: Array.isArray(summary.deferred) ? summary.deferred : [],
       },
     };
   } finally {

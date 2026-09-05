@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import McpCheckoutButton from "./McpCheckoutButton";
 import { ALL_TOOLS, TOOL_COUNT } from "./tools-data";
 import { TOTAL_MODULES } from "@/app/lib/module-count";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: "GateTest MCP — Free Local Server, $29/mo Hosted Endpoint",
@@ -26,7 +27,7 @@ const FAQ = [
   },
   {
     q: "How do I add it to Claude Code?",
-    a: "Free local server (every tool): claude mcp add gatetest -- npx -y @gatetest/mcp-server\nHosted endpoint (claude.ai web/mobile): add https://gatetest.io/api/mcp as a custom connector, with Authorization: Bearer gtmcp_xxx for the paid tools.",
+    a: `Free local server (every tool): claude mcp add gatetest -- npx -y @gatetest/mcp-server\nHosted endpoint (claude.ai web/mobile): add ${SITE_URL}/api/mcp as a custom connector, with Authorization: Bearer gtmcp_xxx for the paid tools.`,
   },
   {
     q: "Does the key expire?",
@@ -101,7 +102,7 @@ export default function McpPage() {
             <h3 className="font-semibold text-neutral-200 mb-1">claude.ai web &amp; mobile <span className="text-emerald-400 text-xs font-normal ml-1">zero install</span></h3>
             <p className="text-neutral-500 text-xs mb-3">Settings → Connectors → Add custom connector</p>
             <pre className="text-emerald-300 text-xs font-mono bg-neutral-950 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
-{`URL: https://gatetest.io/api/mcp`}
+{`URL: ${SITE_URL}/api/mcp`}
             </pre>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
@@ -115,7 +116,7 @@ export default function McpPage() {
             </a>
             <p className="text-neutral-600 text-xs">
               Or paste into Settings → Developer → Edit Config:{" "}
-              <span className="font-mono text-neutral-500 break-all">{`{ "mcpServers": { "gatetest": { "url": "https://gatetest.io/api/mcp" } } }`}</span>
+              <span className="font-mono text-neutral-500 break-all">{`{ "mcpServers": { "gatetest": { "url": "${SITE_URL}/api/mcp" } } }`}</span>
             </p>
           </div>
           <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
@@ -129,7 +130,7 @@ export default function McpPage() {
             <h3 className="font-semibold text-neutral-200 mb-1">Cursor / Windsurf / Cline / Zed</h3>
             <p className="text-neutral-500 text-xs mb-3">MCP settings → Add server (URL or command, both work)</p>
             <pre className="text-emerald-300 text-xs font-mono bg-neutral-950 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
-{`https://gatetest.io/api/mcp`}
+{`${SITE_URL}/api/mcp`}
             </pre>
           </div>
         </div>

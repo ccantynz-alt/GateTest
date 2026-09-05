@@ -438,13 +438,16 @@ function isSpecFile(filePath) {
   const lower = filePath.toLowerCase();
   if (lower.endsWith('.graphql') || lower.endsWith('.gql') || lower.endsWith('.proto')) return true;
   if (!lower.endsWith('.yaml') && !lower.endsWith('.yml') && !lower.endsWith('.json')) return false;
+  // `spec` as a path TOKEN (a segment, or a `.`/`-`/`_` delimited word),
+  // not a substring: `inspect.json` and `specific-rules.yaml` are not API
+  // contracts. Same shape as `.git` matching `.github` (Move 10).
   return (
     lower.includes('openapi') ||
     lower.includes('swagger') ||
     lower.includes('api-spec') ||
     lower.includes('api_spec') ||
     lower.includes('schema') ||
-    lower.includes('spec')
+    /(?:^|[/._-])specs?(?=[/._-]|$)/.test(lower)
   );
 }
 
@@ -579,6 +582,7 @@ function renderContractReport(graph) {
 
 module.exports = {
   buildContractGraph,
+  isSpecFile,
   renderContractReport,
   harvestOpenApi,
   harvestGraphQL,

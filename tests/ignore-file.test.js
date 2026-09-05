@@ -146,3 +146,38 @@ describe('ignore-file — module-name spelling normalization (2026-07-12 fix)', 
     );
   });
 });
+
+// suggestLine (move 25): the line offered beside a finding must be one the
+// matcher honours — most specific first, never broader than needed.
+describe('ignore-file — suggestLine round-trips through the matcher', () => {
+  const { suggestLine } = require('../src/core/ignore-file');
+  const { ruleKeyOf } = require('../src/core/finding-registry');
+  const mk = (module, name, file) => ({ module, name, file, ruleKey: ruleKeyOf(name, file) });
+
+  const cases = [
+    [mk('hardcodedUrl', 'hardcoded-url:localhost:src/x.ts:12', 'src/x.ts'), 'hardcodedUrl:localhost@src/x.ts'],
+    [mk('prSize', 'pr-size:too-large'), 'prSize:too-large'],
+    // a path-shaped rule segment is not a rule: scope by file, not by "rule"
+    [mk('secrets', 'secrets:src/config.js', 'src/config.js'), 'secrets@src/config.js'],
+    [mk('security', 'security:secret:src/a.js:3', 'src/a.js'), 'security:secret@src/a.js'],
+    [mk('crossFileTaint', 'cross-file-taint:sink:sql-query:src/db.js:12', 'src/db.js'), 'crossFileTaint:sink@src/db.js'],
+  ];
+  for (const [finding, expected] of cases) {
+    it(`${finding.name} → ${expected}`, () => {
+      const line = suggestLine(finding);
+      assert.strictEqual(line, expected);
+      assert.strictEqual(parse(line).matches(finding), true, 'the suggested line must silence the finding');
+    });
+  }
+
+  it('the suggested line does not silence a sibling rule or another file', () => {
+    const f = mk('hardcodedUrl', 'hardcoded-url:localhost:src/x.ts:12', 'src/x.ts');
+    const m = parse(suggestLine(f));
+    assert.strictEqual(m.matches(mk('hardcodedUrl', 'hardcoded-url:production-ip:src/x.ts:4', 'src/x.ts')), false);
+    assert.strictEqual(m.matches(mk('hardcodedUrl', 'hardcoded-url:localhost:src/y.ts:1', 'src/y.ts')), false);
+  });
+
+  it('returns null without a module', () => {
+    assert.strictEqual(suggestLine({ name: 'x' }), null);
+  });
+});

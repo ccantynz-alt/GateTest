@@ -58,13 +58,12 @@ const path = require('path');
 const { isNonUserFacingPage } = require('../core/scan-scope');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
-
 
 // Filenames we skip entirely (config examples, docs, local dev infra).
 const SKIP_BASENAME_RE = /^(?:\.env(\..*)?|.*\.example|.*\.md|.*\.mdx|README.*|CHANGELOG.*|MIGRATION.*|playwright\.config\..*|vitest\.config\..*|jest\.config\..*|cypress\.config\..*|webpack\.config\..*|vite\.config\..*|rollup\.config\..*)$/i;
@@ -123,7 +122,10 @@ class HardcodedUrlModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const files = this._findFiles(projectRoot);
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104);
+    // the basename skip-list is applied on top of it.
+    const files = this._collectFiles(projectRoot, [...SOURCE_EXTS], EXTRA_EXCLUDES)
+      .filter((f) => !SKIP_BASENAME_RE.test(path.basename(f)));
 
     if (files.length === 0) {
       result.addCheck('hardcoded-url:no-files', true, {
@@ -147,27 +149,6 @@ class HardcodedUrlModule extends BaseModule {
       severity: 'info',
       message: `Hardcoded-URL scan: ${files.length} file(s), ${issues} issue(s)`,
     });
-  }
-
-  _findFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full, depth + 1);
-        else if (entry.isFile()) {
-          if (SKIP_BASENAME_RE.test(entry.name)) continue;
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
   }
 
   _scanFile(file, projectRoot, result) {
