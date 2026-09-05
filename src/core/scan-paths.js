@@ -50,4 +50,4 @@ function pathInScope(filter, rel) {
   return filter.include.some((re) => re.test(p));
 }
 
-module.exports = { readPathFilter, pathInScope };
+module.exports = { readPathFilter, pathInScope, compilePatterns: compile };
