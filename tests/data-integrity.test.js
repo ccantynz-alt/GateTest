@@ -246,3 +246,192 @@ describe('data-integrity — handler detection is framework-agnostic', () => {
     assert.deepStrictEqual(found, []);
   });
 });
+
+/**
+ * KI #106 (the Fifty, move 11) — two framework-gated early exits.
+ *
+ * 1. `prisma/schema.prisma` present → `_checkModels` RETURNED before the
+ *    Mongoose sweep. A repo carrying both (every Mongo → Postgres migration
+ *    in progress) never had its Mongoose schemas checked.
+ * 2. Four literal root paths decided "no migrations", and only the files
+ *    DIRECTLY inside were read — Rails `db/migrate`, Alembic, Flyway, a
+ *    Django app's `migrations/`, and Prisma's own nested
+ *    `prisma/migrations/<ts>/migration.sql` all reported "No migration
+ *    directory found". The convention now lives in src/core/migration-dirs.js.
+ */
+describe('data-integrity — Prisma does not gate the Mongoose sweep', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-di-orm-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  function plant(rel, content) {
+    const abs = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content);
+  }
+  async function scan() {
+    plant('package.json', '{"name":"t","version":"1.0.0"}\n');
+    const result = makeResult();
+    await new DataIntegrityModule().run(result, { projectRoot: tmp });
+    return result.checks;
+  }
+  const UNVALIDATED_MONGOOSE = [
+    "const mongoose = require('mongoose');",
+    'const UserSchema = new mongoose.Schema({ email: String, name: String });',
+    "module.exports = mongoose.model('User', UserSchema);",
+  ].join('\n');
+
+  it('POSITIVE: a Prisma repo with an unvalidated Mongoose schema gets BOTH checked', async () => {
+    plant('prisma/schema.prisma', 'model User { id Int @id\n email String @unique }');
+    plant('src/models/user.js', UNVALIDATED_MONGOOSE);
+    const checks = await scan();
+    assert.ok(checks.some((c) => c.name === 'data:prisma-schema'), 'prisma path still runs');
+    assert.ok(checks.some((c) => c.name === 'data:mongoose-validation:src/models/user.js' && !c.passed),
+      `mongoose sweep must run beside prisma: ${checks.map((c) => c.name).join(', ')}`);
+    assert.ok(!checks.some((c) => c.name === 'data:models'), '"no ORM" must not be claimed when two ORMs are present');
+  });
+
+  it('NEGATIVE: a Prisma-only repo does not invent a Mongoose finding', async () => {
+    plant('prisma/schema.prisma', 'model User { id Int @id\n email String @unique }');
+    plant('src/db.js', "const { PrismaClient } = require('@prisma/client');\nmodule.exports = new PrismaClient();");
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.startsWith('data:mongoose-validation')));
+    assert.ok(!checks.some((c) => c.name === 'data:models'), 'prisma IS an ORM schema');
+  });
+
+  it('still says "No ORM schema detected" when there is neither', async () => {
+    plant('src/app.js', 'module.exports = 1;');
+    const checks = await scan();
+    assert.ok(checks.some((c) => c.name === 'data:models'));
+  });
+});
+
+describe('data-integrity — migration trees are found by the shared convention', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-di-mig-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  function plant(rel, content) {
+    const abs = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, content);
+  }
+  async function scan() {
+    plant('package.json', '{"name":"t","version":"1.0.0"}\n');
+    const result = makeResult();
+    await new DataIntegrityModule().run(result, { projectRoot: tmp });
+    return result.checks;
+  }
+  const DROP = 'DROP TABLE users;';
+
+  // Each layout planted ALONE: the tree must be found and the destructive
+  // statement inside it must be reported. Before the shared convention every
+  // one of these said "No migration directory found — skipping".
+  const LAYOUTS = [
+    ['Rails db/migrate', 'db/migrate/20170806125915_drop_users.rb', 'execute "DROP TABLE users"'],
+    ['Alembic alembic/versions', 'alembic/versions/1975ea83b712_drop.py', 'op.execute("DROP TABLE users")'],
+    ['Alembic migrations/versions', 'migrations/versions/1975ea83b712_drop.py', 'op.execute("DROP TABLE users")'],
+    ['Flyway', 'src/main/resources/db/migration/V2__drop.sql', DROP],
+    ['Liquibase', 'src/main/resources/db/changelog/changes/drop.sql', DROP],
+    ['Supabase', 'supabase/migrations/20240101120000_drop.sql', DROP],
+    ['Prisma nested', 'prisma/migrations/20240102030405_drop/migration.sql', DROP],
+    ['Django app', 'blog/migrations/0002_drop.py', 'migrations.RunSQL("DROP TABLE users")'],
+    ['TypeORM', 'src/migrations/1700000000000-Drop.ts', 'await q.query("DROP TABLE users")'],
+    ['Laravel', 'database/migrations/2014_10_12_000000_drop.php', 'DB::statement("DROP TABLE users");'],
+    ['EF Core', 'Migrations/20240101120000_Drop.cs', 'migrationBuilder.Sql("DROP TABLE users");'],
+    ['Sequelize', 'migrations/20240101-drop.js', 'await qi.sequelize.query("DROP TABLE users")'],
+    ['golang-migrate', 'db/migrations/000002_drop.up.sql', DROP],
+    ['Knex', 'migrations/20240101120000_drop.js', 'knex.raw("DROP TABLE users")'],
+  ];
+  for (const [label, file, content] of LAYOUTS) {
+    it(`POSITIVE: ${label} — only that layout present, its DROP TABLE is reported`, async () => {
+      plant(file, content);
+      const checks = await scan();
+      assert.ok(!checks.some((c) => c.name === 'data:migrations'), `${label}: must not say "no migration directory"`);
+      const hit = checks.find((c) => c.name === `data:migration-drop:${file}`);
+      assert.ok(hit && !hit.passed, `${label}: expected a drop finding, got ${checks.map((c) => c.name).join(', ')}`);
+      assert.strictEqual(hit.file, file);
+    });
+  }
+
+  it('POSITIVE: Drizzle — drizzle/ beside drizzle.config.ts, meta/ snapshots not read', async () => {
+    plant('drizzle.config.ts', 'export default {}');
+    plant('drizzle/0001_drop.sql', DROP);
+    plant('drizzle/meta/_journal.json', '{"note":"DROP TABLE users"}');
+    const checks = await scan();
+    assert.ok(checks.some((c) => c.name === 'data:migration-drop:drizzle/0001_drop.sql'));
+    assert.ok(!checks.some((c) => c.name.includes('_journal.json')));
+  });
+
+  it('POSITIVE: Atlas — a dir holding atlas.sum', async () => {
+    plant('migrate/atlas.sum', 'h1:x');
+    plant('migrate/20240101120000_drop.sql', DROP);
+    const checks = await scan();
+    assert.ok(checks.some((c) => c.name === 'data:migration-drop:migrate/20240101120000_drop.sql'));
+  });
+
+  it('NEGATIVE: a dir that merely contains the word is not a migration dir', async () => {
+    plant('src/migrationsHelper/index.js', 'module.exports = "DROP TABLE users";');
+    plant('docs/migration-guide/v2.md', 'Run `DROP TABLE users` then TRUNCATE the cache.');
+    const checks = await scan();
+    assert.ok(checks.some((c) => c.name === 'data:migrations'), 'must report no migration dir');
+    assert.ok(!checks.some((c) => c.name.startsWith('data:migration-')));
+  });
+
+  it('NEGATIVE: a framework\'s migration implementation is named like one and is not one — and is listed as not checked', async () => {
+    // prisma corpus: packages/…/src/core/migrations/op-factory-call.ts renders
+    // DDL; it produced four BLOCKING drop findings on 2026-09-05.
+    plant('packages/postgres/src/core/migrations/op-factory-call.ts', 'const ddl = `DROP TABLE ${name}`;');
+    plant('django/db/migrations/loader.py', '# DROP TABLE handling');
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.startsWith('data:migration-drop')), 'no drop finding on a DDL renderer');
+    const info = checks.find((c) => c.name === 'data:migrations');
+    assert.ok(info, 'reports no migration dir');
+    assert.match(info.message, /not checked: .*django\/db\/migrations/);
+    assert.match(info.message, /packages\/postgres\/src\/core\/migrations/);
+  });
+
+  it('fixture trees under test paths are not checked — and say so', async () => {
+    plant('test/dummy/db/migrate/20170806125915_x.rb', 'execute "DROP TABLE users"');
+    plant('db/migrate/20170806125915_y.rb', 'create_table :users');
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.startsWith('data:migration-drop')));
+    const info = checks.find((c) => c.name === 'data:migrations-exist');
+    assert.match(info.message, /found in db\/migrate/);
+    assert.match(info.message, /not checked: test\/dummy\/db\/migrate \(fixture\)/);
+  });
+
+  it('naming: Prisma stamps the directory, so nested timestamped dirs are ordered', async () => {
+    plant('prisma/migrations/20240102030405_init/migration.sql', 'CREATE TABLE IF NOT EXISTS a (id int);');
+    plant('prisma/migrations/20240103030405_more/migration.sql', 'CREATE TABLE IF NOT EXISTS b (id int);');
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.startsWith('data:migration-naming')));
+  });
+
+  it('naming: Flyway and Alembic names carry order', async () => {
+    plant('src/main/resources/db/migration/V1__init.sql', 'SELECT 1;');
+    plant('src/main/resources/db/migration/R__views.sql', 'SELECT 1;');
+    plant('alembic/versions/1975ea83b712_a.py', '');
+    plant('alembic/versions/ae1027a6acf4_b.py', '');
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.startsWith('data:migration-naming')), checks.map((c) => c.name).join(', '));
+  });
+
+  it('naming: CONTROL — a hand-named raw SQL set still gets the naming warning', async () => {
+    plant('migrations/create_users.sql', 'SELECT 1;');
+    plant('migrations/add_email.sql', 'SELECT 1;');
+    const checks = await scan();
+    const hit = checks.find((c) => c.name === 'data:migration-naming:migrations');
+    assert.ok(hit && hit.severity === 'warning');
+  });
+
+  it('tool-state JSON beside migrations is not read as a migration statement', async () => {
+    // Prisma 8's ops.json embeds the DDL as data AND a precheck that makes it
+    // idempotent; the substring rule read "CREATE TABLE" out of it.
+    plant('migrations/app/20260520T1317_init/ops.json', '[{"sql":"CREATE TABLE post (id int)","precheck":[]}]');
+    plant('migrations/app/20260520T1317_init/migration.sql', 'CREATE TABLE post (id int);');
+    const checks = await scan();
+    assert.ok(!checks.some((c) => c.name.includes('ops.json')));
+    assert.ok(checks.some((c) => c.name === 'data:idempotent:migrations/app/20260520T1317_init/migration.sql'), 'the .sql beside it still fires');
+  });
+});
