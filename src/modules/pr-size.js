@@ -230,9 +230,26 @@ class PrSizeModule extends BaseModule {
     const relocatedLines = counted
       .filter((f) => relocationSources.has(f.path))
       .reduce((s, f) => s + f.added + f.removed, 0);
-    const reviewLines = Math.max(0, totalLines - relocatedLines);
-    const relocNote = relocatedLines > 0
-      ? ` (${reviewLines} excluding ${relocatedLines} relocated line(s))`
+    // A file deleted outright — numstat says +0 / -N and the path is gone
+    // from the tree — is reviewed by its header ("should this go?"), not
+    // line by line; tests and the build answer whether anything needed it.
+    // Deleting 24 files nothing imported (KI #96) was +0 / -4,167 and blocked
+    // on both ceilings, which is the one kind of change the ceilings were
+    // never meant to slow down. Still reported (below), never counted.
+    const deletedFiles = new Set(
+      counted
+        .filter((f) => f.added === 0 && f.removed > 0 && !fs.existsSync(path.join(projectRoot, f.path)))
+        .map((f) => f.path),
+    );
+    const deletedLines = counted
+      .filter((f) => deletedFiles.has(f.path))
+      .reduce((s, f) => s + f.removed, 0);
+    const reviewLines = Math.max(0, totalLines - relocatedLines - deletedLines);
+    const excludedNotes = [];
+    if (relocatedLines > 0) excludedNotes.push(`${relocatedLines} relocated line(s)`);
+    if (deletedLines > 0) excludedNotes.push(`${deletedLines} line(s) in ${deletedFiles.size} deleted file(s)`);
+    const relocNote = excludedNotes.length > 0
+      ? ` (${reviewLines} excluding ${excludedNotes.join(' and ')})`
       : '';
 
     const bypassNote = bypass ? ' [pr-size-ok trailer present — downgraded to warning]' : '';
@@ -297,6 +314,17 @@ class PrSizeModule extends BaseModule {
     // (`relocationSources` is computed with the totals above.)
     for (const f of counted) {
       const fileLines = f.added + f.removed;
+      if (deletedFiles.has(f.path)) {
+        if (fileLines > thresholds.maxLinesPerFileWarning) {
+          result.addCheck(`pr-size:deleted-file:${f.path}`, true, {
+            severity: 'warning',
+            message: `${f.path} deleted (-${f.removed} lines) — a whole-file deletion is not counted against the per-file ceiling; check nothing needed it.`,
+            file: f.path,
+            lines: fileLines,
+          });
+        }
+        continue;
+      }
       if (relocationSources.has(f.path) && fileLines > thresholds.maxLinesPerFileWarning) {
         result.addCheck(`pr-size:relocated-source:${f.path}`, true, {
           severity: 'warning',
