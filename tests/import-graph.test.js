@@ -363,7 +363,11 @@ describe('import-graph — type-only elision (TypeScript NodeNext)', () => {
   before(() => {
     E = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-elide-'));
     writeTree(E, {
-      'src/a.ts': 'export class A { static k = 1; }\n',
+      // `a.ts` imports each file under test back, so every one sits inside a
+      // candidate cycle: the use-scan runs only there (elision can only remove
+      // edges, so a file outside every cycle needs no scan — see the lazy-scan
+      // control pair below).
+      'src/a.ts': "export class A { static k = 1; }\nimport './types-only.js';\nimport './value-use.js';\nimport './deferred-use.js';\nimport './multi.js';\nimport './inline-type.js';\n",
       // POSITIVE CONTROL — used only in type positions (nest's *.interface.ts): elided.
       'src/types-only.ts': "import { A } from './a.js';\nexport function f(x: A): Array<A> { return [x]; }\nexport interface I extends A { y?: A }\n",
       // NEGATIVE CONTROL — the same import with ONE value use at module scope: load-time.
@@ -429,6 +433,44 @@ describe('import-graph — type-only elision (TypeScript NodeNext)', () => {
   });
 });
 
+describe('import-graph — the use-scan runs only inside candidate cycles (Doctrine §14)', () => {
+  // Elision can only REMOVE edges. A file outside every strongly connected
+  // component of the unscanned graph therefore cannot be in a cycle after
+  // scanning, so its provisional labels are already right for every cycle view
+  // and the scanner never reads it. prisma: 14 of 4,551 files scanned.
+  let L;
+  let g;
+  before(() => {
+    L = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-lazy-'));
+    writeTree(L, {
+      'src/a.ts': "export class A {}\nimport './in-cycle.js';\n",
+      // Inside a candidate cycle with a.ts: scanned, and elided (type-only use).
+      'src/in-cycle.ts': "import { A } from './a.js';\nexport type T = A;\n",
+      // Outside every cycle: identical text, never scanned — provisional load edge.
+      'src/leaf.ts': "import { A } from './a.js';\nexport type U = A;\n",
+      // Decided without a scan: explicit `import type`, and a declaration file.
+      'src/explicit.ts': "import type { A } from './a.js';\nexport type V = A;\n",
+      'src/decl.d.ts': "import { A } from './a.js';\nexport declare const w: A;\n",
+    });
+    g = buildImportGraph({ projectRoot: L });
+  });
+  after(() => fs.rmSync(L, { recursive: true, force: true }));
+  const edge = (relFrom) => g.edges.find((e) => g.rel(e.from) === relFrom && g.rel(e.to) === 'src/a.ts');
+
+  it('POSITIVE CONTROL — inside the candidate cycle the type-only use is scanned and elided', () => {
+    assert.strictEqual(edge('src/in-cycle.ts').kind, 'type');
+    assert.ok(!(g.runtimeGraph.get(path.join(L, 'src/in-cycle.ts')) || new Set()).has(path.join(L, 'src/a.ts')));
+  });
+  it('NEGATIVE CONTROL — outside every cycle the same text is not scanned: a provisional load edge, no cycle view changes', () => {
+    assert.deepStrictEqual({ kind: edge('src/leaf.ts').kind, use: edge('src/leaf.ts').use }, { kind: 'ts-esm', use: 'load' });
+    assert.deepStrictEqual(g.elision, { scanned: 1, pending: 1 });
+  });
+  it('an explicit `import type` and a `.d.ts` import are decided without any scan', () => {
+    assert.strictEqual(edge('src/explicit.ts').kind, 'type');
+    assert.strictEqual(edge('src/decl.d.ts').kind, 'type');
+  });
+});
+
 describe('import-graph — verbatimModuleSyntax disables elision, isolatedModules does not', () => {
   // tsc keeps every import as written under verbatimModuleSyntax /
   // preserveValueImports / importsNotUsedAsValues: preserve|error;
@@ -437,7 +479,7 @@ describe('import-graph — verbatimModuleSyntax disables elision, isolatedModule
     const R = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-verbatim-'));
     writeTree(R, {
       'tsconfig.json': JSON.stringify({ compilerOptions: tsconfig }),
-      'src/a.ts': 'export class A {}\n',
+      'src/a.ts': "export class A {}\nimport './types-only.js';\n",
       'src/types-only.ts': "import { A } from './a.js';\nexport function f(x: A): A { return x; }\n",
     });
     const gr = buildImportGraph({ projectRoot: R });
