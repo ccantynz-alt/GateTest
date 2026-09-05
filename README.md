@@ -54,6 +54,8 @@ jobs:
 
 The action is a composite — no Docker pull, no container build. It installs GateTest, runs the gate, and if `auto-fix: true` and `ANTHROPIC_API_KEY` is set, runs the AI repair loop on a blocking gate. See [`action.yml`](action.yml) for every input.
 
+**Your first full run passes.** Turning a gate on against an existing codebase would otherwise fail on years of backlog nobody wrote this week, so a full-repo run that finds no `.gatetest/baseline.json` snapshots what is already there and exits green. Commit that file and every run after it fails on **new** findings only — pull requests are judged on the files they change from the very first run. Details under [baseline mode](#onboarding-a-mature-repo--baseline-mode).
+
 ### CLI — local development
 
 ```bash
