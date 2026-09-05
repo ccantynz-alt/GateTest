@@ -17,7 +17,7 @@ Status legend: **done** (merged or in the open PR, with evidence) · **partial**
 | Blocking on express · django · rails | 0 · 64 · 46 | 2 · 89 · 56 (first contact) |
 | PR diff scan | 8s | 17s, and it scanned everything |
 | Full self-scan | 65s (mutation deferred to nightly) | never finished |
-| Tests passing | 8,600+ | 7,790 |
+| Tests passing | 9,302 (470 files, every one reporting its summary through `scripts/run-tests.js`) | 7,790 |
 
 The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 `scripts/real-world-precision.js`; rendered at `/precision`.
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-Nothing pre-authorised is left in the Fifty (20, 39 and 42 merged). Open pre-authorised code work lives in the Known Issues (`docs/ROADMAP.md`): KI #77 (the 22 split/join module pairs), KI #96 (dead-code through indirection), KI #52 (link checking).
+Nothing pre-authorised is left in the Fifty (20, 39 and 42 merged). KI #77 closed on both halves 2026-09-05 (the 22 split/join pairs, then the twenty-six private string guards — one stripper, #458); KI #96 shipped (#443 / #444); KI #108 (the action's swallowed exit codes, #461) closed the same day. What remains in the Known Issues is Craig's: deploy (KI #79), the two Vapron secrets (#80), the Resend env typo (#82), the domain failover (#93), the Gluecron env values (#103), the Marketplace listing (#29), the MCP registry (#35), and the network-call policy that gates both cve-feed (#32) and live link checking (#52). Move 08 waits on flywheel data that cannot exist until production ships.
 Waiting on Craig: 15, 22, 29, 35, 37, 40, 41, 43, 44, 45, 47, 48, 49, 50.
