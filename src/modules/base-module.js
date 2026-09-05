@@ -88,6 +88,15 @@ class BaseModule {
 
     walk(projectRoot);
 
+    // Repository path filter (.gatetest.json `paths`, stamped by the runner
+    // as this._scanPathFilter): the one place "in scope for this gate" is
+    // decided for every module that walks (src/core/scan-paths.js).
+    if (this._scanPathFilter) {
+      const { pathInScope } = require('../core/scan-paths');
+      const inScope = (f) => pathInScope(this._scanPathFilter, path.relative(projectRoot, f).split(path.sep).join('/'));
+      for (let i = files.length - 1; i >= 0; i--) if (!inScope(files[i])) files.splice(i, 1);
+    }
+
     // Incremental filter — applied AFTER the walk so the exclude rules
     // and extension matching still hold. Cheap set intersection.
     if (

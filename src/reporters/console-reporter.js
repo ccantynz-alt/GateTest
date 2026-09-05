@@ -220,6 +220,13 @@ class ConsoleReporter {
     if (summary.diffOnly) {
       console.log(`${COLORS.dim}  Mode: diff-only (${(summary.changedFiles || []).length} changed files)${COLORS.reset}`);
     }
+    if (summary.pathFilter) {
+      const pf = summary.pathFilter;
+      const parts = [];
+      if (pf.include.length) parts.push(`include ${pf.include.join(', ')}`);
+      if (pf.exclude.length) parts.push(`exclude ${pf.exclude.join(', ')}`);
+      console.log(`${COLORS.dim}  Scope: .gatetest.json paths — ${parts.join('; ')}${pf.findingsDropped ? ` (${pf.findingsDropped} finding(s) outside it not shown)` : ''}${COLORS.reset}`);
+    }
     console.log(`  Modules:  ${summary.modules.passed}/${summary.modules.total} passed`);
     // "86/89 passed" reads as "the whole engine ran". When a suite
     // deliberately holds a module back, saying so here is the difference
