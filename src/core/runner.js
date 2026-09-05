@@ -878,42 +878,22 @@ class GateTestRunner extends EventEmitter {
    */
   _getChangedFiles() {
     const { execSync } = require('child_process');
+    const { resolveDiffBase } = require('./diff-base');
+    const projectRoot = (this.config && this.config.projectRoot) || process.cwd();
+    const opts = { encoding: 'utf-8', cwd: projectRoot, stdio: ['pipe', 'pipe', 'pipe'] };
     try {
-      // Get files changed vs merge-base with main/master
-      const baseBranch = (() => {
-        try {
-          execSync('git rev-parse --verify main', { stdio: 'pipe' });
-          return 'main';
-        } catch {
-          try {
-            execSync('git rev-parse --verify master', { stdio: 'pipe' });
-            return 'master';
-          } catch {
-            return 'HEAD~1';
-          }
-        }
-      })();
-
-      const mergeBase = execSync(`git merge-base HEAD ${baseBranch}`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
-
-      const diff = execSync(`git diff --name-only ${mergeBase}`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      // The base is ONE decision shared with prSize and fakeFixDetector
+      // (src/core/diff-base.js): explicit, --since/--pr, a merge-queue
+      // base, GITHUB_BASE_REF, origin/main — a local `main` only when no
+      // origin exists. Before this the runner asked for local `main` first
+      // and fell back to HEAD~1 on CI, where a PR checkout has no `main`.
+      const base = resolveDiffBase({ projectRoot, incrementalSince: this.options.incrementalSince });
+      const diff = execSync(`git diff --name-only ${base ? base.mergeBase : 'HEAD~1'}`, opts).trim();
 
       // Also include staged and unstaged changes
-      const staged = execSync('git diff --cached --name-only', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const staged = execSync('git diff --cached --name-only', opts).trim();
 
-      const unstaged = execSync('git diff --name-only', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const unstaged = execSync('git diff --name-only', opts).trim();
 
       const allChanged = new Set([
         ...diff.split('\n').filter(Boolean),

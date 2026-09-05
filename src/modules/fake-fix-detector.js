@@ -21,6 +21,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { resolveDiffBase } = require('../core/diff-base');
 const https = require('https');
 const { endpoint: anthropicEndpoint, apiPath: anthropicApiPath, apiVersion: anthropicVersion } = require('../core/anthropic-config');
 
@@ -462,17 +463,19 @@ class FakeFixDetectorModule extends BaseModule {
     // multi-commit PR, so a `test.skip` added in any commit but the last was
     // never analysed (the Fifty, move 30, 2026-09-05). An unfetched ref fails
     // the command and falls through to the local shapes below.
-    const inferredBase = !against && (
-      runnerOptions.incrementalSince
-      || (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : null)
-    );
-    // Each command carries the commit range it covers (`null` = not yet
-    // committed) so a finding can ask which commits touched its file.
-    const ranged = (ref) => ({ cmd: `git diff --unified=3 ${ref}...HEAD -- .`, range: `${ref}..HEAD` });
-    const commands = against
-      ? [ranged(against)]
+    // ONE decision shared with prSize and the runner (src/core/diff-base.js):
+    // `against`, --since / --pr, a merge-queue base, GITHUB_BASE_REF,
+    // origin/main. Each command carries the commit range it covers (`null`
+    // = not yet committed) so a finding can ask which commits touched its
+    // file. An explicit `against` that resolves is the only command, as
+    // before; one that does not resolve falls through instead of reporting
+    // nothing.
+    const base = resolveDiffBase({ projectRoot, explicit: against, incrementalSince: runnerOptions.incrementalSince });
+    const ranged = (b) => ({ cmd: `git diff --unified=3 ${b.mergeBase}..HEAD -- .`, range: `${b.mergeBase}..HEAD` });
+    const commands = base && base.source === 'explicit'
+      ? [ranged(base)]
       : [
-          ...(inferredBase ? [ranged(inferredBase)] : []),
+          ...(base ? [ranged(base)] : []),
           { cmd: 'git diff --unified=3 --cached -- .', range: null },     // staged
           { cmd: 'git diff --unified=3 -- .', range: null },              // working tree
           { cmd: 'git diff --unified=3 HEAD~1 HEAD -- .', range: 'HEAD~1..HEAD' }, // last commit
