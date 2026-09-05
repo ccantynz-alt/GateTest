@@ -71,7 +71,7 @@ function isIllustrationPath(relPath) {
 // `integration-tests`), or is a `perf-`/`bench-` compound (`perf-measures`,
 // `bench-target`) is a harness.
 const HARNESS_DIR_RE =
-  /(^|\/)(?:tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?|[a-z0-9]+-(?:tests?|specs?|benchmarks?)|(?:perf|bench)-[a-z0-9-]+)\//i;
+  /(^|\/)(?:tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?|[a-z0-9]+[-_](?:tests?|specs?|benchmarks?)|(?:perf|bench)[-_][a-z0-9_-]+)\//i;
 
 /**
  * True when `relPath` is a document nobody navigates to as a user: a demo, a

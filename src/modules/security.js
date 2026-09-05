@@ -849,19 +849,46 @@ class SecurityModule extends BaseModule {
       // Database connection strings with credentials
       { regex: /(mongodb(\+srv)?|postgres|postgresql|mysql|mariadb|redis|amqp):\/\/[^:\s]+:[^@\s]+@[^\s"'`]+/gi, name: 'Database Connection String with Credentials' },
       // Generic API key assignments
-      { regex: /(?:api[_-]?key|apikey)\s*[:=]\s*['"][a-zA-Z0-9_\-/.]{10,}['"]/gi, name: 'API Key' },
+      { regex: /(?:api[_-]?key|apikey)\s*[:=]\s*['"][a-zA-Z0-9_\-/.]{10,}['"]/gi, name: 'API Key', identifierKeyed: true },
       // Generic secrets/passwords/tokens in assignments
-      { regex: /(?:secret|password|passwd|pwd|token|auth_token|access_token|refresh_token|client_secret)\s*[:=]\s*['"][a-zA-Z0-9_\-/.+]{8,}['"]/gi, name: 'Hardcoded Secret/Password/Token' },
+      { regex: /(?:secret|password|passwd|pwd|token|auth_token|access_token|refresh_token|client_secret)\s*[:=]\s*['"][a-zA-Z0-9_\-/.+]{8,}['"]/gi, name: 'Hardcoded Secret/Password/Token', identifierKeyed: true },
       // High-entropy hex strings assigned to suspicious variable names
-      { regex: /(?:secret|key|token|password|credential|auth)\s*[:=]\s*['"][0-9a-fA-F]{32,}['"]/gi, name: 'High-Entropy Hex String' },
+      { regex: /(?:secret|key|token|password|credential|auth)\s*[:=]\s*['"][0-9a-fA-F]{32,}['"]/gi, name: 'High-Entropy Hex String', identifierKeyed: true },
       // High-entropy base64 strings assigned to suspicious variable names
-      { regex: /(?:secret|key|token|password|credential|auth)\s*[:=]\s*['"][A-Za-z0-9+/]{32,}={0,2}['"]/gi, name: 'High-Entropy Base64 String' },
+      { regex: /(?:secret|key|token|password|credential|auth)\s*[:=]\s*['"][A-Za-z0-9+/]{32,}={0,2}['"]/gi, name: 'High-Entropy Base64 String', identifierKeyed: true },
     ];
+
+    // Two kinds of pattern above, and they must be told apart (secrets.js
+    // draws the same line). VENDOR-SHAPED — AKIA…, ghp_…, a JWT, a PEM — is
+    // a credential wherever it sits; a test file does not make an AWS key
+    // fake. IDENTIFIER-KEYED — `password = "…"` — matches on the NAME, and
+    // the name is exactly what test fixtures are full of: django @b3f4d83
+    // produced 76 blocking "secrets", 74 of them `password='secret'`-shaped
+    // fixtures under tests/. Those drop to warning in test trees.
+    //
+    // A value that itself NAMES a credential is a label, not a credential:
+    //   INTERNAL_RESET_SESSION_TOKEN = "_password_reset_token"
+    //   reset_url_token = "set-password"
+    // were Django's other two. Nobody's secret is the word "password".
+    // "Names a credential" is a SHAPE, not a substring: snake/kebab case,
+    // no digits, and either the bare word (`"secret"`, what Django's
+    // fixtures use) or a separator on either side (`_password_reset_token`,
+    // `set-password`). `mysecretkey2024` and `secretpass1` are values that
+    // happen to contain the word, and they still fire — the first cut of
+    // this rule skipped them, which is the recall hole this comment guards.
+    const CREDENTIAL_WORD = 'password|passwd|secret|token|api[_-]?key|credential';
+    const LABEL_RE = new RegExp(
+      `^(?:${CREDENTIAL_WORD})$|^[a-z]*[_-][a-z_-]*(?:${CREDENTIAL_WORD})[a-z_-]*$|^[a-z_-]*(?:${CREDENTIAL_WORD})[a-z_-]*[_-][a-z_-]*$`, 'i');
+    const labelValue = (matched) => {
+      const q = matched.match(/['"]([^'"]*)['"]\s*$/);
+      return q ? LABEL_RE.test(q[1]) : false;
+    };
 
     let totalFindings = 0;
 
     for (const file of files) {
       const relPath = path.relative(projectRoot, file);
+      const isTestFile = typeof this._isTestPath === 'function' && this._isTestPath(relPath);
       const basename = path.basename(file);
 
       // Skip .env.example and similar template files
@@ -943,6 +970,7 @@ class SecurityModule extends BaseModule {
             // are the one place a mask can still satisfy the pattern, so the
             // password position is checked explicitly.
             if (credentialIsFullyExpanded(match[0])) continue;
+            if (pattern.identifierKeyed && labelValue(match[0])) continue;
             matchedThisLine = true;
             // Preview comes from the ORIGINAL line — the mask is
             // length-preserving, so the offsets carry over.
@@ -955,6 +983,7 @@ class SecurityModule extends BaseModule {
               file: relPath,
               line: i + 1,
               patternType: pattern.name,
+              ...(pattern.identifierKeyed && isTestFile ? { severity: 'warning' } : {}),
               message: `Potential ${pattern.name} found in ${relPath}:${i + 1}`,
               preview: redacted,
               suggestion: 'Move this value to environment variables or a secrets manager. Never commit secrets to source control.',

@@ -40,12 +40,16 @@ const LANGUAGE_SPECS = {
     extensions: ['.py'],
     testFilePattern: /(^|\/)(test_|.*_test)\.py$|(^|\/)tests?\//i,
     patterns: [
-      { name: 'eval', pattern: /(?<![.\w])eval\s*\(/, severity: 'error',
+      // `(?<!def\s)` — django/template/smartif.py defines `def eval(self,
+      // context)` on its expression nodes; a method DEFINITION named eval
+      // is not a call to the builtin. Four of Django's eight real-source
+      // hits were definitions.
+      { name: 'eval', pattern: /(?<![.\w])(?<!def\s)eval\s*\(/, severity: 'error',
         message: 'eval() — arbitrary code execution risk',
         suggestion: 'Use ast.literal_eval for literals, or refactor to avoid eval entirely.' },
       // `(?<![.\w])` — a METHOD named exec (`session.exec(select(...))` in
       // SQLModel, `cursor.exec`, `re.compile(...).exec`) is not the builtin.
-      { name: 'exec', pattern: /(?<![.\w])exec\s*\(/, severity: 'error',
+      { name: 'exec', pattern: /(?<![.\w])(?<!def\s)exec\s*\(/, severity: 'error',
         message: 'exec() — arbitrary code execution risk',
         suggestion: 'Refactor to call the target function directly. Exec is rarely needed.' },
       { name: 'bare-except', pattern: /^\s*except\s*:/, severity: 'warning',
@@ -153,10 +157,38 @@ const LANGUAGE_SPECS = {
       // reaches it); the risk is eval of an expression/variable. The old
       // pattern flagged exactly the safe case (`binding.eval('@_out_buf')`
       // in sinatra) and missed the dangerous one.
-      { name: 'eval', pattern: /(?<![.\w])(?:instance_|class_|module_)?eval(?:\s*\(\s*|\s+)(?!['"])[A-Za-z_([@$:]/, severity: 'error',
+      // A `*_eval` whose argument list carries a source location —
+      // `__FILE__`, `__LINE__`, or a `.lineno` — is code GENERATION: Rails'
+      // attribute accessors do `class_eval reader, __FILE__, reader_line` and
+      // `module_eval(definition.join(";"), location.path, location.lineno)`.
+      // User input never arrives with its own file and line number. Five of
+      // eleven real-source hits on rails @1ec64ce were this shape; the other
+      // six (`rails runner`, `rails query`, the routes loader) evaluate what
+      // they are handed by design and stay reported.
+      { name: 'eval', pattern: /(?<![.\w])(?:instance_|class_|module_)?eval(?:\s*\(\s*|\s+)(?!['"])[A-Za-z_([@$:](?![^\n]*(?:__FILE__|__LINE__|\.lineno\b))/, severity: 'error',
         message: 'eval() of a non-literal expression — arbitrary code execution risk',
         suggestion: 'Refactor to call the target method directly; never eval user-controlled strings.' },
-      { name: 'system-interp', pattern: /(system|`|exec)\s*\(?\s*["'][^"']*#\{/, severity: 'error',
+      // `exec` only when bare or on Kernel — `pg_conn.exec("NOTIFY #{...}")`
+      // is a database query on a PG connection, not a shell. Same defect as
+      // RegExp.prototype.exec being read as child_process.exec in JS: a
+      // method NAME is not a shell. Backticks keep their own alternative.
+      //
+      // The backtick form is a COMMAND LITERAL only when the backtick opens
+      // an expression — line start, or after `=` `(` `,` — and closes on the
+      // same line. A bare `` `[^`]*#\{ `` matched every error message with a
+      // backtick-quoted word before an interpolation: rails @1ec64ce has
+      // dozens of `raise ArgumentError, "expected Array (got #{x}) for `k`"`,
+      // and that one alternative took the repo from 56 to 127 blocking. The
+      // closing backtick and the leading context are what separate
+      // `out = \`git diff #{sha}\`` from prose about `layout`.
+      //
+      // Not line-start: a continued multi-line message that begins
+      // `\`t.column(.., #{opt}: true)\` from inside a change_table` looks
+      // identical to a bare command statement, and Rails has four of those
+      // for every real one. A command literal in Ruby is assigned or passed;
+      // the bare-statement form is rare enough to be an accepted miss.
+      // `(?<!\\)` keeps a regex literal's `\(\`?` out of it.
+      { name: 'system-interp', pattern: /(?:(?<![.\w])(?:system|exec|Kernel\.exec)\s*\(?\s*["'][^"']*#\{|(?<!\\)[=(,]\s*`[^`\n]*#\{[^`\n]*`)/, severity: 'error',
         message: 'Shell command with string interpolation — command injection risk',
         suggestion: 'Use the array form: system("cmd", arg1, arg2) to avoid shell parsing.',
         // `system "kill -9 #{pid}"` where pid came from `fork` cannot inject
@@ -323,7 +355,17 @@ function runLanguageChecks(lang, projectRoot, result, options = {}) {
       for (const p of spec.patterns) {
         // For test files, downgrade info/warning patterns to info to reduce noise.
         let severity = p.severity;
-        if (isTest && severity !== 'error') severity = 'info';
+        // A test file is not an attack surface. `eval(method)` iterating a
+        // table of helper names in actionview/test/, or `cursor.execute("..."
+        // + sql)` in django/tests/backends/, exercises the thing under test;
+        // it does not expose it. The old rule downgraded only NON-error
+        // severities here, so every error-severity rule (eval, exec,
+        // sql-concat, system-interp) kept blocking inside test trees.
+        // Measured on rails @1ec64ce: 40+ of 54 `ruby:eval` blocking findings
+        // were test files; on django @b3f4d83, 30 of 39 `sql-concat` were.
+        // Errors drop to warning (still reported, no longer a build verdict);
+        // warnings and below drop to info, as before.
+        if (isTest) severity = severity === 'error' ? 'warning' : 'info';
         if (!p.pattern.test(line)) continue;
 
         // A pattern may prove a matched line is materially safer than the

@@ -319,9 +319,14 @@ class DatetimeBugModule extends BaseModule {
       // Rule 1: datetime.now() without tz=
       const m1 = PY_NAIVE_NOW_RE.exec(codeLine);
       if (m1) {
-        const args = m1[1];
-        // Only flag if args is empty OR args contains no tz/tzinfo/timezone
-        if (!/tz(?:info)?\s*=|timezone\b|pytz\b|ZoneInfo\b|zoneinfo\b/.test(args)) {
+        const args = m1[1].trim();
+        // `datetime.now(<anything>)` is AWARE: the sole parameter IS the tz.
+        // The old check looked for the keyword spellings (`tz=`, `timezone`,
+        // `ZoneInfo`) and missed the positional form — `datetime.now(tz)`,
+        // `datetime.now(tzinfo)`, `datetime.now(UTC if aware else None)` —
+        // which is what django/core/mail/message.py:358 and humanize.py:197
+        // write. Only an empty call, or an explicit `None`, is naive.
+        if (args === '' || args === 'None') {
           result.addCheck(`datetime-bug:naive-now:${rel}:${i + 1}`, false, {
             severity: errSev,
             message: `datetime.now() without tz= argument — returns naive datetime. Use datetime.now(timezone.utc) or datetime.now(ZoneInfo("...")).`,

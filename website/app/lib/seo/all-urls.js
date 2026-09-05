@@ -159,6 +159,7 @@ function buildAllUrls({ modulesDataPath } = {}) {
     // Kept in lockstep with the `core` block in sitemap.ts.
     `${BASE}/pricing`,
     `${BASE}/enterprise`,
+    `${BASE}/precision`,
     `${BASE}/find`,
     `${BASE}/how-it-works`,
     `${BASE}/trust`,

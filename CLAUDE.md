@@ -681,6 +681,29 @@ command-execution sink, `.github/` excluded by a `.git` substring match,
 `server/api/` invisible to `authBypass`, and `.npmrc` reported CRITICAL merely
 for being tracked. See `docs/HISTORY.md` and PR #419 for the full list.
 
+**Corpus grown to 11 repos, four of them non-JavaScript (2026-09-05).** The
+engine advertises eight languages; until this pass its false-positive rate was
+measured on JavaScript plus Flask. First contact, `--suite full`, blocking:
+
+| Repo | First scan | After | What was wrong |
+|---|---|---|---|
+| django/django | 89 | **65** | 74 of 76 "secrets" were `password='secret'` fixtures under tests/; `datetime.now(tz)` read as naive; `def eval(self, …)` read as a call |
+| rails/rails | 56 | **47** | `pg_conn.exec("NOTIFY #{…}")` read as a shell; `class_eval reader, __FILE__, line` read as eval; error-severity rules stayed blocking inside test/ |
+| spring-petclinic | 9 | 9 | — |
+| gin-gonic/gin | 2 | 2 | — |
+
+One regression caught by the same gate: a first fix for the Ruby backtick form
+matched every error message with a backtick-quoted word before an
+interpolation and took Rails from 56 to **127**. Narrowed to a command literal
+that opens an expression and closes on the same line. The lesson is the
+session's: **added recall is unvalidated until the corpus says otherwise.**
+
+Django's remaining 65 and Rails' 47 are honest residue, not bugs — the ORM's
+SQL compiler in `django/db` building SQL by string, `rails runner` evaluating
+stdin by design, `datetime.now()` for a file timestamp. A scanner should
+report those; the project is right to ignore them. Ceilings are pinned at the
+measured numbers and ratchet down from here.
+
 **Two things every future session should carry from this:**
 
 1. **The recurring bug shape is a substring test where a segment test was

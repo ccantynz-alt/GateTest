@@ -37,11 +37,12 @@ const GATETEST = path.join(ROOT, 'bin', 'gatetest.js');
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 function parseArgs(argv) {
-  const opts = { repo: null, update: false, keep: false };
+  const opts = { repo: null, update: false, keep: false, writeJson: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--repo') { opts.repo = argv[i + 1]; i += 1; }
     else if (argv[i] === '--update') opts.update = true;
     else if (argv[i] === '--keep') opts.keep = true;
+    else if (argv[i] === '--write-json') { opts.writeJson = argv[i + 1]; i += 1; }
   }
   return opts;
 }
@@ -116,7 +117,11 @@ function main() {
         continue;
       }
 
-      measured.push({ name: repo.name, blocking });
+      measured.push({
+        name: repo.name, url: repo.url, sha: repo.sha, why: repo.why, blocking,
+        ...(typeof repo.maxBlocking === 'number' ? { ceiling: repo.maxBlocking } : {}),
+        ...(typeof repo.minBlocking === 'number' ? { floor: repo.minBlocking } : {}),
+      });
 
       if (typeof repo.maxBlocking === 'number') {
         const ok = blocking <= repo.maxBlocking;
@@ -147,6 +152,34 @@ function main() {
   if (opts.update) {
     console.log('\nMeasured counts (for updating the manifest deliberately):');
     for (const m of measured) console.log(`  ${m.name.padEnd(10)} ${m.blocking}`);
+  }
+
+  // --write-json <path>: the public precision table. Same contract as
+  // scripts/generate-site-stats.js — every number here is this run's own
+  // measurement, the page imports the file at build time, and nothing is
+  // typed by hand. Written only when every repo was measured: a partial
+  // table that omits a failed clone would read as "those repos were fine".
+  if (opts.writeJson) {
+    if (measured.length !== repos.length) {
+      console.log(`\nNOT writing ${opts.writeJson}: ${repos.length - measured.length} repo(s) could not be measured.`);
+    } else {
+      let engineCommit = 'unknown';
+      try {
+        engineCommit = require('child_process')
+          .execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+      } catch { /* error-ok: a missing .git only costs the commit label on the page */ }
+      const out = {
+        generatedAt: new Date().toISOString(),
+        source: 'scripts/real-world-precision.js',
+        note: 'Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit — run the script.',
+        engineVersion: require(path.join(ROOT, 'package.json')).version,
+        engineCommit,
+        repos: measured,
+      };
+      fs.mkdirSync(path.dirname(opts.writeJson), { recursive: true });
+      fs.writeFileSync(opts.writeJson, `${JSON.stringify(out, null, 2)}\n`);
+      console.log(`\nWrote ${path.relative(ROOT, opts.writeJson)} (${measured.length} repos, engine ${out.engineVersion}@${engineCommit})`);
+    }
   }
 
   console.log('');

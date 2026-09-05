@@ -1,0 +1,97 @@
+{
+  "generatedAt": "2026-09-05T00:32:28.838Z",
+  "source": "scripts/real-world-precision.js",
+  "note": "Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit — run the script.",
+  "engineVersion": "1.61.0",
+  "engineCommit": "c725bc97",
+  "repos": [
+    {
+      "name": "express",
+      "url": "https://github.com/expressjs/express.git",
+      "sha": "023767fe9872e029271df1418f73401bff20ff40",
+      "why": "the most-depended-on Node package there is; the canonical clean control",
+      "blocking": 0,
+      "ceiling": 0
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask.git",
+      "sha": "d318b683471101618febed18996405ad26462110",
+      "why": "Python — proves the non-JS rules are held to the same bar",
+      "blocking": 2,
+      "ceiling": 2
+    },
+    {
+      "name": "fastify",
+      "url": "https://github.com/fastify/fastify.git",
+      "sha": "15ebc8e2fe6932d3e91afa84709523804f8a2537",
+      "why": "large plugin-oriented server; exercises the auth and route grammars",
+      "blocking": 5,
+      "ceiling": 5
+    },
+    {
+      "name": "got",
+      "url": "https://github.com/sindresorhus/got.git",
+      "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
+      "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
+      "blocking": 15,
+      "ceiling": 15
+    },
+    {
+      "name": "hono",
+      "url": "https://github.com/honojs/hono.git",
+      "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
+      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
+      "blocking": 33,
+      "ceiling": 33
+    },
+    {
+      "name": "zod",
+      "url": "https://github.com/colinhacks/zod.git",
+      "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
+      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
+      "blocking": 20,
+      "ceiling": 20
+    },
+    {
+      "name": "django",
+      "url": "https://github.com/django/django.git",
+      "sha": "b3f4d83aad7f589f165a6d8b020b7acba4936f35",
+      "why": "Python at scale — the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
+      "blocking": 65,
+      "ceiling": 65
+    },
+    {
+      "name": "rails",
+      "url": "https://github.com/rails/rails.git",
+      "sha": "1ec64ce82451c52d7407fa665ea5f95291430c23",
+      "why": "Ruby at scale — instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
+      "blocking": 47,
+      "ceiling": 47
+    },
+    {
+      "name": "spring-petclinic",
+      "url": "https://github.com/spring-projects/spring-petclinic.git",
+      "sha": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
+      "why": "Java + Thymeleaf templates + a k8s manifest; the reference Spring app",
+      "blocking": 9,
+      "ceiling": 9
+    },
+    {
+      "name": "gin",
+      "url": "https://github.com/gin-gonic/gin.git",
+      "sha": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
+      "why": "Go — the ignored-error idiom the go module could not see until 2026-09-04",
+      "blocking": 2,
+      "ceiling": 2
+    },
+    {
+      "name": "NodeGoat",
+      "url": "https://github.com/OWASP/NodeGoat.git",
+      "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "why": "OWASP's deliberately vulnerable app — the recall floor",
+      "blocking": 59,
+      "floor": 40
+    }
+  ]
+}

@@ -146,3 +146,32 @@ describe('SecretsModule — "example" suppression is word-bounded', () => {
     assert.deepStrictEqual(found, []);
   });
 });
+
+// secrets.js carried its own private test-path regex, which did not know the
+// separator-compound dirs (`js_tests/`, `runtime-tests/`) that base-module's
+// TEST_PATH_RE learned from django and hono. One definition now.
+describe('SecretsModule — test-tree detection is the canonical predicate', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-secrets-testpath-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function severityOf(rel) {
+    const f = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, 'const aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";\nconst k = "AKIAIOSFODNN7EXAMPLE";\n');
+    const result = makeResult();
+    await new SecretsModule().run(result, { projectRoot: tmp });
+    const check = result.checks.find((c) => c.name === `secrets:${rel}`);
+    return check ? check.severity : null;
+  }
+
+  it('js_tests/ is a test tree (django) — warning, not error', async () => {
+    assert.strictEqual(await severityOf('js_tests/admin/creds.test.js'), 'warning');
+  });
+  it('runtime-tests/ is a test tree (hono)', async () => {
+    assert.strictEqual(await severityOf('runtime-tests/node/creds.js'), 'warning');
+  });
+  it('a file that merely contains "test" in its name is application code', async () => {
+    assert.strictEqual(await severityOf('src/contest.js'), 'error');
+  });
+});

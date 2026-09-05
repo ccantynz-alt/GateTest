@@ -388,3 +388,85 @@ describe('JunitReporter', () => {
     assert.ok(xml.includes('&quot;'), 'Should escape "');
   });
 });
+
+// The level GitHub sees must be the level the GATE used. On PR #422
+// (2026-09-05) a `password='hunter2'` fixture in a test file — which the
+// engine had already downgraded to `warning` — reached Code Scanning with
+// the secrets module's flat 9.1 score, was shown as CRITICAL, and failed
+// the PR check that the engine's own verdict had passed.
+describe('SarifReporter — effective severity, not module severity', () => {
+  let tmpDir;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-sarif-eff-'));
+    fs.mkdirSync(path.join(tmpDir, '.gatetest', 'reports'), { recursive: true });
+  });
+  afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  async function emit(moduleName, checks, runnerOptions = {}) {
+    const config = new GateTestConfig(tmpDir);
+    const runner = new GateTestRunner(config, runnerOptions);
+    new SarifReporter(runner, config);
+    runner.register(moduleName, {
+      async run(result) {
+        for (const [name, details, mutate] of checks) {
+          result.addCheck(name, false, details);
+          if (mutate) mutate(result.checks[result.checks.length - 1]);
+        }
+      },
+    });
+    await runner.run([moduleName]);
+    return JSON.parse(fs.readFileSync(
+      path.join(tmpDir, '.gatetest', 'reports', 'gatetest-results.sarif'), 'utf-8',
+    ));
+  }
+
+  it('a warning from a security module is at most MEDIUM, an error keeps the module score', async () => {
+    const sarif = await emit('secrets', [
+      ['secrets:tests/fixture.test.js', { severity: 'warning', file: 'tests/fixture.test.js', line: 1, message: '1 potential secret(s) found' }],
+      ['secrets:src/config.js', { severity: 'error', file: 'src/config.js', line: 4, message: '1 potential secret(s) found' }],
+    ]);
+    const rules = Object.fromEntries(sarif.runs[0].tool.driver.rules.map((r) => [r.name, r]));
+    assert.strictEqual(rules['secrets:tests/fixture.test.js'].properties['security-severity'], '6.9',
+      'a test-tree fixture the engine downgraded must not render as critical');
+    assert.strictEqual(rules['secrets:tests/fixture.test.js'].defaultConfiguration.level, 'warning');
+    assert.strictEqual(rules['secrets:src/config.js'].properties['security-severity'], '9.1');
+    assert.strictEqual(rules['secrets:src/config.js'].defaultConfiguration.level, 'error');
+  });
+
+  it('an error below the confidence threshold ("soft") is a warning to GitHub too', async () => {
+    const sarif = await emit('ssrf', [
+      ['ssrf:soft', { severity: 'error', file: 'src/a.js', line: 1, message: 'maybe', confidence: 0.5 }],
+      ['ssrf:confident', { severity: 'error', file: 'src/b.js', line: 1, message: 'surely', confidence: 0.99 }],
+    ], { confidenceThreshold: 0.95 });
+    const byName = Object.fromEntries(sarif.runs[0].tool.driver.rules.map((r) => [r.name, r]));
+    const results = Object.fromEntries(sarif.runs[0].results.map((r) => [r.ruleId, r]));
+    assert.strictEqual(byName['ssrf:soft'].defaultConfiguration.level, 'warning');
+    assert.strictEqual(byName['ssrf:soft'].properties['security-severity'], '6.9');
+    assert.strictEqual(results['gatetest/ssrf/ssrf-soft'].level, 'warning');
+    assert.strictEqual(results['gatetest/ssrf/ssrf-soft'].properties.blocking, false);
+    assert.strictEqual(results['gatetest/ssrf/ssrf-soft'].properties.confidence, 0.5);
+    assert.strictEqual(byName['ssrf:confident'].defaultConfiguration.level, 'error');
+    assert.strictEqual(byName['ssrf:confident'].properties['security-severity'], '8.6');
+    assert.strictEqual(results['gatetest/ssrf/ssrf-confident'].properties.blocking, true);
+  });
+
+  it('a later, more severe finding under the same rule lifts the rule', async () => {
+    const sarif = await emit('secrets', [
+      ['secrets:same', { severity: 'warning', file: 'tests/x.test.js', line: 1, message: 'fixture' }],
+      ['secrets:same', { severity: 'error', file: 'src/x.js', line: 1, message: 'real' }],
+    ]);
+    const rule = sarif.runs[0].tool.driver.rules.find((r) => r.name === 'secrets:same');
+    assert.strictEqual(rule.defaultConfiguration.level, 'error');
+    assert.strictEqual(rule.properties['security-severity'], '9.1');
+    assert.strictEqual(sarif.runs[0].tool.driver.rules.length, 1, 'one rule, not two');
+  });
+
+  it('suppressed findings (.gatetestignore / baseline) are not uploaded as alerts', async () => {
+    const sarif = await emit('ssrf', [
+      ['ssrf:ignored', { severity: 'error', file: 'src/a.js', line: 1, message: 'ignored' },
+        (c) => { c.suppressed = true; c.suppressReason = 'gatetestignore'; }],
+      ['ssrf:live', { severity: 'error', file: 'src/b.js', line: 1, message: 'live' }],
+    ]);
+    assert.deepStrictEqual(sarif.runs[0].results.map((r) => r.ruleId), ['gatetest/ssrf/ssrf-live']);
+  });
+});
