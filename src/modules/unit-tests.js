@@ -6,6 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { looksLikeMissingToolchain } = require('../core/toolchain-signals');
 
 class UnitTestsModule extends BaseModule {
   constructor() {
@@ -197,13 +198,8 @@ class UnitTestsModule extends BaseModule {
   }
 
   _looksLikeMissingToolchain(out) {
-    // Each alternation is a runner that never reached a test: a missing
-    // binary (`/bin/sh: 1: vendor/bin/phpunit: not found` — laravel, where
-    // composer had not run), a missing module, or a BUILD that failed before
-    // the test task (ktor's Gradle compile under a toolchain this box does
-    // not have). "Unit tests failed" would blame the customer's suite for
-    // our environment.
-    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |: not found\b|Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies|SDK location not found|Could not resolve all (?:files|dependencies)|Unsupported class file major version|Execution failed for task '[^']*:compile|Compilation error\. See log|BUILD FAILURE[\s\S]*COMPILATION ERROR/i.test(out);
+    // One definition, shared with integrationTests: src/core/toolchain-signals.js.
+    return looksLikeMissingToolchain(out);
   }
 
   /** Does a test directory contain anything `node --test` can actually run? */

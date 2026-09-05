@@ -357,7 +357,16 @@ class CiSecurityModule extends BaseModule {
     for (let k = 0; k < block.length; k += 1) {
       const l = block[k];
       const lineNo = startIdx + 1 + k;
-      if (/\$\{\{\s*github\.event\./.test(l) || /\$\{\{\s*github\.head_ref\s*\}\}/.test(l)) {
+      // A `github.event.*` expansion is injectable when the value is free
+      // text an outsider controls (`head_ref`, `pull_request.title`,
+      // `comment.body`, `release.tag_name`). A commit SHA (40 hex chars) or a
+      // numeric `number`/`id` cannot carry shell metacharacters — prisma's
+      // `--baseline-commit ${{ github.event.pull_request.base.sha }}` was
+      // reported as injection (2026-09-05). GitHub's own guidance draws the
+      // same line.
+      const eventExpansion = /\$\{\{\s*github\.event\.([\w.]+)/.exec(l);
+      const safeLeaf = eventExpansion && /(?:^|\.)(?:sha|number|id|node_id|run_number|run_id)$/.test(eventExpansion[1]);
+      if ((eventExpansion && !safeLeaf) || /\$\{\{\s*github\.head_ref\s*\}\}/.test(l)) {
         issues += this._flag(result, `ci-security:shell-injection:${rel}:${lineNo}`, {
           severity: 'error',
           file: rel,

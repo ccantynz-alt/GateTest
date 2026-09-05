@@ -238,7 +238,11 @@ const PATTERN_RULES = [
   {
     id: 'commented-out-code',
     direction: 'added',
-    pattern: /^\+\s*\/\/\s*(TODO|FIXME|HACK|XXX|temporary|temp|disabled|commented out)/i,
+    // Token, not prefix (doctrine §5): without the boundary `temp` matched
+    // `// template expression`. `(?![\w-])` rather than `\b` so a hyphenated
+    // word (`// disabled-by-default option`) is not the marker either. Found
+    // by the determinism gate on our own diff, 2026-09-05.
+    pattern: /^\+\s*\/\/\s*(TODO|FIXME|HACK|XXX|temporary|temp|disabled|commented out)(?![\w-])/i,
     severity: 'warning',
     title: 'TODO/FIXME/HACK comment added',
     explanation: 'New TODO/FIXME/HACK comments indicate unresolved work left in place of a real fix.',

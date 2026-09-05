@@ -330,3 +330,29 @@ describe('FakeFixDetectorModule — documentation is not source', () => {
     assert.ok(failedCheckNames(r).length > 0, 'positive control');
   });
 });
+
+// `temp` matched `// template expression` — a comment about template
+// literals was "a TODO/FIXME/HACK comment added". Found by the determinism
+// gate on our own diff (2026-09-05). Token, not prefix (doctrine §5).
+describe('FakeFixDetectorModule — commented-out-code is a token, not a prefix', () => {
+  async function run(diff) {
+    const mod = new FakeFixDetector();
+    const result = new TestResult('fakeFixDetector');
+    result.start();
+    await mod.run(result, makeConfig(diff));
+    return result;
+  }
+  const hunk = (lines) => [
+    'diff --git a/src/a.js b/src/a.js', '--- a/src/a.js', '+++ b/src/a.js', '@@ -1,3 +1,4 @@', ...lines,
+  ].join('\n');
+
+  it('fires on `// TEMP disable` and `// HACK:`', async () => {
+    const result = await run(hunk([' const a = 1;', '+  // TEMP disable the check', '+  // HACK: skip validation', ' return a;']));
+    assert.ok(findFailure(result, 'commented-out-code'), failedCheckNames(result).join(', '));
+  });
+
+  it('stays quiet on `// template expression` and `// disabled-by-default option`', async () => {
+    const result = await run(hunk([' const a = 1;', '+  // template expressions are code', '+  // disabled-by-default option', ' return a;']));
+    assert.ok(!findFailure(result, 'commented-out-code'), failedCheckNames(result).join(', '));
+  });
+});

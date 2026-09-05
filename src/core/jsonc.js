@@ -103,8 +103,12 @@ function stripJsonc(text) {
 // Files that ARE JSONC by their own specification. Anchored to the filename or
 // a known directory — a repo's own `data/config.json` is still strict JSON and
 // a trailing comma there is a real defect worth reporting.
+// 2026-09-05, prisma: `packages/0-config/tsconfig/base.json` (a tsconfig
+// split into a directory, commented) and `turbo.json` (Turborepo documents
+// comments) were "JSON syntax errors". Added: a `tsconfig/` directory, the
+// `.jsonc` extension, turbo/biome/deno configs, `.babelrc` / `.swcrc`.
 const JSONC_FILE_RE =
-  /(^|\/)(?:tsconfig(?:\.[^/]*)?\.json|jsconfig(?:\.[^/]*)?\.json|devcontainer\.json|\.eslintrc\.json|typedoc\.json)$|(^|\/)\.?vscode\/[^/]+\.json$|(^|\/)\.devcontainer\/[^/]+\.json$/i;
+  /(^|\/)(?:tsconfig(?:\.[^/]*)?\.json|jsconfig(?:\.[^/]*)?\.json|devcontainer\.json|\.eslintrc\.json|typedoc\.json|turbo\.json|biome\.jsonc?|deno\.jsonc?|\.babelrc(?:\.json)?|\.swcrc|[^/]+\.jsonc)$|(^|\/)\.?vscode\/[^/]+\.json$|(^|\/)\.devcontainer\/[^/]+\.json$|(^|\/)tsconfig\/[^/]+\.json$/i;
 
 /**
  * True when `relPath` names a file whose format permits comments and trailing
