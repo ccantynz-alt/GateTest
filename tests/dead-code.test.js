@@ -837,3 +837,33 @@ describe('DeadCodeModule — tsconfig path aliases', () => {
     assert.ok(!names.some((n) => n.includes('util/fmt')), `extends-defined alias not honoured: ${names.join(', ')}`);
   });
 });
+
+// ── KI #96: shipped-but-unreachable, on the one import graph ────────────────
+describe('DeadCodeModule — orphan-file reads the import graph (KI #96)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-deadcode-ki96-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const orphans = (r) => r.checks.filter((c) => c.name.startsWith('dead-code:orphan-file:')).map((c) => c.file).sort();
+
+  it('a module whose only importer is its own test is shipped but unreachable', async () => {
+    write(tmp, 'src/helper.js', 'module.exports.help = () => 1;\n');
+    write(tmp, 'tests/helper.test.js', "const { help } = require('../src/helper');\n");
+    write(tmp, 'src/used.js', 'module.exports.u = 1;\n');
+    write(tmp, 'src/main.js', "const { u } = require('./used');\nmodule.exports = u;\n");
+    const r = await run(tmp);
+    assert.deepStrictEqual(orphans(r), ['src/helper.js']);
+    const hit = r.checks.find((c) => c.name === 'dead-code:orphan-file:src/helper.js');
+    assert.strictEqual(hit.severity, 'warning');
+  });
+  it('an importer through a multi-line import, a path alias or a package.json script is a real reader', async () => {
+    write(tmp, 'tsconfig.json', '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }');
+    write(tmp, 'package.json', JSON.stringify({ name: 'p', scripts: { gen: 'node tools/gen.js' } }));
+    write(tmp, 'src/multi.ts', 'export const a = 1;\nexport const b = 2;\n');
+    write(tmp, 'src/aliased.ts', 'export const z = 1;\n');
+    write(tmp, 'src/entry.ts', 'import {\n  a,\n  b,\n} from "./multi";\nimport { z } from "@/aliased";\nexport default a + b + z;\n');
+    write(tmp, 'tools/gen.js', 'module.exports.gen = () => 1;\n');
+    write(tmp, 'src/lonely.ts', 'export const lonely = 1;\n');
+    const r = await run(tmp);
+    assert.deepStrictEqual(orphans(r), ['src/lonely.ts'], 'positive control: the real orphan is still reported');
+  });
+});

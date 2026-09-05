@@ -282,3 +282,61 @@ describe('path-literal edges (dynamic registries)', () => {
     }
   });
 });
+
+// ── KI #96 step 3: the shapes that hid live files from reachability ──────────
+describe('import-graph — aliases, workspaces, root-relative strings, multi-line imports', () => {
+  let R;
+  before(() => {
+    R = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-ki96-'));
+    writeTree(R, {
+      'package.json': JSON.stringify({ name: 'root', workspaces: ['packages/*'] }),
+      'tsconfig.base.json': '{ "compilerOptions": { "baseUrl": ".", "paths": { "~/*": ["src/*"] } } }',
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json", /* comment */ "include": ["**/*.ts"], }',
+      'web/tsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./*"], "@lib/*": ["../lib/*"] } } }',
+      'web/app/page.tsx': 'import { cn } from "@/app/lib/cn";\nimport gate from "@lib/gate";\nexport default function P() { return cn(gate); }\n',
+      'web/app/lib/cn.ts': 'export const cn = (x: string) => x;\n',
+      'lib/gate.js': 'module.exports = 1;\n',
+      'src/index.ts': 'import { fmt } from "~/util/fmt";\nimport {\n  a,\n  b,\n} from "./multi";\nexport const main = () => fmt(a + b);\n',
+      'src/util/fmt.ts': 'export const fmt = (x: number) => String(x);\n',
+      'src/multi.ts': 'export const a = 1; export const b = 2;\n',
+      'packages/tool/package.json': JSON.stringify({ name: '@acme/tool', main: 'lib/main.js' }),
+      'packages/tool/lib/main.js': 'module.exports = {};\n',
+      'packages/tool/lib/extra.js': 'module.exports = {};\n',
+      'uses-ws.js': "const t = require('@acme/tool');\nconst e = require('@acme/tool/lib/extra.js');\nconst x = require('left-pad');\n",
+      'bin/doctor.js': "const { diagnose } = require(path.join(ROOT, 'src/doctor/diagnose.js'));\n",
+      'src/doctor/diagnose.js': 'module.exports = {};\n',
+    });
+  });
+  after(() => fs.rmSync(R, { recursive: true, force: true }));
+
+  const kindsInto = (g, rel) => g.edges.filter((e) => g.rel(e.to) === rel).map((e) => `${e.kind}:${g.rel(e.from)}`).sort();
+
+  it('resolves tsconfig path aliases, including one defined through `extends`', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    assert.deepStrictEqual(kindsInto(g, 'web/app/lib/cn.ts'), ['alias:web/app/page.tsx']);
+    assert.deepStrictEqual(kindsInto(g, 'lib/gate.js'), ['alias:web/app/page.tsx']);
+    assert.deepStrictEqual(kindsInto(g, 'src/util/fmt.ts'), ['alias:src/index.ts']);
+  });
+  it('resolves a workspace package by name and by subpath; an external package stays external', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    assert.deepStrictEqual(kindsInto(g, 'packages/tool/lib/main.js'), ['workspace:uses-ws.js']);
+    assert.deepStrictEqual(kindsInto(g, 'packages/tool/lib/extra.js'), ['workspace:uses-ws.js']);
+    assert.ok(!g.edges.some((e) => g.rel(e.to).includes('left-pad')));
+  });
+  it('a root-relative path string that resolves is a path-literal edge', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    assert.deepStrictEqual(kindsInto(g, 'src/doctor/diagnose.js'), ['path-literal:bin/doctor.js']);
+  });
+  it('the closing line of a multi-line import is an edge', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    assert.deepStrictEqual(kindsInto(g, 'src/multi.ts'), ['multiline:src/index.ts']);
+  });
+  it('none of the new kinds enter staticGraph — import-cycle sees exactly what it saw before', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    const statics = new Set(['static', 'type']);
+    for (const e of g.edges) {
+      if (!statics.has(e.kind)) assert.ok(!g.staticGraph.get(e.from).has(e.to), `${e.kind} edge leaked into staticGraph`);
+    }
+    assert.strictEqual(g.staticEdgeCount, 0);
+  });
+});

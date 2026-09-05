@@ -2,130 +2,15 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolvePackageEntry, resolveAlias, stripJsoncLite, tsEquivalents } = require('../core/module-resolution');
 const BaseModule = require('./base-module');
 
 const JS_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
 const PY_EXTS = new Set(['.py']);
 const ALL_EXTS = new Set([...JS_EXTS, ...PY_EXTS]);
 
-function resolvePackageEntry(pkgDir) {
-  let mainBase = 'index';
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8'));
-    const mainField = (typeof pkg.module === 'string' && pkg.module)
-      || (typeof pkg.main === 'string' && pkg.main)
-      || null;
-    if (mainField) mainBase = mainField.replace(/\.(js|mjs|cjs|ts|tsx)$/, '');
-  } catch { /* use default */ }
-
-  const base = path.isAbsolute(mainBase) ? mainBase : path.join(pkgDir, mainBase);
-  const candidates = [
-    base,
-    ...Array.from(ALL_EXTS).map((e) => base + e),
-    ...Array.from(ALL_EXTS).map((e) => path.join(pkgDir, 'index' + e)),
-    ...Array.from(ALL_EXTS).map((e) => path.join(pkgDir, 'src', 'index' + e)),
-  ];
-  for (const c of candidates) {
-    try { if (fs.statSync(c).isFile()) return path.normalize(c); }
-    catch { /* keep trying */ }
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
-// tsconfig / jsconfig `paths` aliases.
-//
-// `import X from "@/app/components/X"` is how every Next.js app in the world
-// imports its own files, and until 2026-09-05 this resolver returned null for
-// any specifier that did not start with `.` or `/` — so a component imported
-// only through the alias was reported as an orphaned module (it happened to
-// website/app/components/ComparisonReviewed.tsx, imported by seven pages).
-// The nearest tsconfig.json / jsconfig.json walking up from the importing file
-// is consulted, `extends` is followed, and the config is read once per
-// directory. JSONC is tolerated: tsconfig files carry comments.
-// ---------------------------------------------------------------------------
-const aliasCache = new Map(); // dir → [{ prefix, wildcard, targets: [abs base] }] | null
-
-function stripJsoncLite(src) {
-  let out = '';
-  let i = 0;
-  let inStr = null;
-  while (i < src.length) {
-    const ch = src[i];
-    const next = src[i + 1];
-    if (inStr) {
-      out += ch;
-      if (ch === '\\') { out += next || ''; i += 2; continue; }
-      if (ch === inStr) inStr = null;
-      i += 1;
-      continue;
-    }
-    if (ch === '"' || ch === "'") { inStr = ch; out += ch; i += 1; continue; }
-    if (ch === '/' && next === '/') { while (i < src.length && src[i] !== '\n') i += 1; continue; }
-    if (ch === '/' && next === '*') { i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1; i += 2; continue; }
-    out += ch;
-    i += 1;
-  }
-  return out.replace(/,\s*([}\]])/g, '$1');
-}
-
-function readTsconfig(file, depth = 0) {
-  let cfg;
-  try { cfg = JSON.parse(stripJsoncLite(fs.readFileSync(file, 'utf8'))); } catch { return null; }
-  if (!cfg || typeof cfg !== 'object') return null;
-  const co = cfg.compilerOptions || {};
-  let base = { baseUrl: co.baseUrl, paths: co.paths, dir: path.dirname(file) };
-  if (cfg.extends && typeof cfg.extends === 'string' && cfg.extends.startsWith('.') && depth < 3) {
-    const parent = readTsconfig(path.resolve(path.dirname(file), cfg.extends.endsWith('.json') ? cfg.extends : `${cfg.extends}.json`), depth + 1);
-    if (parent) base = { baseUrl: base.baseUrl || parent.baseUrl, paths: base.paths || parent.paths, dir: base.paths ? base.dir : parent.dir };
-  }
-  return base;
-}
-
-function loadPathAliases(dir) {
-  if (aliasCache.has(dir)) return aliasCache.get(dir);
-  let entries = null;
-  for (const name of ['tsconfig.json', 'jsconfig.json']) {
-    const cfg = readTsconfig(path.join(dir, name));
-    if (!cfg || !cfg.paths || typeof cfg.paths !== 'object') continue;
-    const baseDir = path.resolve(cfg.dir, cfg.baseUrl || '.');
-    entries = [];
-    for (const [pattern, targets] of Object.entries(cfg.paths)) {
-      if (!Array.isArray(targets)) continue;
-      const wildcard = pattern.endsWith('*');
-      entries.push({
-        prefix: wildcard ? pattern.slice(0, -1) : pattern,
-        wildcard,
-        targets: targets.map((t) => path.resolve(baseDir, wildcard && t.endsWith('*') ? t.slice(0, -1) : t)),
-      });
-    }
-    break;
-  }
-  aliasCache.set(dir, entries);
-  return entries;
-}
-
-/** Absolute base paths an aliased specifier maps to, or null when no alias applies. */
-function resolveAlias(fromFile, importPath, projectRoot) {
-  const root = path.resolve(projectRoot);
-  let dir = path.dirname(path.resolve(fromFile));
-  for (;;) {
-    const aliases = loadPathAliases(dir);
-    if (aliases) {
-      for (const a of aliases) {
-        if (a.wildcard ? importPath.startsWith(a.prefix) : importPath === a.prefix) {
-          const rest = a.wildcard ? importPath.slice(a.prefix.length) : '';
-          return a.targets.map((t) => (a.wildcard ? path.join(t, rest) : t));
-        }
-      }
-    }
-    if (dir === root || !dir.startsWith(root)) return null;
-    const up = path.dirname(dir);
-    if (up === dir) return null;
-    dir = up;
-  }
-}
-
 function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages = null) {
   if (!importPath) return null;
   if (workspacePackages && !importPath.startsWith('.') && !importPath.startsWith('/')) {
@@ -133,7 +18,7 @@ function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages 
       || (importPath.startsWith('@')
         ? workspacePackages.get(importPath.split('/').slice(0, 2).join('/'))
         : workspacePackages.get(importPath.split('/')[0]));
-    if (pkgDir) return resolvePackageEntry(pkgDir);
+    if (pkgDir) return resolvePackageEntry(pkgDir, ALL_EXTS);
   }
   if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
     const bases = resolveAlias(fromFile, importPath, projectRoot);
@@ -164,17 +49,9 @@ function resolveFromBase(base) {
   // the full public API. Every export the surface missed was then reported as
   // "candidate dead code" — 1806 findings in packages/zod alone, on a library
   // whose exports exist precisely to be imported from outside the repo.
-  const tsEquivalents = [];
-  const jsToTs = { '.js': ['.ts', '.tsx', '.d.ts'], '.jsx': ['.tsx'], '.mjs': ['.mts'], '.cjs': ['.cts'] };
-  const ext = path.extname(base);
-  if (jsToTs[ext]) {
-    const stem = base.slice(0, -ext.length);
-    for (const e of jsToTs[ext]) tsEquivalents.push(stem + e);
-  }
-
   const candidates = [
     base,
-    ...tsEquivalents,
+    ...tsEquivalents(base),
     ...Array.from(ALL_EXTS).map((e) => base + e),
     ...Array.from(ALL_EXTS).map((e) => path.join(base, 'index' + e)),
     ...Array.from(ALL_EXTS).map((e) => path.join(base, '__init__' + e)),
@@ -401,7 +278,7 @@ function buildPackageExportSurface(entryFile, pkgDir, seen = new Set()) {
 
 // Merge a workspace package's entry surface into the global index sets (Phase 1B precision suppression).
 function populatePackageSurface(pkgDir, pkgName, referencedFiles, importedNames, workspacePackagesWithSurface) {
-  const entryFile = resolvePackageEntry(pkgDir);
+  const entryFile = resolvePackageEntry(pkgDir, ALL_EXTS);
   if (!entryFile) return;
   try {
     const { reachableFiles, exportedNames } = buildPackageExportSurface(entryFile, pkgDir);
