@@ -91,7 +91,7 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 const { HARNESS_DIR_RE } = require('../core/scan-scope');
-const { classifyEmptyCatch, maskNonCode, enclosingContext, isTeardownName } = require('../core/guarded-catch');
+const { classifyEmptyCatch, enclosingContext, isTeardownName } = require('../core/guarded-catch');
 
 // Directory excludes beyond what `BaseModule._collectFiles` already skips
 // (node_modules, .git, dist, build, coverage, .next, out, …). The old
@@ -148,20 +148,31 @@ function receiverTopLevel(receiverExpr) {
   return dot === -1 ? receiverExpr : receiverExpr.slice(0, dot);
 }
 
-// String-aware "inside a string literal" guard (copied in spirit from
-// flaky-tests.js — kept local to avoid cross-module coupling).
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
+// Every deciding regex runs on the MASKED line (BaseModule._maskedLines:
+// string, regex and comment content blanked, offsets preserved). The raw
+// line is read only for the `// error-ok` marker, which IS a comment, and
+// for the event name inside `process.on('…')`'s quotes.
 
+// The `.catch(noop)` shapes are matched on the masked line — so a quoted or
+// commented example cannot fire them — and then confirmed on the raw text at
+// the same span. The confirmation keeps one thing deliberately as it was:
+// `.catch(() => { /* best-effort */ })`, an arrow whose body is only a
+// comment, reads as `{ }` once masked and has never been reported (the raw
+// regex cannot see past the comment). Reporting it is a rule decision — four
+// new blocking findings on this repo alone — not a stripper migration.
+// The shape is matched on the masked line (a quoted example cannot fire);
+// whether the arrow body is bare or comment-only is read from the raw span:
+// `.catch(() => { /* best-effort */ })` masks to `{ }` and had never fired
+// because the old raw-line regex could not see past the comment — the
+// module's own doc claimed it did. It reports at warning, like a
+// comment-only `catch {}`: a comment documents intent, it does not handle
+// the error.
+function noopCatchAt(code, line, re) {
+  const m = code.match(re);
+  if (!m) return null;
+  m.commentOnly = !re.test(line.slice(m.index, m.index + m[0].length));
+  return m;
+}
 class ErrorSwallowModule extends BaseModule {
   constructor() {
     super(
@@ -216,9 +227,9 @@ class ErrorSwallowModule extends BaseModule {
   // intentional fire-and-forget. We walk back up to 2 lines looking
   // for a `void ` at statement start, stopping at a prior statement
   // boundary so we don't accidentally accept an unrelated `void` above.
-  _isVoidFireAndForget(lines, lineIdx) {
+  _isVoidFireAndForget(masked, lineIdx) {
     for (let j = lineIdx; j >= Math.max(0, lineIdx - 2); j -= 1) {
-      const trimmed = (lines[j] || '').trim();
+      const trimmed = (masked[j] || '').trim();
       if (/^void\s+[\w$(]/.test(trimmed)) return true;
       // Hit a prior statement boundary — stop walking back. The
       // current line itself is allowed to end with `;` (the chain
@@ -226,24 +237,6 @@ class ErrorSwallowModule extends BaseModule {
       if (j !== lineIdx && /;\s*$/.test(trimmed)) return false;
     }
     return false;
-  }
-
-  // Strips `//` line comments and `/* */` block comments from a catch
-  // body so a comment-only catch (`catch (err) { // nothing to do here }`)
-  // is treated as empty — comments document intent, they don't handle
-  // the error. `isInString` keeps us from truncating a line at a `//`
-  // that's actually inside a string literal in the catch body.
-  _stripComments(body) {
-    const withoutBlocks = body.replace(/\/\*[\s\S]*?\*\//g, '');
-    return withoutBlocks
-      .split(/\r?\n/)
-      .map((l) => {
-        const idx = l.indexOf('//');
-        if (idx === -1 || isInString(l, idx)) return l;
-        return l.slice(0, idx);
-      })
-      .join('\n')
-      .trim();
   }
 
   _scanFile(file, projectRoot, result) {
@@ -259,27 +252,30 @@ class ErrorSwallowModule extends BaseModule {
     // and was told 22 times that it had erased an error.
     const isHarness = this._isTestPath(relPosix) || HARNESS_DIR_RE.test(relPosix);
     const lines = content.split(/\r?\n/);
-    // Masked copy (string and comment CONTENT blanked, offsets preserved) for
-    // the structural analysis in guarded-catch — and for `_isExecutableAt`,
-    // which is what keeps this module from reporting the examples in its own
-    // documentation. Built once per file.
-    const masked = maskNonCode(content).split(/\r?\n/);
+    // Masked copy (string, regex and comment CONTENT blanked, offsets
+    // preserved): every pattern below matches on it, and the structural
+    // analysis in guarded-catch reads it. Built once per file. Found by
+    // self-scan 2026-09-04: the doc comment at the top of guarded-catch.js
+    // shows `try { await db.commit(); } catch {}` as the example of a genuine
+    // swallow, and this module reported it — twice, at ERROR.
+    const masked = this._maskedLines(content);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
+      const line = lines[i];      // raw: only what lives inside quotes
+      const code = masked[i] || ''; // masked: every pattern match
+      if (!code.trim()) continue;
 
       // 1. Empty catch block — `catch (err) {}` or `catch {}` on one
       //    line, OR `catch (err) {` followed immediately by `}`.
-      const catchOnLine = line.match(/\bcatch\s*(?:\(([^)]*)\))?\s*\{/);
-      if (catchOnLine && !isInString(line, catchOnLine.index) && this._isExecutableAt(masked, i, line, catchOnLine.index) && !this._isSuppressed(lines, i)) {
-        const bodyText = this._collectBlockBody(lines, i, catchOnLine.index);
-        const rawBody = bodyText.closed ? bodyText.body.trim() : bodyText.body;
-        const effectiveBody = bodyText.closed ? this._stripComments(bodyText.body) : bodyText.body;
-        const isBareEmpty = bodyText.closed && rawBody === '';
-        const isCommentOnly = bodyText.closed && !isBareEmpty && effectiveBody === '';
+      const catchOnLine = code.match(/\bcatch\s*(?:\(([^)]*)\))?\s*\{/);
+      if (catchOnLine && !this._isSuppressed(lines, i)) {
+        const block = this._collectBlockBody(masked, lines, i, catchOnLine.index);
+        // `body` is the raw text between the braces; `code` the same text with
+        // comments and strings blanked — a comment-only catch is one whose
+        // body is not empty but whose code is.
+        const isBareEmpty = block.closed && block.body === '';
+        const isCommentOnly = block.closed && !isBareEmpty && block.code === '';
         if (isBareEmpty || isCommentOnly) {
           // Is the failure observable by the code around the catch? A
           // fallthrough alternative, or a target the next statement tests, is
@@ -293,7 +289,7 @@ class ErrorSwallowModule extends BaseModule {
             `error-swallow:empty-catch:${rel}:${i + 1}`,
             this._emptyCatchDetails({ rel, line: i + 1, isHarness, isBareEmpty, guard }),
           );
-        } else if (bodyText.closed && this._isLogAndEat(bodyText.body)) {
+        } else if (block.closed && this._isLogAndEat(block.code)) {
           issues += this._flag(result, `error-swallow:log-and-eat:${rel}:${i + 1}`, {
             severity: isHarness ? 'info' : 'error',
             file: rel,
@@ -307,22 +303,23 @@ class ErrorSwallowModule extends BaseModule {
       // 2. `.catch(() => {})` / `.catch(() => null)` / `.catch(noop)`
       // Suppressed when the chain is part of a `void expression`
       // statement — the idiomatic JS fire-and-forget pattern.
-      const catchNoop = line.match(/\.catch\s*\(\s*(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0)\s*\)/);
-      if (catchNoop && !isInString(line, catchNoop.index) && this._isExecutableAt(masked, i, line, catchNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
+      const catchNoop = noopCatchAt(code, line, /\.catch\s*\(\s*(?:\(\s*\w*\s*\)|\w+)?\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0)\s*\)/);
+      if (catchNoop && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(masked, i)) {
         const guard = isHarness ? { guarded: false } : this._catchNoopGuard(masked, i, catchNoop);
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, this._catchNoopDetails({
           rel,
           line: i + 1,
           isHarness,
           guard,
-          what: 'has `.catch(() => {})` or equivalent',
+          commentOnly: catchNoop.commentOnly,
+          what: catchNoop.commentOnly ? 'has `.catch(() => { /* comment */ })` — a comment documents intent, it does not handle the error' : 'has `.catch(() => {})` or equivalent',
           suggestion: 'Replace with `.catch((err) => log.error({ err }, "context"))` and either rethrow or surface a typed error. If this is intentional fire-and-forget, use `void promise` (the JS idiom) or add `// gatetest-fire-and-forget` on the line above.',
         }));
       }
       // `.catch(noop)` / `.catch(ignore)` / `.catch(() => { /* ignore */ })`
       // — same void-prefix suppression applies.
-      const catchNamedNoop = line.match(/\.catch\s*\(\s*(?:noop|ignore|swallow|_)\s*\)/);
-      if (catchNamedNoop && !isInString(line, catchNamedNoop.index) && this._isExecutableAt(masked, i, line, catchNamedNoop.index) && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(lines, i)) {
+      const catchNamedNoop = noopCatchAt(code, line, /\.catch\s*\(\s*(?:noop|ignore|swallow|_)\s*\)/);
+      if (catchNamedNoop && !this._isSuppressed(lines, i) && !this._isVoidFireAndForget(masked, i)) {
         const guard = isHarness ? { guarded: false } : this._catchNoopGuard(masked, i, catchNamedNoop);
         issues += this._flag(result, `error-swallow:catch-noop:${rel}:${i + 1}`, this._catchNoopDetails({
           rel,
@@ -334,11 +331,14 @@ class ErrorSwallowModule extends BaseModule {
         }));
       }
 
-      // 3. Global silent handlers
-      const globalHandler = line.match(/process\.on\s*\(\s*['"`](uncaughtException|unhandledRejection)['"`]/);
-      if (globalHandler && !isInString(line, globalHandler.index) && this._isExecutableAt(masked, i, line, globalHandler.index) && !this._isSuppressed(lines, i)) {
+      // 3. Global silent handlers — the call shape on the masked line, the
+      //    event name from inside the quotes on the raw one.
+      const handlerOpen = code.match(/process\.on\s*\(\s*['"`]/);
+      const globalHandler = handlerOpen
+        && line.slice(handlerOpen.index + handlerOpen[0].length).match(/^(uncaughtException|unhandledRejection)['"`]/);
+      if (globalHandler && !this._isSuppressed(lines, i)) {
         // Look at next ~8 lines for a throw/exit/log-with-rethrow
-        const windowText = lines.slice(i, Math.min(lines.length, i + 10)).join('\n');
+        const windowText = masked.slice(i, Math.min(masked.length, i + 10)).join('\n');
         const hasExit = /\bprocess\.exit\s*\(/.test(windowText);
         const hasThrow = /\bthrow\b/.test(windowText);
         if (!hasExit && !hasThrow) {
@@ -362,24 +362,24 @@ class ErrorSwallowModule extends BaseModule {
       //    old fixed 5-line window false-fired on bodies that handle the
       //    error on line 6+). We look ONLY after the opening brace to
       //    avoid counting the param itself.
-      const nodeCb = line.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/)
-        || line.match(/function\s*(?:[A-Za-z_$][\w$]*\s*)?\(\s*(err|error)\s*,\s*[^)]+\)\s*\{/);
-      if (nodeCb && !isInString(line, nodeCb.index) && this._isExecutableAt(masked, i, line, nodeCb.index) && !this._isSuppressed(lines, i)) {
+      const nodeCb = code.match(/\(\s*(err|error)\s*,\s*[^)]+\)\s*=>\s*\{/)
+        || code.match(/function\s*(?:[A-Za-z_$][\w$]*\s*)?\(\s*(err|error)\s*,\s*[^)]+\)\s*\{/);
+      if (nodeCb && !this._isSuppressed(lines, i)) {
         const errName = nodeCb[1];
         // Body starts right after the `{` on this line; scan until the
         // callback's braces balance (capped at 60 lines for pathological
         // files — a longer body that still never says `err` has earned it).
-        const braceOffset = line.indexOf('{', nodeCb.index + nodeCb[0].length - 1);
-        const sameLineBody = braceOffset >= 0 ? line.slice(braceOffset + 1) : '';
+        const braceOffset = code.indexOf('{', nodeCb.index + nodeCb[0].length - 1);
+        const sameLineBody = braceOffset >= 0 ? code.slice(braceOffset + 1) : '';
         const bodyLines = [sameLineBody];
         let depth = 1;
         for (const ch of sameLineBody) {
           if (ch === '{') depth += 1;
           else if (ch === '}') depth -= 1;
         }
-        for (let k = i + 1; k < Math.min(lines.length, i + 61) && depth > 0; k += 1) {
-          bodyLines.push(lines[k]);
-          for (const ch of lines[k]) {
+        for (let k = i + 1; k < Math.min(masked.length, i + 61) && depth > 0; k += 1) {
+          bodyLines.push(masked[k]);
+          for (const ch of masked[k]) {
             if (ch === '{') depth += 1;
             else if (ch === '}') { depth -= 1; if (depth === 0) break; }
           }
@@ -402,8 +402,8 @@ class ErrorSwallowModule extends BaseModule {
       //    `return`, `void`, `=` etc., and NOT followed on the same
       //    line by `.then(` or `.catch(`. Deliberately narrow.
       if (!isHarness) {
-        const flt = line.match(/^(\s*)([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)\s*\(/);
-        if (flt && !isInString(line, flt.index) && this._isExecutableAt(masked, i, line, flt.index) && !this._isSuppressed(lines, i)) {
+        const flt = code.match(/^(\s*)([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)\s*\(/);
+        if (flt && !this._isSuppressed(lines, i)) {
           const indent = flt[1];
           const receiver = flt[2];
           const method = flt[3];
@@ -419,13 +419,13 @@ class ErrorSwallowModule extends BaseModule {
           // when its first argument opens with `{`. Kills the Map/Set/cookie
           // false-positive class without losing real floating DB deletes.
           if (method.toLowerCase() === 'delete') {
-            const afterOpen = line.slice(flt.index + flt[0].length).trimStart();
+            const afterOpen = code.slice(flt.index + flt[0].length).trimStart();
             if (!afterOpen.startsWith('{')) continue;
           }
           if (PROMISE_METHOD_HINTS.includes(method.toLowerCase())) {
             // Prefix check — is the statement preceded by await/return/void/= ?
-            const before = line.slice(0, flt.index + indent.length);
-            const head = line.slice(flt.index + indent.length);
+            const before = code.slice(0, flt.index + indent.length);
+            const head = code.slice(flt.index + indent.length);
             const prevNonWs = before.trim();
             const looksAwaited = /\b(?:await|return|void|yield)\s*$/.test(prevNonWs)
               || /[=!?([,]\s*$/.test(prevNonWs);
@@ -446,28 +446,6 @@ class ErrorSwallowModule extends BaseModule {
     }
 
     return issues;
-  }
-
-  /**
-   * Is the match at `idx` executable code, or prose that looks like it?
-   *
-   * Found by self-scan 2026-09-04: the doc comment at the top of
-   * `src/core/guarded-catch.js` shows `try { await db.commit(); } catch {}` as
-   * the example of a genuine swallow, and this module reported it — twice, at
-   * ERROR, blocking our own repo on its own documentation. `_isCommentLine`
-   * only covers a whole line starting with `//`; a `/** ... *\/` block or a
-   * trailing comment slipped straight through, and `isInString` answers a
-   * different question.
-   *
-   * The masked copy already blanks comment and string content while keeping
-   * every offset, so the test is simply: is the character still there?
-   */
-  _isExecutableAt(masked, lineIdx, line, idx) {
-    const m = masked && masked[lineIdx];
-    if (typeof m !== 'string') return true;
-    let p = idx;
-    while (p < line.length && /\s/.test(line[p])) p += 1;
-    return m[p] === line[p];
   }
 
   /**
@@ -547,7 +525,7 @@ class ErrorSwallowModule extends BaseModule {
     return m ? m[1] : null;
   }
 
-  _catchNoopDetails({ rel, line, isHarness, guard, what, suggestion }) {
+  _catchNoopDetails({ rel, line, isHarness, guard, commentOnly, what, suggestion }) {
     const at = `${rel}:${line}`;
     if (guard && guard.guarded) {
       const why = {
@@ -565,7 +543,7 @@ class ErrorSwallowModule extends BaseModule {
       };
     }
     return {
-      severity: isHarness ? 'warning' : 'error',
+      severity: isHarness || commentOnly ? 'warning' : 'error',
       file: rel,
       line,
       message: `${at} ${what} — Promise rejection is silently dropped`,
@@ -626,42 +604,41 @@ class ErrorSwallowModule extends BaseModule {
     };
   }
 
-  // Best-effort block-body extractor. Starting at `lines[lineIdx]`
-  // with `{` at `openIdx` on that line, walk forward counting braces
-  // (string-aware) and return the concatenated body (excluding the
-  // outermost braces) plus whether the block was closed.
-  _collectBlockBody(lines, lineIdx, hintIdx) {
-    const startLine = lines[lineIdx];
-    const braceIdx = startLine.indexOf('{', hintIdx);
-    if (braceIdx === -1) return { body: '', closed: false };
+  // Best-effort block-body extractor. Starting at `masked[lineIdx]` with
+  // `{` at or after `hintIdx`, walk forward counting braces on the MASKED
+  // text (a brace inside a string or a comment is not a brace) and return
+  // the text between the outermost braces twice — `body` raw, `code` masked
+  // — plus whether the block was closed.
+  _collectBlockBody(masked, lines, lineIdx, hintIdx) {
+    const braceIdx = (masked[lineIdx] || '').indexOf('{', hintIdx);
+    if (braceIdx === -1) return { body: '', code: '', closed: false };
 
     let depth = 1;
     let body = '';
-    let firstLineRemainder = startLine.slice(braceIdx + 1);
-    const walkLine = (text) => {
-      for (let i = 0; i < text.length; i += 1) {
-        const ch = text[i];
-        if (ch === '{') { depth += 1; body += ch; }
+    let code = '';
+    const done = (closed) => ({ body: body.trim(), code: code.trim(), closed });
+    const walkLine = (j, from) => {
+      const m = masked[j] || '';
+      const r = lines[j] || '';
+      for (let k = from; k < m.length; k += 1) {
+        const ch = m[k];
+        if (ch === '{') depth += 1;
         else if (ch === '}') {
           depth -= 1;
-          if (depth === 0) return { closed: true, rest: text.slice(i + 1) };
-          body += ch;
+          if (depth === 0) return true;
         }
-        else body += ch;
+        body += r[k];
+        code += ch;
       }
-      return { closed: false, rest: '' };
+      return false;
     };
-    // Process first-line remainder
-    const first = walkLine(firstLineRemainder);
-    if (first.closed) return { body: body.trim(), closed: true };
-
-    body += '\n';
+    if (walkLine(lineIdx, braceIdx + 1)) return done(true);
     for (let j = lineIdx + 1; j < lines.length && j < lineIdx + 40; j += 1) {
-      const res = walkLine(lines[j]);
-      if (res.closed) return { body: body.trim(), closed: true };
       body += '\n';
+      code += '\n';
+      if (walkLine(j, 0)) return done(true);
     }
-    return { body: body.trim(), closed: false };
+    return done(false);
   }
 
   // True if the catch body only contains `console.*` calls (or a

@@ -68,29 +68,6 @@ const EXTRA_EXCLUDES = ['.terraform'];
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
-function matchOutsideString(line, re) {
-  const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-  const gre = new RegExp(re.source, flags);
-  let m;
-  while ((m = gre.exec(line)) !== null) {
-    if (!isInString(line, m.index)) return m;
-    if (m.index === gre.lastIndex) gre.lastIndex += 1;
-  }
-  return null;
-}
-
 // Acquire patterns. Each entry:
 //   re:   matches the acquire call, with capture group for the
 //         variable name (if the line looks like `const x = ...`).
@@ -175,28 +152,21 @@ class ResourceLeakModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const isTestFile = this._isTestPath(rel);
-    const lines = content.split(/\r?\n/);
+    // Every acquire, close, return and clear is matched on the masked lines
+    // (BaseModule._maskedLines: strings, regexes and comments blanked, offsets
+    // kept): `* setInterval (never cleared)` in a module doc, a
+    // `setInterval(` quoted in a string, and a `handle.close()` that exists
+    // only in a comment are all data. Line numbers index the raw file.
+    const lines = this._maskedLines(content);
     let issues = 0;
 
-    // Track JSDoc / block-comment state so `* setInterval (never
-    // cleared)` lines in module docs don't false-positive.
-    let inBlockComment = false;
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (inBlockComment) {
-        if (/\*\//.test(line)) inBlockComment = false;
-        continue;
-      }
-      if (/^\s*\/\*/.test(line) && !/\*\//.test(line)) {
-        inBlockComment = true;
-        continue;
-      }
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+      const line = lines[i] || '';
+      if (!line.trim()) continue;
 
       // --- Standard acquire patterns ---
       for (const pattern of ACQUIRE_PATTERNS) {
-        const m = matchOutsideString(line, pattern.re);
+        const m = pattern.re.exec(line);
         if (!m) continue;
         const varName = m[1];
         if (!varName) continue;
@@ -220,7 +190,7 @@ class ResourceLeakModule extends BaseModule {
       }
 
       // --- setInterval — captured but not cleared ---
-      const siAssigned = matchOutsideString(line, SETINTERVAL_ASSIGNED_RE);
+      const siAssigned = SETINTERVAL_ASSIGNED_RE.exec(line);
       if (siAssigned) {
         const varName = siAssigned[1];
         const cleared = this._isIntervalCleared(lines, i, varName);
@@ -239,7 +209,7 @@ class ResourceLeakModule extends BaseModule {
       }
 
       // --- setInterval — bare call, return value discarded ---
-      const siBare = matchOutsideString(line, SETINTERVAL_BARE_RE);
+      const siBare = SETINTERVAL_BARE_RE.exec(line);
       // Reject when the line already had an assignment (handled above)
       if (siBare && !SETINTERVAL_ASSIGNED_RE.test(line) && !/=\s*setInterval/.test(line)) {
         issues += this._flag(result, `resource-leak:setinterval:${rel}:${i + 1}`, {
@@ -259,6 +229,12 @@ class ResourceLeakModule extends BaseModule {
     const escaped = this._escapeRegex(varName);
     const verbGroup = closeVerbs.map((v) => this._escapeRegex(v)).join('|');
     const closeRe = new RegExp(`\\b${escaped}\\.(?:${verbGroup})\\s*\\(`);
+    // A numeric descriptor from `fs.openSync` has no `.close()` — it is
+    // closed with `fs.closeSync(fd)` / `fs.close(fd, cb)`. Until 2026-09-05
+    // this was invisible, and `src/core/log-streamer.js:90` escaped only
+    // because a template string 70 lines later happened to contain `/fd/1`
+    // and the raw-line return check read it as a reference.
+    const closeArgRe = new RegExp(`\\bclose(?:Sync)?\\s*\\(\\s*${escaped}\\b`);
     // `stream.pipeline(x, ...)` also counts as cleanup.
     const pipelineRe = new RegExp(`\\bpipeline\\s*\\([^)]*\\b${escaped}\\b`);
     // `stream.finished(x, ...)` emits close — also counts.
@@ -268,7 +244,7 @@ class ResourceLeakModule extends BaseModule {
     const end = Math.min(lines.length, startLine + 80);
     for (let i = startLine; i < end; i += 1) {
       const line = lines[i];
-      if (closeRe.test(line) || pipelineRe.test(line) || finishedRe.test(line)) {
+      if (closeRe.test(line) || closeArgRe.test(line) || pipelineRe.test(line) || finishedRe.test(line)) {
         return true;
       }
     }

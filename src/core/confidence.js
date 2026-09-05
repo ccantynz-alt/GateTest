@@ -26,6 +26,7 @@
  */
 
 'use strict';
+const { maskSource, literalKindAt } = require('./source-strip');
 
 const DEFAULT_CONFIDENCE = 1.0;
 const BLOCK_THRESHOLD = 0.7;
@@ -204,80 +205,38 @@ function isHomeworkDir(filePath) {
   return null;
 }
 
+// The mask of the last source text asked about: findings for one file
+// arrive together, and masking a large file per finding would be the cost.
+let lastSource = null;
+let lastFile = null;
+let lastMasked = null;
+function maskedOf(sourceText, filePath) {
+  if (sourceText !== lastSource || (filePath || '') !== lastFile) {
+    // maskSource picks the stripper by language — a shell script masked as
+    // JavaScript read `/*)` in a case pattern as a comment opener (gradlew).
+    lastSource = sourceText;
+    lastFile = filePath || '';
+    lastMasked = { raw: sourceText.split(/\r?\n/), masked: maskSource(sourceText, filePath).split(/\r?\n/) };
+  }
+  return lastMasked;
+}
+
 /**
- * Inside block comment: line is between `/*` and `*\/`.
- *
- * Walks the source forward from line 0 to `line` (1-indexed) tracking
- * block-comment state. Returns multiplier 0.2 if the target line is
- * inside an unclosed block comment.
+ * Inside a comment: the line's first non-space character is masked and the
+ * mask says it is a comment (src/core/source-strip.js literalKindAt — one
+ * definition; the block-comment walker this replaced skipped line comments
+ * and strings on its own and disagreed with the modules' stripper at the
+ * edges, KI #85).
  */
-function isInsideBlockComment(sourceText, line) {
+function isInsideBlockComment(sourceText, line, filePath) {
   if (!sourceText || !line || line < 1) return null;
-  const lines = sourceText.split('\n');
-  if (line > lines.length) return null;
-
-  let inBlock = false;
-  // Scan up to (but not including) the target line — we want the state
-  // ENTERING the target line.
-  //
-  // The walker MUST skip line comments and string literals. It used to
-  // count any `/*` anywhere, so a line comment like
-  //     // The /api/v1/* endpoints expose ...
-  // or a string like '**/*.test.js' latched `inBlock` on permanently, and
-  // every finding below it in that file scored 0.20 "inside block comment".
-  //
-  // That is the FALSE-NEGATIVE direction and it defeats the gate: error
-  // findings below the block threshold are downgraded to non-blocking soft
-  // errors. Measured on this repo before the fix — 13 findings carried the
-  // signal, 13 of them were not inside a comment at all, and 1 was
-  // error-severity, i.e. the gate passed something it should have caught.
-  for (let i = 0; i < line - 1; i += 1) {
-    const s = lines[i];
-    let j = 0;
-    let quote = null;
-    while (j < s.length) {
-      const ch = s[j];
-      const nx = s[j + 1];
-
-      if (inBlock) {
-        if (ch === '*' && nx === '/') { inBlock = false; j += 2; continue; }
-        j += 1;
-        continue;
-      }
-      if (quote) {
-        if (ch === '\\') { j += 2; continue; }   // escape — skip the pair
-        if (ch === quote) quote = null;
-        j += 1;
-        continue;
-      }
-      if (ch === '"' || ch === "'" || ch === '`') { quote = ch; j += 1; continue; }
-      // `//` starts a line comment: nothing after it on this line is code,
-      // so no `/*` in it can open a block.
-      if (ch === '/' && nx === '/') break;
-      if (ch === '/' && nx === '*') { inBlock = true; j += 2; continue; }
-      j += 1;
-    }
-    // An unterminated quote cannot span a newline in valid JS (template
-    // literals aside, which we deliberately do not track across lines —
-    // over-tracking would resurrect the very bug this guards against).
-    quote = null;
-  }
-
-  if (inBlock) {
-    return { multiplier: 0.2, reason: 'inside block comment' };
-  }
-
-  // Also flag if the line itself is a single-line block comment:
-  // /* ... */ on one line
-  const target = lines[line - 1] || '';
-  if (/^\s*\/\*[\s\S]*\*\//.test(target) && !/[A-Za-z0-9_]\s*=\s*['"`]/.test(target)) {
-    return { multiplier: 0.2, reason: 'inside block comment' };
-  }
-  // Line-comment-only line (//-prefixed)
-  if (/^\s*\/\//.test(target)) {
-    return { multiplier: 0.2, reason: 'inside line comment' };
-  }
-  return null;
+  const { raw, masked } = maskedOf(sourceText, filePath);
+  if (line > raw.length) return null;
+  const target = raw[line - 1] || '';
+  const first = target.search(/\S/);
+  if (first === -1) return null;
+  if (literalKindAt(raw, masked, line - 1, first) !== 'comment') return null;
+  return { multiplier: 0.2, reason: /^\s*\/\//.test(target) || /^\s*#/.test(target) ? 'inside line comment' : 'inside block comment' };
 }
 
 /**
@@ -286,78 +245,18 @@ function isInsideBlockComment(sourceText, line) {
  * "is the line dominated by a string?" — used by modules that don't
  * track column.
  */
-/**
- * Is `column` inside string TEXT — as opposed to code?
- *
- * The distinction that matters is `${...}` interpolation. The previous
- * implementation flipped a boolean on every backtick and answered "inside a
- * string" for everything between them, so the most common injection shape in
- * modern JavaScript —
- *
- *     const q = `SELECT * FROM users WHERE id = ${req.query.id}`;
- *
- * — scored 0.4 at the column of `req.query.id`. Below the 0.7 block
- * threshold, an error-severity finding there is downgraded to a
- * non-blocking soft error, so the gate waved SQL injection through. Same
- * false-negative class as the block-comment walker (KI #85), found the same
- * way: by looking at what the "string literal" signal was actually firing on.
- *
- * Maintains a stack so nesting works — `${obj['key']}` is a string inside
- * interpolation inside a template.
- *
- * @param {string} lineText
- * @param {number} column
- * @returns {boolean} true only when the position is literal text
- */
-function _isInsideStringText(lineText, column) {
-  const stack = []; // { q: "'" | '"' | '`', interp: number }
-  let i = 0;
-  while (i < column && i < lineText.length) {
-    const ch = lineText[i];
-    const nx = lineText[i + 1];
-    const top = stack[stack.length - 1];
-
-    // Inside `${ ... }` — ordinary code rules apply.
-    if (top && top.q === '`' && top.interp > 0) {
-      if (ch === '\\') { i += 2; continue; }
-      if (ch === '{') { top.interp += 1; i += 1; continue; }
-      if (ch === '}') { top.interp -= 1; i += 1; continue; }
-      if (ch === "'" || ch === '"' || ch === '`') { stack.push({ q: ch, interp: 0 }); i += 1; continue; }
-      i += 1;
-      continue;
-    }
-
-    // Inside string text.
-    if (top) {
-      if (ch === '\\') { i += 2; continue; }
-      if (top.q === '`' && ch === '$' && nx === '{') { top.interp = 1; i += 2; continue; }
-      if (ch === top.q) { stack.pop(); i += 1; continue; }
-      i += 1;
-      continue;
-    }
-
-    // Outside any string.
-    if (ch === "'" || ch === '"' || ch === '`') { stack.push({ q: ch, interp: 0 }); i += 1; continue; }
-    i += 1;
-  }
-
-  const top = stack[stack.length - 1];
-  if (!top) return false;
-  // Sitting in a template's interpolation is code, not text.
-  if (top.q === '`' && top.interp > 0) return false;
-  return true;
-}
-
-function isInsideStringLiteral(sourceText, line, column) {
+function isInsideStringLiteral(sourceText, line, column, filePath) {
   if (!sourceText || !line || line < 1) return null;
-  const lines = sourceText.split('\n');
-  if (line > lines.length) return null;
-  const lineText = lines[line - 1];
+  const { raw, masked } = maskedOf(sourceText, filePath);
+  if (line > raw.length) return null;
+  const lineText = raw[line - 1];
   if (!lineText) return null;
 
-  // If column is given, walk to that column tracking string state.
+  // With a column: the mask decides. A `${…}` hole is code, so the injection
+  // shape `\`SELECT … ${req.query.id}\`` scores at the column of the hole as
+  // code (the 0.4 that once waved SQL injection through, see git history).
   if (typeof column === 'number' && column >= 0) {
-    if (_isInsideStringText(lineText, column)) {
+    if (literalKindAt(raw, masked, line - 1, column) === 'string') {
       return { multiplier: 0.4, reason: 'string literal' };
     }
     return null;
@@ -484,12 +383,12 @@ function scoreFinding(input = {}, ruleOverrides = null) {
 
   // Source-text signals (only fire when source is available)
   if (input.sourceText && input.line) {
-    const sBlock = isInsideBlockComment(input.sourceText, input.line);
+    const sBlock = isInsideBlockComment(input.sourceText, input.line, input.filePath);
     if (sBlock) {
       score *= sBlock.multiplier;
       signals.push(sBlock.reason);
     }
-    const sStr = isInsideStringLiteral(input.sourceText, input.line, input.column);
+    const sStr = isInsideStringLiteral(input.sourceText, input.line, input.column, input.filePath);
     if (sStr) {
       score *= sStr.multiplier;
       signals.push(sStr.reason);

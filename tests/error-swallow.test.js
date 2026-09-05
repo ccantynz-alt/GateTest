@@ -1088,3 +1088,81 @@ describe('ErrorSwallowModule — guarded .catch(noop) (control pair)', () => {
     assert.strictEqual(plain.severity, 'error');
   });
 });
+
+describe('ErrorSwallowModule — one stripper (control pair)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('an empty catch inside a string, a template or a comment is not a catch; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/svc.js', [
+      'const doc = "try { a(); } catch (err) {}";',
+      'const tpl = `try {',
+      '  a();',
+      '} catch (err) {}',
+      '`;',
+      '/*',
+      'try { a(); } catch (err) {}',
+      'p.catch(() => {});',
+      '*/',
+      'function real() {',
+      '  try { a(); } catch (err) {}',
+      '}',
+      'module.exports = { doc, tpl, real };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^error-swallow:/.test(c.name));
+    assert.deepStrictEqual(
+      flagged.map((c) => c.name),
+      ['error-swallow:empty-catch:src/svc.js:11'],
+      'only the real catch on line 11 erases an error',
+    );
+    assert.strictEqual(flagged[0].severity, 'error');
+  });
+
+  it('a comment-only `.catch(() => { /* … */ })` is reported at warning — a comment documents intent, it does not handle the error; the bare one beside it stays an error (2026-09-05)', async () => {
+    write(tmp, 'src/noop.js', [
+      'p.catch(() => { /* best-effort */ });',
+      'q.catch(() => {});',
+      'const example = "r.catch(() => {})";',
+      'export const ok = example;',
+    ].join('\n') + '\n');
+    const r = await run(tmp);
+    const byLine = (n) => r.checks.find((c) => !c.passed && c.name === `error-swallow:catch-noop:src/noop.js:${n}`);
+    assert.ok(byLine(1), 'the comment-only noop handler must be reported');
+    assert.strictEqual(byLine(1).severity, 'warning');
+    assert.match(byLine(1).message, /comment documents intent/);
+    assert.ok(byLine(2), 'the bare noop handler must be reported');
+    assert.strictEqual(byLine(2).severity, 'error');
+    assert.ok(!byLine(3), 'a quoted example is not a handler');
+  });
+
+  it('still reads the event name from inside the quotes — a silent uncaughtException handler is reported (2026-09-05)', async () => {
+    write(tmp, 'src/boot.js', [
+      "process.on('uncaughtException', (err) => { logger.warn(err); });",
+    ].join('\n'));
+    const r = await run(tmp);
+    const f = r.checks.find((c) => c.name === 'error-swallow:global-silent-handler:src/boot.js:1');
+    assert.ok(f, 'the handler on line 1 must be reported');
+    assert.strictEqual(f.event, 'uncaughtException');
+  });
+
+  it('an empty catch below a backslash-continued string is still on its own line (2026-09-05)', async () => {
+    // The stripper this module used before 2026-09-05 masked the newline
+    // inside the continued string to a space, so every later masked line was
+    // compared against the wrong raw line and this catch was dropped — the
+    // same shift moved src/modules/env-vars.js:332 to a JSON.parse line.
+    write(tmp, 'src/svc.js', [
+      'const banner = "first line \\',
+      'second line";',
+      'function real() {',
+      '  try { a(); } catch (err) {}',
+      '}',
+      'module.exports = { banner, real };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^error-swallow:/.test(c.name));
+    assert.deepStrictEqual(flagged.map((c) => c.name), ['error-swallow:empty-catch:src/svc.js:4']);
+    assert.strictEqual(flagged[0].severity, 'error');
+  });
+});

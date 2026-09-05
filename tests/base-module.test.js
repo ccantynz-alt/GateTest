@@ -27,56 +27,66 @@ describe('BaseModule#_exec — timeout vs crash detection', () => {
   });
 });
 
-describe('BaseModule#_isInsideStringLiteral', () => {
+describe('BaseModule#_maskedLines / _insideLiteral — the one stripper, line by line', () => {
   const mod = new BaseModule('test', 'test');
+  const inside = (src, word, rel = 'a.js') => {
+    const lines = src.split(/\r?\n/);
+    const masked = mod._maskedLines(src, rel);
+    const i = lines.findIndex((l) => l.includes(word));
+    return mod._insideLiteral(masked, lines, i, lines[i].indexOf(word));
+  };
 
   it('is false for a real top-level statement (the case that must still be flagged)', () => {
-    const line = 'process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";';
-    const idx = line.indexOf('process');
-    assert.strictEqual(mod._isInsideStringLiteral(line, idx), false);
+    assert.strictEqual(inside('process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";', 'process'), false);
   });
 
   it('is true when the same text is nested inside an outer string literal (test fixture data)', () => {
-    const line = "write(tmp, 'src/a.js', 'process.env.NODE_TLS_REJECT_UNAUTHORIZED = \"0\";\\n');";
-    const idx = line.indexOf('process');
-    assert.strictEqual(mod._isInsideStringLiteral(line, idx), true);
+    assert.strictEqual(inside("write(tmp, 'src/a.js', 'process.env.NODE_TLS_REJECT_UNAUTHORIZED = \"0\";\\n');", 'process'), true);
   });
 
   it('is true inside a single-quoted config value', () => {
-    const line = "secret: 'changeme'";
-    const idx = line.indexOf('changeme');
-    assert.strictEqual(mod._isInsideStringLiteral(line, idx), true);
+    assert.strictEqual(inside("secret: 'changeme'", 'changeme'), true);
   });
 
   it('handles escaped quotes without losing track of string state', () => {
-    const line = String.raw`const s = 'it\'s fine'; process.env.X = "0";`;
-    const idx = line.indexOf('process');
-    assert.strictEqual(mod._isInsideStringLiteral(line, idx), false);
-  });
-});
-
-describe('BaseModule#_stripJsStrings — regex literals', () => {
-  const mod = new BaseModule('test', 'test');
-
-  it('blanks a regex literal used in a test assertion, keeping delimiters', () => {
-    const { stripped } = mod._stripJsStrings('assert.doesNotMatch(result, /rejectUnauthorized: false/);', false);
-    assert.ok(!stripped.includes('rejectUnauthorized'), `expected regex body blanked, got: ${stripped}`);
-    assert.strictEqual(stripped, 'assert.doesNotMatch(result, /                         /);');
+    assert.strictEqual(inside(String.raw`const s = 'it\'s fine'; process.env.X = "0";`, 'process'), false);
   });
 
-  it('still flags a real object literal (not a regex) unaffected by the new branch', () => {
-    const { stripped } = mod._stripJsStrings('const agent = new https.Agent({ rejectUnauthorized: false });', false);
-    assert.ok(stripped.includes('rejectUnauthorized: false'), 'real code must still be visible after stripping');
+  it('a call inside ${…} is not inside a string; text after a closed hole, or in a plain string, is', () => {
+    assert.strictEqual(inside('const apiKey = `${Math.random()}`;', 'Math'), false);
+    assert.strictEqual(inside('t = `${ `${Math.random()}` }`', 'Math'), false);
+    assert.strictEqual(inside('s = `a ${f("}")} Math`', 'Math'), true);
+    assert.strictEqual(inside('x = "const token = Math.random()"', 'Math'), true);
   });
 
-  it('does not mistake division for a regex literal', () => {
-    const { stripped } = mod._stripJsStrings('const half = total / 2;', false);
-    assert.strictEqual(stripped, 'const half = total / 2;');
+  it('sees what a per-line counter never could: a template literal and a block comment spanning lines', () => {
+    assert.strictEqual(inside('const t = `line one\nprocess.env.X = "0";\n`;', 'process'), true);
+    assert.strictEqual(inside('/* opened above\nprocess.env.X = "0";\n*/', 'process'), true);
   });
 
-  it('handles a character class containing a slash inside the regex', () => {
-    const { stripped } = mod._stripJsStrings('const re = /[a/b]:false/;', false);
-    assert.ok(!stripped.includes('false'), `expected regex with char-class blanked, got: ${stripped}`);
+  it('blanks a regex literal used in a test assertion, keeping delimiters; a real object literal stays visible', () => {
+    const [m1] = mod._maskedLines('assert.doesNotMatch(result, /rejectUnauthorized: false/);');
+    assert.strictEqual(m1, 'assert.doesNotMatch(result, /                         /);');
+    const [m2] = mod._maskedLines('const agent = new https.Agent({ rejectUnauthorized: false });');
+    assert.ok(m2.includes('rejectUnauthorized: false'), 'real code must still be visible');
+    const [m3] = mod._maskedLines('const half = total / 2;');
+    assert.strictEqual(m3, 'const half = total / 2;');
+    const [m4] = mod._maskedLines('const re = /[a/b]:false/;');
+    assert.ok(!m4.includes('false'), `expected the char-class regex blanked, got: ${m4}`);
+  });
+
+  it('a .py file is masked by the Python stripper: an apostrophe in a # comment opens nothing', () => {
+    assert.strictEqual(inside("x = 1 # don't\nmodel = 'gpt-4'\n", 'model', 'a.py'), false);
+  });
+
+  it('_matchOnRaw reads a quoted value at the offset where the masked line kept the opening quote', () => {
+    const line = "  secret: 'changeme',";
+    const [code] = mod._maskedLines(line);
+    const m = mod._matchOnRaw(code, line, /secret\s*:\s*['"]/, /secret\s*:\s*['"]([^'"]+)['"]/y);
+    assert.strictEqual(m && m[1], 'changeme');
+    const quoted = "const example = \"secret: 'changeme'\";";
+    const [code2] = mod._maskedLines(quoted);
+    assert.strictEqual(mod._matchOnRaw(code2, quoted, /secret\s*:\s*['"]/, /secret\s*:\s*['"]([^'"]+)['"]/y), null);
   });
 });
 
@@ -119,16 +129,3 @@ describe('BaseModule#_isCommentLine', () => {
 // `apiKey = \`${Math.random()}\`` as prose, so the security module anchored
 // its regex at the line start to dodge the guard — and then fired on
 // Math.random() inside a plain string (the inert-fixture sweep caught it).
-describe('BaseModule#_isInsideStringLiteral — template expressions are code', () => {
-  const mod = new BaseModule('t', 'd');
-  const at = (line, word) => mod._isInsideStringLiteral(line, line.indexOf(word));
-  it('a call inside ${…} is not inside a string', () => {
-    assert.strictEqual(at('const apiKey = `${Math.random()}`;', 'Math'), false);
-    assert.strictEqual(at('t = `${ `${Math.random()}` }`', 'Math'), false);
-  });
-  it('POSITIVE CONTROL: text after a closed ${…}, or in a plain string, is still inside the string', () => {
-    assert.strictEqual(at('s = `a ${f("}")} Math`', 'Math'), true);
-    assert.strictEqual(at('s = `a ${ {a:1} } Math`', 'Math'), true);
-    assert.strictEqual(at('x = "const token = Math.random()"', 'Math'), true);
-  });
-});

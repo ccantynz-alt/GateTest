@@ -75,28 +75,17 @@ const EXTRA_EXCLUDES = ['.terraform'];
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
-// String-aware helper (shared pattern across modules).
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
-function matchOutsideString(line, re) {
-  const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-  const gre = new RegExp(re.source, flags);
+// Every deciding regex runs on the MASKED line (BaseModule._maskedLines:
+// string, regex and comment content blanked, offsets preserved). The raw line
+// is read only for the loop head quoted in a message and for a retry
+// library's name, which lives inside the import's quotes.
+function usesRetryLib(codeText, rawText) {
+  const open = /\b(?:require|import)\s*\(?\s*['"`]/g;
   let m;
-  while ((m = gre.exec(line)) !== null) {
-    if (!isInString(line, m.index)) return m;
-    if (m.index === gre.lastIndex) gre.lastIndex += 1;
+  while ((m = open.exec(codeText)) !== null) {
+    if (/^(?:async-retry|p-retry|retry|cockatiel|opossum)['"`]/.test(rawText.slice(m.index + m[0].length))) return true;
   }
-  return null;
+  return false;
 }
 
 // Identify any HTTP / network call shape inside a retry block.
@@ -117,7 +106,6 @@ const RETRY_LIB_RES = [
   /\bretry\s*\(\s*async/,
   /\bpRetry\s*\(/,
   /\basyncRetry\s*\(/,
-  /\b(?:require|import)\s*\(?\s*['"`](?:async-retry|p-retry|retry|cockatiel|opossum)['"`]/,
 ];
 
 // Sleep / delay primitives with a literal-number first argument.
@@ -172,19 +160,22 @@ class RetryHygieneModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const lines = content.split(/\r?\n/);
+    const masked = this._maskedLines(content);
     let issues = 0;
 
     // Find retry-shaped loop blocks first. A retry block is a loop
     // whose body contains an HTTP call AND either awaits a `sleep`
     // or matches a `while (!ok)` / `for (;;)` / `while (true)` head.
-    const retryBlocks = this._findRetryBlocks(lines);
+    const retryBlocks = this._findRetryBlocks(masked);
 
     for (const block of retryBlocks) {
-      const head = lines[block.start] || '';
-      const body = lines.slice(block.start, block.end + 1).join('\n');
+      const rawHead = lines[block.start] || '';
+      const head = masked[block.start] || '';
+      const body = masked.slice(block.start, block.end + 1).join('\n');
+      const rawBody = lines.slice(block.start, block.end + 1).join('\n');
 
       // Rule: library-backed retry → info.
-      if (RETRY_LIB_RES.some((re) => re.test(head) || re.test(body))) {
+      if (RETRY_LIB_RES.some((re) => re.test(head) || re.test(body)) || usesRetryLib(body, rawBody)) {
         result.addCheck(`retry-hygiene:library-ok:${rel}:${block.start + 1}`, true, {
           severity: 'info',
           file: rel,
@@ -204,7 +195,7 @@ class RetryHygieneModule extends BaseModule {
           severity: 'error',
           file: rel,
           line: block.start + 1,
-          message: `${rel}:${block.start + 1} infinite retry loop (\`${head.trim().slice(0, 50)}\`) with no visible \`break\` or max-attempts counter — a permanent upstream failure becomes an infinite loop that pins CPU and fills logs`,
+          message: `${rel}:${block.start + 1} infinite retry loop (\`${rawHead.trim().slice(0, 50)}\`) with no visible \`break\` or max-attempts counter — a permanent upstream failure becomes an infinite loop that pins CPU and fills logs`,
           suggestion: 'Add `if (attempt >= MAX_ATTEMPTS) throw err;` OR use a retry library (async-retry / p-retry) that enforces a bound.',
         });
       }
@@ -214,10 +205,10 @@ class RetryHygieneModule extends BaseModule {
       // argument is a raw number and the surrounding code does NOT
       // multiply by `attempt`/`i`/`n` and does NOT use `Math.random`,
       // flag no-backoff + no-jitter.
-      const literalSleep = this._findLiteralSleep(lines, block);
+      const literalSleep = this._findLiteralSleep(masked, block);
       if (literalSleep) {
         const { lineIdx, delay } = literalSleep;
-        const window = lines.slice(Math.max(block.start, lineIdx - 3), Math.min(block.end + 1, lineIdx + 4)).join('\n');
+        const window = masked.slice(Math.max(block.start, lineIdx - 3), Math.min(block.end + 1, lineIdx + 4)).join('\n');
         const hasMultiplier = /(?:attempt|tries|retries|i|n)\s*[*]/.test(window)
           || /Math\.pow\s*\(/.test(window)
           || /\*\*\s*(?:attempt|tries|retries|i|n)/.test(window)
@@ -278,21 +269,19 @@ class RetryHygieneModule extends BaseModule {
   // A retry block is a loop whose body awaits an HTTP call.
   // Use the same loop-range approach as n-plus-one but restrict
   // to loops that contain HTTP.
-  _findRetryBlocks(lines) {
+  _findRetryBlocks(masked) {
     const blocks = [];
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
+    for (let i = 0; i < masked.length; i += 1) {
       // Match: while (...), for (...), for (;;)
-      const blockMatch = matchOutsideString(line, /\b(?:while|for)\s*\(/);
-      if (!blockMatch) continue;
+      if (!/\b(?:while|for)\s*\(/.test(masked[i])) continue;
 
       // Find `{`
-      const braceLine = this._findOpenBraceLine(lines, i);
+      const braceLine = this._findOpenBraceLine(masked, i);
       if (braceLine < 0) continue;
-      const end = this._findMatchingBrace(lines, braceLine);
+      const end = this._findMatchingBrace(masked, braceLine);
       if (end < 0) continue;
 
-      const bodyStr = lines.slice(braceLine, end + 1).join('\n');
+      const bodyStr = masked.slice(braceLine, end + 1).join('\n');
       const hasHttp = HTTP_CALL_RES.some((re) => re.test(bodyStr));
       const hasSleep = LITERAL_SLEEP_RES.some((re) => re.test(bodyStr));
       if (hasHttp || hasSleep) {
@@ -307,16 +296,14 @@ class RetryHygieneModule extends BaseModule {
       || LITERAL_SLEEP_RES.some((re) => re.test(body));
   }
 
-  _findLiteralSleep(lines, block) {
+  // Prose about sleep(5) is not a call to sleep(5): `// Time-based: send
+  // sleep(5), expect response delay` was reported as a real un-backed-off
+  // retry (KI #77). The masked lines carry no comment or string content.
+  _findLiteralSleep(masked, block) {
     for (let i = block.start; i <= block.end; i += 1) {
-      const line = lines[i];
-      // Prose about sleep(5) is not a call to sleep(5). Without this,
-      // `// Time-based: send sleep(5), expect response delay` was reported
-      // as a real un-backed-off retry (KI #77).
-      if (this._isCommentLine(line)) continue;
       for (const re of LITERAL_SLEEP_RES) {
-        const m = line.match(re);
-        if (m && !isInString(line, m.index)) {
+        const m = masked[i].match(re);
+        if (m) {
           const delay = parseInt(m[1] || m[2] || '0', 10);
           if (Number.isFinite(delay) && delay > 0) {
             return { lineIdx: i, delay };
@@ -327,14 +314,13 @@ class RetryHygieneModule extends BaseModule {
     return null;
   }
 
-  _findOpenBraceLine(lines, startLine) {
+  _findOpenBraceLine(masked, startLine) {
     let depthParen = 0;
     let seenOpenParen = false;
-    for (let i = startLine; i < lines.length && i < startLine + 30; i += 1) {
-      const line = lines[i];
+    for (let i = startLine; i < masked.length && i < startLine + 30; i += 1) {
+      const line = masked[i];
       for (let j = 0; j < line.length; j += 1) {
         const ch = line[j];
-        if (isInString(line, j)) continue;
         if (ch === '(') { depthParen += 1; seenOpenParen = true; }
         else if (ch === ')') { depthParen -= 1; }
         else if (ch === '{' && (depthParen === 0 || !seenOpenParen)) {
@@ -345,13 +331,12 @@ class RetryHygieneModule extends BaseModule {
     return -1;
   }
 
-  _findMatchingBrace(lines, braceLine) {
+  _findMatchingBrace(masked, braceLine) {
     let depth = 0;
     let started = false;
-    for (let i = braceLine; i < lines.length && i < braceLine + 200; i += 1) {
-      const line = lines[i];
+    for (let i = braceLine; i < masked.length && i < braceLine + 200; i += 1) {
+      const line = masked[i];
       for (let j = 0; j < line.length; j += 1) {
-        if (isInString(line, j)) continue;
         const ch = line[j];
         if (ch === '{') { depth += 1; started = true; }
         else if (ch === '}') {

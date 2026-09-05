@@ -722,3 +722,76 @@ describe('security — the self-pattern marker is an opt-out, not a mute', () =>
     }
   });
 });
+
+// =============================================================================
+// One stripper (2026-09-05): every pattern above is now located on
+// BaseModule._maskedLines, which sees a template literal and a block comment
+// that span lines — the per-line quote counter it replaced could not, and the
+// block-comment case below (a line inside `/* … */` that does not start with
+// `*`) was a live finding before. Each rule keeps its positive control beside
+// the three inert shapes so "quieter" cannot pass for "working".
+// =============================================================================
+
+describe('security — a pattern inside a string, a template or a comment is inert; the real one beside it fires', () => {
+  let tmp6;
+  beforeEach(() => { tmp6 = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sec-mask-')); });
+  afterEach(() => { fs.rmSync(tmp6, { recursive: true, force: true }); });
+
+  async function scanRule(source, ruleRe) {
+    fs.mkdirSync(path.join(tmp6, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(tmp6, 'package.json'), '{"name":"t","version":"1.0.0"}\n');
+    fs.writeFileSync(path.join(tmp6, 'src', 'x.js'), source);
+    const mod = new SecurityModule();
+    const result = makeResult();
+    await mod.run(result, { projectRoot: tmp6 });
+    return result.checks.filter((c) => !c.passed && ruleRe.test(c.name)).map((c) => c.line);
+  }
+
+  // Three inert copies of `snippet` (double-quoted string, template literal,
+  // block comment opened on an earlier line) followed by the real thing.
+  const around = (snippet, real) => [
+    `const doc = "${snippet}";`,
+    'const tpl = `',
+    `  ${snippet}`,
+    '`;',
+    '/* example:',
+    `   ${snippet}`,
+    '*/',
+    ...real,
+    '',
+  ].join('\n');
+
+  it('eval() inside a string, a template or a comment is not a call; the real one beside them is (2026-09-05)', async () => {
+    const lines = await scanRule(around('eval(userInput)', ['eval(userInput);']), /^security:eval\(\)/);
+    assert.deepStrictEqual(lines, [8]);
+  });
+
+  it('createHash(md5) inside a string, a template or a comment is not a hash; the real one beside them is (2026-09-05)', async () => {
+    const lines = await scanRule(around(
+      "hashPassword: crypto.createHash('md5').update(pw)",
+      ['function hashPassword(pw) {', "  return crypto.createHash('md5').update(pw).digest('hex');", '}'],
+    ), /weak-password-hash/);
+    assert.deepStrictEqual(lines, [9]);
+  });
+
+  it('target[req.body.key] = inside a string, a template or a comment is not an assignment; the real one beside them is (2026-09-05)', async () => {
+    const lines = await scanRule(around(
+      'target[req.body.key] = req.body.value',
+      ['function merge(target, req) {', '  target[req.body.key] = req.body.value;', '}'],
+    ), /prototype-pollution/);
+    assert.deepStrictEqual(lines, [9]);
+  });
+
+  it('fs.readFileSync(… + req.query.file) inside a string, a template or a comment reads nothing; the real one beside them is (2026-09-05)', async () => {
+    const lines = await scanRule(around(
+      "fs.readFileSync('/data/' + req.query.file)",
+      ['function read(req) {', "  return fs.readFileSync('/data/' + req.query.file);", '}'],
+    ), /path-traversal/);
+    assert.deepStrictEqual(lines, [9]);
+  });
+
+  it("app.disable('csrf') still fires (it reads the string), but not from inside a string, a template or a comment (2026-09-05)", async () => {
+    const lines = await scanRule(around("app.disable('csrf')", ["app.disable('csrf');"]), /CSRF protection disabled/);
+    assert.deepStrictEqual(lines, [8]);
+  });
+});

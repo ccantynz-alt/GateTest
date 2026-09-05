@@ -279,164 +279,144 @@ class MoneyFloatModule extends BaseModule {
 
   _scanJs(rel, text, result, hasLibrary) {
     const isTest = this._isTestPath(rel);
-    const errSev = isTest ? 'warning' : 'error';
-    const warnSev = isTest ? 'info' : 'warning';
+    const sev = { err: isTest ? 'warning' : 'error', warn: isTest ? 'info' : 'warning' };
     const lines = text.split(/\r?\n/);
+    // Every rule matches on the MASKED line (BaseModule._maskedLines): string,
+    // template, regex and comment bodies are blanked, offsets preserved. A
+    // line of documentation like
+    //   moneyFloat: "const total = parseFloat(priceString)",
+    // was once reported at ERROR severity — blocking a build over a code
+    // sample that never executes (Bible Forbidden #25; caught by
+    // tests/heavy/inert-fixture-sweep.test.js). The per-line quote counter
+    // that replaced it could not see a template literal or a block comment
+    // that started on an earlier line; the whole-file mask can (2026-09-05).
+    const masked = this._maskedLines(text);
     let issues = 0;
-    let inBlock = false;
 
     for (let i = 0; i < lines.length; i += 1) {
-      let line = lines[i];
-
-      // Block-comment state
-      if (inBlock) {
-        const endIdx = line.indexOf('*/');
-        if (endIdx === -1) continue;
-        line = line.slice(endIdx + 2);
-        inBlock = false;
-      }
-      const startBlock = line.indexOf('/*');
-      if (startBlock !== -1) {
-        const endBlock = line.indexOf('*/', startBlock + 2);
-        if (endBlock === -1) {
-          inBlock = true;
-          line = line.slice(0, startBlock);
-        } else {
-          line = line.slice(0, startBlock) + line.slice(endBlock + 2);
-        }
-      }
-      // Strip line comments
-      const lc = line.indexOf('//');
-      if (lc !== -1) line = line.slice(0, lc);
-
-      if (this._suppressed(lines, i)) continue;
-
-      // Rule 1: money-named var assigned from parseFloat / Number
-      //
-      // Both branches check _isInsideStringLiteral, matching the compound-assignment
-      // rule further down. They previously did NOT, so a line of documentation like
-      //   moneyFloat: "const total = parseFloat(priceString)",
-      // was reported at ERROR severity — blocking a build over a code sample that
-      // never executes (Bible Forbidden #25). Caught by
-      // tests/heavy/inert-fixture-sweep.test.js, which is the only reason a rule
-      // guarded in one place and unguarded two lines earlier came to light.
+      const code = masked[i] || '';
+      if (!code.trim() || this._suppressed(lines, i)) continue;
+      const at = { rel, line: i + 1, sev };
       if (!hasLibrary) {
-        const m1 = JS_ASSIGN_FLOAT_RE.exec(line);
-        if (m1 && MONEY_NAME_RE.test(m1[1]) && !this._isInsideStringLiteral(line, m1.index)) {
-          result.addCheck(`money-float:js-parse-float:${rel}:${i + 1}`, false, {
-            severity: errSev,
-            message: `Money-named variable "${m1[1]}" assigned from ${m1[2]}(...) — IEEE-754 precision loss. Use Decimal.js / big.js / dinero.js.`,
-            file: rel,
-            line: i + 1,
-            variable: m1[1],
-          });
-          issues += 1;
-        }
-        const m2 = JS_PROP_FLOAT_RE.exec(line);
-        if (m2 && MONEY_NAME_RE.test(m2[1]) && !this._isInsideStringLiteral(line, m2.index)) {
-          result.addCheck(`money-float:js-parse-float-prop:${rel}:${i + 1}`, false, {
-            severity: errSev,
-            message: `Money-named property ".${m2[1]}" assigned from ${m2[2]}(...) — IEEE-754 precision loss.`,
-            file: rel,
-            line: i + 1,
-            property: m2[1],
-          });
-          issues += 1;
-        }
+        issues += this._castRule(code, at, result);
+        issues += this._arithmeticRule(code, at, result);
       }
-
-      // Rule 2: plain arithmetic directly on a money-named identifier —
-      // no parseFloat/Number cast needed to trigger this bug class. JS has
-      // one numeric type (float64), so `price * (1 + taxRate)` and
-      // `total += item.price * item.qty` accumulate the exact same
-      // rounding error as an explicit cast. Compound-assign checked first
-      // so a line like `total += item.price * item.qty` reports once
-      // (on the accumulator) instead of twice (accumulator + RHS product).
-      //
-      // Generic accumulator names (total/balance/credit/margin) double as
-      // plain counters in real repos (`all.total += 1`, `total += items.length`)
-      // — those four names only fire when the SAME statement carries a second,
-      // distinct money-named identifier (`total += item.price * item.qty`
-      // fires via `price`) and never on a bare integer increment or a
-      // `.length` read. Specific names (price, cost, fee, salary, ...) keep
-      // firing alone, unchanged.
-      if (!hasLibrary) {
-        const mCompound = JS_COMPOUND_ASSIGN_RE.exec(line);
-        if (mCompound && MONEY_NAME_RE.test(mCompound[1]) && !this._isInsideStringLiteral(line, mCompound.index)) {
-          const rhs = line.slice(mCompound.index + mCompound[0].length);
-          const generic = isGenericMoneyName(mCompound[1]);
-          const fires = generic
-            ? hasCorroboratingMoneyIdentifier(line, mCompound[1]) && !isTrivialIncrementRhs(rhs)
-            : true;
-          if (fires) {
-            result.addCheck(`money-float:arithmetic:${rel}:${i + 1}`, false, {
-              severity: errSev,
-              message: `Money-named variable "${mCompound[1]}" accumulated via \`${mCompound[2]}\` — plain float arithmetic on a JS number, the same precision-loss risk as parseFloat/Number. Use Decimal.js / big.js / dinero.js.`,
-              file: rel,
-              line: i + 1,
-              variable: mCompound[1],
-            });
-            issues += 1;
-          }
-        } else {
-          const mArith = JS_MONEY_MULDIV_RE.exec(line);
-          if (mArith && MONEY_NAME_RE.test(mArith[1]) && !this._isInsideStringLiteral(line, mArith.index)) {
-            const opIdx = line.indexOf(mArith[2], mArith.index + mArith[1].length);
-            const isRegexLiteralTail = mArith[2] === '/' && REGEX_LITERAL_TAIL_RE.test(line.slice(opIdx + 1));
-            const generic = isGenericMoneyName(mArith[1]);
-            // Integer minor units rendered for display — `cents / 100` fed
-            // straight into Math.round / toFixed / Intl.NumberFormat or a
-            // template literal — is the correct way to SHOW money stored as
-            // cents; nothing is computed with the float and nothing stores
-            // it. Surfaced by the in-string guard learning that `${…}` is
-            // code (website/app/checkout/page.tsx:17, 2026-09-05). A value
-            // that is assigned, returned bare, or passed to anything else
-            // still fires.
-            const isDisplayOfMinorUnits = isMinorUnitsDisplay(line, mArith, opIdx);
-            const fires = !isRegexLiteralTail && !isDisplayOfMinorUnits && (generic ? hasCorroboratingMoneyIdentifier(line, mArith[1]) : true);
-            if (fires) {
-              result.addCheck(`money-float:arithmetic:${rel}:${i + 1}`, false, {
-                severity: errSev,
-                message: `Money-named value "${mArith[1]}" used directly in \`${mArith[2]}\` arithmetic — plain float math on a JS number, the same precision-loss risk as parseFloat/Number. Use Decimal.js / big.js / dinero.js.`,
-                file: rel,
-                line: i + 1,
-                variable: mArith[1],
-              });
-              issues += 1;
-            }
-          }
-        }
-      }
-
-      // Rule 3: .toFixed(N) with N < 2 on a money-named receiver
-      // Skip display-only contexts: inside template literals, JSX, or string concat.
-      const m3 = TOFIXED_RE.exec(line);
-      if (m3) {
-        const receiver = m3[1];
-        const precision = parseInt(m3[2], 10);
-        if (precision < 2 && MONEY_NAME_RE.test(receiver)) {
-          // Skip when used inside a template literal (display formatting)
-          const matchIdx = line.indexOf(m3[0]);
-          const beforeMatch = line.slice(0, matchIdx);
-          const isDisplayContext = /`[^`]*$/.test(beforeMatch)   // inside template literal
-            || /['"][^'"]*$/.test(beforeMatch)                   // inside string concat
-            || />\s*\{[^}]*$/.test(beforeMatch)                  // inside JSX children
-            || /return\s+$/.test(beforeMatch.trim());            // bare return (display fn)
-          if (!isDisplayContext) {
-            result.addCheck(`money-float:insufficient-precision:${rel}:${i + 1}`, false, {
-              severity: warnSev,
-              message: `${receiver}.toFixed(${precision}) — sub-cent precision on money variable. Use .toFixed(2) or a decimal library.`,
-              file: rel,
-              line: i + 1,
-              variable: receiver,
-              precision,
-            });
-            issues += 1;
-          }
-        }
-      }
+      issues += this._toFixedRule(code, at, result);
     }
     return issues;
+  }
+
+  // Rule 1: money-named var assigned from parseFloat / Number
+  _castRule(code, at, result) {
+    let issues = 0;
+    const m1 = JS_ASSIGN_FLOAT_RE.exec(code);
+    if (m1 && MONEY_NAME_RE.test(m1[1])) {
+      result.addCheck(`money-float:js-parse-float:${at.rel}:${at.line}`, false, {
+        severity: at.sev.err,
+        message: `Money-named variable "${m1[1]}" assigned from ${m1[2]}(...) — IEEE-754 precision loss. Use Decimal.js / big.js / dinero.js.`,
+        file: at.rel,
+        line: at.line,
+        variable: m1[1],
+      });
+      issues += 1;
+    }
+    const m2 = JS_PROP_FLOAT_RE.exec(code);
+    if (m2 && MONEY_NAME_RE.test(m2[1])) {
+      result.addCheck(`money-float:js-parse-float-prop:${at.rel}:${at.line}`, false, {
+        severity: at.sev.err,
+        message: `Money-named property ".${m2[1]}" assigned from ${m2[2]}(...) — IEEE-754 precision loss.`,
+        file: at.rel,
+        line: at.line,
+        property: m2[1],
+      });
+      issues += 1;
+    }
+    return issues;
+  }
+
+  // Rule 2: plain arithmetic directly on a money-named identifier —
+  // no parseFloat/Number cast needed to trigger this bug class. JS has
+  // one numeric type (float64), so `price * (1 + taxRate)` and
+  // `total += item.price * item.qty` accumulate the exact same
+  // rounding error as an explicit cast. Compound-assign checked first
+  // so a line like `total += item.price * item.qty` reports once
+  // (on the accumulator) instead of twice (accumulator + RHS product).
+  //
+  // Generic accumulator names (total/balance/credit/margin) double as
+  // plain counters in real repos (`all.total += 1`, `total += items.length`)
+  // — those four names only fire when the SAME statement carries a second,
+  // distinct money-named identifier (`total += item.price * item.qty`
+  // fires via `price`) and never on a bare integer increment or a
+  // `.length` read. Specific names (price, cost, fee, salary, ...) keep
+  // firing alone, unchanged.
+  _arithmeticRule(code, at, result) {
+    const mCompound = JS_COMPOUND_ASSIGN_RE.exec(code);
+    if (mCompound && MONEY_NAME_RE.test(mCompound[1])) {
+      const rhs = code.slice(mCompound.index + mCompound[0].length);
+      const generic = isGenericMoneyName(mCompound[1]);
+      const fires = generic
+        ? hasCorroboratingMoneyIdentifier(code, mCompound[1]) && !isTrivialIncrementRhs(rhs)
+        : true;
+      if (!fires) return 0;
+      result.addCheck(`money-float:arithmetic:${at.rel}:${at.line}`, false, {
+        severity: at.sev.err,
+        message: `Money-named variable "${mCompound[1]}" accumulated via \`${mCompound[2]}\` — plain float arithmetic on a JS number, the same precision-loss risk as parseFloat/Number. Use Decimal.js / big.js / dinero.js.`,
+        file: at.rel,
+        line: at.line,
+        variable: mCompound[1],
+      });
+      return 1;
+    }
+    const mArith = JS_MONEY_MULDIV_RE.exec(code);
+    if (!mArith || !MONEY_NAME_RE.test(mArith[1])) return 0;
+    const opIdx = code.indexOf(mArith[2], mArith.index + mArith[1].length);
+    const isRegexLiteralTail = mArith[2] === '/' && REGEX_LITERAL_TAIL_RE.test(code.slice(opIdx + 1));
+    const generic = isGenericMoneyName(mArith[1]);
+    // Integer minor units rendered for display — `cents / 100` fed
+    // straight into Math.round / toFixed / Intl.NumberFormat or a
+    // template literal — is the correct way to SHOW money stored as
+    // cents; nothing is computed with the float and nothing stores
+    // it. Surfaced by the in-string guard learning that `${…}` is
+    // code (website/app/checkout/page.tsx:17, 2026-09-05). A value
+    // that is assigned, returned bare, or passed to anything else
+    // still fires.
+    const isDisplayOfMinorUnits = isMinorUnitsDisplay(code, mArith, opIdx);
+    const fires = !isRegexLiteralTail && !isDisplayOfMinorUnits && (generic ? hasCorroboratingMoneyIdentifier(code, mArith[1]) : true);
+    if (!fires) return 0;
+    result.addCheck(`money-float:arithmetic:${at.rel}:${at.line}`, false, {
+      severity: at.sev.err,
+      message: `Money-named value "${mArith[1]}" used directly in \`${mArith[2]}\` arithmetic — plain float math on a JS number, the same precision-loss risk as parseFloat/Number. Use Decimal.js / big.js / dinero.js.`,
+      file: at.rel,
+      line: at.line,
+      variable: mArith[1],
+    });
+    return 1;
+  }
+
+  // Rule 3: .toFixed(N) with N < 2 on a money-named receiver
+  // Skip display-only contexts: inside template literals, JSX, or string concat.
+  _toFixedRule(code, at, result) {
+    const m3 = TOFIXED_RE.exec(code);
+    if (!m3) return 0;
+    const receiver = m3[1];
+    const precision = parseInt(m3[2], 10);
+    if (precision >= 2 || !MONEY_NAME_RE.test(receiver)) return 0;
+    // Skip when used inside a template literal (display formatting)
+    const beforeMatch = code.slice(0, m3.index);
+    const isDisplayContext = /`[^`]*$/.test(beforeMatch)   // inside template literal
+      || /['"][^'"]*$/.test(beforeMatch)                   // inside string concat
+      || />\s*\{[^}]*$/.test(beforeMatch)                  // inside JSX children
+      || /return\s+$/.test(beforeMatch.trim());            // bare return (display fn)
+    if (isDisplayContext) return 0;
+    result.addCheck(`money-float:insufficient-precision:${at.rel}:${at.line}`, false, {
+      severity: at.sev.warn,
+      message: `${receiver}.toFixed(${precision}) — sub-cent precision on money variable. Use .toFixed(2) or a decimal library.`,
+      file: at.rel,
+      line: at.line,
+      variable: receiver,
+      precision,
+    });
+    return 1;
   }
 
   _scanPy(rel, text, result, hasLibrary) {

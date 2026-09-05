@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { resolvePackageEntry, resolveAlias, stripJsoncLite, tsEquivalents } = require('../core/module-resolution');
 const { logicalLines } = require('../core/python-imports');
-const BaseModule = require('./base-module');
+const { stripStringsAndComments } = require('../core/source-strip');
 
 const JS_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
 const PY_EXTS = new Set(['.py']);
@@ -68,11 +68,15 @@ function resolveFromBase(base) {
 
 function extractJsExports(content) {
   const out = [];
-  const lines = content.split(/\r?\n/);
+  // Every shape is matched on the MASKED line (src/core/source-strip.js, the
+  // one stripper: string, template, regex and comment bodies blanked, offsets
+  // preserved), so an `export const x` inside a multi-line fixture string or a
+  // block comment is not an export; every captured name is an identifier and
+  // survives. Until 2026-09-05 only `module.exports = {…}` had a guard, blind to both.
+  const lines = stripStringsAndComments(content).split(/\r?\n/);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+    if (!line.trim()) continue;
 
     let m = line.match(/^\s*export\s+(?:async\s+)?(?:function\*?|class|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)/);
     if (m) { out.push({ name: m[1], line: i + 1 }); continue; }
@@ -100,7 +104,7 @@ function extractJsExports(content) {
     // export missed, the file's exports list came back empty, so downstream
     // "unused export" AND "orphaned file" checks both silently no-op on it.
     m = line.match(/\bmodule\.exports\s*=\s*\{([^}]*)\}/);
-    if (m && !BaseModule.prototype._isInsideStringLiteral(line, m.index)) {
+    if (m) {
       for (const part of m[1].split(',')) {
         const trimmed = part.trim();
         if (!trimmed) continue;

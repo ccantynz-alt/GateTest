@@ -249,3 +249,45 @@ describe('TlsSecurityModule — test path downgrade', () => {
     assert.strictEqual(hit.severity, 'warning');
   });
 });
+
+describe('TlsSecurityModule — one stripper: the masked line decides', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-tls-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('rejectUnauthorized: false inside a string, a template, a comment or a regex is not a bypass; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/agent.js', [
+      'const doc = "set rejectUnauthorized: false to skip validation";',
+      'const tpl = `',
+      '  rejectUnauthorized: false,',
+      '  strictSSL: false,',
+      '`;',
+      '/* a block comment that starts on this line',
+      '   rejectUnauthorized: false',
+      '   insecure: true */',
+      'assert.doesNotMatch(out, /rejectUnauthorized: false/);',
+      'const agent = new https.Agent({ rejectUnauthorized: false });',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('tls-security:js-reject-unauthorized:'));
+    assert.deepStrictEqual(hits.map((c) => c.line), [10]);
+    assert.ok(!r.checks.some((c) => c.name.startsWith('tls-security:js-strict-ssl:')), 'strictSSL in a template is not a config');
+    assert.ok(!r.checks.some((c) => c.name.startsWith('tls-security:js-insecure-flag:')), 'insecure in a block comment is not a config');
+  });
+
+  it('NODE_TLS_REJECT_UNAUTHORIZED = "0" inside a template or a comment is not a bypass; the real bracket-form write beside them is, its "0" read from the raw line (2026-09-05)', async () => {
+    write(tmp, 'src/env.js', [
+      'const snippet = `',
+      '  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";',
+      '`;',
+      '// process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"',
+      "process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';",
+      "process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';",
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.name.startsWith('tls-security:js-env-bypass:'));
+    assert.deepStrictEqual(hits.map((c) => c.line), [5]);
+  });
+});

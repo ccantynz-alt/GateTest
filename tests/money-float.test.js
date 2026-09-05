@@ -456,3 +456,28 @@ describe('MoneyFloatModule — minor units divided for display are not float mon
     assert.strictEqual(names.length, 3, names.join(', '));
   });
 });
+
+describe('MoneyFloatModule — one stripper: the masked line decides', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-mf-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('parseFloat / arithmetic on a money name inside a string, a template or a comment is not a cast; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/checkout.js', [
+      'const doc = "const total = parseFloat(priceString)";',
+      'const tpl = `',
+      '  const price = parseFloat(raw);',
+      '  const due = fee * 1.2;',
+      '`;',
+      '/* a block comment that starts on this line',
+      '   this.cost = Number(input);',
+      '   subtotal += item.price * item.qty */',
+      'const price = parseFloat(input);',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const casts = r.checks.filter((c) => c.name.startsWith('money-float:js-parse-float'));
+    assert.deepStrictEqual(casts.map((c) => [c.name.split(':')[1], c.line]), [['js-parse-float', 9]]);
+    assert.ok(!r.checks.some((c) => c.name.startsWith('money-float:arithmetic:')), 'arithmetic in a template or comment is not arithmetic');
+  });
+});

@@ -83,12 +83,29 @@ const PY_EXTS = new Set(['.py']);
 
 const SUPPRESS_RE = /\bcookie-ok\b/;
 
-// JS/TS patterns.
+// JS/TS patterns — every one is matched on the MASKED line
+// (BaseModule._maskedLines): string, template, regex and comment bodies are
+// blanked there, so `httpOnly: false` in a docstring, in a fixture string,
+// or in a test's `assert.match(out, /httpOnly: false/)` cannot fire
+// (self-scan 2026-07-15), and neither can one in a block comment or template
+// literal that started on an earlier line (2026-09-05).
 const JS_HTTPONLY_FALSE_RE = /\bhttpOnly\s*:\s*false\b/;
 const JS_SECURE_FALSE_RE = /\bsecure\s*:\s*false\b/;
-// Weak session secret — known placeholder values.
+// Weak session secret — known placeholder values. The value is a string
+// body, blanked on the masked line, so the SHAPE (`secret: '`) is matched
+// there and the placeholder is then read from the raw line at the same
+// offset (the mask preserves offsets; sticky regex). A weak secret nested
+// inside ANOTHER string is fixture data — its opening quote is blanked, so
+// the shape never matches (this rule flagged its own test file's sample
+// payloads, self-scan 2026-07-15).
+const JS_WEAK_SECRET_SHAPE_RE = /\bsecret\s*:\s*['"]/;
 const JS_WEAK_SECRET_RE =
-  /\bsecret\s*:\s*['"](changeme|secret|default|password|keyboard cat|test|mysecret|sessionsecret|session-secret|abcd1234|foo|bar|change[_-]?me|your[_-]?secret[_-]?here|replace[_-]?me)['"]/i;
+  /\bsecret\s*:\s*['"](changeme|secret|default|password|keyboard cat|test|mysecret|sessionsecret|session-secret|abcd1234|foo|bar|change[_-]?me|your[_-]?secret[_-]?here|replace[_-]?me)['"]/iy;
+
+const JS_RULES = [
+  { re: JS_HTTPONLY_FALSE_RE, id: 'js-httponly-false', sev: 'err', message: '`httpOnly: false` on a session cookie — readable from JS. XSS becomes session takeover.' },
+  { re: JS_SECURE_FALSE_RE, id: 'js-secure-false', sev: 'warn', message: '`secure: false` allows the cookie over plain HTTP — a network attacker can read it.' },
+];
 
 // Python patterns.
 const PY_COOKIE_SECURE_FALSE_RE =
@@ -217,72 +234,27 @@ class CookieSecurityModule extends BaseModule {
     const errSev = isTest ? 'warning' : 'error';
     const warnSev = isTest ? 'info' : 'warning';
     const lines = text.split(/\r?\n/);
+    const masked = this._maskedLines(text);
     let issues = 0;
-    let inBlock = false;
-    let inTemplate = false;
 
     for (let i = 0; i < lines.length; i += 1) {
-      let line = lines[i];
-
-      if (inBlock) {
-        const endIdx = line.indexOf('*/');
-        if (endIdx === -1) continue;
-        line = line.slice(endIdx + 2);
-        inBlock = false;
-      }
-      const startBlock = line.indexOf('/*');
-      if (startBlock !== -1) {
-        const endBlock = line.indexOf('*/', startBlock + 2);
-        if (endBlock === -1) {
-          inBlock = true;
-          line = line.slice(0, startBlock);
-        } else {
-          line = line.slice(0, startBlock) + line.slice(endBlock + 2);
-        }
-      }
-
-      // Weak-secret rule needs the raw string value — capture
-      // block-stripped version before string-content strip.
-      const blockStripped = line;
-
-      const stripRes = this._stripJsStrings(line, inTemplate);
-      line = stripRes.stripped;
-      inTemplate = stripRes.inTemplate;
-
-      const lc = line.indexOf('//');
-      if (lc !== -1) line = line.slice(0, lc);
-
+      const line = lines[i];        // raw: the secret's value, `cookie-ok` markers
+      const code = masked[i] || ''; // masked: every pattern match
       if (this._suppressed(lines, i)) continue;
 
-      if (JS_HTTPONLY_FALSE_RE.test(line)) {
-        result.addCheck(`cookie-sec:js-httponly-false:${rel}:${i + 1}`, false, {
-          severity: errSev,
-          message: '`httpOnly: false` on a session cookie — readable from JS. XSS becomes session takeover.',
-          file: rel,
-          line: i + 1,
-        });
-        issues += 1;
-      }
-      if (JS_SECURE_FALSE_RE.test(line)) {
-        result.addCheck(`cookie-sec:js-secure-false:${rel}:${i + 1}`, false, {
-          severity: warnSev,
-          message: '`secure: false` allows the cookie over plain HTTP — a network attacker can read it.',
+      for (const rule of JS_RULES) {
+        if (!rule.re.test(code)) continue;
+        result.addCheck(`cookie-sec:${rule.id}:${rel}:${i + 1}`, false, {
+          severity: rule.sev === 'err' ? errSev : warnSev,
+          message: rule.message,
           file: rel,
           line: i + 1,
         });
         issues += 1;
       }
 
-      // Weak-secret rule on the block-stripped (strings-intact) line.
-      let secretLine = blockStripped;
-      const secretLc = secretLine.indexOf('//');
-      if (secretLc !== -1) secretLine = secretLine.slice(0, secretLc);
-      const weakMatch = JS_WEAK_SECRET_RE.exec(secretLine);
-      // A real weak secret is never itself nested inside another string
-      // literal — that's fixture/example data (see self-scan 2026-07-15:
-      // this rule flagging its own test file's sample payloads), not a live
-      // config value. _isInsideStringLiteral is the general-purpose guard.
-      if (weakMatch && !this._isInsideStringLiteral(secretLine, weakMatch.index)) {
+      const weakMatch = this._matchOnRaw(code, line, JS_WEAK_SECRET_SHAPE_RE, JS_WEAK_SECRET_RE);
+      if (weakMatch) {
         result.addCheck(`cookie-sec:js-weak-secret:${rel}:${i + 1}`, false, {
           severity: errSev,
           message: `Session secret is a known-weak placeholder ("${weakMatch[1]}") — replace before deploy.`,
@@ -370,11 +342,6 @@ class CookieSecurityModule extends BaseModule {
     return (lines[i] && SUPPRESS_RE.test(lines[i])) ||
       (i > 0 && lines[i - 1] && SUPPRESS_RE.test(lines[i - 1]));
   }
-
-  // _stripJsStrings is inherited from BaseModule (also strips regex-literal
-  // bodies, e.g. `/httpOnly:false/` in a test assertion — this module and
-  // tls-security.js used to carry identical private copies that only
-  // handled quotes; consolidated 2026-07-15).
 
   _findUnquotedHash(line) {
     let inStr = null;

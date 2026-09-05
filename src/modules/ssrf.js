@@ -71,29 +71,10 @@ const BaseModule = require('./base-module');
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
 
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
-function matchOutsideString(line, re) {
-  const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-  const gre = new RegExp(re.source, flags);
-  let m;
-  while ((m = gre.exec(line)) !== null) {
-    if (!isInString(line, m.index)) return m;
-    if (m.index === gre.lastIndex) gre.lastIndex += 1;
-  }
-  return null;
-}
-
+// Every deciding regex runs on the MASKED line (BaseModule._maskedLines:
+// string, regex and comment content blanked, offsets preserved). The raw
+// line is read only where the rule needs what is INSIDE the quotes — the
+// URL argument of the HTTP call, for the metadata-endpoint rule.
 // HTTP client call entrypoints. Matches the call and we extract the
 // first argument from the line / next few lines.
 const HTTP_CLIENT_RES = [
@@ -181,6 +162,7 @@ class SSRFModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const isTestFile = this._isTestPath(rel);
     const lines = content.split(/\r?\n/);
+    const masked = this._maskedLines(content);
     let issues = 0;
 
     // Library-ok short-circuit: if the file imports an SSRF-filter,
@@ -203,23 +185,12 @@ class SSRFModule extends BaseModule {
     // at column 0-ish, class methods, arrow function start).
     const taintedVars = new Map();
 
-    let inBlockComment = false;
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      if (inBlockComment) {
-        if (/\*\//.test(line)) inBlockComment = false;
-        continue;
-      }
-      if (/^\s*\/\*/.test(line) && !/\*\//.test(line)) {
-        inBlockComment = true;
-        continue;
-      }
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+      const code = masked[i] || '';
+      if (!code.trim()) continue;
 
       // Rough "function boundary" reset.
-      if (/^\s*(?:async\s+)?function\b|^\s*\w+\s*\([^)]*\)\s*\{|^\s*(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:function|\()|^}$/.test(line)) {
+      if (/^\s*(?:async\s+)?function\b|^\s*\w+\s*\([^)]*\)\s*\{|^\s*(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:function|\()|^}$/.test(code)) {
         // A new function scope could start; we clear prior taint
         // assignments to stop cross-function leak.
         // (Keep the map but prune old entries — simple: clear.)
@@ -228,16 +199,14 @@ class SSRFModule extends BaseModule {
 
       // --- Track taint assignments ---
       // `const x = req.body.url;` / `let x = req.query.target;` / etc.
-      const taintAssign = matchOutsideString(
-        line,
+      const taintAssign = code.match(
         /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;]*?\b(?:req|request|ctx|event)\.(?:body|query|params|headers|rawBody)\b/,
       );
       if (taintAssign) {
         taintedVars.set(taintAssign[1], i);
       }
       // Destructured: `const { url } = req.body;` → treat `url` as tainted
-      const destruct = matchOutsideString(
-        line,
+      const destruct = code.match(
         /\b(?:const|let|var)\s*\{\s*([^}]+)\}\s*=\s*[^;]*?\b(?:req|request|ctx|event)\.(?:body|query|params|headers)\b/,
       );
       if (destruct) {
@@ -248,24 +217,26 @@ class SSRFModule extends BaseModule {
       }
 
       // --- Validation call clears taint on referenced vars ---
-      if (VALIDATION_RE.test(line)) {
+      if (VALIDATION_RE.test(code)) {
         // crude: any identifier passed to a validator gets untainted
-        const valArgs = line.match(/\b(?:validateUrl|isValidUrl|assertSafeUrl|checkUrl|isSafeUrl|sanitizeUrl)\s*\(\s*([A-Za-z_$][\w$]*)/);
+        const valArgs = code.match(/\b(?:validateUrl|isValidUrl|assertSafeUrl|checkUrl|isSafeUrl|sanitizeUrl)\s*\(\s*([A-Za-z_$][\w$]*)/);
         if (valArgs) taintedVars.delete(valArgs[1]);
       }
 
       // --- HTTP client call site ---
       let httpMatch = null;
       for (const re of HTTP_CLIENT_RES) {
-        const m = matchOutsideString(line, re);
+        const m = code.match(re);
         if (m) { httpMatch = m; break; }
       }
       if (!httpMatch) continue;
 
       // Pull the first argument: text from after '(' to matching ')' or
       // first ',' at depth 0, on this line + up to 3 continuation lines.
+      // Brackets and commas are counted on the masked text; `argText` is
+      // the raw argument (its URL literal intact), `argCode` the masked one.
       const argStart = httpMatch.index + httpMatch[0].length;
-      const argText = this._extractFirstArg(lines, i, argStart);
+      const { argText, argCode } = this._extractFirstArg(masked, lines, i, argStart);
       if (!argText) continue;
 
       // Metadata endpoint hardcoded.
@@ -282,10 +253,10 @@ class SSRFModule extends BaseModule {
       }
 
       // Direct inline taint: `fetch(req.body.url)` / `fetch(req.query.x)`
-      if (INLINE_TAINT_RE.test(argText)) {
+      if (INLINE_TAINT_RE.test(argCode)) {
         // Suppress if a validation call is in scope (same line or
         // preceding 5 lines referencing the argument).
-        const windowTxt = lines.slice(Math.max(0, i - 5), i + 1).join('\n');
+        const windowTxt = masked.slice(Math.max(0, i - 5), i + 1).join('\n');
         if (VALIDATION_RE.test(windowTxt)) continue;
         issues += this._flag(result, `ssrf:tainted-url:${rel}:${i + 1}`, {
           severity: isTestFile ? 'info' : 'error',
@@ -300,10 +271,10 @@ class SSRFModule extends BaseModule {
 
       // Tainted variable reference: the argument's first identifier
       // is in the taint map AND no validator ran in between.
-      const firstIdent = argText.match(/^[\s(]*([A-Za-z_$][\w$]*)\b/);
+      const firstIdent = argCode.match(/^[\s(]*([A-Za-z_$][\w$]*)\b/);
       if (firstIdent && taintedVars.has(firstIdent[1])) {
         const taintLine = taintedVars.get(firstIdent[1]);
-        const windowTxt = lines.slice(taintLine, i + 1).join('\n');
+        const windowTxt = masked.slice(taintLine, i + 1).join('\n');
         if (VALIDATION_RE.test(windowTxt)) {
           taintedVars.delete(firstIdent[1]);
           continue;
@@ -321,11 +292,11 @@ class SSRFModule extends BaseModule {
       }
 
       // Suspicious-named variable with no validation.
-      const susVar = argText.match(SUSPICIOUS_VAR_RE);
+      const susVar = argCode.match(SUSPICIOUS_VAR_RE);
       if (susVar && !isTestFile) {
         // Look back 10 lines for a validator call on this var or
         // nearby.
-        const windowTxt = lines.slice(Math.max(0, i - 10), i + 1).join('\n');
+        const windowTxt = masked.slice(Math.max(0, i - 10), i + 1).join('\n');
         if (VALIDATION_RE.test(windowTxt)) continue;
         issues += this._flag(result, `ssrf:unvalidated-url-var:${rel}:${i + 1}`, {
           severity: 'warning',
@@ -342,31 +313,39 @@ class SSRFModule extends BaseModule {
     return issues;
   }
 
-  _extractFirstArg(lines, startLine, startCol) {
+  _extractFirstArg(masked, lines, startLine, startCol) {
     // Walk forward from startCol collecting characters until the
     // matching top-level `)` or a top-level `,`. Accumulate up to 4
     // lines total (usually plenty — objects and multi-line calls).
+    // Depth is counted on the masked text — a `,` or `)` inside a string
+    // is not a boundary — while both the raw and the masked argument are
+    // collected at the same offsets.
     let depth = 1; // we start right after the opening `(`
-    let buf = '';
+    let argText = '';
+    let argCode = '';
     const maxLines = 4;
+    const done = () => ({ argText: argText.trim(), argCode: argCode.trim() });
     for (let li = 0; li < maxLines; li += 1) {
       const ln = lines[startLine + li];
+      const mk = masked[startLine + li] || '';
       if (ln == null) break;
       const from = li === 0 ? startCol : 0;
       for (let j = from; j < ln.length; j += 1) {
-        const ch = ln[j];
+        const ch = mk[j];
         if (ch === '(' || ch === '[' || ch === '{') depth += 1;
         else if (ch === ')' || ch === ']' || ch === '}') {
           depth -= 1;
-          if (depth === 0) return buf.trim();
+          if (depth === 0) return done();
         } else if (ch === ',' && depth === 1) {
-          return buf.trim();
+          return done();
         }
-        buf += ch;
+        argText += ln[j];
+        argCode += ch;
       }
-      buf += ' ';
+      argText += ' ';
+      argCode += ' ';
     }
-    return buf.trim();
+    return done();
   }
 
   _flag(result, name, details) {

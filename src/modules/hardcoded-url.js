@@ -54,6 +54,7 @@
  */
 
 const fs = require('fs');
+const { literalKindAt } = require('../core/source-strip');
 const path = require('path');
 const { isNonUserFacingPage } = require('../core/scan-scope');
 const BaseModule = require('./base-module');
@@ -104,10 +105,13 @@ const SCHEMA_DEFAULT_RE = /\.(?:default|devDefault)\s*\(\s*['"`]$|\bdevDefault\s
 const LISTEN_RE = /\.listen\s*\(/;
 const BARE_LOCALHOST_RE = /^https?:\/\/localhost\/?['"`]/i;
 
-function isUrlParseBase(line, before, content) {
+// `before` and `maskedContent` are the masked text (the parse-base call is
+// code); `line` is raw because the `'http://localhost` it looks for is the
+// string's own content.
+function isUrlParseBase(line, before, maskedContent) {
   if (/\bnew\s+URL\s*\([^,]+,\s*['"`]$/.test(before)) return true;
   const decl = line.match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*['"`]https?:\/\/localhost/);
-  return !!decl && new RegExp(`\\bnew\\s+URL\\s*\\([^,]+,\\s*${decl[1]}\\b`).test(content);
+  return !!decl && new RegExp(`\\bnew\\s+URL\\s*\\([^,]+,\\s*${decl[1]}\\b`).test(maskedContent);
 }
 
 // Documentation-URL allowlist — common examples.
@@ -123,17 +127,6 @@ const DOC_ALLOWLIST = new Set([
   'bar.com',
 ]);
 
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
 
 class HardcodedUrlModule extends BaseModule {
   constructor() {
@@ -192,31 +185,27 @@ class HardcodedUrlModule extends BaseModule {
     // `runtime-tests/`. Scope, not severity: these stay visible at info.
     const isTestFile = this._isTestPath(rel) || isNonUserFacingPage(rel);
     const lines = content.split(/\r?\n/);
+    const masked = this._maskedLines(content);
     let issues = 0;
 
-    let inBlockComment = false;
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
+      const line = lines[i];      // raw: the URL text, messages, comment markers
+      const code = masked[i] || ''; // masked: every structural match
+      // A blank masked line is a comment, or the inside of a template literal
+      // spanning lines — the URL check below tells them apart, so no skip here.
 
-      if (inBlockComment) {
-        if (/\*\//.test(line)) inBlockComment = false;
-        continue;
-      }
-      if (/^\s*\/\*/.test(line) && !/\*\//.test(line)) {
-        inBlockComment = true;
-        continue;
-      }
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
-
-      // Suppressor comment on same or previous line.
+      // Suppressor comment on same or previous line — a comment, so raw.
       const prevLine = i > 0 ? lines[i - 1] : '';
       if (/\bhardcoded-url-ok\b/.test(line) || /\bhardcoded-url-ok\b/.test(prevLine)) continue;
 
-      // Skip lines whose identifier context says "dev URL".
+      // Skip lines whose identifier context says "dev URL". Raw on purpose:
+      // measured behaviour also honours a `// DEV only` annotation and a
+      // `/MOCK/` path inside the string, and the corpus has not been run on
+      // the narrower reading.
       if (DEV_CONTEXT_LINE_RE.test(line)) continue;
 
-      // Skip lines under a dev-guard on the current or last 3 lines.
+      // Skip lines under a dev-guard on the current or last 3 lines. Raw:
+      // the guard IS a string comparison (`!== 'production'`).
       const guardWindow = lines.slice(Math.max(0, i - 3), i + 1).join('\n');
       if (DEV_GUARD_RE.test(guardWindow)) continue;
 
@@ -224,9 +213,10 @@ class HardcodedUrlModule extends BaseModule {
       URL_RE.lastIndex = 0;
       let m;
       while ((m = URL_RE.exec(line)) !== null) {
-        // Must be inside a quoted string to count (avoids matching
-        // comments we might have missed and package-json-like syntax).
-        if (!isInString(line, m.index)) continue;
+        // A URL is by definition string content: it counts only inside a
+        // string or template literal — not a comment, not a regex. One
+        // definition (src/core/source-strip.js literalKindAt).
+        if (literalKindAt(lines, masked, i, m.index) !== 'string') continue;
 
         const scheme = m[1].toLowerCase();
         const host = m[2];
@@ -239,7 +229,7 @@ class HardcodedUrlModule extends BaseModule {
         // `.endsWith(`, `.includes(`, `.indexOf(`, `.match(`, `new RegExp(`,
         // or comparison operators `=== "http..."`) is a filter pattern,
         // not a fetch target.
-        const before = line.slice(Math.max(0, m.index - 40), m.index);
+        const before = code.slice(Math.max(0, m.index - 40), m.index);
         if (/\.(?:startsWith|endsWith|includes|indexOf|lastIndexOf|match|search|test|split|replace|replaceAll)\s*\(\s*['"`]$/.test(before)) continue;
         if (/new\s+RegExp\s*\(\s*['"`]$/.test(before)) continue;
         if (/(?:===|!==|==|!=)\s*['"`]$/.test(before)) continue;
@@ -247,11 +237,11 @@ class HardcodedUrlModule extends BaseModule {
         // Env-fallback: `process.env.X || "http://localhost..."` is
         // explicitly the "use env in prod, localhost in dev" pattern.
         if (/\bprocess\.env\.[A-Z_][A-Z0-9_]*\s*(?:\|\||\?\?)\s*['"`]$/.test(before)) continue;
-        const windowBefore = `${lines.slice(Math.max(0, i - 3), i).join('\n')}\n${line.slice(0, m.index)}`;
+        const windowBefore = `${masked.slice(Math.max(0, i - 3), i).join('\n')}\n${code.slice(0, m.index)}`;
         if (ENV_TERNARY_RE.test(windowBefore)) continue;
         if (SCHEMA_DEFAULT_RE.test(before)) continue;
         if (LISTEN_RE.test(windowBefore)) continue;
-        if (BARE_LOCALHOST_RE.test(line.slice(m.index)) && isUrlParseBase(line, before, content)) continue;
+        if (BARE_LOCALHOST_RE.test(line.slice(m.index)) && isUrlParseBase(line, before, masked.join('\n'))) continue;
 
         if (LOCALHOST_RE.test(host)) {
           issues += this._flag(result, `hardcoded-url:localhost:${rel}:${i + 1}`, {

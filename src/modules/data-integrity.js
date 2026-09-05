@@ -255,6 +255,15 @@ class DataIntegrityModule extends BaseModule {
 
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);
+      // Strings, regex literals and comments blanked to spaces, offsets kept
+      // (BaseModule._maskedLines — the one stripper). The PII regexes read
+      // words out of string content (`console.log('password:', pw)`), so
+      // they run on the raw line; whether the match START is code is decided
+      // against the masked line: a character the mask blanked sits inside a
+      // string literal or a comment. The per-line quote counter this
+      // replaced (2026-09-05) could not see a template literal or a block
+      // comment that spans lines.
+      const masked = this._maskedLines(content);
 
       for (const { regex, type, exempt } of piiPatterns) {
         regex.lastIndex = 0;
@@ -281,7 +290,7 @@ class DataIntegrityModule extends BaseModule {
           regex.lastIndex = 0;
           const m = regex.exec(line);
           if (!m) continue;
-          if (this._isInsideStringLiteral(line, m.index)) continue;
+          if (this._insideLiteral(masked, lines, i, m.index)) continue;
           if (exempt && exempt(line, m.index)) continue;
           hit = { line: i + 1, column: m.index + 1 };
         }
@@ -359,6 +368,12 @@ class DataIntegrityModule extends BaseModule {
       if (SCANNER_PATH_RE.test(normalisedPath)) continue;
 
       const content = fs.readFileSync(file, 'utf-8');
+      // The one stripper (BaseModule._maskedLines) decides whether `query(`
+      // below sits in code: a character the mask blanked is inside a string
+      // literal or a comment — including a template literal or a block
+      // comment opened on an earlier line, which the per-line quote counter
+      // this replaced (2026-09-05) could not see.
+      const masked = this._maskedLines(content);
 
       // SQL string concatenation INSIDE a query/execute/raw call. The old
       // regex had a runaway `(?:\+\s*\w+\s*\+)` alternation that matched
@@ -389,8 +404,8 @@ class DataIntegrityModule extends BaseModule {
       // The discriminator is the position of `query(` itself: in real code
       // it IS code, and in the doc string it is inside a string literal. So
       // check the match START rather than dropping to line-by-line. The
-      // opening quote always shares that line, so the line-based guard is
-      // exact here.
+      // pattern itself reads the SQL keyword out of the quotes, so it runs
+      // on the raw content, not the masked one.
       sqlConcatPattern.lastIndex = 0;
       let sqlMatch;
       while ((sqlMatch = sqlConcatPattern.exec(content)) !== null) {
@@ -403,7 +418,7 @@ class DataIntegrityModule extends BaseModule {
         const col = sqlMatch.index - lineStart;
 
         if (this._isCommentLine(lineText)) continue;
-        if (this._isInsideStringLiteral(lineText, col)) continue;
+        if ((masked[lineNo - 1] || '')[col] !== lineText[col]) continue;
 
         result.addCheck(`data:sql-injection:${relPath}:${lineNo}`, false, {
           file: relPath,

@@ -284,3 +284,31 @@ describe('CookieSecurityModule — session middleware in both module systems', (
     assert.ok(!r.checks.some((c) => !c.passed && /cookie-sec.*session/.test(c.name)));
   });
 });
+
+describe('CookieSecurityModule — one stripper: the masked line decides', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cookie-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('httpOnly: false / secret: "changeme" inside a string, a template, a comment or a regex is not a config; the real ones beside them are, the placeholder read from the raw line (2026-09-05)', async () => {
+    write(tmp, 'src/session.js', [
+      'const doc = "httpOnly: false is readable from JS";',
+      'const tpl = `',
+      '  cookie: { httpOnly: false, secure: false },',
+      '`;',
+      '/* a block comment that starts on this line',
+      '   httpOnly: false',
+      '   secret: "changeme" */',
+      'assert.match(out, /httpOnly: false/);',
+      'const fixture = "secret: \'changeme\'";',
+      'app.use(session({ secret: "changeme", cookie: { httpOnly: false } }));',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const httpOnly = r.checks.filter((c) => c.name.startsWith('cookie-sec:js-httponly-false:'));
+    assert.deepStrictEqual(httpOnly.map((c) => c.line), [10]);
+    const weak = r.checks.filter((c) => c.name.startsWith('cookie-sec:js-weak-secret:'));
+    assert.deepStrictEqual(weak.map((c) => [c.line, c.value]), [[10, 'changeme']]);
+    assert.ok(!r.checks.some((c) => c.name.startsWith('cookie-sec:js-secure-false:')), 'secure: false in a template is not a config');
+  });
+});

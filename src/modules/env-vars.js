@@ -88,18 +88,6 @@ const CI_WORKFLOW_RE = /\.ya?ml$/i;
 // that CI sets at runtime; they don't need `.env.example` entries.
 const DEV_CONFIG_BASENAME_RE = /^(?:playwright|vitest|jest|cypress|webpack|vite|rollup|next|tailwind|postcss|babel|eslint|prettier)\.config\.(?:js|mjs|cjs|ts|mts|cts)$/i;
 
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
 // Keys that are _always_ considered declared — they come from the
 // runtime/platform, not from the app.
 const RUNTIME_ENV_ALLOWLIST = new Set([
@@ -168,13 +156,38 @@ function isRuntimeAllowed(key) {
 const ENV_KEY_RE = /^[A-Z][A-Z0-9_]{1,}$/;
 
 // process.env.<KEY>  /  process.env['<KEY>']  /  process.env["<KEY>"]
-const NODE_ENV_REF_RE = /\bprocess\.env\.([A-Z][A-Z0-9_]+)\b|\bprocess\.env\[\s*['"`]([A-Z][A-Z0-9_]+)['"`]\s*\]/g;
+// Matched on the MASKED line (BaseModule._maskedLines — strings and comments
+// blanked, delimiters and offsets kept), so a `process.env.X` quoted in an
+// advice string or a doc comment is not a read. The bracket form's key is
+// string content, blank on the masked line: the regex stops at the opening
+// quote and NODE_ENV_BRACKET_KEY_RE reads the key from the raw line at that
+// offset. The per-line quote counter this replaced (2026-09-05) could not see
+// a template literal or a block comment spanning lines.
+const NODE_ENV_REF_RE = /\bprocess\.env\.([A-Z][A-Z0-9_]+)\b|\bprocess\.env\[\s*['"`]/g;
+const NODE_ENV_BRACKET_KEY_RE = /^([A-Z][A-Z0-9_]+)['"`]\s*\]/;
+
+// `env: {` opening a child's environment object, and a `KEY:` / `KEY,`
+// member inside it — both on the masked line, so a key inside a string is
+// not a member. Matched from the start of a member (after `{`, `,` or the
+// line start) so `...process.env` and `NODE_OPTIONS: ''` read as members
+// and `foo.BAR:` does not.
+const CHILD_ENV_BLOCK_RE = /\benv\s*:\s*\{/;
+const CHILD_ENV_KEY_RE = /(?:^|[{,]|\n)\s*([A-Z][A-Z0-9_]+)\s*(?=[:,}]|$)/g;
 
 // os.environ["FOO"] / os.environ.get("FOO") / os.getenv("FOO")
 const PY_ENV_REF_RE = /\bos\.(?:environ\[|environ\.get\(|getenv\()\s*['"]([A-Z][A-Z0-9_]+)['"]/g;
 
 // Go: os.Getenv("FOO") / os.LookupEnv("FOO")
 const GO_ENV_REF_RE = /\bos\.(?:Getenv|LookupEnv)\(\s*"([A-Z][A-Z0-9_]+)"/g;
+
+// Raw line on purpose: Python and Go lines are never masked, and the
+// `.get(K, d)` shape reads the quoted key itself.
+function isGuardedRead(raw, end) {
+  const tail = raw.slice(end, end + 60);
+  return /^\s*(?:\)|\]|\))*\s*(?:\|\||\?\?|\?\.|\?\s|\|\|=)/.test(tail)
+    || /^\s*,\s*[^)]+\)/.test(tail) && /(?:\.get|getenv)\s*\(\s*['"]?[A-Z_]+['"]?\s*$/.test(raw.slice(0, end))
+    || /\b(?:os\.environ\.get|os\.getenv|getenv)\s*\(\s*['"][A-Z0-9_]+['"]\s*,/.test(raw);
+}
 
 class EnvVarsModule extends BaseModule {
   constructor() {
@@ -222,6 +235,11 @@ class EnvVarsModule extends BaseModule {
     for (const [key, refs] of referenced) {
       if (isRuntimeAllowed(key)) continue;
       if (declared.has(key)) continue;
+      // A key the program only SETS for a child process is not a key the
+      // program needs configured — `GIT_TERMINAL_PROMPT: '0'` on a spawn is
+      // an output, and nothing boots broken when it is absent from
+      // `.env.example`. It still counts as a use above (unused-in-code).
+      if (refs.every((r) => r.form === 'child-env')) continue;
       const firstRef = refs[0];
       const unguarded = refs.some((r) => !r.guarded);
       const lang = firstRef.lang || 'js';
@@ -383,71 +401,110 @@ class EnvVarsModule extends BaseModule {
     let content;
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return; }
     const rel = path.relative(projectRoot, file);
-    const lines = content.split(/\r?\n/);
     const ext = path.extname(file).toLowerCase();
-
-    const patterns = [];
     const isJs = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts'].includes(ext);
-    const isPy = ext === '.py';
-    const isGo = ext === '.go';
-    if (isJs) patterns.push(NODE_ENV_REF_RE);
-    if (isPy) patterns.push(PY_ENV_REF_RE);
-    if (isGo) patterns.push(GO_ENV_REF_RE);
+    const lang = isJs ? 'js' : ext === '.go' ? 'go' : ext === '.py' ? 'py' : null;
+    if (!lang) return;
 
-    let inBlockComment = false;
-    let inPyDoc = false;
+    const lines = content.split(/\r?\n/);
+    // JS/TS: the one stripper decides what is a comment or a string. Go and
+    // Python keep the line-state trackers below — the stripper is JS-only.
+    const masked = isJs ? this._maskedLines(content) : null;
+    const state = { inBlockComment: false, inPyDoc: false };
+    // Brace depth inside an `env: {` object handed to a child process
+    // (`spawn(cmd, args, { env: { ...process.env, KEY: value } })`). A key
+    // SET there is a use of the key: the program passes it on, and the child
+    // is where it is read — often from source the parent holds as a string
+    // (`src/core/playwright-sandbox.js` boots its worker from one, and its
+    // two keys went "unused" the day reads inside strings stopped counting,
+    // 2026-09-05). Recorded as guarded: an absent value cannot break boot.
+    let envDepth = 0;
+
     for (let i = 0; i < lines.length; i += 1) {
       const raw = lines[i];
-      let line = raw;
-      const trimmed = raw.trim();
+      const code = isJs ? (masked[i] || '') : this._codeOfLine(raw, lang, state);
+      if (code === null || !code.trim()) continue;
 
-      // JS / Go block-comment awareness.
-      if (isJs || isGo) {
-        if (inBlockComment) {
-          if (/\*\//.test(line)) inBlockComment = false;
-          continue;
+      if (isJs) {
+        let from = 0;
+        if (envDepth === 0) {
+          const open = CHILD_ENV_BLOCK_RE.exec(code);
+          if (open) { envDepth = 1; from = open.index + open[0].length; }
         }
-        if (/^\s*\/\*/.test(line) && !/\*\//.test(line)) {
-          inBlockComment = true;
-          continue;
+        if (envDepth > 0) {
+          const inside = code.slice(from);
+          CHILD_ENV_KEY_RE.lastIndex = 0;
+          let km;
+          while ((km = CHILD_ENV_KEY_RE.exec(inside)) !== null) {
+            if (!ENV_KEY_RE.test(km[1])) continue;
+            if (!referenced.has(km[1])) referenced.set(km[1], []);
+            referenced.get(km[1]).push({ file: rel, line: i + 1, guarded: true, lang, form: 'child-env' });
+          }
+          for (const ch of inside) {
+            if (ch === '{') envDepth += 1;
+            else if (ch === '}' && (envDepth -= 1) === 0) break;
+          }
         }
-        // Strip inline line-comment and inline block-comment.
-        line = line.replace(/\/\/.*$/, '');
-        line = line.replace(/\/\*.*?\*\//g, '');
-        if (trimmed.startsWith('*')) continue;
-      }
-      // Python docstring awareness (triple-quoted).
-      if (isPy) {
-        const tripleMatches = (raw.match(/"""/g) || []).length + (raw.match(/'''/g) || []).length;
-        if (inPyDoc) {
-          if (tripleMatches % 2 === 1) inPyDoc = false;
-          continue;
-        }
-        if (tripleMatches % 2 === 1) { inPyDoc = true; continue; }
-        if (trimmed.startsWith('#')) continue;
       }
 
-      for (const re of patterns) {
-        re.lastIndex = 0;
-        let m;
-        while ((m = re.exec(line)) !== null) {
-          const key = m[1] || m[2];
-          if (!key || !ENV_KEY_RE.test(key)) continue;
-          // For JS, skip matches inside a string literal (these are
-          // documentation / advice strings, not real reads).
-          if (isJs && isInString(raw, m.index)) continue;
-          // A read WITH a fallback (`|| default`, `?? default`, `.get(K, d)`,
-          // `getenv(K, d)`, `?.`) cannot break boot when the key is absent —
-          // that is exactly what the fallback is for. Record it as guarded.
-          const tail = raw.slice(m.index + m[0].length, m.index + m[0].length + 60);
-          const guarded = /^\s*(?:\)|\]|\))*\s*(?:\|\||\?\?|\?\.|\?\s|\|\|=)/.test(tail)
-            || /^\s*,\s*[^)]+\)/.test(tail) && /(?:\.get|getenv)\s*\(\s*['"]?[A-Z_]+['"]?\s*$/.test(raw.slice(0, m.index + m[0].length))
-            || /\b(?:os\.environ\.get|os\.getenv|getenv)\s*\(\s*['"][A-Z0-9_]+['"]\s*,/.test(raw);
-          if (!referenced.has(key)) referenced.set(key, []);
-          referenced.get(key).push({ file: rel, line: i + 1, guarded, lang: isJs ? 'js' : (isGo ? 'go' : 'py') });
-        }
+      for (const { key, end } of this._envRefsOn(code, raw, lang)) {
+        // A read WITH a fallback (`|| default`, `?? default`, `.get(K, d)`,
+        // `getenv(K, d)`, `?.`) cannot break boot when the key is absent —
+        // that is exactly what the fallback is for. Record it as guarded.
+        const guarded = isGuardedRead(raw, end);
+        if (!referenced.has(key)) referenced.set(key, []);
+        referenced.get(key).push({ file: rel, line: i + 1, guarded, lang });
       }
     }
+  }
+
+  // Go: block-comment tracking plus inline comment stripping; Python:
+  // triple-quoted docstrings and `#` lines. Returns null for a line that is
+  // not code.
+  _codeOfLine(raw, lang, state) {
+    const trimmed = raw.trim();
+    if (lang === 'go') {
+      if (state.inBlockComment) {
+        if (/\*\//.test(raw)) state.inBlockComment = false;
+        return null;
+      }
+      if (/^\s*\/\*/.test(raw) && !/\*\//.test(raw)) {
+        state.inBlockComment = true;
+        return null;
+      }
+      if (trimmed.startsWith('*')) return null;
+      return raw.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\//g, '');
+    }
+    const tripleMatches = (raw.match(/"""/g) || []).length + (raw.match(/'''/g) || []).length;
+    if (state.inPyDoc) {
+      if (tripleMatches % 2 === 1) state.inPyDoc = false;
+      return null;
+    }
+    if (tripleMatches % 2 === 1) { state.inPyDoc = true; return null; }
+    if (trimmed.startsWith('#')) return null;
+    return raw;
+  }
+
+  // Every env read on one line: `{ key, end }`, `end` being the raw offset
+  // just past the reference (where a fallback operator would begin).
+  _envRefsOn(code, raw, lang) {
+    const re = lang === 'js' ? NODE_ENV_REF_RE : lang === 'go' ? GO_ENV_REF_RE : PY_ENV_REF_RE;
+    const refs = [];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      let key = m[1];
+      let end = m.index + m[0].length;
+      if (lang === 'js' && !key) {
+        const km = NODE_ENV_BRACKET_KEY_RE.exec(raw.slice(end));
+        if (!km) continue;
+        key = km[1];
+        end += km[0].length;
+      }
+      if (!key || !ENV_KEY_RE.test(key)) continue;
+      refs.push({ key, end });
+    }
+    return refs;
   }
 
   _flag(result, name, details) {

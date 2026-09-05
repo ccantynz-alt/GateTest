@@ -638,3 +638,28 @@ test('control: a rule-id override never matches a longer rule id that merely sta
   );
   assert.ok(confidence <= 0.7, `expected <= 0.7, got ${confidence}`);
 });
+
+// A shell script masked as JavaScript: ktor's gradlew has `/*)` in a case
+// pattern on line 80 and a real `eval "set -- $(…)"` on line 241; the
+// scorer read everything below line 80 as a block comment and gave the
+// eval 0.2 — the gate passed it (2026-09-05, found by the corpus ceiling
+// the day the modules' own masking was corrected).
+const GRADLEW_SHAPE = [
+  '#!/bin/sh',
+  'case $link in',
+  '  /*)   app_path=$link ;; #(',
+  '  *)    app_path=$APP_HOME$link ;;',
+  'esac',
+  'eval "set -- $(printf \'%s\\n\' "$OPTS" | xargs -n1)"',
+].join('\n');
+
+test('language dispatch: a `/*)` case pattern in a shell script does not open a comment — the eval below it keeps full confidence', () => {
+  const r = scoreFinding({ filePath: 'gradlew', ruleKey: 'shell:eval-var', module: 'shell', line: 6, sourceText: GRADLEW_SHAPE });
+  assert.equal((r.signals || []).includes('inside block comment'), false, JSON.stringify(r));
+  assert.equal(r.confidence, 1);
+});
+
+test('language dispatch: the same bytes in a JavaScript file ARE inside the comment `/*` opened', () => {
+  const r = scoreFinding({ filePath: 'src/x.js', ruleKey: 'shell:eval-var', module: 'shell', line: 6, sourceText: GRADLEW_SHAPE });
+  assert.equal((r.signals || []).includes('inside block comment'), true, JSON.stringify(r));
+});

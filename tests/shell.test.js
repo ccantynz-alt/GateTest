@@ -303,3 +303,31 @@ describe('ShellModule — summary', () => {
     assert.match(summary.message, /1 file\(s\)/);
   });
 });
+
+describe('ShellModule — a vendored build-tool wrapper is reported, not blocked (2026-09-05)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-shell-vendored-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const EVAL = ['#!/bin/sh', 'eval "set -- $(printf x | xargs -n1)"', ''].join('\n');
+
+  it('the stock gradlew / mvnw: eval-var is info and says why', async () => {
+    write(tmp, 'gradlew', EVAL);
+    write(tmp, 'mvnw', EVAL);
+    const r = await run(tmp);
+    const evals = r.checks.filter((c) => c.name.startsWith('shell:eval-var:'));
+    assert.strictEqual(evals.length, 2, JSON.stringify(r.checks.map((c) => c.name)));
+    for (const c of evals) {
+      assert.strictEqual(c.severity, 'info');
+      assert.match(c.message, /vendored build-tool wrapper/);
+    }
+  });
+
+  it('the same line in the project\'s own script is still an error', async () => {
+    write(tmp, 'scripts/deploy.sh', EVAL);
+    const r = await run(tmp);
+    const c = r.checks.find((x) => x.name.startsWith('shell:eval-var:'));
+    assert.ok(c, 'eval-var must fire');
+    assert.strictEqual(c.severity, 'error');
+  });
+});

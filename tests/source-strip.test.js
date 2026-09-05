@@ -95,12 +95,38 @@ describe('source-strip — the two defects the slice-based scanner fixed (2026-0
   });
 });
 
+describe('source-strip — Python (stripPythonStringsAndComments)', () => {
+  const { stripPythonStringsAndComments: py } = require('../src/core/source-strip');
+  const sameShape = (src) => {
+    const out = py(src);
+    assert.strictEqual(out.length, src.length, 'length preserved');
+    assert.deepStrictEqual(out.split(/\r?\n/).map((l) => l.length), src.split(/\r?\n/).map((l) => l.length), 'line lengths preserved');
+    return out;
+  };
+  it('a # comment is blanked; an apostrophe inside it does not open a string', () => {
+    assert.strictEqual(sameShape("x = 'a#b' # don't\ny = \"q\"\n"), "x = '   '        \ny = \" \"\n");
+  });
+  it('a triple-quoted string spans lines; an f-string hole is masked with the string', () => {
+    assert.strictEqual(sameShape('d = """multi\nline \'q\' """ + z\nm = f"gpt-{v}"\n'), 'd = """     \n         """ + z\nm = f"       "\n');
+  });
+  it('an unterminated single-quoted string ends at the line', () => {
+    assert.strictEqual(sameShape("s = 'unterminated\nnext = 1\n"), "s = '            \nnext = 1\n");
+  });
+  it('an escaped quote does not close the string; CRLF line ends stay', () => {
+    assert.strictEqual(sameShape('e = "esc \\" still" # c\r\nf = 2\r\n'), 'e = "            "    \r\nf = 2\r\n');
+  });
+});
+
 describe('source-strip — robustness', () => {
-  it('CRLF: the `\\n` stays; a `\\r` inside a line comment is masked like the rest of the comment', () => {
+  it('CRLF: both `\\r` and `\\n` stay, so raw and masked text split into lines of equal length', () => {
     // Length and every `\n` position are preserved (the helper asserts both),
     // so line numbers computed on the stripped text match the source.
     const out = strip('a = "s"; // c\r\nb = 1;\r\n');
-    assert.strictEqual(out, 'a = " ";      \nb = 1;\r\n');
+    assert.strictEqual(out, 'a = " ";     \r\nb = 1;\r\n');
+    const src = 'a // c\r\nb = "x\r\ny"\r\n/* m\r\n n */ z\r\n';
+    const rawLines = src.split(/\r?\n/);
+    const maskedLines = strip(src).split(/\r?\n/);
+    assert.deepStrictEqual(maskedLines.map((l) => l.length), rawLines.map((l) => l.length));
   });
   it('an unterminated string or comment does not throw and keeps the length', () => {
     strip('a = "never closed\nb = 1;');
@@ -110,5 +136,31 @@ describe('source-strip — robustness', () => {
   it('POSITIVE CONTROL — code outside literals is untouched byte for byte', () => {
     const src = 'const { a, b } = require(mod);\nif (a < b && b > 0) { return a ?? b; }\n';
     assert.strictEqual(strip(src), src);
+  });
+});
+
+describe('maskSource — which stripper a file gets is decided once (2026-09-05)', () => {
+  const { maskSource } = require('../src/core/source-strip');
+  const SHELL = ['#!/usr/bin/env sh', 'case $x in', '  /*)   app_path=$link ;; #(', 'esac', 'eval "set -- $(printf x)"', ''].join('\n');
+
+  it('a shell script (by extension, or extensionless with a shebang) is masked with the shell grammar — `/*)` in a case pattern is code, not a comment opener', () => {
+    for (const name of ['gradlew', 'bin/run.sh']) {
+      const lines = maskSource(SHELL, name).split('\n');
+      assert.match(lines[2], /^\s*\/\*\)\s+app_path=\$link ;;\s*$/, `${name}: ${JSON.stringify(lines[2])} (the trailing #( comment is blanked, the case pattern is not)`);
+      assert.match(lines[4], /^eval "/, `${name}: the eval below the case pattern is still code`);
+    }
+  });
+
+  it('the same bytes as JavaScript open a real block comment', () => {
+    const lines = maskSource(SHELL, 'src/x.js').split('\n');
+    assert.strictEqual(lines[4].trim(), '', 'everything after /* is comment in JavaScript');
+  });
+
+  it('Python by extension; a `#`-comment language by extension; everything else the JavaScript grammar', () => {
+    assert.strictEqual(maskSource('x = 1  # comment "q"', 'a.py'), 'x = 1  ' + ' '.repeat(13));
+    const yml = maskSource('key: "v"  # c', 'a.yml');
+    assert.strictEqual(yml.length, 'key: "v"  # c'.length);
+    assert.strictEqual(yml.includes('# c'), false);
+    assert.strictEqual(maskSource('const s = "v"; // c', 'a.go'), 'const s = " "; ' + ' '.repeat(4));
   });
 });

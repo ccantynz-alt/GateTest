@@ -459,22 +459,19 @@ class CrossFileTaintModule extends BaseModule {
     }
 
     const lines = text.split(/\r?\n/);
+    // The one stripper (BaseModule._maskedLines): string, template, regex and
+    // comment bodies blanked, offsets preserved, a `${…}` hole inside a
+    // template kept live because it IS code. A backtick fixture spanning
+    // multiple lines (e.g. `run({ 'index.js': \`...eval(code)...\` })` in a
+    // test file) reads as blank on every line inside it.
+    const masked = this._maskedLines(text);
     const dir = path.dirname(abs);
 
     // Track tainted vars (grows as we parse)
     const tainted = new Set();
 
-    // Cross-line template-literal state, for sink detection only (see
-    // sinkSafeLine below) — a backtick fixture spanning multiple lines
-    // (e.g. `run({ 'index.js': \`...eval(code)...\` })` in a test file)
-    // would otherwise read as real code on every line inside it.
-    let inTemplate = false;
-
     for (let i = 0; i < lines.length; i++) {
       const raw = lines[i];
-      const stripped = this._stripComments(raw);
-      const stripRes = this._stripJsStrings(raw, inTemplate);
-      inTemplate = stripRes.inTemplate;
       // Sink patterns only — text inside a string/template/regex literal
       // isn't executable in the current file, so a sink match there is
       // example/fixture data, not a live vulnerability (self-scan
@@ -483,8 +480,10 @@ class CrossFileTaintModule extends BaseModule {
       // propagation / export tracking above untouched — narrowly scoping
       // this to sink detection is enough to kill the false positive,
       // since a hit requires a sink match AND a tainted-var reference on
-      // the SAME line.
-      const sinkSafeLine = this._stripComments(stripRes.stripped);
+      // the SAME line. Before 2026-09-05 this was a per-line quote counter
+      // that also blanked `${…}` holes, so a tainted variable interpolated
+      // into a query template was invisible to the reference check.
+      const sinkSafeLine = masked[i] || '';
 
       // ----------------------------------------------------------------
       // Collect imports (top-level only — stop at first blank-ish line
@@ -560,11 +559,17 @@ class CrossFileTaintModule extends BaseModule {
       // ----------------------------------------------------------------
       // Taint source detection
       // ----------------------------------------------------------------
-      const isTaintSource = TAINT_SOURCE_RES.some((re) => re.test(stripped));
+      // Sources and the assignments that carry them are read on the masked
+      // line too (2026-09-05): a fixture such as
+      //     "const fs = require('fs'); … req.body.name …"
+      // quoted on one line tainted `fs` for the rest of the file, and every
+      // later `fs.writeFileSync(path.join(…))` became a finding. A `${…}`
+      // hole is code, so `\`…${req.query.q}\`` still taints.
+      const isTaintSource = TAINT_SOURCE_RES.some((re) => re.test(sinkSafeLine));
 
       if (isTaintSource) {
         // Destructure: const { id, name } = req.body
-        const destruct = TAINT_DESTRUCT_RE.exec(raw);
+        const destruct = TAINT_DESTRUCT_RE.exec(sinkSafeLine);
         if (destruct) {
           for (const part of destruct[1].split(',')) {
             const t = part.trim().split(':')[0].trim(); // handle { id: userId }
@@ -572,7 +577,7 @@ class CrossFileTaintModule extends BaseModule {
           }
         }
         // Direct assignment: const userId = req.params.id
-        const assign = TAINT_ASSIGN_RE.exec(raw);
+        const assign = TAINT_ASSIGN_RE.exec(sinkSafeLine);
         if (assign && isTaintSource) {
           if (/^\w+$/.test(assign[1])) tainted.add(assign[1]);
         }
@@ -582,7 +587,7 @@ class CrossFileTaintModule extends BaseModule {
       }
 
       // Also propagate taint: if rhs contains a known tainted var
-      const assignProp = TAINT_ASSIGN_RE.exec(raw);
+      const assignProp = TAINT_ASSIGN_RE.exec(sinkSafeLine);
       if (assignProp && !isTaintSource) {
         const rhs = assignProp[2] || '';
         for (const v of tainted) {
@@ -637,49 +642,39 @@ class CrossFileTaintModule extends BaseModule {
 
     data.localTaintedVars = tainted;
     data.lines = lines;
-    data.paramTaintFunctions = this._analyseFunctionParamTaint(lines);
+    data.paramTaintFunctions = this._analyseFunctionParamTaint(lines, masked);
     return data;
   }
 
   // ---------------------------------------------------------------------------
-  // Function-parameter taint (own pass, own template-literal state) — finds
+  // Function-parameter taint (own pass over the same masked lines) — finds
   // functions whose OWN parameter reaches a dangerous sink internally, e.g.
   // `function findOrderById(orderId) { ...conn.query(\`...${orderId}\`)... }`.
   // Consumed by phase 2c in run() to catch a caller in another file passing
   // a tainted argument into that parameter.
   // ---------------------------------------------------------------------------
 
-  _analyseFunctionParamTaint(lines) {
+  _analyseFunctionParamTaint(lines, masked) {
     const funcs = new Map();
     const FUNC_DEF_RE = /^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/;
 
     let activeFn = null;
     let depth = 0;
     let everOpened = false;
-    let inTemplate = false;
-    let inTemplateInterp = false;
 
     for (let i = 0; i < lines.length; i += 1) {
       const raw = lines[i];
-      const stripRes = this._stripJsStrings(raw, inTemplate);
-      inTemplate = stripRes.inTemplate;
-      // Match against string/comment-stripped text only — a function
-      // definition whose text sits entirely inside a multi-line template
-      // literal (test fixtures writing sample code as strings) is blanked
-      // to spaces here and can never match, so it can't start a phantom
-      // activeFn whose brace depth would never close.
-      const codeLine = this._stripComments(stripRes.stripped);
-
-      // Same blanking, EXCEPT `${...}` template-literal interpolations stay
-      // live — those are executable expressions (e.g. `${orderId}`), not
-      // string content, so the reassignment-propagation match below needs
-      // to see identifiers referenced there. FUNC_DEF_RE and sink detection
-      // deliberately keep using the fully-blanked `codeLine` above so
-      // fixture strings full of sample code can never open a phantom
-      // activeFn or fake a sink hit.
-      const interpRes = this._stripStringsKeepTemplateInterp(raw, inTemplateInterp);
-      inTemplateInterp = interpRes.inTemplate;
-      const propagationLine = this._stripComments(interpRes.stripped);
+      // Match against the masked line only — a function definition whose
+      // text sits entirely inside a multi-line template literal (test
+      // fixtures writing sample code as strings) is blanked to spaces there
+      // and can never match, so it can't start a phantom activeFn whose
+      // brace depth would never close. A `${...}` interpolation stays live
+      // on the masked line — it is an executable expression (`${orderId}`),
+      // not string content — so the reassignment-propagation and
+      // identifier-reference matches below see the names referenced there.
+      // Until 2026-09-05 that took a second, private stripper
+      // (_stripStringsKeepTemplateInterp) beside the fully-blanking one.
+      const codeLine = masked[i] || '';
 
       if (!activeFn) {
         const m = FUNC_DEF_RE.exec(codeLine);
@@ -698,7 +693,7 @@ class CrossFileTaintModule extends BaseModule {
 
       // Propagate parameter taint through simple reassignment:
       // const sql = `...${orderId}...` — 'sql' inherits orderId's origin index.
-      const assign = TAINT_ASSIGN_RE.exec(propagationLine);
+      const assign = TAINT_ASSIGN_RE.exec(codeLine);
       if (assign && /^\w+$/.test(assign[1]) && !activeFn.origin.has(assign[1])) {
         const rhs = assign[2] || '';
         for (const [name, idx] of activeFn.origin) {
@@ -710,19 +705,16 @@ class CrossFileTaintModule extends BaseModule {
       }
 
       // Sink detection scoped to this function's tracked (param-derived) names.
-      // The sink pattern itself is matched against `codeLine` (fully-blanked
-      // strings/templates) so fixture strings can't fake a sink hit, but the
-      // identifier-reference check runs against `propagationLine`, where
-      // `${...}` template interpolations stay live — otherwise the flagship
-      // inline-sink shape (`conn.query(\`...${orderId}\`)`) is invisible
-      // because `codeLine` blanks the interpolation along with the rest of
-      // the template.
+      // The sink pattern and the identifier reference are both matched on
+      // `codeLine`: string bodies are blanked so fixture strings can't fake
+      // a sink hit, and `${...}` holes stay live so the flagship inline-sink
+      // shape (`conn.query(\`...${orderId}\`)`) is seen.
       if (!SUPPRESS_TAINT_OK_RE.test(raw)) {
         for (const sink of SINKS) {
           if (!sink.re.test(codeLine)) continue;
           if (sink.not && sink.not.test(codeLine)) continue;
           for (const [name, idx] of activeFn.origin) {
-            if (!this._lineReferencesVar(propagationLine, name)) continue;
+            if (!this._lineReferencesVar(codeLine, name)) continue;
             const contextLines = lines.slice(Math.max(0, i - 3), i + 1).join('\n');
             if (!this._hasSanitiser(raw, contextLines)) {
               activeFn.hits.push({
@@ -754,48 +746,6 @@ class CrossFileTaintModule extends BaseModule {
     }
 
     return funcs;
-  }
-
-  // Like BaseModule._stripJsStrings, but a `${...}` interpolation inside a
-  // template literal is left LIVE instead of being blanked — it's an
-  // executable expression, not string content. Single/double-quoted strings
-  // and the non-interpolation portions of a template literal are still
-  // fully blanked, so SQL-injection-shaped text nested inside an unrelated
-  // outer string (fixture data) can't leak an identifier into the match.
-  _stripStringsKeepTemplateInterp(line, inTemplate) {
-    let out = '';
-    let state = inTemplate ? '`' : null;
-    let interpDepth = 0;
-    let j = 0;
-    while (j < line.length) {
-      const ch = line[j];
-      if (state === '`') {
-        if (interpDepth > 0) {
-          out += ch;
-          if (ch === '{') interpDepth += 1;
-          else if (ch === '}') interpDepth -= 1;
-          j += 1;
-          continue;
-        }
-        if (ch === '\\') { out += '  '; j += 2; continue; }
-        if (ch === '$' && line[j + 1] === '{') { out += '${'; interpDepth = 1; j += 2; continue; }
-        if (ch === '`') { out += ch; state = null; j += 1; continue; }
-        out += ' ';
-        j += 1;
-        continue;
-      }
-      if (state) {
-        if (ch === '\\') { out += '  '; j += 2; continue; }
-        if (ch === state) { out += ch; state = null; j += 1; continue; }
-        out += ' ';
-        j += 1;
-        continue;
-      }
-      if (ch === "'" || ch === '"' || ch === '`') { out += ch; state = ch; j += 1; continue; }
-      out += ch;
-      j += 1;
-    }
-    return { stripped: out, inTemplate: state === '`' };
   }
 
   // True when `argText` (raw call-site argument text) is tainted: either it

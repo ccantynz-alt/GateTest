@@ -799,3 +799,64 @@ module.exports = { sample };
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// One stripper — the masked line decides sink detection
+// ---------------------------------------------------------------------------
+
+describe('CrossFileTaintModule — one stripper: the masked line decides', () => {
+  it('eval(code) inside a string, a template, a comment or a regex is not a sink; the real one beside them is (2026-09-05)', async () => {
+    const result = await run({
+      'index.js': [
+        'function run(req) {',
+        '  const code = req.body.script;',
+        '  const doc = "eval(code)";',
+        '  const tpl = `',
+        '    eval(code)',
+        '  `;',
+        '  /* a block comment that starts on this line',
+        '     eval(code) */',
+        '  assert.doesNotMatch(out, /eval\\(code\\)/);',
+        '  eval(code);',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const evals = result.errors().filter((e) => e.sink === 'eval');
+    assert.deepStrictEqual(evals.map((e) => e.line), [10], JSON.stringify(result.errors()));
+  });
+
+  it('a tainted variable interpolated into a query template is seen — the ${…} hole is code, not string body (2026-09-05)', async () => {
+    const result = await run({
+      'index.js': [
+        'function find(req, res) {',
+        '  const id = req.params.id;',
+        '  return db.query(`SELECT * FROM users WHERE id = ${id}`);',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const sql = result.errors().filter((e) => e.sink === 'sql-query');
+    assert.deepStrictEqual(sql.map((e) => e.line), [3], JSON.stringify(result.errors()));
+  });
+
+  it('a request read quoted inside a string does not taint the variable assigned on that line; the real read beside it does (2026-09-05)', async () => {
+    // tests/security-inert-patterns.test.js:500 shape — a one-line fixture
+    // `"const fs = require('fs'); … req.body.name …"` tainted `fs` for the
+    // rest of the file and every later path.join became a finding.
+    const result = await run({
+      'index.js': [
+        'const fs = require("fs");',
+        'const FIXTURE = "const fs = require(\'fs\'); function w(req) { fs.writeFileSync(\'/d/\' + req.body.name, \'x\'); }";',
+        'function save(req, res) {',
+        '  const name = req.body.name;',
+        '  fs.writeFileSync(path.join("/data", name), FIXTURE);',
+        '}',
+        'module.exports = { save };',
+        '',
+      ].join('\n'),
+    });
+    const hits = result.errors().map((e) => `${e.binding}@${e.line}:${e.sink}`).sort();
+    assert.deepStrictEqual(hits, ['name@5:file-write', 'name@5:path-join'], JSON.stringify(result.errors()));
+  });
+});

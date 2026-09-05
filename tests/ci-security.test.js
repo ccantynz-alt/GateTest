@@ -852,3 +852,36 @@ describe('CiSecurityModule — secret-echo: captured echo output is not stdout',
     assert.strictEqual(hits(await run(tmp)).length, 2);
   });
 });
+
+describe('CiSecurityModule — an echo inside a redirected `{ … }` group never reaches stdout (2026-09-05)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-group-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const step = (closer) => [
+    'name: ci',
+    'on: push',
+    'jobs:',
+    '  a:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - run: |',
+    '          {',
+    '            echo "DATABASE_URL=$DB_URL"',
+    '            echo "SUPABASE_JWT_SECRET=$JWT_SECRET"',
+    `          ${closer}`,
+    '',
+  ].join('\n');
+
+  it('NEGATIVE: prisma ci.yml:440 — the group is appended to $GITHUB_ENV', async () => {
+    writeWorkflow(tmp, 'ci.yml', step('} >> "$GITHUB_ENV"'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(r.checks.filter((c) => c.name.startsWith('ci-security:secret-echo:')).map((c) => c.name), []);
+  });
+
+  it('POSITIVE: the same group with no redirect prints the secret', async () => {
+    writeWorkflow(tmp, 'ci.yml', step('}'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(r.checks.filter((c) => c.name.startsWith('ci-security:secret-echo:')).map((c) => c.name), ['ci-security:secret-echo:.github/workflows/ci.yml:10']);
+  });
+});

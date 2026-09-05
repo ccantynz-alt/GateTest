@@ -302,3 +302,48 @@ describe('SSRFModule — summary', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+describe('SSRFModule — one stripper (control pair)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ssrf-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('fetch(req.body.url) inside a string, a template or a comment is not a call; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/proxy.js', [
+      'const doc = "await fetch(req.body.url)";',
+      'const tpl = `usage:',
+      '  await fetch(req.body.url)',
+      'done`;',
+      '/*',
+      '  await fetch(req.body.url)',
+      '*/',
+      'async function handler(req) {',
+      '  return fetch(req.body.url);',
+      '}',
+      'module.exports = { doc, tpl, handler };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^ssrf:/.test(c.name));
+    assert.deepStrictEqual(
+      flagged.map((c) => c.name),
+      ['ssrf:tainted-url:src/proxy.js:9'],
+      'only the real fetch on line 9 is an HTTP call handed user input',
+    );
+    assert.strictEqual(flagged[0].severity, 'error');
+  });
+
+  it('still reads the URL from inside the quotes — a metadata endpoint in the call is reported (2026-09-05)', async () => {
+    write(tmp, 'src/creds.js', [
+      '/*',
+      '  fetch("http://169.254.169.254/latest/meta-data/")',
+      '*/',
+      'async function creds() {',
+      '  return fetch("http://169.254.169.254/latest/meta-data/");',
+      '}',
+      'module.exports = { creds };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^ssrf:/.test(c.name));
+    assert.deepStrictEqual(flagged.map((c) => c.name), ['ssrf:metadata-endpoint:src/creds.js:5']);
+  });
+});

@@ -223,3 +223,80 @@ describe('EnvVarsModule — summary', () => {
     assert.match(s.message, /declared=\d+/);
   });
 });
+
+// ── the one stripper (2026-09-05, Doctrine §4): the private per-line quote
+// counter this module carried could not see a template continuation line or a
+// block comment that opened earlier, and read comment text as code ──
+describe('EnvVarsModule — reads are matched on the masked line', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ev-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a process.env read inside a string, a template or a comment is not a read; the real ones beside them are — dot and bracket form (2026-09-05)', async () => {
+    write(tmp, 'src/a.ts', [
+      'const advice = "set process.env.QUOTED_KEY before boot";', // 1 string
+      'const tpl = `',                                             // 2
+      '  export DEFAULT=${process.env.HOLE_KEY} # process.env.TEMPLATE_KEY', // 3: the hole is code, the rest is template text
+      '`;',                                                        // 4
+      '/* migration notes:',                                       // 5
+      '   we used to read process.env.COMMENT_KEY here',           // 6 block comment
+      ' */',                                                       // 7
+      'const real = process.env.REAL_KEY;',                        // 8 real, dot form
+      'const bracket = process.env["BRACKET_KEY"];',               // 9 real, bracket form — the key is string content
+    ].join('\n'));
+    write(tmp, '.env.example', '\n');
+    const r = await run(tmp);
+    const missing = r.checks
+      .filter((c) => c.passed === false && c.name.startsWith('env-vars:missing-from-example:'))
+      .map((c) => `${c.name}@${c.line}`)
+      .sort();
+    assert.deepStrictEqual(missing, [
+      'env-vars:missing-from-example:BRACKET_KEY@9',
+      'env-vars:missing-from-example:HOLE_KEY@3',
+      'env-vars:missing-from-example:REAL_KEY@8',
+    ]);
+  });
+});
+
+describe('EnvVarsModule — a key set in a child process env block is a use of the key (2026-09-05)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ev-child-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('CHILD_KEY passed to spawn is referenced; PLAIN_KEY in an ordinary object and NEVER_KEY are unused', async () => {
+    write(tmp, 'src/a.js', [
+      'const labels = { PLAIN_KEY: "x" };',
+      'spawn(process.execPath, [worker], {',
+      '  env: {',
+      '    ...process.env,',
+      '    CHILD_KEY: JSON.stringify(task),',
+      '    QUOTED_KEY: "not a key: OTHER_KEY: 1",',
+      '    NODE_OPTIONS: "",',
+      '  },',
+      '});',
+      'const after = { LATE_KEY: 1 };',
+      '',
+    ].join('\n'));
+    write(tmp, '.env.example', 'CHILD_KEY=\nQUOTED_KEY=\nOTHER_KEY=\nPLAIN_KEY=\nLATE_KEY=\nNEVER_KEY=\n');
+    const r = await run(tmp);
+    const unused = r.checks
+      .filter((c) => c.passed === false && c.name.startsWith('env-vars:unused-in-code:'))
+      .map((c) => c.name.replace('env-vars:unused-in-code:', ''))
+      .sort();
+    assert.deepStrictEqual(unused, ['LATE_KEY', 'NEVER_KEY', 'OTHER_KEY', 'PLAIN_KEY']);
+  });
+
+  it('a key only SET for a child is not missing from .env.example; a key READ beside it is', async () => {
+    write(tmp, 'src/a.js', [
+      'const worker = process.env.WORKER_PATH;',
+      'spawn(process.execPath, [worker], { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });',
+      '',
+    ].join('\n'));
+    write(tmp, '.env.example', 'OTHER=\n');
+    const r = await run(tmp);
+    const missing = r.checks
+      .filter((c) => c.passed === false && c.name.startsWith('env-vars:missing-from-example:'))
+      .map((c) => c.name.replace('env-vars:missing-from-example:', ''));
+    assert.deepStrictEqual(missing, ['WORKER_PATH']);
+  });
+});

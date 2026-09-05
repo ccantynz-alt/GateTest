@@ -273,3 +273,37 @@ describe('SecurityModule — SQL injection: constant-only splices and call-expre
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// One stripper (2026-09-05): the SQL regexes read the keyword out of the
+// quotes, so they still run on the raw line — but whether the quote they start
+// at is a real delimiter is decided by BaseModule._maskedLines, which sees a
+// template literal and a block comment that span lines. The block-comment
+// case (a line inside `/* … */` that does not start with `*`) was a live
+// finding under the per-line quote counter this replaced.
+// ---------------------------------------------------------------------------
+
+describe('SecurityModule — SQL injection: a query inside a string, a template or a comment is inert', () => {
+  it('a concatenated query inside a string, a template or a comment is not flagged; the real one beside them is (2026-09-05)', async () => {
+    await withTmp('gt-sqli-mask-', async (tmp) => {
+      write(tmp, 'src/db/query.js', [
+        'function find(id, conn) {',
+        '  const doc = "const sql = \'SELECT * FROM users WHERE id = \' + id; conn.query(sql)";',
+        '  const tpl = `',
+        "    const sql2 = 'SELECT * FROM users WHERE id = ' + id; conn.query(sql2)",
+        '  `;',
+        '  /* example:',
+        "     const sql3 = 'SELECT * FROM users WHERE id = ' + id; conn.query(sql3)",
+        '  */',
+        "  const sql = 'SELECT * FROM users WHERE id = ' + id;",
+        '  return conn.query(sql);',
+        '}',
+        'module.exports = { find };',
+        '',
+      ].join('\n'));
+      const result = await run(tmp);
+      const found = result.errors().filter((c) => c.rule.startsWith('security:sql-injection:'));
+      assert.deepStrictEqual(found.map((c) => c.line), [9], JSON.stringify(result.checks.map((c) => c.rule)));
+    });
+  });
+});

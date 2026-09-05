@@ -361,3 +361,33 @@ describe('HardcodedUrlModule — localhost dev defaults that are NOT leaks', () 
     ]);
   });
 });
+
+// ── the one stripper: a URL is string content, so the question is WHICH kind of
+// literal holds it (2026-09-05, Doctrine §4 — the private quote counter this
+// replaced could not see a template continuation line or a block comment) ──
+describe('HardcodedUrlModule — string, template and comment are told apart by the one stripper', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-hu-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a URL inside a block comment that opened on an earlier line, or in a line comment with an apostrophe before it, is not a leak; the ones in a string, a template and a template continuation line beside them are (2026-09-05)', async () => {
+    write(tmp, 'src/api.ts', [
+      '/* dev notes:',                                          // 1
+      '   the old box was http://192.168.1.20:8080 — gone */', // 2  comment: silent
+      "const N = 1; // don't point at http://localhost:5000",   // 3  the apostrophe opened a phantom string for the old counter: silent
+      'const A = "http://localhost:3000";',                    // 4  string: fires
+      'const B = `http://10.0.0.5:9000/api`;',                 // 5  template: fires
+      'const C = `',                                           // 6
+      '  preview at http://staging.example.io/x for review',   // 7  continuation line, no quote of its own: fires
+      '`;',                                                    // 8
+      'export const get = () => fetch(A + B + C);',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name).sort();
+    assert.deepStrictEqual(names, [
+      'hardcoded-url:internal-tld:src/api.ts:7',
+      'hardcoded-url:localhost:src/api.ts:4',
+      'hardcoded-url:private-ip:src/api.ts:5',
+    ]);
+  });
+});

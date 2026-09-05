@@ -262,6 +262,21 @@ function sqlSpliceIsConstantOnly(line, match) {
   return sawIdent;
 }
 
+// The first createHash(...) on the masked line whose raw text names a weak
+// digest. The call shape is code and survives the mask; the algorithm is
+// string content the mask blanked, so `weakRe` (sticky) reads it from the raw
+// line at the offset the masked match reports.
+function weakHashAt(code, line, callRe, weakRe) {
+  callRe.lastIndex = 0;
+  let at;
+  while ((at = callRe.exec(code)) !== null) {
+    weakRe.lastIndex = at.index;
+    const m = weakRe.exec(line);
+    if (m) return m;
+  }
+  return null;
+}
+
 class SecurityModule extends BaseModule {
   constructor() {
     super('security', 'Security Analysis');
@@ -481,7 +496,18 @@ class SecurityModule extends BaseModule {
       //
       // Only an array literal is excluded. `exec(cmd + input)` with no leading
       // quote still fires, because that one really can reach a shell.
-      { regex: /\b(?:exec|execSync)\s*\(\s*(?!\[)[^)]*(?:\+|\$\{)/g, name: 'shell exec with interpolated input', severity: 'critical' },
+      //
+      // The callee must be a shell exec: a bare `exec(` / `execSync(` (the
+      // destructured child_process import) or one qualified by the module
+      // (`child_process.exec`, `childProcess.execSync`, `cp.exec`). Any other
+      // `<receiver>.exec(` is a different function wearing the name —
+      // `RegExp#exec` (got, `/…/v.exec(\`${url.pathname}\`)`, two findings)
+      // and a database handle's `db.exec(\`INSERT … ${values}\`)` (prisma's
+      // sqlite fixtures) reach no shell. Measured 2026-09-05 when the match
+      // moved onto the masked line: the raw form had skipped prisma only
+      // because `[^)]*` stopped at a `)` inside the SQL string, and had
+      // flagged got's RegExp because `[^)]*` ran through the regex body.
+      { regex: /(?:\b(?:child_process|childProcess|cp)\.|(?<![\w$.]))(?:exec|execSync)\s*\(\s*(?!\[)[^)]*(?:\+|\$\{)/g, name: 'shell exec with interpolated input', severity: 'critical' },
       { regex: /\$\{.*req\.(params|query|body)/g, name: 'unsanitized user input in template', severity: 'critical' },
       { regex: /res\.redirect\s*\(\s*req\./g, name: 'open redirect risk', severity: 'high' },
       { regex: /\.createReadStream\s*\(\s*req\./g, name: 'path traversal risk', severity: 'critical' },
@@ -491,9 +517,9 @@ class SecurityModule extends BaseModule {
       // the substring rule. Identifier-keyed, so a test-tree hit is a
       // warning (a test's `nonce-${Math.random()}` cache-buster is not
       // shipped), same split as the secret patterns below.
-      // Not anchored: the shared in-string guard knows that `${…}` inside a
-      // template literal is code, so `apiKey = \`${Math.random()}\`` fires
-      // and `"const token = Math.random()"` inside a plain string does not.
+      // Not anchored: the masked line keeps `${…}` inside a template literal
+      // as code, so `apiKey = \`${Math.random()}\`` fires and
+      // `"const token = Math.random()"` inside a plain string does not.
       {
         regex: /Math\.random\s*\(/g,
         name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)',
@@ -501,7 +527,9 @@ class SecurityModule extends BaseModule {
         identifierKeyed: true,
         safeIf: (line) => !mathRandomIsSecuritySensitive(line),
       },
-      { regex: /disable.*csrf|csrf.*disable/gi, name: 'CSRF protection disabled', severity: 'critical' },
+      // Reads string content (`app.disable('csrf')`), so it runs on the raw
+      // line; the match start is still required to be code.
+      { regex: /disable.*csrf|csrf.*disable/gi, name: 'CSRF protection disabled', severity: 'critical', readsStrings: true },
       // NoSQL injection: a $where clause built from dynamic input executes
       // attacker-controlled JavaScript on the MongoDB server (NodeGoat A1;
       // 2026-08-18 audit advancement #6 — this class was a recall miss).
@@ -541,6 +569,13 @@ class SecurityModule extends BaseModule {
       if (SCANNER_PATH_RE.test(normalisedPath)) continue;
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);
+      // Strings, regex literals and comments blanked to spaces, offsets kept
+      // (BaseModule._maskedLines — the one stripper). Every dangerous pattern
+      // is matched on the masked line, so prose about eval() in a string, a
+      // template literal or a block comment is not a call to eval(); the
+      // per-line quote counter this replaced (2026-09-05) could not see a
+      // template or a block comment that spans lines.
+      const masked = this._maskedLines(content);
 
       // Test files don't wire the app — and their fixtures legitimately
       // contain the keywords (a ZAP test with `_csrf` URL-encoded in a
@@ -586,11 +621,15 @@ class SecurityModule extends BaseModule {
           // regexes, so a following exec() would resume past the match and
           // return null. Same trap that silently disabled the secrets
           // module's placeholder allow-list (KI #78 audit).
+          const code = masked[i] || '';
           pattern.regex.lastIndex = 0;
-          const match = pattern.regex.exec(line);
+          const match = pattern.regex.exec(pattern.readsStrings ? line : code);
           pattern.regex.lastIndex = 0;
           if (match) {
-            if (this._isInsideStringLiteral(line, match.index)) continue;
+            // A pattern that reads string content ran on the raw line; its
+            // match START must still be code — a character the mask blanked
+            // sits inside a string literal or a comment.
+            if (pattern.readsStrings && code[match.index] !== line[match.index]) continue;
             // Per-pattern proof of safety. Distinct from the opt-out marker
             // above: that one silences a line because an author asked, this
             // one silences it because the code on it cannot do the thing the
@@ -663,12 +702,20 @@ class SecurityModule extends BaseModule {
         continue;
       }
       const lines = content.split(/\r?\n/);
+      // Both SQL regexes read the keyword out of the quotes, so they run on
+      // the raw line; whether the opening quote they start at is a real
+      // delimiter is decided by the one stripper (BaseModule._maskedLines):
+      // a delimiter survives the mask, a quote inside another string, a
+      // template literal or a block comment is blanked. The per-line quote
+      // counter this replaced (2026-09-05) could not see either spanning
+      // lines.
+      const masked = this._maskedLines(content);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const match = SQL_CONCAT_RE.exec(line) || SQL_TEMPLATE_RE.exec(line);
         if (!match) continue;
-        if (this._isInsideStringLiteral(line, match.index)) continue;
+        if (this._insideLiteral(masked, lines, i, match.index)) continue;
         if (sqlSpliceIsConstantOnly(line, match)) continue;
 
         // Built and used at a sink on the same line — flag directly.
@@ -764,8 +811,11 @@ class SecurityModule extends BaseModule {
     const files = this._collectFiles(projectRoot, JS_SOURCE_EXTS);
     const SCANNER_PATH_RE = /(?:^|\/)(?:src\/modules|src\/core|tests)\//;
 
-    // A weak, fast digest being constructed.
-    const WEAK_HASH_RE = /createHash\s*\(\s*['"`](md5|sha1|sha-1)['"`]/i;
+    // A weak, fast digest being constructed: the call shape is located on
+    // the masked line, the algorithm name is string content read from the raw
+    // line at that offset (sticky) — see weakHashAt.
+    const CREATE_HASH_RE = /createHash\s*\(\s*['"`]/g;
+    const WEAK_HASH_RE = /createHash\s*\(\s*['"`](md5|sha1|sha-1)['"`]/iy;
     // Credential-ish naming, in the hashed value or the assignment target.
     //
     // Two classes, and the distinction matters. The unambiguous words are
@@ -785,13 +835,13 @@ class SecurityModule extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
       const lines = content.split(/\r?\n/);
+      const masked = this._maskedLines(content);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (this._isCommentLine(line)) continue;
-        const m = line.match(WEAK_HASH_RE);
+        const m = weakHashAt(masked[i] || '', line, CREATE_HASH_RE, WEAK_HASH_RE);
         if (!m) continue;
-        if (this._isInsideStringLiteral(line, m.index)) continue;
 
         // The credential can be named on this line (`.update(password)`) or
         // on the enclosing function/assignment a couple of lines up
@@ -858,13 +908,16 @@ class SecurityModule extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
       const lines = content.split(/\r?\n/);
+      // The sink is matched on the masked line (BaseModule._maskedLines): a
+      // `target[req.body.key] =` quoted in a string, a template literal or a
+      // block comment is not an assignment.
+      const masked = this._maskedLines(content);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (this._isCommentLine(line)) continue;
-        const m = line.match(SINK_RE);
+        const m = (masked[i] || '').match(SINK_RE);
         if (!m) continue;
-        if (this._isInsideStringLiteral(line, m.index)) continue;
 
         // Wider window than the weak-hash check: a key denylist is usually a
         // few lines above the assignment, not adjacent to it.
@@ -927,13 +980,17 @@ class SecurityModule extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
       const lines = content.split(/\r?\n/);
+      // Sinks are matched on the masked line (BaseModule._maskedLines): a
+      // `fs.readFile(… + req.query.file)` quoted in a string, a template
+      // literal or a block comment reads nothing.
+      const masked = this._maskedLines(content);
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (this._isCommentLine(line)) continue;
-        const m = line.match(FS_SINK_RE) || line.match(RES_SINK_RE);
+        const code = masked[i] || '';
+        const m = code.match(FS_SINK_RE) || code.match(RES_SINK_RE);
         if (!m) continue;
-        if (this._isInsideStringLiteral(line, m.index)) continue;
 
         const windowText = lines.slice(Math.max(0, i - 6), i + 3).join('\n');
         if (GUARD_RE.test(windowText)) continue;

@@ -199,3 +199,71 @@ describe('bash-safety — `cmd || true` whose OUTCOME is tested on the next line
     assert.equal(hit.severity, 'error');
   });
 });
+
+describe('bash-safety — every line of a multi-line `run: |` block is scanned (2026-09-05)', () => {
+  // `_isInRunBlock` used to stop at the first line above that began with a
+  // word character, so a `|| true` anywhere but the FIRST command of a step
+  // was never seen — this repo's dogfood workflow carried two, and ci.yml
+  // read as clean. Doctrine §1: a rule that scans one line per block and
+  // reports nothing is reporting success while doing nothing.
+  const WORKFLOW = [
+    'name: x',
+    'on: push',
+    'jobs:',
+    '  a:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - name: sweep',
+    '        run: |',
+    '          mkdir -p .out',                                                    // 9
+    '          node run.js 2>&1 | tee .out/sweep.log || true',                  // 10 second line: was invisible
+    '          if [ -s .out/sweep.log ]; then',
+    '            node summarise.js .out/sweep.log || true',                     // 12 nested deeper than the `if`
+    '          fi',
+    '      - name: folded',
+    '        run: >',
+    '          node scan.js',
+    '            > .out/scan.log 2>&1 || true',                                  // 17 continuation line, deeper than its head
+    '      - name: not shell',
+    '        with:',
+    '          note: "|| true"',                                                 // 20 a `with:` value, not a run block
+    '        env:',
+    '          FLAG: cmd || true',                                                // 22 an env value, not a run block
+    '      - run: cmd || true',                                                   // 23 single-line list-item run
+    '',
+  ].join('\n');
+
+  it('POSITIVE: the second line, a nested line, a folded continuation and a one-line `- run:` all fire', async () => {
+    const found = await scan({ '.github/workflows/x.yml': WORKFLOW });
+    const lines = found.filter((c) => c.name.startsWith('bash-safety:pipe-true:')).map((c) => c.line).sort((a, b) => a - b);
+    assert.deepStrictEqual(lines, [10, 12, 17, 23], names(found));
+  });
+
+  it('NEGATIVE: a `with:` value and an `env:` value are not shell — the same text there is silent', async () => {
+    const found = await scan({ '.github/workflows/x.yml': WORKFLOW });
+    const lines = found.map((c) => c.line);
+    assert.ok(!lines.includes(20) && !lines.includes(22), names(found));
+  });
+});
+
+describe('bash-safety — `VAR=$(cmd || true)` is the capture shape too (2026-09-05)', () => {
+  // ktor switch-base-branch.sh:133 — the `|| true` sits INSIDE the
+  // substitution; the exit status is traded for the output exactly as in
+  // `VAR=$(cmd) || true`, and `$origin_url` is read on the next lines.
+  const CAPTURE = 'origin_url=$(git remote get-url "$ORIGIN_REMOTE" 2> /dev/null || true)';
+
+  it('NEGATIVE: read below — a warning with the reason', async () => {
+    const found = await scan({ 'switch.sh': ['#!/bin/bash', CAPTURE, 'if [ -z "$origin_url" ]; then echo none; fi', ''].join('\n') });
+    const c = pipeTrue(found);
+    assert.ok(c, names(found));
+    assert.strictEqual(c.severity, 'warning');
+    assert.match(c.message, /captured output is read below/);
+  });
+
+  it('POSITIVE: nothing reads it — an error', async () => {
+    const found = await scan({ 'switch.sh': ['#!/bin/bash', CAPTURE, 'echo done', ''].join('\n') });
+    const c = pipeTrue(found);
+    assert.ok(c, names(found));
+    assert.strictEqual(c.severity, 'error');
+  });
+});

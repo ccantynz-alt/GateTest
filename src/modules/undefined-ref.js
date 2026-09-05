@@ -42,6 +42,14 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
+const { stripStringsAndComments, splitTopLevel } = require('../core/source-strip');
+
+let lastSrc = null;
+let lastMask = null;
+function maskOf(src) {
+  if (src !== lastSrc) { lastSrc = src; lastMask = stripStringsAndComments(src); }
+  return lastMask;
+}
 
 // ─── Globals / built-ins allowlist ──────────────────────────────────────
 // Names that are unambiguously available without import. Conservative —
@@ -710,20 +718,14 @@ class UndefinedRefModule extends BaseModule {
  * template literals are skipped. Returns the declarator text or null.
  */
 UndefinedRefModule._readDeclaration = function (src, start) {
+  // Walk the MASKED text (strings and comments blank, offsets preserved —
+  // src/core/source-strip.js, one definition) and slice the raw declarator.
+  const code = maskOf(src);
   let depth = 0;
-  let quote = null;
   let i = start;
   const max = Math.min(src.length, start + 20000);
   for (; i < max; i++) {
-    const ch = src[i];
-    if (quote) {
-      if (ch === '\\') { i++; continue; }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; continue; }
-    if (ch === '/' && src[i + 1] === '/') { const nl = src.indexOf('\n', i); if (nl === -1) break; i = nl; continue; }
-    if (ch === '/' && src[i + 1] === '*') { const end = src.indexOf('*/', i + 2); if (end === -1) break; i = end + 1; continue; }
+    const ch = code[i];
     if (ch === '(' || ch === '[' || ch === '{') depth++;
     else if (ch === ')' || ch === ']' || ch === '}') { depth--; if (depth < 0) break; }
     else if (ch === ';' && depth === 0) break;
@@ -739,28 +741,9 @@ UndefinedRefModule._readDeclaration = function (src, start) {
   return src.slice(start, i);
 };
 
-/** Split on commas at bracket depth 0 (outside strings). */
+/** Split on commas at bracket depth 0, outside strings — the one walk in src/core/source-strip.js; `<`/`>` count for generics. */
 UndefinedRefModule._splitTopLevel = function (text) {
-  const out = [];
-  let depth = 0;
-  let quote = null;
-  let cur = '';
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quote) {
-      cur += ch;
-      if (ch === '\\') { cur += text[i + 1] || ''; i++; continue; }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; cur += ch; continue; }
-    if (ch === '(' || ch === '[' || ch === '{' || ch === '<') depth++;
-    else if (ch === ')' || ch === ']' || ch === '}' || ch === '>') depth = Math.max(0, depth - 1);
-    if (ch === ',' && depth === 0) { out.push(cur); cur = ''; continue; }
-    cur += ch;
-  }
-  if (cur.trim()) out.push(cur);
-  return out;
+  return splitTopLevel(text, ',', { angle: true }).filter((piece) => piece.trim());
 };
 
 /**

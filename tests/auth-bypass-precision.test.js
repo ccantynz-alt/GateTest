@@ -148,6 +148,28 @@ router.post('/reports', (req, res) => res.json(create(req.body)));
 // indistinguishable.
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('authBypass — a route inside a string, a template or a comment is not a route', () => {
+  it('a route inside a string, a template or a comment is not an endpoint; the real one beside them is (2026-09-05)', async () => {
+    // Control pair for the one-stripper migration: the match START is judged
+    // against BaseModule._maskedLines, which sees a template literal and a
+    // block comment that span lines — the per-line quote counter it replaced
+    // could not, and the block-comment line below was a live ERROR.
+    const r = await scan({ 'src/routes.js': [
+      "const doc = \"app.post('/in-string', (req, res) => res.json(db.save(req.body)))\";",
+      'const tpl = `',
+      "  app.post('/in-template', (req, res) => res.json(db.save(req.body)))",
+      '`;',
+      '/* example:',
+      "   app.post('/in-comment', (req, res) => res.json(db.save(req.body)))",
+      '*/',
+      "app.post('/real', (req, res) => res.json(db.save(req.body)));",
+      '',
+    ].join('\n') });
+    assert.deepStrictEqual(r.findings.map((c) => c.meta.line), [8], JSON.stringify(r.findings));
+    assert.match(r.findings[0].meta.message, /POST \/real/);
+  });
+});
+
 describe('authBypass — 405 method-not-allowed stubs are not endpoints', () => {
   it('NEGATIVE: a handler whose only behaviour is returning 405 is silent', async () => {
     const r = await scan({ 'website/app/api/admin/recipes/route.ts': `

@@ -903,3 +903,26 @@ describe('DeadCodeModule — orphan-file reads the import graph (KI #96)', () =>
     assert.deepStrictEqual(orphans(r), ['src/lonely.ts'], 'positive control: the real orphan is still reported');
   });
 });
+
+describe('DeadCodeModule — extractJsExports: one stripper, the masked line decides', () => {
+  const { extractJsExports } = require('../src/modules/dead-code-extractor');
+
+  it('an export inside a string, a template or a comment is not an export; the real ones beside them are (2026-09-05)', () => {
+    const src = [
+      'const doc = "module.exports = { fromString }";',
+      'const tpl = `',
+      'export const fromTemplate = 1;',
+      'module.exports = { fromTemplateObj };',
+      '`;',
+      '/* a block comment that starts on this line',
+      'export function fromComment() {}',
+      'module.exports = { fromCommentObj }; */',
+      'export const real = 1;',
+      'module.exports = { realObj, other: renamed };',
+    ].join('\n');
+    assert.deepStrictEqual(
+      extractJsExports(src).map((e) => `${e.name}:${e.line}`),
+      ['real:9', 'realObj:10', 'other:10'],
+    );
+  });
+});

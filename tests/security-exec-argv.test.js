@@ -56,6 +56,13 @@ describe('security — argv arrays do not reach a shell', () => {
       'const r = exec(["ls", "-la", dir + suffix]);\n',
     'argv array spanning the call':
       'const r = exec([\n  "git",\n  `${ref}`,\n]);\n',
+    // The callee is not a shell exec at all (2026-09-05, measured on got and
+    // prisma when the match moved onto the masked line): RegExp#exec and a
+    // database handle's exec share the name and reach no shell.
+    'RegExp#exec with a template argument (got, is-unix-socket-url.ts)':
+      'return /^(?<socketPath>[^:]+):/v.exec(`${url.pathname}${url.search}`)?.groups?.socketPath;\n',
+    'a database handle\'s exec (prisma sqlite fixture)':
+      "rawDb.exec(`INSERT INTO posts (id, title) VALUES ${values.join(', ')}`);\n",
   };
 
   for (const [why, src] of Object.entries(SAFE)) {
@@ -77,6 +84,9 @@ describe('security — genuine shell strings still fire', () => {
     'template literal': 'const out = exec(`ls ${dir}`);\n',
     'execSync with concatenation': 'const out = execSync("git checkout " + ref);\n',
     'bare variable concatenation, no leading quote': 'const out = exec(baseCmd + userInput);\n',
+    // Qualified by the module — the same shell, so the same finding.
+    'child_process.exec with a template': 'const out = child_process.exec(`ls ${dir}`);\n',
+    'cp.execSync with concatenation': 'const out = cp.execSync("git checkout " + ref);\n',
   };
 
   for (const [why, src] of Object.entries(UNSAFE)) {

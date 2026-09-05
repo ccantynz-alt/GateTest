@@ -411,6 +411,37 @@ class CiSecurityModule extends BaseModule {
    * indentation returns to the KEY's column, so a sibling `env:` mapping
    * after `- run: |` is not read as part of the script.
    */
+  /**
+   * Is line `k` inside a `{ … }` group whose closing brace is redirected or
+   * piped — `{ echo "KEY=$SECRET"; … } >> "$GITHUB_ENV"`? Then the echo
+   * never reaches stdout: the group's output does, into the file. prisma's
+   * ci.yml:440 writes four Supabase values to GITHUB_ENV this way; it had
+   * scored 0.2 by accident (a phantom JavaScript comment in a YAML file) and
+   * became a blocking finding the day the scorer masked YAML as YAML
+   * (2026-09-05). A `${…}` expansion is not a group opener.
+   */
+  _groupRedirected(block, k) {
+    const opens = (t) => t === '{' || (/\{\s*$/.test(t) && !/\$\{\s*$/.test(t));
+    const closes = (t) => /^\}/.test(t);
+    let depth = 0;
+    for (let i = k - 1; i >= 0; i -= 1) {
+      const t = block[i].trim();
+      if (closes(t)) { depth += 1; continue; }
+      if (!opens(t)) continue;
+      if (depth > 0) { depth -= 1; continue; }
+      let inner = 0;
+      for (let j = k + 1; j < block.length; j += 1) {
+        const u = block[j].trim();
+        if (opens(u)) { inner += 1; continue; }
+        if (!closes(u)) continue;
+        if (inner > 0) { inner -= 1; continue; }
+        return /^\}\s*(?:\d?>>?|\|)/.test(u);
+      }
+      return false;
+    }
+    return false;
+  }
+
   _collectShellBlock(startLine, lines, startIdx) {
     const block = [startLine];
     const m = startLine.match(/^(\s*)(-\s*)?[\w-]+\s*:\s*(.*)$/);
@@ -458,7 +489,7 @@ class CiSecurityModule extends BaseModule {
       // postgis.yml:63, an initdb --pwfile), `$(echo …)`, backticks — or
       // redirected / piped never reaches stdout.
       const echoed = /\becho\b(.*)$/.exec(l);
-      const captured = echoed && /(?:[<$]\(|`)\s*$/.test(l.slice(0, echoed.index));
+      const captured = echoed && (/(?:[<$]\(|`)\s*$/.test(l.slice(0, echoed.index)) || this._groupRedirected(block, k));
       const secretEnv = echoed && !captured && SECRET_VAR_RE.test(echoed[1]) && !/[|>]/.test(echoed[1]);
       if (/\becho\b.*\$\{\{\s*secrets\./.test(l) || secretEnv) {
         issues += this._flag(result, `ci-security:secret-echo:${rel}:${lineNo}`, {

@@ -292,3 +292,30 @@ describe('RaceConditionModule — fs TOCTOU compares the WHOLE path argument (PR
     assert.ok(r.checks.find((c) => c.name.startsWith('race-condition:fs-toctou:')));
   });
 });
+
+// ── the one stripper (2026-09-05, Doctrine §4): the private per-line quote
+// counter this module carried could not see a template continuation line or a
+// block comment that opened earlier, and read comment text as code ──
+describe('RaceConditionModule — matches on the masked line', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rc-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a check-then-act inside a string, a template or a comment is not a race; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/a.ts', [
+      'const doc = "if (fs.existsSync(p)) fs.unlinkSync(p);";', // 1 string
+      'const tpl = `',                                            // 2
+      '  if (fs.existsSync(q)) fs.unlinkSync(q);',                // 3 template continuation
+      '`;',                                                       // 4
+      '/* the bug we fixed:',                                     // 5
+      '   if (fs.existsSync(r)) fs.unlinkSync(r);',               // 6 block comment
+      ' */',                                                      // 7
+      'function drop(target) {',
+      '  if (fs.existsSync(target)) fs.unlinkSync(target);',      // 9 real
+      '}',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name);
+    assert.deepStrictEqual(names, ['race-condition:fs-toctou:src/a.ts:9']);
+  });
+});

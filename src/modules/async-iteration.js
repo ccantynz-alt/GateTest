@@ -103,18 +103,6 @@ const METHOD_CALL_RE = /\.\s*(reduce|reduceRight|filter|some|every|forEach|map|f
 // Explicit opt-out marker.
 const OK_MARKER_RE = /\basync-iteration-ok\b/;
 
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
 /**
  * Walk backwards through `before` tracking paren depth. If we pop back
  * through an unclosed `(` whose text immediately prior matches
@@ -189,22 +177,17 @@ class AsyncIterationModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const isTestFile = this._isTestPath(rel);
     const lines = content.split(/\r?\n/);
+    // Every pattern is matched on the masked line (BaseModule._maskedLines:
+    // strings, regexes and comments blanked, offsets kept) — a
+    // `.forEach(async` inside a doc string, a template a generator writes to
+    // disk, or a block comment that opened lines earlier is data, not a call.
+    const masked = this._maskedLines(content);
     let issues = 0;
 
-    let inBlockComment = false;
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      if (inBlockComment) {
-        if (/\*\//.test(line)) inBlockComment = false;
-        continue;
-      }
-      if (/^\s*\/\*/.test(line) && !/\*\//.test(line)) {
-        inBlockComment = true;
-        continue;
-      }
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+      const line = lines[i];      // raw: the opt-out marker lives in a comment
+      const code = masked[i] || '';
+      if (!code.trim()) continue;
 
       // Per-file and per-line opt-out.
       if (OK_MARKER_RE.test(line)) continue;
@@ -213,15 +196,13 @@ class AsyncIterationModule extends BaseModule {
 
       METHOD_CALL_RE.lastIndex = 0;
       let m;
-      while ((m = METHOD_CALL_RE.exec(line)) !== null) {
-        if (isInString(line, m.index)) continue;
-
+      while ((m = METHOD_CALL_RE.exec(code)) !== null) {
         const method = m[1];
 
         // For `.map` / `.flatMap`, only flag when NOT inside Promise.all(...)
         // on the same line or the immediately preceding line.
         if (method === 'map' || method === 'flatMap') {
-          const before = line.slice(0, m.index);
+          const before = code.slice(0, m.index);
 
           // Accept `Promise.all(...)` / `Promise.allSettled(...)` / etc.
           // wrapping the .map call. Walk back through paren depth to
@@ -229,7 +210,7 @@ class AsyncIterationModule extends BaseModule {
           if (isInsidePromiseCombinator(before)) continue;
           // Also check multi-line: preceding line may end with
           // `await Promise.all(` and the .map is on a fresh line.
-          const prevLine = i > 0 ? lines[i - 1] : '';
+          const prevLine = i > 0 ? masked[i - 1] : '';
           if (/\bPromise\.(?:all|allSettled|any|race)\s*\(\s*$/.test(prevLine.trim() ? prevLine : '')) {
             if (/^\s*(?:[a-zA-Z_$][\w$]*)?\s*$/.test(before)) continue;
           }
@@ -237,7 +218,7 @@ class AsyncIterationModule extends BaseModule {
           // Accept immediate `await` context on map returning a short
           // chain `.map(...).then(...)` or `.map(...).catch(...)` —
           // those are explicit promise consumers.
-          const after = line.slice(m.index);
+          const after = code.slice(m.index);
           // Look ahead to end of call: if the matching close-paren is
           // followed by `.then(` or `.catch(` or `.finally(`, treat
           // as explicit async consumer.
