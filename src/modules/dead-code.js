@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 const { buildDeadCodeIndex } = require('./dead-code-index');
+const { isEntryPoint, manifestEntrypoints } = require('../core/entrypoints');
+const { buildImportGraph, reverseGraph, JS_EXTS } = require('../core/import-graph');
 const { parseExportsWithAcorn } = require('./dead-code-extractor');
 
 // Directory excludes beyond what `BaseModule._collectFiles` already skips
@@ -14,19 +16,6 @@ const { parseExportsWithAcorn } = require('./dead-code-extractor');
 const EXTRA_EXCLUDES = ['.terraform'];
 
 const ALL_EXTS_MAIN = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
-
-const ENTRYPOINT_DIRS = [
-  'bin/', 'tests/', 'test/', '__tests__/', 'scripts/',
-  'migrations/', 'pages/', 'app/', 'api/', 'public/',
-  'integrations/',
-];
-
-const ENTRYPOINT_BASENAMES = new Set([
-  'index.js', 'index.ts', 'index.mjs', 'index.cjs', 'index.jsx', 'index.tsx',
-  'main.js', 'main.ts', 'main.py', '__init__.py', '__main__.py',
-  'app.js', 'app.ts', 'server.js', 'server.ts',
-  'conftest.py', 'setup.py', 'manage.py',
-]);
 
 // Test files are executed by the runner, never imported — their top-level
 // exports are incidental (a local `run` helper, a mock), so "unused export"
@@ -83,10 +72,20 @@ class DeadCodeModule extends BaseModule {
     const ignorePatterns = (config.deadCode?.ignore || config.ignore || []);
 
     const index = buildDeadCodeIndex(files, projectRoot);
+    // Every directory a scanned file sits in, and every ancestor up to the
+    // root: a package.json one level above `src/` names `src/extension.ts`
+    // through its compiled main.
+    const manifestDirs = new Set();
+    for (const f of files) {
+      let d = path.dirname(f);
+      while (d.startsWith(projectRoot) && !manifestDirs.has(d)) { manifestDirs.add(d); d = path.dirname(d); }
+    }
+    this._manifestRefs = manifestEntrypoints(manifestDirs);
+    const reach = this._buildReach(files, projectRoot);
 
     let totalIssues = 0;
     totalIssues += this._flagUnusedExports(index, result, ignorePatterns);
-    totalIssues += this._flagOrphanedFiles(index, result, ignorePatterns);
+    totalIssues += this._flagOrphanedFiles(index, result, ignorePatterns, reach);
     totalIssues += this._flagCommentedOutBlocks(files, projectRoot, result, ignorePatterns);
 
     result.addCheck('dead-code:summary', true, {
@@ -96,19 +95,32 @@ class DeadCodeModule extends BaseModule {
   }
 
   _isEntryPoint(file, projectRoot) {
-    const rel = path.relative(projectRoot, file).replace(/\\/g, '/');
-    const base = path.basename(file);
-    if (ENTRYPOINT_BASENAMES.has(base)) return true;
-    for (const dir of ENTRYPOINT_DIRS) {
-      if (rel === dir.slice(0, -1) || rel.startsWith(dir)) return true;
+    // One definition (src/core/entrypoints.js): segment-aware directories,
+    // framework and tool files, and whatever a package.json names.
+    return isEntryPoint(file, projectRoot, this._manifestRefs);
+  }
+
+  /**
+   * Who imports each JS/TS file, per src/core/import-graph.js — the one
+   * import graph, with path aliases, workspace packages and registry path
+   * strings resolved (KI #96). Test files count as importers only of
+   * themselves' kind: a module whose sole importer is its own test has no
+   * production reader.
+   */
+  _buildReach(files, projectRoot) {
+    const jsFiles = files.filter((f) => JS_EXTS.includes(path.extname(f).toLowerCase()));
+    // Docs sites import components from .mdx — a reader the JS-only walk
+    // never sees (trpc's www/: five components "unreachable" for this).
+    // They are importers only; nothing under them is ever a finding.
+    const mdx = this._collectFiles(projectRoot, ['.mdx'], EXTRA_EXCLUDES);
+    const graph = buildImportGraph({ projectRoot, files: jsFiles.concat(mdx) });
+    const rev = reverseGraph(graph.fullGraph);
+    const productionImporters = new Map();
+    for (const f of jsFiles) {
+      const importers = [...(rev.get(f) || [])].filter((i) => !TEST_FILE_RE.test(graph.rel(i)));
+      productionImporters.set(f, importers);
     }
-    if (/\b(page|layout|route|loading|error|not-found|template|default|global-error)\.(tsx?|jsx?)$/.test(base)) {
-      return true;
-    }
-    if (/^(opengraph-image|twitter-image|icon|apple-icon|favicon|robots|sitemap|manifest)(\.[^.]+)?\.(tsx?|jsx?|ts|js)$/.test(base)) {
-      return true;
-    }
-    return false;
+    return { productionImporters, rel: graph.rel };
   }
 
   _matchesIgnorePattern(rel, patterns) {
@@ -177,12 +189,18 @@ class DeadCodeModule extends BaseModule {
     return issues;
   }
 
-  _flagOrphanedFiles(index, result, ignorePatterns = []) {
+  _flagOrphanedFiles(index, result, ignorePatterns = [], reach = null) {
     let issues = 0;
     for (const [file, info] of index.perFile.entries()) {
       if (info.exports.length === 0) continue;
       if (this._isEntryPoint(file, index.projectRoot)) continue;
-      if (index.referencedFiles.has(path.normalize(file))) continue;
+      if (TEST_FILE_RE.test(info.rel)) continue;
+      // JS/TS: the import graph decides (aliases, workspaces, registry
+      // strings resolved). Python keeps the index's own resolution.
+      const viaGraph = reach && reach.productionImporters.has(file);
+      if (viaGraph) {
+        if (reach.productionImporters.get(file).length > 0) continue;
+      } else if (index.referencedFiles.has(path.normalize(file))) continue;
 
       const wsPkg = index.fileWorkspacePackage && index.fileWorkspacePackage.get(file);
       if (wsPkg && index.importedWorkspacePackages && index.importedWorkspacePackages.has(wsPkg)) {
@@ -191,10 +209,10 @@ class DeadCodeModule extends BaseModule {
       if (this._matchesIgnorePattern(info.rel, ignorePatterns)) continue;
 
       issues += this._flag(result, `dead-code:orphan-file:${info.rel}`, {
-        severity: 'info',
+        severity: 'warning',
         file: info.rel,
-        message: `${info.rel} exports ${info.exports.length} symbol(s) but no file in the project imports it — candidate orphaned module`,
-        suggestion: 'If this module is legitimately reachable via a path alias, dynamic require, or non-JS entry point, mark it as such. Otherwise delete.',
+        message: `${info.rel} exports ${info.exports.length} symbol(s) but no file outside tests imports it — shipped, but unreachable`,
+        suggestion: 'If it is run rather than imported (a script, a hook, a package main), name it in package.json or move it under bin/ or scripts/; if a test is its only reader, it is test code; otherwise delete it.',
       });
     }
     return issues;

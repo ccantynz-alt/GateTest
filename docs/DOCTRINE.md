@@ -73,6 +73,8 @@ is always toward the author's own repo.
 | Is this an illustration / harness dir? | `src/core/scan-scope.js` |
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
 | What depends on what? | `src/core/import-graph.js` |
+| What does this specifier resolve to — a tsconfig alias, a workspace package, a `.js` written for a `.ts`? | `src/core/module-resolution.js` (the import graph and the dead-code extractor both resolve through it) |
+| Is this file run rather than imported — a package main, a hook, a route file, a tool config, a fixture? | `src/core/entrypoints.js` |
 | Which packages make up this workspace, which manifest governs a file, what does it declare? | `src/core/workspaces.js` (`listWorkspacePackages`, `nearestWorkspacePackage`, `manifestDeclares`) |
 | Where do the migrations live — and is that directory a migration tree or a framework? | `src/core/migration-dirs.js` |
 | Is this file a shell script? | `src/core/shell-files.js` (extension or shebang; binaries and prose out) |

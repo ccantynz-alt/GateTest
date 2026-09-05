@@ -31,6 +31,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const { workspacePackageMap } = require('./workspaces');
+const { resolveAlias, resolvePackageEntry, resolvePackageSubpath, tsEquivalents } = require('./module-resolution');
 
 const EXCLUDE_DIRS = new Set([
   'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
@@ -54,6 +56,15 @@ const EXPORT_FROM_RE = /^\s*export\s+(?:type\s+)?(?:\*|\{[\s\S]*?\})\s+from\s+['
 const EXPORT_TYPE_RE = /^\s*export\s+type\b/;
 const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/;
 const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/;
+// The closing line of a multi-line import / export-from:
+//   import {\n  a,\n  b,\n} from './x';
+// The `import` line carries no specifier and the `from` line carries no
+// `import`, so a line-based reader saw neither. KI #96 step 3: five live
+// website modules were reported unreachable for exactly this shape. Kept
+// out of staticGraph (kind 'multiline') so import-cycle's proven edge set is
+// unchanged; cycles through multi-line imports are a separate, corpus-
+// validated change.
+const CONTINUATION_FROM_RE = /^\s*(?:[\w$,\s]*\})?\s*from\s+['"]([^'"]+)['"]/;
 // A relative path written as a plain STRING, outside any import/require. This
 // is how plugin registries, route tables and DI manifests reference code:
 // `registry.js` maps every module as `accessibility: '../modules/accessibility.js'`.
@@ -61,6 +72,27 @@ const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/;
 // production (KI #96 — measured on this repo before the pass was added).
 // Global: one line can list several.
 const PATH_LITERAL_RE = /['"`](\.\.?\/[A-Za-z0-9_\-./]+?\.(?:js|mjs|cjs|jsx|ts|tsx))['"`]/g;
+// The same reference written from the project root — `path.join(ROOT,
+// "src/core/x.js")`, a manifest listing "lib/y.js". No `./` prefix, at least
+// one `/`, a JS extension, and it must resolve from the project root or it is
+// just a string. KI #96 step 3: two files looked unreachable for this shape.
+const ROOT_LITERAL_RE = /['"`]([A-Za-z0-9_-][A-Za-z0-9_.-]*(?:\/[A-Za-z0-9_.-]+)+\.(?:js|mjs|cjs|jsx|ts|tsx))['"`]/g;
+
+function resolveWorkspace(spec, workspaces, fileSet) {
+  for (const [name, dir] of workspaces) {
+    if (spec !== name && !spec.startsWith(`${name}/`)) continue;
+    const sub = spec === name ? null : spec.slice(name.length + 1);
+    if (sub !== null) {
+      const direct = resolveImport(dir, `./${sub}`, fileSet) || resolveImportTsEsm(dir, `./${sub}`, fileSet);
+      if (direct) return direct;
+      const viaExports = resolvePackageSubpath(dir, sub);
+      return viaExports && fileSet.has(viaExports) ? viaExports : null;
+    }
+    const entry = resolvePackageEntry(dir, JS_EXTS);
+    return entry && fileSet.has(entry) ? entry : null;
+  }
+  return null;
+}
 
 /**
  * Walk a project root and return every JS/TS source file (absolute paths).
@@ -136,6 +168,24 @@ function resolveImport(dir, spec, fileSet) {
   return null;
 }
 
+/**
+ * `./x.js` written for a `x.ts` on disk (TypeScript NodeNext / ESM). Kept
+ * apart from resolveImport on purpose: an edge found only this way is
+ * recorded as kind 'ts-esm', outside staticGraph. Letting it into the static
+ * set surfaced 15 import-cycle findings on nest and 2 on apollo-server in
+ * one corpus run — real cycles through barrel files and `.interface.ts`
+ * imports that TypeScript elides at compile time, which import-cycle cannot
+ * yet tell from runtime ones. Reachability needs the edge; the cycle rule
+ * needs the elision work first (KI #96 follow-up).
+ */
+function resolveImportTsEsm(dir, spec, fileSet) {
+  const base = path.resolve(dir, spec);
+  for (const cand of tsEquivalents(base)) {
+    if (fileSet.has(cand)) return cand;
+  }
+  return null;
+}
+
 function isRelative(spec) {
   return spec.startsWith('./') || spec.startsWith('../') || spec === '.' || spec === '..';
 }
@@ -144,7 +194,7 @@ function isRelative(spec) {
  * Extract every outgoing edge from one file, tagged by kind.
  * @returns {Array<{to: string, kind: 'static'|'lazy'|'type', line: number}>}
  */
-function edgesForFile(absPath, fileSet) {
+function edgesForFile(absPath, fileSet, ctx = {}) {
   const out = [];
   let text;
   try {
@@ -158,14 +208,33 @@ function edgesForFile(absPath, fileSet) {
   const dir = path.dirname(absPath);
   const seen = new Set(); // dedupe identical to+kind pairs per file
 
-  const push = (spec, kind, lineNo) => {
-    if (!isRelative(spec)) return; // bare package -> external, not our graph
-    const to = resolveImport(dir, spec, fileSet);
-    if (!to) return;
+  const record = (to, kind, lineNo) => {
     const key = `${to}|${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push({ to, kind, line: lineNo });
+  };
+  const push = (spec, kind, lineNo) => {
+    if (isRelative(spec)) {
+      const to = resolveImport(dir, spec, fileSet);
+      if (to) { record(to, kind, lineNo); return; }
+      const swapped = resolveImportTsEsm(dir, spec, fileSet);
+      if (swapped) record(swapped, 'ts-esm', lineNo);
+      return;
+    }
+    // A bare specifier is external unless a path alias or a workspace
+    // package of THIS project names it. Those edges are real coupling but
+    // never enter staticGraph (kinds 'alias' / 'workspace'), so import-cycle
+    // is unchanged; that is the deliberate, conservative half of KI #96.
+    if (ctx.projectRoot) {
+      const bases = resolveAlias(absPath, spec, ctx.projectRoot);
+      const viaAlias = bases
+        ? bases.map((b) => resolveImport(path.dirname(b), `./${path.basename(b)}`, fileSet) || resolveImportTsEsm(path.dirname(b), `./${path.basename(b)}`, fileSet)).find(Boolean)
+        : null;
+      if (viaAlias) { record(viaAlias, 'alias', lineNo); return; }
+      const viaWs = ctx.workspaces && ctx.workspaces.size ? resolveWorkspace(spec, ctx.workspaces, fileSet) : null;
+      if (viaWs) record(viaWs, 'workspace', lineNo);
+    }
   };
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -183,6 +252,9 @@ function edgesForFile(absPath, fileSet) {
 
     const mExp = EXPORT_FROM_RE.exec(line);
     if (mExp) { push(mExp[1], typeOnly ? 'type' : 'static', lineNo); continue; }
+
+    const mCont = CONTINUATION_FROM_RE.exec(line);
+    if (mCont) { push(mCont[1], 'multiline', lineNo); continue; }
 
     const mReq = REQUIRE_RE.exec(line);
     if (mReq) {
@@ -205,6 +277,15 @@ function edgesForFile(absPath, fileSet) {
     while (mLit !== null) {
       push(mLit[1], 'path-literal', lineNo);
       mLit = PATH_LITERAL_RE.exec(line);
+    }
+    if (ctx.projectRoot) {
+      ROOT_LITERAL_RE.lastIndex = 0;
+      let mRoot = ROOT_LITERAL_RE.exec(line);
+      while (mRoot !== null) {
+        const to = resolveImport(ctx.projectRoot, `./${mRoot[1]}`, fileSet);
+        if (to && to !== absPath) record(to, 'path-literal', lineNo);
+        mRoot = ROOT_LITERAL_RE.exec(line);
+      }
     }
   }
 
@@ -236,11 +317,12 @@ function buildImportGraph(opts = {}) {
   const fullGraph = new Map();
   const edges = [];
   let staticEdgeCount = 0;
+  const ctx = { projectRoot, workspaces: workspacePackageMap(projectRoot) };
 
   for (const abs of files) {
     const statics = new Set();
     const all = new Set();
-    for (const e of edgesForFile(abs, fileSet)) {
+    for (const e of edgesForFile(abs, fileSet, ctx)) {
       edges.push({ from: abs, to: e.to, kind: e.kind, line: e.line });
       all.add(e.to);
       if (e.kind === 'static') statics.add(e.to);
