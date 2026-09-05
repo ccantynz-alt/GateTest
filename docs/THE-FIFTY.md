@@ -36,7 +36,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 08 | Retire any rule above 20% FP that can't be fixed | open | depends on 07 |
 | 09 | Recalibrate confidence against the corpus | open | 0.7 was chosen, not derived |
 | 10 | Hunt the substring-vs-segment shape everywhere | done | guard extended to src/core, bin, website analysers; five recall holes closed (PR #423) |
-| 11 | Audit every early return that assumes a framework | partial 9/15 | `src/core/route-grammar.js` (4, PR #423); webHeaders, integrationTests, webhookPayload, cacheHeaders, monorepoConstraints + one `src/core/workspaces.js` (5, PR #426); the other 8 are KI #106 |
+| 11 | Audit every early return that assumes a framework | done | 15/15 — `src/core/route-grammar.js` (4, PR #423); webHeaders, integrationTests, webhookPayload, cacheHeaders, monorepoConstraints + `src/core/workspaces.js` (5, PR #426); promptSafety, zodSchema, trpcContract, dataIntegrity, sqlMigrations, shell, bashSafety, ciSecurity, seo + `migration-dirs.js`, `shell-files.js` (KI #106 closed, corpus 20/20 at ceilings) |
 | 12 | Publish the precision numbers, including the bad ones | done | `/precision`, generated, sync-tested (PR #422) |
 
 ## B. Honesty (13–22)
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-the 8 gates left in KI #106, 23, 30, 46.
+30, 46; then 07 (the flywheel leaderboard), 26, 27.
 Waiting on Craig: 15, 29, 35, 41.
