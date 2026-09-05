@@ -1283,8 +1283,11 @@ async function runWatchMode(gatetest, args) {
     try {
       fs.watch(fullPath, { recursive: true }, (eventType, filename) => {
         if (!filename) return;
-        // Ignore generated files
-        if (filename.includes('.gatetest') || filename.includes('node_modules')) return;
+        // Ignore generated files — by path segment, not substring: an edit
+        // to `.gatetestignore` SHOULD trigger a rescan, and `.gatetest`
+        // matched it (2026-09-05).
+        const segments = String(filename).split(/[\\/]/);
+        if (segments.includes('.gatetest') || segments.includes('node_modules')) return;
         if (filename.endsWith('.map') || filename.endsWith('.d.ts')) return;
 
         if (timer) clearTimeout(timer);

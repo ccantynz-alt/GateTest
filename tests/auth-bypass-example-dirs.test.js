@@ -105,3 +105,22 @@ describe('auth-bypass — real application code still reported', () => {
     });
   }
 });
+
+// Move 10 (2026-09-05): the exempt-path check used `lower.includes('test')`
+// and `includes('spec')`, so src/latest/, contest/, attestation.js and
+// inspect.js were never checked for missing auth at all. Segment-anchored
+// now; these must FIRE.
+describe('auth-bypass — "test" inside a word is not a test dir', () => {
+  for (const rel of ['src/latest/routes.js', 'src/contest/entry.js', 'src/attestation.js', 'src/inspect.js']) {
+    it(`reports the unprotected route in ${rel}`, async () => {
+      const findings = await scanWith(rel);
+      assert.ok(findings.length > 0, `${rel} was exempted from the auth check`);
+    });
+  }
+  for (const rel of ['tests/routes.test.js', 'src/__tests__/app.js', 'spec/app.js']) {
+    it(`still silent in ${rel}`, async () => {
+      const findings = await scanWith(rel);
+      assert.strictEqual(findings.length, 0, `${rel}: ${findings.map((f) => f.id).join(', ')}`);
+    });
+  }
+});

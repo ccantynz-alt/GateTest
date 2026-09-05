@@ -299,3 +299,7 @@ class BaseModule {
 }
 
 module.exports = BaseModule;
+// The one test-path definition, for the standalone predicates that have no
+// module instance to call `_isTestPath()` on (auth-bypass's exempt-path
+// check, duplicate-code's skip list). Same regex, same drift guard.
+module.exports.TEST_PATH_RE = TEST_PATH_RE;

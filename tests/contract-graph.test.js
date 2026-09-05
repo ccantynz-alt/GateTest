@@ -647,3 +647,19 @@ describe('module constants', () => {
     assert.ok(MAX_FILE_BYTES >= 50 * 1024);
   });
 });
+
+
+// isSpecFile — `spec` is a path token, not a substring (Move 10, 2026-09-05).
+describe('isSpecFile — token, not substring', () => {
+  const { isSpecFile } = require('../website/app/lib/contract-graph');
+  it('contract-shaped names are specs', () => {
+    for (const f of ['openapi.yaml', 'docs/swagger.json', 'api/spec/users.yaml', 'api-spec.yml', 'petstore.spec.json', 'specs/orders.yaml', 'schema.json']) {
+      assert.strictEqual(isSpecFile(f), true, f);
+    }
+  });
+  it('a file that merely contains the letters "spec" is not', () => {
+    for (const f of ['inspect.json', 'config/specific-rules.yaml', 'prospects.yml', 'respect.json']) {
+      assert.strictEqual(isSpecFile(f), false, f);
+    }
+  });
+});

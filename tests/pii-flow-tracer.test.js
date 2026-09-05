@@ -183,3 +183,25 @@ console.log(email);
     assert.ok(report.includes('No PII flows'));
   });
 });
+
+
+// Test-path predicate is segment-anchored (Move 10, 2026-09-05): a relative
+// path starting with `tests/` counts, `contest/` and `latest/` do not.
+describe('tracePiiFlows — test dirs by segment', () => {
+  const SRC = `
+    const email = req.body.email;
+    console.log(email);
+  `;
+  test('tests/ at the start of a relative path downgrades to warning', () => {
+    const r = tracePiiFlows([file('tests/helpers.js', SRC)]);
+    assert.ok(r.findings.length > 0);
+    assert.ok(r.findings.every((f) => f.severity === 'warning'), JSON.stringify(r.findings));
+  });
+  test('contest/ and latest/ are application code and stay error', () => {
+    for (const p of ['src/contest/entry.js', 'src/latest/handler.js', 'src/attestation.js']) {
+      const r = tracePiiFlows([file(p, SRC)]);
+      assert.ok(r.findings.length > 0, p);
+      assert.ok(r.findings.every((f) => f.severity === 'error'), `${p}: ${JSON.stringify(r.findings)}`);
+    }
+  });
+});

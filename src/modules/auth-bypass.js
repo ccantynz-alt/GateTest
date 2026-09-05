@@ -146,10 +146,10 @@ function isPublicFile(relPath) {
     lower.includes('logout') ||
     lower.includes('signup') ||
     lower.includes('register') ||
-    lower.includes('test') ||
-    lower.includes('spec') ||
-    lower.includes('.test.') ||
-    lower.includes('.spec.')
+    // Test trees by SEGMENT (base-module's TEST_PATH_RE), not substring:
+    // `lower.includes('test')` exempted src/latest/, contest/ and
+    // attestation.js from the auth check entirely (Move 10, 2026-09-05).
+    BaseModule.TEST_PATH_RE.test(lower)
   );
 }
 
