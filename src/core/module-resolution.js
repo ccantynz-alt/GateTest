@@ -25,7 +25,7 @@ function resolvePackageEntry(pkgDir, exts = ENTRY_EXTS) {
       || (typeof pkg.main === 'string' && pkg.main)
       || null;
     if (mainField) mainBase = mainField.replace(/\.(js|mjs|cjs|ts|tsx)$/, '');
-  } catch { /* use default */ }
+  } catch { /* error-ok — no readable package.json: `index` is the resolution default */ }
 
   const base = path.isAbsolute(mainBase) ? mainBase : path.join(pkgDir, mainBase);
   const candidates = [
@@ -36,7 +36,7 @@ function resolvePackageEntry(pkgDir, exts = ENTRY_EXTS) {
   ];
   for (const c of candidates) {
     try { if (fs.statSync(c).isFile()) return path.normalize(c); }
-    catch { /* keep trying */ }
+    catch { /* error-ok — this candidate is absent; the next extension may exist */ }
   }
   return null;
 }
@@ -273,4 +273,4 @@ function tsEquivalents(base) {
   return JS_TO_TS[ext].map((e) => stem + e);
 }
 
-module.exports = { ENTRY_EXTS, tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSource, compiledToSources, resolveAlias, loadPathAliases, readTsconfig, stripJsoncLite };
+module.exports = { tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSources, resolveAlias, stripJsoncLite };

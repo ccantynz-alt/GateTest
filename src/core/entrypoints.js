@@ -112,4 +112,4 @@ function isEntryPoint(file, projectRoot, manifestRefs) {
   return false;
 }
 
-module.exports = { isEntryPoint, manifestEntrypoints, ENTRYPOINT_SEGMENTS, FIXTURE_SEGMENTS, ENTRYPOINT_BASENAMES };
+module.exports = { isEntryPoint, manifestEntrypoints };
