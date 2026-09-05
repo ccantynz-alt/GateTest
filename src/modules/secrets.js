@@ -95,6 +95,11 @@ const SEARCH_CONFIG_WINDOW = 6;
  * ever reported as ".gitignore missing pattern: *.key", which names the
  * wrong defendant: adding the line would not un-commit the key.
  */
+// A directory segment that is a fixture/example/mock dir, or a basename in
+// which fixture/example/mock is a whole token (`.env.example`, `fixture.key`,
+// `user.mock.ts`, `MockServer.ts`) — never a substring of a longer word.
+// No `i` flag: with it `[A-Z]` matches lowercase and `mockingbird` is a mock.
+const FIXTURE_PATH_RE = /(?:^|\/)(?:__fixtures__|[Ff]ixtures?|[Ee]xamples?|[Ss]amples?|__mocks__|[Mm]ocks?)(?:\/|$)|(?:^|\/)[^/]*(?:^|[._-]|\b)(?:[Ff]ixture|[Ee]xample|[Mm]ock)s?(?=[._-]|[A-Z]|$)[^/]*$/;
 const KEY_FILE_EXTENSIONS = new Set(['.pem', '.key', '.p8', '.pk8', '.ppk']);
 const KEY_FILE_HEAD_BYTES = 64 * 1024;
 const PRIVATE_KEY_HEADER_RE = /-----BEGIN (?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED|PGP) )?PRIVATE KEY(?: BLOCK)?-----|^PuTTY-User-Key-File-\d/m;
@@ -463,10 +468,11 @@ class SecretsModule extends BaseModule {
     for (const file of files) {
       const relPath = path.relative(projectRoot, file);
 
-      // Skip test fixtures and example files
-      if (relPath.includes('fixture') || relPath.includes('example') || relPath.includes('mock')) {
-        continue;
-      }
+      // Skip test fixtures, example and mock files — by SEGMENT and by
+      // basename token, not substring (doctrine §5): `includes('mock')`
+      // also skipped `src/mockingbird.ts`, `includes('example')` skipped
+      // `counterexample-search/` (2026-09-05).
+      if (FIXTURE_PATH_RE.test(relPath.replace(/\\/g, '/'))) continue;
 
       // Skip module source files — they contain detection pattern strings
       // that match the very rules they implement (e.g. cookie-security.js

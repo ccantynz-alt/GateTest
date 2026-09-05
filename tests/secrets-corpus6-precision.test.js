@@ -283,3 +283,21 @@ describe('secrets — corpus6: private key files are read, not inferred from .gi
     assert.strictEqual(found[0].details.length, 2);
   });
 });
+
+// Doctrine §5: the fixture/example/mock skip was `relPath.includes(...)` —
+// `src/mockingbird.ts` and `counterexample-search/` were never scanned.
+// Now a directory SEGMENT or a basename TOKEN, never a substring.
+describe('secrets — fixture/example/mock paths are matched by segment and token', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'modules', 'secrets.js'), 'utf8');
+  const re = new RegExp(src.match(/const FIXTURE_PATH_RE = \/(.*)\/;/)[1]);
+  it('skips real fixture, example and mock paths', () => {
+    for (const p of ['.env.example', 'tests/fixtures/a.key', 'src/__mocks__/x.ts', 'user.mock.ts', 'MockServer.ts', 'examples/demo/app.js', 'config/example.env', 'fixture.key', 'mocks/db.js']) {
+      assert.ok(re.test(p), p);
+    }
+  });
+  it('POSITIVE CONTROL: a longer word containing the token is application code and is scanned', () => {
+    for (const p of ['src/mockingbird.ts', 'packages/counterexample-search/index.ts', 'src/examplesearch/x.js', 'lib/fixturesque.js', 'src/app.js']) {
+      assert.ok(!re.test(p), p);
+    }
+  });
+});
