@@ -232,7 +232,7 @@ function resolveSpec(dir, absPath, spec, fileSet, ctx) {
  * JavaScript does with it. Returns the edges plus the set of source lines the
  * statements occupy (so the line reader below does not see them twice).
  */
-function importStatementEdges(absPath, text, ctx) {
+function importStatementEdges(absPath, text, ctx, full) {
   // No import / export-from statement at a line start → nothing to read, and
   // no reason to tokenise (this repository is CommonJS: 1,341 files, most of
   // them `require` only — Doctrine §14).
@@ -248,24 +248,59 @@ function importStatementEdges(absPath, text, ctx) {
   });
   const names = new Set();
   for (const st of kept) for (const b of st.bindings) if (!b.typeOnly) names.add(b.local);
-  const mode = isTs && !jsx ? elisionMode(path.dirname(absPath), ctx.projectRoot) : { elide: false };
+  // A declaration file has no runtime at all: every import in a `.d.ts` is
+  // type-level by definition, so there is nothing to scan (prisma: 348 files,
+  // 6.8 MB of its 30 MB — Doctrine §14).
+  const dts = /\.d\.[cm]?ts$/i.test(absPath);
+  const mode = isTs && !jsx && !dts ? elisionMode(path.dirname(absPath), ctx.projectRoot) : { elide: false };
   // JSX is NOT checked: its text can hold an apostrophe or a brace that a
   // character-level stripper reads as syntax, and a scanner that can be
   // knocked off course by prose would elide edges it should keep. A .tsx
   // import is therefore what it always was — kept, load-time — and the
   // file is reported as unchecked (Doctrine §6). Measured against tsc on the
   // corpus: every remaining disagreement in the dangerous direction was .tsx.
-  const uses = jsx ? new Map() : classifyUses(tokens, consumed, names, {});
-  const useOf = jsx ? kept.map((st) => (st.typeOnly ? 'type' : 'load')) : statementUses(kept, uses, mode);
+  //
+  // The use-scan runs only when asked (`full`): elision can only REMOVE
+  // edges, so a file outside every cycle of the unscanned graph cannot be in
+  // one after scanning — buildImportGraph scans just the files inside a
+  // strongly connected component. Without the scan a statement whose bindings
+  // are values is provisionally load-time and the file is marked `pending`.
+  let useOf;
+  let pending = false;
+  if (dts) useOf = kept.map(() => 'type');
+  else if (jsx) useOf = kept.map((st) => (st.typeOnly ? 'type' : 'load'));
+  else if (full) useOf = statementUses(kept, classifyUses(tokens, consumed, names, {}), mode);
+  else {
+    useOf = provisionalUses(kept, mode);
+    pending = useOf.includes('pending');
+  }
   const edges = [];
   kept.forEach((st, i) => {
-    const use = useOf[i];
+    const use = useOf[i] === 'pending' ? 'load' : useOf[i];
     const multiline = st.endLine !== st.line;
     edges.push({ spec: st.spec, line: st.line, use, kind: use === 'type' ? 'type' : (multiline ? 'multiline' : null) });
   });
   const consumedLines = new Set();
   for (const st of statements) for (let l = st.line; l <= st.endLine; l += 1) consumedLines.add(l);
-  return { edges, consumedLines, unchecked: jsx && kept.length ? 'jsx' : null };
+  return { edges, consumedLines, unchecked: jsx && kept.length ? 'jsx' : null, pending };
+}
+
+/**
+ * What can be decided about each statement WITHOUT scanning the file: an
+ * explicit `import type`, a statement whose every binding carries an inline
+ * `type`, a side-effect import, a re-export, a file whose tsconfig disables
+ * elision. Anything else is 'pending' — provisionally load-time until the
+ * scanner has looked, and only worth looking at inside a candidate cycle.
+ */
+function provisionalUses(statements, mode) {
+  return statements.map((st) => {
+    if (st.typeOnly) return 'type';
+    if (st.form === 'side-effect' || st.form === 'export-from') return 'load';
+    if (!mode.elide) return 'load';
+    const valueBindings = st.bindings.filter((b) => !b.typeOnly);
+    if (valueBindings.length === 0) return st.bindings.length ? 'type' : 'load';
+    return 'pending';
+  });
 }
 
 const IMPORT_STATEMENT_HINT_RE = /^\s*(?:import\s+[^(.]|export\s+(?:type\s+)?(?:\*|\{))/m;
@@ -282,25 +317,25 @@ const FILE_EDGE_CACHE_MAX = 50000;
  * @returns {Array<{to: string, kind: string, line: number, via: 'static'|'ts-esm'|'alias'|'workspace', use?: 'load'|'deferred'}>}
  *   kind — what the edge MEANS (static / type / lazy / multiline / …); via — how the specifier RESOLVED.
  */
-function edgesForFile(absPath, fileSet, ctx = {}) {
+function edgesForFile(absPath, fileSet, ctx = {}, full = true) {
   let cacheKey = null;
   try {
     const st = fs.statSync(absPath);
-    cacheKey = `${absPath}|${st.size}|${st.mtimeMs}|${ctx.projectRoot || ''}|${fileSet.size}`;
+    cacheKey = `${absPath}|${st.size}|${st.mtimeMs}|${ctx.projectRoot || ''}|${fileSet.size}|${full ? 'full' : 'cheap'}`;
     const hit = fileEdgeCache.get(cacheKey);
-    if (hit) { const copy = hit.edges.map((e) => ({ ...e })); if (hit.unchecked) copy.unchecked = hit.unchecked; return copy; }
+    if (hit) { const copy = hit.edges.map((e) => ({ ...e })); if (hit.unchecked) copy.unchecked = hit.unchecked; if (hit.pending) copy.pending = true; return copy; }
   } catch {
     cacheKey = null; // error-ok — unreadable stat, just don't cache
   }
-  const out = edgesForFileUncached(absPath, fileSet, ctx);
+  const out = edgesForFileUncached(absPath, fileSet, ctx, full);
   if (cacheKey) {
     if (fileEdgeCache.size >= FILE_EDGE_CACHE_MAX) fileEdgeCache.clear();
-    fileEdgeCache.set(cacheKey, { edges: out.map((e) => ({ ...e })), unchecked: out.unchecked || null });
+    fileEdgeCache.set(cacheKey, { edges: out.map((e) => ({ ...e })), unchecked: out.unchecked || null, pending: !!out.pending });
   }
   return out;
 }
 
-function edgesForFileUncached(absPath, fileSet, ctx) {
+function edgesForFileUncached(absPath, fileSet, ctx, full = true) {
   const out = [];
   let text;
   try {
@@ -330,9 +365,10 @@ function edgesForFileUncached(absPath, fileSet, ctx) {
     if (r) record(r[0], kind || r[1], lineNo, use, r[1]);
   };
 
-  const { edges: stmtEdges, consumedLines, unchecked } = importStatementEdges(absPath, text, ctx);
+  const { edges: stmtEdges, consumedLines, unchecked, pending } = importStatementEdges(absPath, text, ctx, full);
   for (const e of stmtEdges) push(e.spec, e.kind, e.line, e.use === 'type' ? undefined : e.use);
   if (unchecked) out.unchecked = unchecked;
+  if (pending) out.pending = true;
 
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i];
@@ -397,6 +433,7 @@ function edgesForFileUncached(absPath, fileSet, ctx) {
  *   staticEdgeCount: number,
  *   runtimeEdgeCount: number,
  *   unchecked: { jsx: string[] },              files whose imports were kept without elision analysis, by reason
+ *   elision: { scanned: number, pending: number }, files the use-scan ran on (inside a candidate cycle) / files it never needed to
  *   rel: (abs: string) => string,
  * }}
  */
@@ -415,12 +452,37 @@ function buildImportGraph(opts = {}) {
   const unchecked = { jsx: [] }; // files whose imports were kept unexamined, by reason
   const ctx = { projectRoot, workspaces: workspacePackageMap(projectRoot) };
 
+  // Phase 1 — every file, no use-scan. Phase 2 — the use-scan, only for files
+  // whose provisional (over-approximate) runtime edges put them inside a
+  // strongly connected component: elision only removes edges, so a file that
+  // is in no cycle now is in no cycle after scanning, and its provisional
+  // labels are already right for every cycle view. prisma: 4,551 files, of
+  // which a few dozen sit in a candidate cycle (Doctrine §14).
+  const perFile = new Map();
+  const provisional = new Map();
+  for (const abs of files) {
+    const fileEdges = edgesForFile(abs, fileSet, ctx, false);
+    perFile.set(abs, fileEdges);
+    provisional.set(abs, new Set(fileEdges.filter((e) => RUNTIME_KINDS.has(e.kind)).map((e) => e.to)));
+  }
+  const elision = { scanned: 0, pending: 0 };
+  for (const scc of tarjanSCC(provisional)) {
+    const cyclic = scc.length >= 2 || (provisional.get(scc[0]) || EMPTY_SET).has(scc[0]);
+    if (!cyclic) continue;
+    for (const abs of scc) {
+      if (!perFile.get(abs).pending) continue;
+      perFile.set(abs, edgesForFile(abs, fileSet, ctx, true));
+      elision.scanned += 1;
+    }
+  }
+  for (const fileEdges of perFile.values()) if (fileEdges.pending) elision.pending += 1;
+
   for (const abs of files) {
     const statics = new Set();
     const runtime = new Set();
     const load = new Set();
     const all = new Set();
-    const fileEdges = edgesForFile(abs, fileSet, ctx);
+    const fileEdges = perFile.get(abs);
     if (fileEdges.unchecked) unchecked[fileEdges.unchecked].push(abs);
     for (const e of fileEdges) {
       const edge = { from: abs, to: e.to, kind: e.kind, line: e.line, via: e.via };
@@ -443,7 +505,7 @@ function buildImportGraph(opts = {}) {
 
   const rel = (abs) => path.relative(projectRoot, abs).split(path.sep).join('/');
 
-  return { files, fileSet, staticGraph, runtimeGraph, loadGraph, fullGraph, edges, staticEdgeCount, runtimeEdgeCount, unchecked, rel };
+  return { files, fileSet, staticGraph, runtimeGraph, loadGraph, fullGraph, edges, staticEdgeCount, runtimeEdgeCount, unchecked, elision, rel };
 }
 
 /**

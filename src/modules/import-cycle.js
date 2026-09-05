@@ -211,9 +211,11 @@ class ImportCycleModule extends BaseModule {
     const notChecked = [];
     if (jsxUnchecked.length) notChecked.push(`${jsxUnchecked.length} JSX file(s) kept every import as load-time (type-only elision is not analysed in JSX)`);
     notChecked.push('emitDecoratorMetadata: a class-typed annotation on a decorated member is a runtime reference this scan cannot see without type information');
+    const el = built.elision || { scanned: 0, pending: 0 };
+    const scanned = `type-only elision scanned ${el.scanned} file(s) inside candidate cycles; ${el.pending} file(s) outside every cycle needed no scan`;
     result.addCheck('import-cycle:summary', true, {
       severity: 'info',
-      message: `${files.length} file(s) scanned, ${edgeCount} runtime edge(s), ${cycles.length} load-time cycle(s), ${deferredCycles.length} deferred cycle(s), ${selfLoops.length} self-loop(s). Not checked: ${notChecked.join('; ')}`,
+      message: `${files.length} file(s) scanned, ${edgeCount} runtime edge(s), ${cycles.length} load-time cycle(s), ${deferredCycles.length} deferred cycle(s), ${selfLoops.length} self-loop(s). ${scanned}. Not checked: ${notChecked.join('; ')}`,
       fileCount: files.length,
       edgeCount,
       cycleCount: cycles.length,
