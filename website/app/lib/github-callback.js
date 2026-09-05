@@ -297,6 +297,12 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
           const quote = String(f.evidence).replace(/\s+/g, ' ').trim().slice(0, 120);
           lines.push(`  <sub>evidence: \`${quote.replace(/`/g, "'")}\`</sub>`);
         }
+        // The exact suppression for THIS finding, as the reply that applies
+        // it (move 25). The engine computed and verified the line; the
+        // reader copies, never composes.
+        if (typeof f.ignoreLine === 'string' && f.ignoreLine) {
+          lines.push(`  <sub>wrong? reply \`@gatetest ignore ${f.ignoreLine.replace(/[`\n]/g, '')}\`</sub>`);
+        }
       }
       if (ranked.length > top.length) {
         lines.push(`- *…${ranked.length - top.length} more, by module below*`);

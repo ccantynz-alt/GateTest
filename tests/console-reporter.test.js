@@ -66,3 +66,31 @@ describe('ConsoleReporter — info-findings summary (self-scan 2026-07-15 fix)',
     assert.doesNotMatch(output, /Info:/);
   });
 });
+
+// Move 25 (2026-09-05): beside every finding in "What's blocking you", the
+// exact .gatetestignore line that silences it — verified against the matcher.
+describe('ConsoleReporter — offers the exact .gatetestignore line', () => {
+  it('prints module:rule@file for a blocking finding', () => {
+    const runner = new EventEmitter();
+    new ConsoleReporter(runner);
+    const output = captureLog(() => {
+      runner.emit('suite:end', {
+        gateStatus: 'BLOCKED',
+        modules: { passed: 0, total: 1 },
+        checks: { total: 1, passed: 0, failed: 1, errors: 1, blockingErrors: 1, softErrors: 0, warnings: 0, infoFindings: 0 },
+        fixes: { total: 0 },
+        duration: 10,
+        failedModules: ['hardcodedUrl'],
+        confidenceThreshold: 0.7,
+        results: [{
+          module: 'hardcodedUrl',
+          checks: [{
+            name: 'hardcoded-url:localhost:src/x.ts:12', passed: false, severity: 'error', confidence: 1,
+            file: 'src/x.ts', line: 12, message: 'hardcoded http://localhost:3000',
+          }],
+        }],
+      });
+    });
+    assert.match(output, /wrong\? add to \.gatetestignore: hardcodedUrl:localhost@src\/x\.ts/);
+  });
+});

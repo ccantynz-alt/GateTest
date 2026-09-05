@@ -981,3 +981,21 @@ describe('buildMarkdownComment — in-this-change attribution', () => {
     assert.match(items[2], /security:rule0\*\* `pre-existing` \[/);
   });
 });
+
+// Move 25: each "What matters" item carries the exact `@gatetest ignore` reply
+// the engine computed for it; nothing is offered when the engine gave none.
+describe('buildMarkdownComment — exact suppression reply per finding', () => {
+  const mk = (i, over = {}) => ({
+    id: `m:r${i}`, module: 'hardcodedUrl', rule: `hardcoded-url:localhost`, severity: 'error', confidence: 1, blocking: true,
+    file: `src/f${i}.ts`, line: 1, message: `finding ${i}`, suggestion: null, class: null, duplicateOf: null, ...over,
+  });
+  const summary = { total: 2, blocking: 2, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 };
+  it('offers the engine-computed line as a reply', () => {
+    const body = buildMarkdownComment('o/r', 'abc1234def', {
+      status: 'complete', totalIssues: 2, duration: 1, modules: [{ name: 'hardcodedUrl', status: 'failed', checks: 2, issues: 2, duration: 1, details: [] }],
+      findings: [mk(0, { ignoreLine: 'hardcodedUrl:localhost@src/f0.ts' }), mk(1)], findingSummary: summary,
+    }, null, 'strict');
+    assert.match(body, /<sub>wrong\? reply `@gatetest ignore hardcodedUrl:localhost@src\/f0\.ts`<\/sub>/);
+    assert.strictEqual((body.match(/@gatetest ignore hardcodedUrl/g) || []).length, 1, 'only the finding with a computed line gets one');
+  });
+});

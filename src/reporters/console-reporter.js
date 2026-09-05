@@ -19,6 +19,8 @@ const COLORS = {
 };
 
 const { triageFindings, countFoldedDuplicates } = require('../core/finding-triage');
+const { suggestLine } = require('../core/ignore-file');
+const { ruleKeyOf } = require('../core/finding-registry');
 const { siteUrl } = require('../core/site-url');
 
 class ConsoleReporter {
@@ -79,6 +81,11 @@ class ConsoleReporter {
       const msg = c.message || c.name;
       if (msg) console.log(`      ${msg}`);
       if (c.suggestion) console.log(`      ${COLORS.dim}→ ${c.suggestion}${COLORS.reset}`);
+      // The exact line that silences THIS finding, verified against the
+      // matcher (move 25). Friction on a false positive is what turns a
+      // shrug into a rip-out.
+      const ignore = suggestLine({ module: f.module, name: c.name, ruleKey: ruleKeyOf(c.name, c.file), file: c.file });
+      if (ignore) console.log(`      ${COLORS.dim}wrong? add to .gatetestignore: ${COLORS.reset}${ignore}`);
     };
 
     // A repo with 200 blockers should not open with 200 lines of scroll —
