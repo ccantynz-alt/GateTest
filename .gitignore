@@ -1,4 +1,7 @@
-node_modules/
+# `node_modules` without the slash: the slash form matches only a DIRECTORY, so a
+# symlinked node_modules (a worktree pointing at the main install) is NOT ignored
+# and `git add -A` committed one into four commits on 2026-09-05.
+node_modules
 .gatetest/
 coverage/
 dist/
