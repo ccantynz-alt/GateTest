@@ -417,6 +417,121 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-05 — one stripper: where a string or a comment begins
+
+"Where do the strings, comments and regex literals begin and end in this
+source?" had one home (`src/core/source-strip.js`) and **twenty-six other
+answers**: `BaseModule._isInsideStringLiteral` (a per-line quote counter, in
+eight modules), `_stripJsStrings` (three), and a private walker in each of
+`resource-leak` (`isInString`), `guarded-catch` and `bash-safety`
+(`maskNonCode`, two different bodies), `redos` / `cron-expression`
+(`_maskedSource`), `cross-file-taint` (`_stripStringsKeepTemplateInterp`),
+`homoglyph` (`_stripLineLiterals`), `confidence` (`_isInsideStringText`),
+`inner-html-safety` (a `quote = ch` walker), `hardcoded-url`
+(`quoteOpenAfter`), `auth-bypass` (none at all). None of them could see a
+template literal or a block comment opened on an earlier line, and each
+counted quotes its own way — an apostrophe in a trailing comment opened a
+phantom string for one and not for another.
+
+What the one stripper changed, measured module by module on fourteen
+repositories (per-module failed-check snapshots of the engine at `main`
+against this tree, every delta read at its source line):
+
+- **False positives gone because the text was not code.** got's
+  `auth-bypass` / `integration-tests` findings were a `server.get('/proxy', …)`
+  inside a JSDoc `@example`; hono's were the app template the benchmark holds
+  in a 15-line template literal, and its three `cross-file-taint` errors
+  traced back to a `c.req.query('name')` inside that same template. NodeGoat's
+  `$where` at `allocations-dao.js:73` is inside `/* … */` (only `:78` is live).
+  prisma's three `money-float` findings were `toThrow(/price/)` regex literals.
+  zod's four `dead-code` exports sat inside a `custom: \`…\`` fixture. Eight
+  `resource-leak` `setInterval` findings on this repo were fixture templates
+  in `tests/multi-file-refactor.test.js`. Five `cross-file-taint` errors on
+  `tests/security-inert-patterns.test.js` came from a one-line fixture string
+  `"const fs = require('fs'); … req.body.name …"` that tainted `fs` for the
+  rest of the file — sources are now read on the masked line too.
+- **Recall the counters had lost.** `\`http://localhost:${PORT}/\`` and a URL
+  in a double-quoted string that contains an apostrophe now fire (fourteen
+  `hardcoded-url` fixtures in this repo's tests, four in fastify's WebDAV
+  XML bodies, all `info` in test files); hono's `jwt({ secret: 'secret' })`
+  in a runtime test is a weak secret; NodeGoat's `function(err, resp)` whose
+  only use of `err` is `//else console.log(err)` ignores it; a
+  `catch { /* best-effort */ }` is a comment-only catch (warning, seven on
+  this repo — a comment documents intent, it does not handle the error);
+  `cross-file-taint` sees a tainted variable inside a `${…}` hole.
+- **Three rules whose real defect the move exposed.** `security`'s shell-exec
+  pattern matched `RegExp#exec` (got, two criticals) and a database handle's
+  `exec` (prisma) — the raw form had skipped prisma only because `[^)]*`
+  stopped inside the SQL string; the callee must now be a shell exec.
+  `resource-leak` did not know `fs.closeSync(fd)` closes a descriptor —
+  `src/core/log-streamer.js:90` and `secrets.js:318` had escaped because a
+  template string 70 lines later contained `/fd/1`. `env-vars` lost the two
+  `GATETEST_SANDBOX_*` keys read inside the playwright bootstrap source
+  string; a key SET in a child's `env: { … }` block is now a use of the key
+  (and not a missing-from-example — `GIT_TERMINAL_PROMPT: '0'` is an output).
+- **Nothing else moved.** 23 modules × 14 repositories otherwise identical;
+  corpus 20/20 at ceilings; determinism identical across runs.
+
+New in the home: `stripPythonStringsAndComments`, `stripShellLiterals` (moved
+from `bash-safety`), `stripLineLiterals`, `literalKindAt`, `splitTopLevel`;
+`BaseModule._maskedLines(content, rel)` / `_insideLiteral` / `_matchOnRaw`.
+`tests/string-guard-canonical.test.js` fails on the shape of a new private
+walker anywhere under `src/` except the home. Every migrated module carries a
+control pair: the token inside a string, a template continuation line and a
+block comment silent, the real one beside them reported.
+
+**What the corpus then found (the same day).** With the modules masking
+correctly, the corpus gate failed on spring-petclinic (9 > 8) and ktor
+(8 > 7) — and both new blockers were old **false negatives** that the
+ceilings had been set on top of:
+
+- **The confidence scorer masked every file as JavaScript.** In `gradlew`
+  the case pattern `/*)` on line 80 opened a phantom block comment that never
+  closed, so the real `eval "set -- $(…)"` on line 241 scored 0.2 and never
+  blocked (KI #85's class, on a shell file); ktor's
+  `origin_url=$(git remote get-url … 2>/dev/null || true)` was hidden the
+  same way. Which stripper a file gets is now decided once, in
+  `source-strip.js` `maskSource(text, filePath)` — Python by extension, shell
+  by extension or shebang, `#`-comment languages (Ruby, YAML, TOML, Dockerfile,
+  Makefile) line by line, the JavaScript grammar for the C-like rest — and
+  both `BaseModule._maskedLines` and the scorer import it. The scorer's memo
+  is keyed on the file as well as the text.
+- **`gradlew` / `mvnw` are vendored** (`shell-files.js` `isVendoredWrapper`):
+  the `shell` module reports their findings at info with the reason —
+  every Gradle and Maven project carries the stock script, and a build the
+  project cannot change must not block on it.
+- **`bash-safety` scanned only the FIRST line of every multi-line
+  `run: |` block**: `_isInRunBlock` broke at the first line above that began
+  with a word character. A `|| true` on line two of a step was never seen —
+  this repo's own dogfood workflow carried six, `ci.yml` read as clean, and
+  bash-safety's own control pairs all put the swallow on line one. The walk
+  now follows YAML indentation out of the block. On this repo that surfaced
+  **42 error-severity swallows** in our own workflows and `action.yml`
+  (`trainer-nightly.yml` 27, `action.yml` 9, the three
+  `integrations/github-actions/*.yml` 5, `flywheel-train.yml` 1) — and
+  `tests/infra-oracles.test.js`, which asserts the audited deploy/CI paths
+  are free of swallows, went red on files it had been calling clean.
+  Fixed here: dogfood (each self-scan step records the engine's exit code
+  instead of `|| true`-ing it away), trainer-nightly (twelve optional
+  `cp … 2>/dev/null || true` became one loop that says which report was
+  absent; `npm ci || true` fails loudly; `git add … || true` inside an
+  `if [ -d ]` has nothing to swallow), flywheel-train, and the install
+  fallback in the three integrations workflows — `npm ci || npm install ||
+  true` now ends in an explicit `::error::` and `exit 1`, a *stricter* gate,
+  not a weaker one (PROTECTED PLATFORMS: nothing removed, nothing softened;
+  flagged for Craig's acknowledgement in the PR). Left for KI #108:
+  `action.yml`'s nine — the Marketplace action, which wants its own tested
+  pass. Also: `VAR=$(cmd || true)` is the capture shape too, downgraded when
+  `$VAR` is read below, as `VAR=$(cmd) || true` already was.
+- **`ci-security` could not see a redirected brace group.** prisma's
+  `{ echo "SUPABASE_JWT_SECRET=$JWT_SECRET"; … } >> "$GITHUB_ENV"` had scored
+  0.2 by the same phantom-comment accident (a `/*` in YAML text); masked as
+  YAML it scored 1.0, and it is not a leak — the group's output goes to the
+  file. `_groupRedirected` reads the closing brace's redirect; control pair
+  in `tests/ci-security.test.js`. prisma 14 → 13, at its ceiling.
+
+Corpus after all of it: 20/20 at ceilings, NodeGoat above its floor.
+
 ### 2026-09-05 — one definition of what a walk skips
 
 "Which directories does a walk never enter" had one home
