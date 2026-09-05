@@ -38,6 +38,69 @@ const path = require('path');
 const PLACEHOLDER_VALUE_RE = /(?:changeme|placeholder|your[_-]?(?:\w+[_-])?(?:secret|key|password|token)|replace[_-]?me|(?<![a-z0-9])example(?![a-z0-9])|default[_-]?(?:secret|key|password|token)|xxx+|insert[_-]?here|todo|<[a-z0-9_. -]{2,30}>|\.{3,}|\u2026)/i;
 
 /**
+ * A Database-URL match is a CREDENTIAL only when it carries one.
+ *
+ * Measured 2026-09-05 on four third-party repos (corpus6): every blocking
+ * Database-URL finding was one of three shapes, none of them a secret \u2014
+ *
+ *   nestjs/nest   integration/mongoose/src/app.module.ts:7
+ *       MongooseModule.forRoot('mongodb://localhost:27017/test')
+ *   prisma        packages/1-framework/3-tooling/cli/scripts/record.ts:171
+ *       const DEFAULT_DATABASE_URL = 'postgres://postgres:postgres@127.0.0.1:5433/postgres'
+ *   prisma        packages/3-extensions/mongo/src/runtime/binding.ts:122
+ *       '... (e.g. mongodb://host:27017/mydb), or pass dbName explicitly'
+ *
+ * A URL with no userinfo names a LOCATION. On a loopback host that location
+ * is the developer's own machine and discloses nothing; a placeholder host
+ * (`host`, `example.com`) is documentation. A URL whose password is the word
+ * `password` / `pass` / `PASS` is a template, and `postgres:postgres` on
+ * loopback is the Docker image default that no one chose.
+ *
+ * Deliberately NOT suppressed, and pinned by the NodeGoat recall floor: a
+ * credential-less URL to a NAMED host (`mongodb://mongo:27017/nodegoat` in
+ * docker-compose.yml \u2014 that host name is topology), a real password on any
+ * host including loopback, and `user==pass` on a non-loopback host.
+ */
+const DB_URL_PARTS_RE = /^[a-z][a-z0-9+.-]*:\/\/(?:([^:@/?#]*)(?::([^@/?#]*))?@)?(\[[^\]]+\]|[^:/?#]+)/i;
+const LOOPBACK_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\]|::1)$/i;
+const PLACEHOLDER_HOST_RE = /^(?:host|hostname|server|db[-_]?host|your[-_]?host|my[-_]?host|(?:[a-z0-9-]+\.)*example\.(?:com|org|net))$/i;
+const PLACEHOLDER_CREDENTIAL_RE = /^(?:user|username|pass|password|passwd|pwd)$/i;
+
+/**
+ * Keys a vendor DESIGNS to ship in a client bundle are public by contract,
+ * not leaked. Stripe publishable keys announce it in the prefix. Algolia
+ * DocSearch keys do not \u2014 they are 32 hex chars like any other Algolia key \u2014
+ * so those are recognised only inside an `algolia:` / `docsearch` block
+ * that says nothing about `admin` or `write`:
+ *
+ *   trpc/trpc  www/docusaurus.config.ts:48
+ *       algolia: { appId: 'BTGPSR4MOE', apiKey: 'ed8b3896f8e3e2b421e4c38834b915a8', indexName: 'trpc' }
+ *
+ * Docusaurus's own template comments that line "Public API key: it is safe
+ * to commit it". A search-only key cannot read, write or list indices.
+ */
+const PUBLISHABLE_KEY_RE = /^pk_(?:live|test)_[A-Za-z0-9]+$/;
+const ALGOLIA_KEY_RE = /^[a-f0-9]{32}$/;
+const SEARCH_CONFIG_WINDOW = 6;
+
+/**
+ * Files whose whole purpose is to hold key material. The line-pattern loop
+ * is wrong for them \u2014 a PEM body is base64, and a 200 KB CA bundle is 3,000
+ * lines of it \u2014 so they are classified by their header instead:
+ * private key material, recognisably public (a certificate, a public key,
+ * a CSR), or unknown.
+ *
+ * Until 2026-09-05 the module never opened these at all. OWASP NodeGoat's
+ * committed `artifacts/cert/server.key` \u2014 a real RSA private key \u2014 was only
+ * ever reported as ".gitignore missing pattern: *.key", which names the
+ * wrong defendant: adding the line would not un-commit the key.
+ */
+const KEY_FILE_EXTENSIONS = new Set(['.pem', '.key', '.p8', '.pk8', '.ppk']);
+const KEY_FILE_HEAD_BYTES = 64 * 1024;
+const PRIVATE_KEY_HEADER_RE = /-----BEGIN (?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED|PGP) )?PRIVATE KEY(?: BLOCK)?-----|^PuTTY-User-Key-File-\d/m;
+const PUBLIC_PEM_HEADER_RE = /-----BEGIN (?:(?:TRUSTED |X509 )?CERTIFICATE|PUBLIC KEY|CERTIFICATE REQUEST|NEW CERTIFICATE REQUEST|X509 CRL)-----/;
+
+/**
  * Credential types recognisable from the VALUE alone.
  *
  * These carry a vendor prefix or a structural header — `AKIA…`, `sk_live_…`,
@@ -84,7 +147,7 @@ class SecretsModule extends BaseModule {
       // .pem on disk nor a key inlined in source ever carries an ellipsis.
       // `illustrationIfElided` applies that to the LINE, since the ellipsis
       // sits beside the header rather than inside the match.
-      { regex: /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/g, type: 'Private Key', illustrationIfElided: true },
+      { regex: /-----BEGIN (?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED|PGP) )?PRIVATE KEY(?: BLOCK)?-----/g, type: 'Private Key', illustrationIfElided: true },
       { regex: /ghp_[A-Za-z0-9_]{36,}/g, type: 'GitHub PAT' },
       { regex: /gho_[A-Za-z0-9_]{36,}/g, type: 'GitHub OAuth Token' },
       { regex: /github_pat_[A-Za-z0-9_]{22,}/g, type: 'GitHub Fine-Grained Token' },
@@ -160,6 +223,123 @@ class SecretsModule extends BaseModule {
       || /^os\.environ\b/.test(value)    // Python
       || /^ENV\[/.test(value)            // Ruby
     );
+  }
+
+  /**
+   * True when a Database-URL match carries no credential worth reporting.
+   * See the DB_URL_PARTS_RE comment for the measured shapes and the lines
+   * that stay reported.
+   *
+   * @param {string} url - the matched URL, e.g. `postgres://u:p@h:5432/db`
+   * @returns {boolean}
+   */
+  _databaseUrlIsPlaceholder(url) {
+    const parts = url.match(DB_URL_PARTS_RE);
+    if (!parts) return false;
+    const [, user = '', password = '', host = ''] = parts;
+    const loopback = LOOPBACK_HOST_RE.test(host);
+    if (!password) {
+      // `user@host` with no password is still no credential.
+      return loopback || PLACEHOLDER_HOST_RE.test(host);
+    }
+    if (PLACEHOLDER_VALUE_RE.test(password)) return true;
+    if (PLACEHOLDER_CREDENTIAL_RE.test(password)) return true;
+    // `postgres:postgres@127.0.0.1` — the image default on the dev machine.
+    return loopback && user.toLowerCase() === password.toLowerCase();
+  }
+
+  /**
+   * True when the quoted value NAMES the thing it is assigned to instead of
+   * holding a credential.
+   *
+   * Two shapes, both from corpus6 (2026-09-05):
+   *
+   *   nestjs/nest  integration/injector/src/dynamic/dynamic.module.ts:3
+   *       export const DYNAMIC_TOKEN = 'DYNAMIC_TOKEN';
+   *   prisma       packages/3-extensions/supabase/src/runtime/supabase.ts:183
+   *       const jwtSecret = 'jwtSecret' in options ? options.jwtSecret : undefined;
+   *
+   * The first is a DI injection token whose string value is its own
+   * identifier; the second probes for a property. The own-name test requires
+   * the value to LOOK like an identifier (an uppercase letter, `_` or `-`):
+   * `password: 'password'` is equal to its name too, but it is a weak default
+   * credential, not a symbol, and it stays reported.
+   *
+   * @param {string} scanLine - the neutralised line the pattern ran on
+   * @param {RegExpExecArray} m - the identifier-keyed match
+   * @returns {boolean}
+   */
+  _isSelfReferentialValue(scanLine, m) {
+    const q = m[0].match(/^([^'"]*?)\s*[:=]\s*['"]([^'"]*)$/);
+    if (!q) return false;
+    const after = scanLine.slice(m.index + m[0].length);
+    if (/^['"]\s+in\s/.test(after)) return true;
+    const value = q[2];
+    if (!/[A-Z_-]/.test(value)) return false;
+    const before = (scanLine.slice(0, m.index).match(/[\w$]*$/) || [''])[0];
+    const norm = (s) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    return norm(value) === norm(before + q[1]);
+  }
+
+  /**
+   * True when the matched value is a key its vendor designed to be public.
+   * See PUBLISHABLE_KEY_RE / ALGOLIA_KEY_RE for the contract.
+   *
+   * @param {string[]} lines - the whole file, for the lookback window
+   * @param {number} i - index of the current line
+   * @param {string} match - the full regex match
+   * @returns {boolean}
+   */
+  _isPublicByDesign(lines, i, match) {
+    const q = match.match(/['"]([^'"]*)$/);
+    if (!q) return false;
+    const value = q[1];
+    if (PUBLISHABLE_KEY_RE.test(value)) return true;
+    if (!ALGOLIA_KEY_RE.test(value) || !/^api[_-]?key\s*[:=]/i.test(match)) return false;
+    const window = lines.slice(Math.max(0, i - SEARCH_CONFIG_WINDOW), i + 1).join('\n');
+    return /\b(?:algolia|docsearch)\b/i.test(window) && !/\b(?:admin|write|secret)\b/i.test(window);
+  }
+
+  /**
+   * Classify a `.pem` / `.key` style file by its header.
+   *
+   * @param {string} file - absolute path
+   * @returns {'private'|'public'|'unknown'}
+   */
+  _classifyKeyFile(file) {
+    let head = '';
+    try {
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buf = Buffer.alloc(KEY_FILE_HEAD_BYTES);
+        const n = fs.readSync(fd, buf, 0, KEY_FILE_HEAD_BYTES, 0);
+        head = buf.toString('utf-8', 0, n);
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      return 'unknown';
+    }
+    if (PRIVATE_KEY_HEADER_RE.test(head)) return 'private';
+    if (PUBLIC_PEM_HEADER_RE.test(head)) return 'public';
+    return 'unknown';
+  }
+
+  /**
+   * A key file the working tree ignores is a developer's local material, not
+   * a committed one. Outside a git checkout nothing is ignored — the module
+   * fails toward detection.
+   *
+   * @param {string} projectRoot
+   * @param {string} relUnix
+   * @returns {boolean}
+   */
+  _isGitIgnored(projectRoot, relUnix) {
+    const { exitCode } = this._exec(`git check-ignore -q -- "${relUnix.replace(/"/g, '\\"')}"`, {
+      cwd: projectRoot,
+      timeout: 5000,
+    });
+    return exitCode === 0;
   }
 
   /**
@@ -270,10 +450,15 @@ class SecretsModule extends BaseModule {
       // The false positives docs invite (`your-api-key-here`, `sk_live_xxxx`,
       // `<paste-key>`) are already handled by the placeholder allow-list this
       // module shares between both of its scan paths.
-      '.md', '.mdx', '.txt', '.rst', '.adoc'];
+      '.md', '.mdx', '.txt', '.rst', '.adoc',
+      ...KEY_FILE_EXTENSIONS];
 
     const files = this._collectFiles(projectRoot, sourceExtensions);
     let totalSecrets = 0;
+    // Key files this scan has already judged — reported as private key
+    // material, or recognised as public. The .gitignore hygiene check below
+    // must not escalate to a second blocking finding for the same file.
+    const vouched = new Set();
 
     for (const file of files) {
       const relPath = path.relative(projectRoot, file);
@@ -288,6 +473,23 @@ class SecretsModule extends BaseModule {
       // has "changeme" as a weak-secret pattern, not an actual secret).
       const relUnix = relPath.replace(/\\/g, '/');
       if (/(?:^|\/)src[\\/]modules[\\/]/.test(relUnix)) continue;
+
+      if (KEY_FILE_EXTENSIONS.has(path.extname(file).toLowerCase())) {
+        const kind = this._classifyKeyFile(file);
+        if (kind === 'public') { vouched.add(relUnix); continue; }
+        if (kind !== 'private') continue;
+        if (this._isGitIgnored(projectRoot, relUnix)) continue;
+        vouched.add(relUnix);
+        totalSecrets += 1;
+        result.addCheck(`secrets:${relPath}`, false, {
+          severity: this._isTestPath(relUnix) ? 'warning' : 'error',
+          file: relPath,
+          message: 'Private key material is committed in this file',
+          details: [{ type: 'Private Key', line: 1, preview: path.basename(file) }],
+          suggestion: 'Remove the key from the repository, rotate it, and add the file pattern to .gitignore',
+        });
+        continue;
+      }
 
       const content = fs.readFileSync(file, 'utf-8');
       const lines = content.split(/\r?\n/);
@@ -386,6 +588,13 @@ class SecretsModule extends BaseModule {
               // Skip values that READ a secret rather than contain one.
               // See _looksLikeReference for the exact test.
               if (this._looksLikeReference(m[0])) continue;
+              // A connection string with no credential in it, or a
+              // template one. See _databaseUrlIsPlaceholder.
+              if (pattern.type === 'Database URL' && this._databaseUrlIsPlaceholder(m[0])) continue;
+              // `DYNAMIC_TOKEN = 'DYNAMIC_TOKEN'`, `'jwtSecret' in options`.
+              if (this._isSelfReferentialValue(scanLine, m)) continue;
+              // Stripe `pk_live_…`, an Algolia DocSearch key in its block.
+              if (this._isPublicByDesign(lines, i, m[0])) continue;
             }
             found.push({
               type: pattern.type,
@@ -440,7 +649,7 @@ class SecretsModule extends BaseModule {
     this._checkEnvFiles(projectRoot, result);
 
     // Check .gitignore for secret file patterns
-    this._checkGitignore(projectRoot, result);
+    this._checkGitignore(projectRoot, result, vouched);
 
     if (totalSecrets === 0) {
       result.addCheck('secrets-scan', true, { message: `Scanned ${files.length} files, no secrets found` });
@@ -494,11 +703,20 @@ class SecretsModule extends BaseModule {
    * in practice. Bounded walk — skips vendor/build dirs and stops at depth 6
    * so a huge monorepo cannot make the secrets module the slow one.
    *
+   * A file the content scan has already VOUCHED for does not count: a
+   * private key it reported is already blocking under its own path (nest's
+   * `integration/microservices/src/tcp-tls/privkey.pem`), and a certificate
+   * bundle it recognised as public is not an exposure at all (apollo-server's
+   * root `.cacert.pem`). Either way the missing pattern is hygiene. An opaque
+   * `.pem` the scan could not classify still escalates — the module fails
+   * toward detection.
+   *
    * @param {string} projectRoot
    * @param {string} pattern - one of `.env`, `*.pem`, `*.key`
+   * @param {Set<string>} [vouched] - forward-slash relative paths already judged
    * @returns {boolean}
    */
-  _matchingFileExists(projectRoot, pattern) {
+  _matchingFileExists(projectRoot, pattern, vouched = new Set()) {
     // Test fixtures / examples / testdata are COMMITTED ON PURPOSE (flask's
     // tests/test_apps/.env, gin's testdata/certificate/*.pem) — their
     // presence is not evidence that a real secret is about to leak, so they
@@ -524,6 +742,8 @@ class SecretsModule extends BaseModule {
           if (SKIP.has(entry.name)) continue;
           if (walk(path.join(dir, entry.name), depth + 1)) return true;
         } else if (matches(entry.name) && !/\.(example|sample|template|dist)$/.test(entry.name)) {
+          const rel = path.relative(projectRoot, path.join(dir, entry.name)).replace(/\\/g, '/');
+          if (vouched.has(rel)) continue;
           return true;
         }
       }
@@ -533,7 +753,7 @@ class SecretsModule extends BaseModule {
     return walk(projectRoot, 0);
   }
 
-  _checkGitignore(projectRoot, result) {
+  _checkGitignore(projectRoot, result, vouched = new Set()) {
     const gitignorePath = path.join(projectRoot, '.gitignore');
     if (!fs.existsSync(gitignorePath)) {
       result.addCheck('secrets:gitignore-exists', false, {
@@ -578,7 +798,7 @@ class SecretsModule extends BaseModule {
         // already downgraded on 2026-07-23: it is incoherent for "no
         // .gitignore at all" to warn while "an existing .gitignore missing
         // one line" blocks.
-        const atRisk = this._matchingFileExists(projectRoot, pat);
+        const atRisk = this._matchingFileExists(projectRoot, pat, vouched);
         result.addCheck(`secrets:gitignore-${pat}`, false, {
           severity: atRisk ? 'error' : 'warning',
           message: atRisk
