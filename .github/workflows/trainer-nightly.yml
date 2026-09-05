@@ -47,7 +47,7 @@ jobs:
       - name: Install (no-op if no deps)
         run: |
           if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts || true
+            npm ci --ignore-scripts
           fi
 
       - name: Ingest last 30d of git history into session-fix corpus
@@ -200,37 +200,37 @@ jobs:
           git checkout -B "$BRANCH" origin/main
           if git fetch origin "$BRANCH" 2>/dev/null; then
             # Carry forward reports from nights that have not been merged yet.
-            git checkout FETCH_HEAD -- docs/trainer/ 2>/dev/null || true
-            echo "carried forward $(git diff --cached --name-only -- docs/trainer/ | wc -l) unmerged report file(s)"
+            if git checkout FETCH_HEAD -- docs/trainer/ 2>/dev/null; then
+              echo "carried forward $(git diff --cached --name-only -- docs/trainer/ | wc -l) unmerged report file(s)"
+            else
+              echo "no docs/trainer/ on $BRANCH yet — nothing to carry forward"
+            fi
           fi
 
           mkdir -p docs/trainer
           DATE=$(date -u +%Y-%m-%d)
           cp .gatetest-train/report.md                   "docs/trainer/${DATE}-pattern-miner.md"
           cp .gatetest-train/report.json                 "docs/trainer/${DATE}-pattern-miner.json"
-          cp .gatetest-train/recipe-promoter.md          "docs/trainer/${DATE}-recipe-promoter.md"  2>/dev/null || true
-          cp .gatetest-train/recipe-promoter.json        "docs/trainer/${DATE}-recipe-promoter.json" 2>/dev/null || true
-          cp .gatetest-train/regression-test-generator.md "docs/trainer/${DATE}-regression-test-generator.md"  2>/dev/null || true
-          cp .gatetest-train/regression-test-generator.json "docs/trainer/${DATE}-regression-test-generator.json" 2>/dev/null || true
-          cp .gatetest-train/adversarial-mutator.md "docs/trainer/${DATE}-adversarial-mutator.md"  2>/dev/null || true
-          cp .gatetest-train/adversarial-mutator.json "docs/trainer/${DATE}-adversarial-mutator.json" 2>/dev/null || true
-          cp .gatetest-train/recipe-auto-promoter.md "docs/trainer/${DATE}-recipe-auto-promoter.md"  2>/dev/null || true
-          cp .gatetest-train/recipe-auto-promoter.json "docs/trainer/${DATE}-recipe-auto-promoter.json" 2>/dev/null || true
-          cp .gatetest-train/cross-repo-promoter.md "docs/trainer/${DATE}-cross-repo-promoter.md"  2>/dev/null || true
-          cp .gatetest-train/cross-repo-promoter.json "docs/trainer/${DATE}-cross-repo-promoter.json" 2>/dev/null || true
-          cp .gatetest-train/confidence-calibrator.md "docs/trainer/${DATE}-confidence-calibrator.md"  2>/dev/null || true
-          cp .gatetest-train/confidence-calibrator.json "docs/trainer/${DATE}-confidence-calibrator.json" 2>/dev/null || true
-          cp .gatetest-train/hacker-news.md "docs/trainer/${DATE}-hacker-news.md"  2>/dev/null || true
-          cp .gatetest-train/hacker-news.json "docs/trainer/${DATE}-hacker-news.json" 2>/dev/null || true
+          # Optional reports: a trainer that did not run this night leaves no
+          # file, which is information, not an error to swallow — say which.
+          for name in recipe-promoter regression-test-generator adversarial-mutator recipe-auto-promoter cross-repo-promoter confidence-calibrator hacker-news; do
+            for ext in md json; do
+              if [ -f ".gatetest-train/$name.$ext" ]; then
+                cp ".gatetest-train/$name.$ext" "docs/trainer/${DATE}-$name.$ext"
+              else
+                echo "no $name.$ext this run"
+              fi
+            done
+          done
 
           # recipe-auto-promoter writes pending rule files here for review
           if [ -d website/app/lib/rule-based-fixer-pending ]; then
-            git add website/app/lib/rule-based-fixer-pending/ || true
+            git add website/app/lib/rule-based-fixer-pending/
           fi
 
           # regression-test-generator writes pending test stubs here
           if [ -d tests/auto-generated ]; then
-            git add tests/auto-generated/ || true
+            git add tests/auto-generated/
           fi
 
           git add docs/trainer/
@@ -254,5 +254,5 @@ jobs:
 
           # Not a draft, and auto-merge armed: the moment the required review
           # lands, so does the PR. A draft can never merge — that was the bug.
-          gh pr ready "$BRANCH" || true
+          gh pr ready "$BRANCH" || echo "gh pr ready: already ready, or unavailable ($?)"
           gh pr merge "$BRANCH" --auto --squash || echo "auto-merge unavailable — PR left open for review"

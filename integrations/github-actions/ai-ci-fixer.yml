@@ -74,7 +74,7 @@ jobs:
           cd "$GATETEST_HOME"
           npm ci --omit=dev --ignore-scripts 2>/dev/null \
             || npm install --production --ignore-scripts 2>/dev/null \
-            || true
+            || { echo "::error::GateTest dependency install failed — npm ci and npm install both exited non-zero; the gate cannot run without its dependencies"; exit 1; }
 
       - name: Run AI CI-fixer
         if: steps.gate.outputs.skip != 'true' && env.ANTHROPIC_API_KEY != ''

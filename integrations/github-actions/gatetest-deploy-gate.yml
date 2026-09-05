@@ -91,7 +91,7 @@ jobs:
       - name: Install GateTest dependencies (incl. Playwright — the live suite needs a real browser)
         run: |
           cd "$RUNNER_TEMP/gatetest"
-          npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --production --ignore-scripts 2>/dev/null || true
+          npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --production --ignore-scripts 2>/dev/null || { echo "::error::GateTest dependency install failed — npm ci and npm install both exited non-zero; the gate cannot run without its dependencies"; exit 1; }
           npx playwright install --with-deps chromium
 
       - name: Point the live suite at the deployed URL
