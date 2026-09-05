@@ -37,6 +37,19 @@ const NAMED_COLORS = {
 // real page it stays an error.
 const FRAGMENT_PATH_RE = /(^|\/)(fragments?|partials?|includes?|_includes|components?|snippets?|layouts?)\//i;
 
+/**
+ * JSX that is RASTERISED, not served: `new ImageResponse(<div>…</div>)` from
+ * `@vercel/og` / `next/og`, or a satori / workers-og render. The markup
+ * becomes a PNG — no screen reader, no keyboard, no DOM. An `<img>` without
+ * alt inside it is a paint instruction (trpc www/og-image/pages/api/_ref/
+ * vercel.tsx:34). Identified by the call or the import, never by path: the
+ * playground page beside it (www/og-image/pages/index.tsx) IS a page.
+ */
+const IMAGE_RENDERER_RE = /\bnew\s+ImageResponse\s*\(|\bsatori\s*\(|from\s+['"](?:satori|workers-og|@cf-wasm\/og|@vercel\/og|next\/og)['"]/;
+function isImageRenderer(content) {
+  return IMAGE_RENDERER_RE.test(String(content || ''));
+}
+
 class AccessibilityModule extends BaseModule {
   constructor() {
     super('accessibility', 'Accessibility (WCAG 2.2, AA + AAA-aligned) Audit');
@@ -64,6 +77,8 @@ class AccessibilityModule extends BaseModule {
         // (Craig 2026-09-01, "keep the a11y blocking, thats quality").
         if (isNonUserFacingPage(normalised)) continue;
         const content = fs.readFileSync(file, 'utf-8');
+        // Rendered to a PNG by satori / ImageResponse — not a page at all.
+        if (isImageRenderer(content)) continue;
         // An Angular / React index.html shell OWNS its <head> — `<html lang>`
         // is checked here like any full document — but its <body> is a mount
         // point the application fills at runtime: no images, headings or
@@ -294,16 +309,34 @@ class AccessibilityModule extends BaseModule {
     }
   }
 
+  /**
+   * "Focus outline removed without alternative" is a claim about a RULE — a
+   * `:focus` selector whose block sets `outline: none|0` and offers nothing
+   * in its place — so it is judged rule by rule, not by substrings over the
+   * whole file. The substring version had an operator-precedence hole
+   * (`a && b || c || d`): any `outline: none` anywhere fired it, with or
+   * without `:focus`. trpc www/src/css/custom.css:130 resets the outline on a
+   * footnote LINK (no :focus) and styles its `:focus::after` with a dotted
+   * outline; prisma examples/…/globals.css:359 removes the ring on
+   * `input:focus` and replaces it with a border + box-shadow. Both were
+   * reported. A `:focus-visible` anywhere in the file still exempts it.
+   */
   _checkCssFocus(relPath, content, result) {
-    if (content.includes(':focus') && content.includes('outline: none') ||
-        content.includes('outline:none') || content.includes('outline: 0')) {
-      if (!content.includes(':focus-visible')) {
-        result.addCheck(`a11y:focus-outline:${relPath}`, false, {
-          file: relPath,
-          message: 'Focus outline removed without alternative',
-          suggestion: 'Use :focus-visible instead of :focus, or provide custom focus indicators',
-        });
-      }
+    if (content.includes(':focus-visible')) return;
+    const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+    let m;
+    while ((m = ruleRe.exec(content)) !== null) {
+      const [, selector, body] = m;
+      if (!/:focus(?![\w-])/.test(selector)) continue;
+      if (!/\boutline\s*:\s*(?:none|0)(?:px)?\s*(?:!important)?\s*[;}]?/.test(body)) continue;
+      // The same rule paints another indicator — that IS the alternative.
+      if (/\b(?:box-shadow|border(?:-[a-z]+)?|background(?:-color)?|text-decoration|outline\s*:\s*(?!none|0\b)[^;]+)\s*:?/.test(body.replace(/\boutline\s*:\s*(?:none|0)(?:px)?[^;]*;?/, ''))) continue;
+      result.addCheck(`a11y:focus-outline:${relPath}`, false, {
+        file: relPath,
+        message: 'Focus outline removed without alternative',
+        suggestion: 'Use :focus-visible instead of :focus, or provide custom focus indicators',
+      });
+      return;
     }
   }
 
@@ -623,4 +656,6 @@ class AccessibilityModule extends BaseModule {
   }
 }
 
+AccessibilityModule.isImageRenderer = isImageRenderer;
 module.exports = AccessibilityModule;
+module.exports.isImageRenderer = isImageRenderer;

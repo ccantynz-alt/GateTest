@@ -276,8 +276,18 @@ class PerformanceModule extends BaseModule {
       if (!name) return false;
       if (disposableCache.has(name)) return disposableCache.get(name);
       const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const constructed = new RegExp(`\\b(?:const|let|var)\\s+${n}\\s*=\\s*(?:await\\s+)?new\\s+(?:${CTORS})\\b`).test(content)
-        || new RegExp(`\\b${n}\\s*=\\s*(?:await\\s+)?new\\s+(?:${CTORS})\\b`).test(content);
+      // The constructor may be QUALIFIED — an injected implementation
+      // (`new opts.EventSource(url)`, `new globalThis.WebSocket(url)`,
+      // `new ws.WebSocket(url)`) — and the binding may sit behind an
+      // assignment chain: `const eventSource = (_es = new opts.EventSource(…))`
+      // (trpc packages/server/src/unstable-core-do-not-import/stream/sse.ts:294).
+      // Six listeners on a source that is `.close()`d on RETURN, on abort and
+      // in `cancel()` were reported as a leak because `new opts.EventSource`
+      // did not read as `new EventSource`.
+      const NEW_CTOR = `(?:await\\s+)?new\\s+(?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)*(?:${CTORS})\\b`;
+      const CHAIN = `\\(?\\s*(?:[A-Za-z_$][\\w$]*\\s*=\\s*)*`;
+      const constructed = new RegExp(`\\b(?:const|let|var)\\s+${n}\\s*=\\s*${CHAIN}${NEW_CTOR}`).test(content)
+        || new RegExp(`\\b${n}\\s*=\\s*${CHAIN}${NEW_CTOR}`).test(content);
       const disposed = new RegExp(`\\b${n}\\s*\\.\\s*(?:${DISPOSERS})\\s*\\(`).test(content);
       const verdict = constructed && disposed;
       disposableCache.set(name, verdict);

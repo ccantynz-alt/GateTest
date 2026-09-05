@@ -308,3 +308,62 @@ export async function DELETE() {
     assert.equal(r.errors[0].meta.details[0].method, 'DELETE');
   });
 });
+
+// ── framework adapter forwarding a handler PARAMETER (nestjs/nest, 2026-09-05) ──
+//
+// packages/platform-express/adapters/express-adapter.ts:167-172 registers
+// `router.all('*path', handler as any)` where `handler` is the PARAMETER of
+// `setNotFoundHandler`. The adapter ships no endpoint — whoever passes the
+// handler in decides whether it is guarded — and was reported as an
+// unauthenticated ALL route at error severity.
+describe('authBypass — a handler forwarded from the enclosing function\'s parameters is plumbing', () => {
+  const NEST_ADAPTER = `
+import express from 'express';
+export class ExpressAdapter {
+  public setNotFoundHandler(handler: Function, prefix?: string) {
+    if (prefix) {
+      this.registeredPrefixes.add(prefix);
+      const router = express.Router();
+      router.all('*path', handler as any);
+      return this.use(prefix, router);
+    }
+    return this.use(handler);
+  }
+}
+`;
+
+  it('NEGATIVE: nest\'s express adapter (verbatim) produces no auth-bypass finding', async () => {
+    const r = await scan({ 'packages/platform-express/adapters/express-adapter.ts': NEST_ADAPTER });
+    assert.equal(r.findings.length, 0, JSON.stringify(r.findings));
+  });
+
+  it('POSITIVE: an inline handler on the same registration still fires', async () => {
+    const r = await scan({ 'src/adapter.ts': `
+const router = require('express').Router();
+export function setNotFoundHandler(handler) {
+  router.all('/admin', (req, res) => res.json(db.dump()));
+}
+` });
+    assert.ok(r.errors.some((c) => c.id === 'auth-bypass:src/adapter.ts'), JSON.stringify(r.findings));
+  });
+
+  it('POSITIVE: a bare identifier that is a module-level const, not a parameter, still fires', async () => {
+    const r = await scan({ 'src/routes.ts': `
+const router = require('express').Router();
+const handler = (req, res) => res.json(db.dump());
+export function mount(app) {
+  router.all('/admin', handler);
+}
+` });
+    assert.ok(r.errors.some((c) => c.id === 'auth-bypass:src/routes.ts'), JSON.stringify(r.findings));
+  });
+
+  it('POSITIVE: a member-expression handler (the NodeGoat shape) still fires', async () => {
+    const r = await scan({ 'src/routes.ts': `
+module.exports = function (app, adminHandler) {
+  app.get('/admin', adminHandler.displayAdmin);
+};
+` });
+    assert.ok(r.errors.some((c) => c.id === 'auth-bypass:src/routes.ts'), JSON.stringify(r.findings));
+  });
+});

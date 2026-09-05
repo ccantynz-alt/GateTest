@@ -130,3 +130,41 @@ describe('SeoModule — a SPA shell is not scored', () => {
     assert.ok(failed.some((n) => n.includes('about.html')), 'positive control: the content page is still scored');
   });
 });
+
+// ── severity: share cards, canonical and structured data do not block a build ──
+//
+// prisma apps/lsp-playground/index.html — a Monaco editor page served by a
+// local CLI — took 9 blocking errors for og:/twitter:/canonical/JSON-LD.
+// Those describe how a page is SHARED; the page's own identity (title,
+// description, h1) stays at error.
+describe('SEO — Open Graph / Twitter / canonical / structured-data absence is a warning; title, description and h1 remain errors', () => {
+  it('splits severity by what the metadata is for', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-sev-'));
+    try {
+      write(root, 'apps/lsp-playground/index.html', [
+        '<!doctype html>',
+        '<html lang="en">',
+        '  <head>',
+        '    <meta charset="utf-8" />',
+        '    <title>PSL Playground</title>',
+        '  </head>',
+        '  <body>',
+        '    <div id="header"><span>PSL Playground — live diagnostics from <code>prisma lsp</code></span></div>',
+        '    <div id="editor"></div>',
+        '    <script type="module" src="/src/client/main.ts"></script>',
+        '  </body>',
+        '</html>',
+      ].join('\n'));
+      const result = makeResult();
+      await new SeoModule().run(result, makeConfig(root));
+      const failed = result.checks.filter((c) => !c.passed && c.id.includes('lsp-playground'));
+      const sev = (prefix) => failed.filter((c) => c.id.startsWith(prefix)).map((c) => c.meta.severity || 'error');
+      for (const p of ['seo:og:', 'seo:twitter:', 'seo:canonical:', 'seo:structured-data:']) {
+        assert.ok(sev(p).length > 0, `${p} must still be reported`);
+        assert.ok(sev(p).every((s) => s === 'warning'), `${p} must be a warning: ${sev(p)}`);
+      }
+      assert.deepEqual(sev('seo:description:'), ['error']);
+      assert.deepEqual(sev('seo:h1-missing:'), ['error']);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});

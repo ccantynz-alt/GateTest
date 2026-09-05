@@ -170,6 +170,12 @@ class SeoModule extends BaseModule {
     }
   }
 
+  // Open Graph / Twitter cards, canonical and structured data are how a page
+  // is SHARED and ENRICHED, not whether it is a page: a private tool page
+  // (prisma apps/lsp-playground/index.html — a Monaco editor served by a
+  // local CLI) took 9 blocking errors for share cards nobody will ever
+  // request. Title / description / h1 remain errors — they are the page's
+  // own identity; the rest is reported at warning (Forbidden #25).
   _checkOpenGraph(relPath, content, result) {
     const ogTags = ['og:title', 'og:description', 'og:image', 'og:url'];
     for (const tag of ogTags) {
@@ -177,6 +183,7 @@ class SeoModule extends BaseModule {
                      new RegExp(`name=["']${tag}["']`, 'i').test(content);
       if (!hasTag) {
         result.addCheck(`seo:${tag}:${relPath}`, false, {
+          severity: 'warning',
           file: relPath,
           message: `Missing Open Graph tag: ${tag}`,
           suggestion: `Add <meta property="${tag}" content="...">`,
@@ -190,6 +197,7 @@ class SeoModule extends BaseModule {
     for (const tag of twitterTags) {
       if (!content.includes(tag)) {
         result.addCheck(`seo:${tag}:${relPath}`, false, {
+          severity: 'warning',
           file: relPath,
           message: `Missing Twitter Card tag: ${tag}`,
           suggestion: `Add <meta name="${tag}" content="...">`,
@@ -201,6 +209,7 @@ class SeoModule extends BaseModule {
   _checkCanonical(relPath, content, result) {
     if (!/<link\s+[^>]*rel=["']canonical["']/i.test(content)) {
       result.addCheck(`seo:canonical:${relPath}`, false, {
+        severity: 'warning',
         file: relPath,
         message: 'Missing canonical URL',
         suggestion: 'Add <link rel="canonical" href="...">',
@@ -214,6 +223,7 @@ class SeoModule extends BaseModule {
 
     if (!hasJsonLd && !hasMicrodata) {
       result.addCheck(`seo:structured-data:${relPath}`, false, {
+        severity: 'warning',
         file: relPath,
         message: 'No structured data (JSON-LD or microdata) found',
         suggestion: 'Add JSON-LD structured data for rich search results',

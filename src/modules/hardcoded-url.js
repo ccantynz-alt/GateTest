@@ -85,7 +85,30 @@ const DEV_CONTEXT_LINE_RE = /\b(?:DEV|LOCAL|DEVELOPMENT|TEST|DEBUG|E2E_BASE_URL|
 
 // Dev-guard: `if (process.env.NODE_ENV !== 'production')` / `!== "prod"`
 // on the current or a recent line.
-const DEV_GUARD_RE = /\bprocess\.env\.NODE_ENV\s*(?:===|!==|==|!=)\s*['"`](?:development|dev|test|local|staging)['"`]|NODE_ENV\s*(?:===|!==|==|!=)\s*['"`]production['"`]|__DEV__\b|isDev(?:elopment)?\b|isLocal\b|isTest\b/;
+// `case 'development':` in a `switch (VERCEL_ENV / NODE_ENV)` is the same
+// guard written as a switch (trpc www/src/utils/env.js:41-42).
+const DEV_GUARD_RE = /\bprocess\.env\.NODE_ENV\s*(?:===|!==|==|!=)\s*['"`](?:development|dev|test|local|staging)['"`]|NODE_ENV\s*(?:===|!==|==|!=)\s*['"`]production['"`]|__DEV__\b|isDev(?:elopment)?\b|isLocal\b|isTest\b|\bcase\s+['"`](?:development|dev|local|test)['"`]\s*:/;
+
+// The "use env in prod, localhost in dev" pattern in its OTHER spellings —
+// each one measured on a real repo and reported as a leak:
+//   ternary across lines — `process.env.VERCEL_URL ? 'https://' + … : 'http://localhost:3000'`
+//     (trpc www/og-image/pages/api/_ref/vercel.tsx:36-38, utils/fetchFont.ts:3-5)
+//   schema default        — zod/joi/yup `.default('http://localhost:3000')`, envalid `devDefault:`
+//     (trpc www/src/utils/env.js:16) — a documented dev default IS the fix this rule suggests
+//   the bound address     — `server.listen(PORT, () => log(`http://localhost:${PORT}`))`
+//     (prisma apps/lsp-playground/src/cli.ts:256-257) — a server announcing where it is listening
+//   WHATWG parse base     — `new URL(req.url, 'http://localhost')`: the host is discarded
+//     (prisma apps/lsp-playground/src/cli.ts:15 → :30)
+const ENV_TERNARY_RE = /\bprocess\.env\.[A-Z_][A-Z0-9_]*\s*\?[^;]*?:\s*['"`]$/;
+const SCHEMA_DEFAULT_RE = /\.(?:default|devDefault)\s*\(\s*['"`]$|\bdevDefault\s*:\s*['"`]$/;
+const LISTEN_RE = /\.listen\s*\(/;
+const BARE_LOCALHOST_RE = /^https?:\/\/localhost\/?['"`]/i;
+
+function isUrlParseBase(line, before, content) {
+  if (/\bnew\s+URL\s*\([^,]+,\s*['"`]$/.test(before)) return true;
+  const decl = line.match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*['"`]https?:\/\/localhost/);
+  return !!decl && new RegExp(`\\bnew\\s+URL\\s*\\([^,]+,\\s*${decl[1]}\\b`).test(content);
+}
 
 // Documentation-URL allowlist — common examples.
 const DOC_ALLOWLIST = new Set([
@@ -224,6 +247,11 @@ class HardcodedUrlModule extends BaseModule {
         // Env-fallback: `process.env.X || "http://localhost..."` is
         // explicitly the "use env in prod, localhost in dev" pattern.
         if (/\bprocess\.env\.[A-Z_][A-Z0-9_]*\s*(?:\|\||\?\?)\s*['"`]$/.test(before)) continue;
+        const windowBefore = `${lines.slice(Math.max(0, i - 3), i).join('\n')}\n${line.slice(0, m.index)}`;
+        if (ENV_TERNARY_RE.test(windowBefore)) continue;
+        if (SCHEMA_DEFAULT_RE.test(before)) continue;
+        if (LISTEN_RE.test(windowBefore)) continue;
+        if (BARE_LOCALHOST_RE.test(line.slice(m.index)) && isUrlParseBase(line, before, content)) continue;
 
         if (LOCALHOST_RE.test(host)) {
           issues += this._flag(result, `hardcoded-url:localhost:${rel}:${i + 1}`, {
