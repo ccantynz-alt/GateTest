@@ -33,6 +33,9 @@ const { spawnSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const MANIFEST = path.join(ROOT, 'reliability-corpus', 'real-world.json');
 const GATETEST = path.join(ROOT, 'bin', 'gatetest.js');
+const { calibrate, findingsFromReport } = require(path.join(ROOT, 'src', 'core', 'confidence-calibration'));
+const { ruleIdentity } = require(path.join(ROOT, 'src', 'core', 'rule-identity'));
+const { BLOCK_THRESHOLD } = require(path.join(ROOT, 'src', 'core', 'confidence'));
 
 // Strip SGR colour sequences before parsing the summary line.
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
@@ -87,7 +90,22 @@ function scan(dir) {
       `Last 40 lines:\n${out.split('\n').slice(-40).join('\n')}`,
     );
   }
-  return Number(m[1]);
+  return { blocking: Number(m[1]), findings: readFindings(dir) };
+}
+
+/**
+ * Every error-severity finding of the run, with its confidence, from the
+ * JSON report the scan wrote — the input to confidence calibration (the
+ * Fifty, move 09). `null` when the report is missing: the calibration is
+ * then reported as not measured, never as "no findings".
+ */
+function readFindings(dir) {
+  const file = path.join(dir, '.gatetest', 'reports', 'gatetest-report-latest.json');
+  try {
+    return findingsFromReport(JSON.parse(fs.readFileSync(file, 'utf8')), ruleIdentity);
+  } catch { // error-ok — reported as calibration: null by the caller
+    return null;
+  }
 }
 
 /**
@@ -142,15 +160,17 @@ function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-realworld-'));
   const failures = [];
   const measured = [];
+  const allFindings = [];
 
   try {
     for (const repo of repos) {
       const dest = path.join(tmp, repo.name);
       process.stdout.write(`\n--- ${repo.name} @ ${repo.sha.slice(0, 8)}\n    ${repo.why}\n`);
       let blocking;
+      let findings;
       try {
         clone(repo, dest);
-        blocking = scan(dest);
+        ({ blocking, findings } = scan(dest));
       } catch (err) {
         // A repo we could not measure is a failure, never a silent pass —
         // that confusion is the whole reason this file exists.
@@ -163,6 +183,15 @@ function main() {
         name: repo.name, url: repo.url, sha: repo.sha, why: repo.why, blocking,
         ...(typeof repo.maxBlocking === 'number' ? { ceiling: repo.maxBlocking } : {}),
         ...(typeof repo.minBlocking === 'number' ? { floor: repo.minBlocking } : {}),
+        // Error findings the confidence signals kept off the gate (null:
+        // the JSON report could not be read, so not measured).
+        softened: findings ? findings.length - blocking : null,
+      });
+      allFindings.push({
+        name: repo.name,
+        kind: typeof repo.minBlocking === 'number' ? 'recall' : 'precision',
+        ...(typeof repo.minBlocking === 'number' ? { floor: repo.minBlocking } : {}),
+        findings,
       });
 
       if (typeof repo.maxBlocking === 'number') {
@@ -238,6 +267,16 @@ function main() {
         engineVersion: require(path.join(ROOT, 'package.json')).version,
         engineCommit,
         repos: measured,
+        // Confidence calibration (move 09): the block threshold measured
+        // against the same run. Null, and said so, if any report could not
+        // be read — a calibration on a partial corpus would be typed, not
+        // measured.
+        calibration: allFindings.every((r) => Array.isArray(r.findings))
+          ? calibrate({ repos: allFindings, threshold: BLOCK_THRESHOLD })
+          : null,
+        calibrationNote: allFindings.every((r) => Array.isArray(r.findings))
+          ? `Every error-severity finding of this run, by confidence, against the shipped block threshold ${BLOCK_THRESHOLD}. Written by the same run as the table above.`
+          : 'Not measured: a JSON report could not be read on this run.',
       };
       fs.mkdirSync(path.dirname(opts.writeJson), { recursive: true });
       fs.writeFileSync(opts.writeJson, `${JSON.stringify(out, null, 2)}\n`);

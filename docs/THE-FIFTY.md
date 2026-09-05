@@ -34,7 +34,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 06 | Ratchet the ceilings on a schedule | done | `--ratchet` in `scripts/real-world-precision.js` lowers `maxBlocking` to the measured count (never raises, never touches floors); `dogfood-nightly.yml` runs it and ships the manifest on the rolling PR, so every improvement becomes a ceiling within a day |
 | 07 | Per-rule false-positive rate from the flywheel | done | the recorder now ships per-rule `fired` / `silenced` counts (ids only, `src/core/rule-identity.js`); the store keeps them (`scan_findings.rules`); `website/app/lib/rule-noise.js` ranks the silenced rate (thin below 5 scans); `/noise` + `GET /api/telemetry/noise` publish it, worst first, and say "not available" / "no data yet" instead of inventing a table |
 | 08 | Retire any rule above 20% FP that can't be fixed | open | depends on 07 |
-| 09 | Recalibrate confidence against the corpus | open | 0.7 was chosen, not derived |
+| 09 | Recalibrate confidence against the corpus | done | measured: confidence is a product of a few discrete multipliers, so a full corpus run produces seven values (1.0, 0.6, 0.4, 0.3, 0.24, 0.2, 0.12) and no finding anywhere near 0.7 — every threshold in (0.6, 1.0] gives the identical gate; 0.6 would admit 87 more findings on the clean repos and 0 more on NodeGoat. The signals soften close to half the error findings on real code (194 of 416) at a cost of 1 of 58 on NodeGoat (a `$where` inside a comment). `src/core/confidence-calibration.js` computes bands / sweep / gap / cost; the corpus runner writes it into `precision.json` on every run; `/precision` renders the sweep; `tests/confidence-calibration.test.js` holds the shipped `BLOCK_THRESHOLD` to the calibrated one and inside a band gap — the day a signal produces a band at 0.7 the suite fails and the number needs a reason |
 | 10 | Hunt the substring-vs-segment shape everywhere | done | guard extended to src/core, bin, website analysers; five recall holes closed (PR #423) |
 | 11 | Audit every early return that assumes a framework | done | 15/15 — `src/core/route-grammar.js` (4, PR #423); webHeaders, integrationTests, webhookPayload, cacheHeaders, monorepoConstraints + `src/core/workspaces.js` (5, PR #426); promptSafety, zodSchema, trpcContract, dataIntegrity, sqlMigrations, shell, bashSafety, ciSecurity, seo + `migration-dirs.js`, `shell-files.js` (KI #106 closed, corpus 20/20 at ceilings) |
 | 12 | Publish the precision numbers, including the bad ones | done | `/precision`, generated, sync-tested (PR #422) |
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-09 (recalibrate confidence against the corpus), 20, 39, 42, 48, 49, 50.
+48, 49, 50 (20, 39 and 42 are in open PRs #437–#439 or merged).
 Waiting on Craig: 15, 29, 35, 41.

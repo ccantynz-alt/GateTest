@@ -32,7 +32,20 @@ type Row = {
   floor?: number;
 };
 
+type Calibration = {
+  threshold: number;
+  bands: Array<{ confidence: number; precision: number; recall: number }>;
+  sweep: Array<{ threshold: number; precisionBlocking: number; recallBlocking: number; shipped: boolean }>;
+  gap: { below: number | null; above: number | null };
+  softened: { precisionTotal: number; precisionBlocking: number; precisionSoftened: number; recallTotal: number; recallBlocking: number; recallLost: number };
+  recallRepos: Array<{ name: string; blocking: number; floor: number | null; held: boolean | null }>;
+};
+
 const rows = precision.repos as Row[];
+// Written by the same corpus run as the table; null when a report could not
+// be read, in which case the section says so rather than disappearing.
+const calibration = (precision as { calibration?: Calibration | null }).calibration ?? null;
+const calibrationNote = (precision as { calibrationNote?: string }).calibrationNote ?? "";
 const precisionRows = rows.filter((r) => typeof r.ceiling === "number");
 const recallRows = rows.filter((r) => typeof r.floor === "number");
 const commitUrl = (r: Row) => `${r.url.replace(/\.git$/, "")}/commit/${r.sha}`;
@@ -152,6 +165,58 @@ export default function PrecisionPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="mt-12">
+          <h2 className="text-xs font-mono uppercase tracking-[0.13em] text-teal-400 mb-4">
+            Confidence — the block threshold, measured on the same run
+          </h2>
+          <p className="text-white/60 max-w-[62ch] leading-relaxed mb-4">
+            Every error finding carries a confidence score: 1.0 unless a signal fires (a test file, a
+            fixture, a comment, a string literal), and only findings at or above the block threshold
+            fail the gate. The threshold used to be a number someone liked. Now each corpus run sweeps
+            the alternatives: how much would block on the clean repositories, and how much the
+            vulnerable one would still catch.
+          </p>
+          {calibration ? (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/[0.08] text-left text-white/40">
+                      <th className="px-4 py-3 font-medium">Block at confidence ≥</th>
+                      <th className="px-4 py-3 font-medium text-right">Blocking on clean repos</th>
+                      <th className="px-4 py-3 font-medium text-right">Still caught on NodeGoat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibration.sweep.map((s) => (
+                      <tr key={s.threshold} className={`border-b border-white/[0.05] last:border-0 ${s.shipped ? "bg-teal-500/[0.07]" : ""}`}>
+                        <td className="px-4 py-3 font-mono tabular-nums text-white">
+                          {s.threshold.toFixed(2)}
+                          {s.shipped && <span className="ml-2 text-[11px] uppercase tracking-[0.08em] text-teal-300">shipped</span>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-right tabular-nums text-white/80">{s.precisionBlocking}</td>
+                        <td className="px-4 py-3 font-mono text-right tabular-nums text-rose-300">{s.recallBlocking}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-4 text-sm text-white/45 max-w-[66ch] leading-relaxed">
+                Confidence is not a continuum: this run produced only{" "}
+                {calibration.bands.length} distinct values (
+                {calibration.bands.map((b) => b.confidence.toFixed(2)).join(", ")}). The shipped threshold
+                of {calibration.threshold} sits between {calibration.gap.below ?? "nothing"} and{" "}
+                {calibration.gap.above ?? "nothing"}, so any value in that gap gives the same gate. The
+                signals kept {calibration.softened.precisionSoftened} of {calibration.softened.precisionTotal}{" "}
+                error findings off the clean repositories and cost {calibration.softened.recallLost} of{" "}
+                {calibration.softened.recallTotal} on the vulnerable one.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-amber-300/80 max-w-[62ch]">{calibrationNote || "Not measured on this run."}</p>
+          )}
         </section>
 
         <section className="mt-12 text-sm text-white/45 max-w-[66ch] leading-relaxed space-y-3">

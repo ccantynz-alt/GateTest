@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-05T03:08:18.673Z",
+  "generatedAt": "2026-09-05T06:53:34.026Z",
   "source": "scripts/real-world-precision.js",
-  "note": "Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit \u2014 run the script.",
+  "note": "Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit — run the script.",
   "engineVersion": "1.61.0",
-  "engineCommit": "9df586e0",
+  "engineCommit": "87433247",
   "repos": [
     {
       "name": "express",
@@ -11,15 +11,17 @@
       "sha": "023767fe9872e029271df1418f73401bff20ff40",
       "why": "the most-depended-on Node package there is; the canonical clean control",
       "blocking": 0,
-      "ceiling": 0
+      "ceiling": 0,
+      "softened": 13
     },
     {
       "name": "flask",
       "url": "https://github.com/pallets/flask.git",
       "sha": "d318b683471101618febed18996405ad26462110",
-      "why": "Python \u2014 proves the non-JS rules are held to the same bar",
+      "why": "Python — proves the non-JS rules are held to the same bar",
       "blocking": 2,
-      "ceiling": 2
+      "ceiling": 2,
+      "softened": 1
     },
     {
       "name": "fastify",
@@ -27,15 +29,17 @@
       "sha": "15ebc8e2fe6932d3e91afa84709523804f8a2537",
       "why": "large plugin-oriented server; exercises the auth and route grammars",
       "blocking": 3,
-      "ceiling": 3
+      "ceiling": 3,
+      "softened": 2
     },
     {
       "name": "got",
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
-      "why": "TypeScript HTTP client with a benchmark/ tree \u2014 a known scope trap",
+      "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
       "blocking": 14,
-      "ceiling": 14
+      "ceiling": 14,
+      "softened": 4
     },
     {
       "name": "hono",
@@ -43,31 +47,35 @@
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
       "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
       "blocking": 27,
-      "ceiling": 27
+      "ceiling": 27,
+      "softened": 55
     },
     {
       "name": "zod",
       "url": "https://github.com/colinhacks/zod.git",
       "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
-      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow \u2014 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
+      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
       "blocking": 5,
-      "ceiling": 5
+      "ceiling": 5,
+      "softened": 10
     },
     {
       "name": "django",
       "url": "https://github.com/django/django.git",
       "sha": "b3f4d83aad7f589f165a6d8b020b7acba4936f35",
-      "why": "Python at scale \u2014 the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
+      "why": "Python at scale — the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
       "blocking": 60,
-      "ceiling": 60
+      "ceiling": 60,
+      "softened": 13
     },
     {
       "name": "rails",
       "url": "https://github.com/rails/rails.git",
       "sha": "1ec64ce82451c52d7407fa665ea5f95291430c23",
-      "why": "Ruby at scale \u2014 instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
+      "why": "Ruby at scale — instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
       "blocking": 41,
-      "ceiling": 41
+      "ceiling": 41,
+      "softened": 29
     },
     {
       "name": "spring-petclinic",
@@ -75,95 +83,422 @@
       "sha": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
       "why": "Java + Thymeleaf templates + a k8s manifest; the reference Spring app",
       "blocking": 8,
-      "ceiling": 8
+      "ceiling": 8,
+      "softened": 1
     },
     {
       "name": "gin",
       "url": "https://github.com/gin-gonic/gin.git",
       "sha": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
-      "why": "Go \u2014 the ignored-error idiom the go module could not see until 2026-09-04",
+      "why": "Go — the ignored-error idiom the go module could not see until 2026-09-04",
       "blocking": 2,
-      "ceiling": 2
+      "ceiling": 2,
+      "softened": 0
     },
     {
       "name": "axum",
       "url": "https://github.com/tokio-rs/axum.git",
       "sha": "8b30afbfeee457146d29c9c9db47f0ae621a22a8",
-      "why": "Rust \u2014 first contact 28 blocking: todo!()/unimplemented!() inside #[cfg(test)] modules, dtolnay/rust-toolchain@stable read as a branch pin; what remains is third-party actions on @master and one real unimplemented!()",
+      "why": "Rust — first contact 28 blocking: todo!()/unimplemented!() inside #[cfg(test)] modules, dtolnay/rust-toolchain@stable read as a branch pin; what remains is third-party actions on @master and one real unimplemented!()",
       "blocking": 5,
-      "ceiling": 5
+      "ceiling": 5,
+      "softened": 4
     },
     {
       "name": "laravel",
       "url": "https://github.com/laravel/framework.git",
       "sha": "cdbd17f7e3257e8ae4207d3c3bef6058452d5f72",
-      "why": "PHP \u2014 first contact 28 blocking, 23 of them `$redis->eval($lua)` read as PHP eval(); what remains is real eval(var_export()) in the config cache and an unguarded rm -rf in a release script",
+      "why": "PHP — first contact 28 blocking, 23 of them `$redis->eval($lua)` read as PHP eval(); what remains is real eval(var_export()) in the config cache and an unguarded rm -rf in a release script",
       "blocking": 4,
-      "ceiling": 4
+      "ceiling": 4,
+      "softened": 0
     },
     {
       "name": "cleanarchitecture",
       "url": "https://github.com/jasontaylordev/CleanArchitecture.git",
       "sha": "3a06afb9258c1f5a9d8e7103bd1479246fa4166a",
-      "why": "C# + Angular + React \u2014 first contact 39 blocking, 26 of them SEO/a11y rules on the two SPA index.html shells; what remains is real: strict:false, a committed .env, unlabeled inputs, log-and-eat catches in a React component",
+      "why": "C# + Angular + React — first contact 39 blocking, 26 of them SEO/a11y rules on the two SPA index.html shells; what remains is real: strict:false, a committed .env, unlabeled inputs, log-and-eat catches in a React component",
       "blocking": 11,
-      "ceiling": 11
+      "ceiling": 11,
+      "softened": 0
     },
     {
       "name": "ktor",
       "url": "https://github.com/ktorio/ktor.git",
       "sha": "f92fad04353817c7eacf8599c8d69d517ba4882c",
-      "why": "Kotlin \u2014 first contact 21 blocking, 14 of them a test.html under test-resources/ scored as a public page, plus a Gradle compile failure in our environment reported as failing tests; what remains is six real TODO() stubs and one third-party workflow on @main",
+      "why": "Kotlin — first contact 21 blocking, 14 of them a test.html under test-resources/ scored as a public page, plus a Gradle compile failure in our environment reported as failing tests; what remains is six real TODO() stubs and one third-party workflow on @main",
       "blocking": 7,
-      "ceiling": 7
+      "ceiling": 7,
+      "softened": 2
     },
     {
       "name": "vapor",
       "url": "https://github.com/vapor/vapor.git",
       "sha": "630763c5e0de50b2ac8c7e9a20d6c3ec5709a4c8",
-      "why": "Swift \u2014 first contact 6 blocking: its own reusable workflows on @main and README section gaps; what remains is a *.key file the .gitignore does not cover",
+      "why": "Swift — first contact 6 blocking: its own reusable workflows on @main and README section gaps; what remains is a *.key file the .gitignore does not cover",
       "blocking": 0,
-      "ceiling": 0
+      "ceiling": 0,
+      "softened": 0
     },
     {
       "name": "nest",
       "url": "https://github.com/nestjs/nest.git",
       "sha": "39fbddae51281ca56bf2fed9123d98e61509066c",
-      "why": "TypeScript monorepo (npm workspaces) with an integration/ e2e tree and sample apps \u2014 first contact 39 blocking: a logger class told it uses console, tsconfig flags as build verdicts, mongodb://localhost fixtures as secrets, `.catch(() => {})` on a stored promise the caller awaits; what remains is six `reduce(async \u2026)` in the e2e app, two npm-audit advisories and one committed PKCS#8 key",
+      "why": "TypeScript monorepo (npm workspaces) with an integration/ e2e tree and sample apps — first contact 39 blocking: a logger class told it uses console, tsconfig flags as build verdicts, mongodb://localhost fixtures as secrets, `.catch(() => {})` on a stored promise the caller awaits; what remains is six `reduce(async …)` in the e2e app, two npm-audit advisories and one committed PKCS#8 key",
       "blocking": 9,
-      "ceiling": 9
+      "ceiling": 9,
+      "softened": 1
     },
     {
       "name": "trpc",
       "url": "https://github.com/trpc/trpc.git",
       "sha": "66d054454a3339dd8421da9dcf0648f92816f704",
-      "why": "pnpm monorepo with members under examples/* and www \u2014 first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell",
+      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell",
       "blocking": 8,
-      "ceiling": 8
+      "ceiling": 8,
+      "softened": 38
     },
     {
       "name": "apollo-server",
       "url": "https://github.com/apollographql/apollo-server.git",
       "sha": "53ac3c13fcf36dd22fb0dbb757a270ae58e89227",
-      "why": "npm-workspaces monorepo with a docs site \u2014 first contact 4 blocking: a CA bundle read as a private key, a README link the resolver could not follow, a destructured parameter the scope harvester missed; nothing remains",
+      "why": "npm-workspaces monorepo with a docs site — first contact 4 blocking: a CA bundle read as a private key, a README link the resolver could not follow, a destructured parameter the scope harvester missed; nothing remains",
       "blocking": 0,
-      "ceiling": 0
+      "ceiling": 0,
+      "softened": 2
     },
     {
       "name": "prisma",
       "url": "https://github.com/prisma/prisma.git",
       "sha": "dd846dcc8f0653099d1a10c457b1603d96bfafc7",
-      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design \u2014 first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description",
+      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description",
       "blocking": 16,
-      "ceiling": 16
+      "ceiling": 16,
+      "softened": 19
     },
     {
       "name": "NodeGoat",
       "url": "https://github.com/OWASP/NodeGoat.git",
       "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
-      "why": "OWASP's deliberately vulnerable app \u2014 the recall floor",
+      "why": "OWASP's deliberately vulnerable app — the recall floor",
       "blocking": 57,
-      "floor": 40
+      "floor": 40,
+      "softened": 1
     }
-  ]
+  ],
+  "calibration": {
+    "threshold": 0.7,
+    "bands": [
+      {
+        "confidence": 1,
+        "precision": 222,
+        "recall": 57,
+        "rules": {
+          "precision": {
+            "python:eval": 3,
+            "python:exec": 4,
+            "error-swallow:catch-noop": 4,
+            "auth-bypass": 1,
+            "secrets": 7,
+            "security:shell exec with interpolated input": 2,
+            "security:secrets-scan": 3,
+            "error-swallow:empty-catch": 15,
+            "tls-security:js-reject-unauthorized": 3,
+            "tls-security:js-strict-ssl": 1,
+            "quality:console.log/debug/info found": 7,
+            "quality:innerHTML assignment detected — use textContent or sanitize": 4,
+            "perf:event-cleanup": 13,
+            "security:innerHTML assignment": 3,
+            "n-plus-one:query-in-loop": 2,
+            "race-condition:fs-toctou": 1,
+            "hardcoded-url:localhost": 4,
+            "import-cycle:cycle:src/jsx/base.ts|src/jsx/intrinsic-element/components.ts|src/jsx/context.ts|src/jsx/dom/context.ts": 1,
+            "import-cycle:cycle:src/jsx/dom/render.ts|src/jsx/hooks/index.ts": 1,
+            "import-cycle:cycle:src/jsx/components.ts|src/jsx/streaming.ts": 1,
+            "import-cycle:cycle:src/helper/streaming/index.ts|src/helper/streaming/text.ts": 1,
+            "taint:sink:file-write": 1,
+            "taint:sink:spawn": 2,
+            "bash-safety:pipe-true": 3,
+            "bash-safety:devnull-swallow": 1,
+            "quality:eval() usage detected": 5,
+            "security:eval()": 5,
+            "error-swallow:log-and-eat": 13,
+            "syntax": 1,
+            "visual:viewport": 5,
+            "a11y:input-label": 10,
+            "a11y:html-lang": 4,
+            "a11y:landmark-main": 5,
+            "perf:render-blocking": 1,
+            "perf:lazy-loading": 1,
+            "security:secret": 2,
+            "links:dead-links": 2,
+            "links:javascript-href": 2,
+            "docs:readme-description": 1,
+            "ci-security:branch-pin": 6,
+            "shell:unsafe-rm": 2,
+            "datetime-bug:naive-now": 7,
+            "cookie-sec:py-cookie-httponly-false": 1,
+            "python:sql-concat": 11,
+            "dockerfile:curl-pipe-sh": 1,
+            "ruby:system-interp": 2,
+            "ruby:eval": 5,
+            "a11y:img-alt": 6,
+            "a11y:contrast-static": 2,
+            "k8s:image-tag": 1,
+            "unit-tests:run": 1,
+            "ci-security:codeql-sarif-missing-actions-read": 1,
+            "rust:unimplemented": 1,
+            "php:eval": 2,
+            "secrets:gitignore-.env": 1,
+            "kotlin:todo-call": 6,
+            "security:npm-audit:ws": 1,
+            "security:npm-audit": 1,
+            "async-iteration:async-reduce": 6,
+            "ci-security:shell-injection": 1,
+            "import-cycle:cycle:packages/react-query/src/shared/hooks/createHooksInternal.tsx|packages/react-query/src/utils/createUtilityFunctions.ts|packages/react-query/src/shared/index.ts|packages/react-query/src/shared/hooks/createRootHooks.tsx": 1,
+            "security:sql-injection": 4,
+            "security:sql-injection-scan": 1,
+            "seo:description": 1,
+            "seo:h1-missing": 1,
+            "import-cycle:cycle:packages/3-mongo-target/2-mongo-adapter/src/core/mongo-control-adapter.ts|packages/3-mongo-target/2-mongo-adapter/src/core/runner-deps.ts": 1,
+            "import-cycle:cycle:packages/3-targets/3-targets/postgres/src/core/migrations/control-policy.ts|packages/3-targets/3-targets/postgres/src/core/migrations/issue-planner.ts": 1,
+            "import-cycle:cycle:packages/3-targets/6-adapters/sqlite/src/core/adapter.ts|packages/3-targets/6-adapters/sqlite/src/core/control-adapter.ts": 1,
+            "taint:sink:sql-query": 1
+          },
+          "recall": {
+            "secrets": 5,
+            "quality:eval() usage detected": 3,
+            "visual:viewport": 1,
+            "a11y:input-label": 6,
+            "a11y:html-lang": 1,
+            "a11y:landmark-main": 5,
+            "a11y:img-alt": 1,
+            "perf:render-blocking": 2,
+            "security:npm-audit:body-parser": 1,
+            "security:npm-audit:bson": 1,
+            "security:npm-audit:connect": 1,
+            "security:npm-audit:debug": 1,
+            "security:npm-audit:express": 1,
+            "security:npm-audit:finalhandler": 1,
+            "security:npm-audit:helmet": 1,
+            "security:npm-audit:marked": 1,
+            "security:npm-audit:mongodb": 1,
+            "security:npm-audit:mongodb-core": 1,
+            "security:npm-audit:path-to-regexp": 1,
+            "security:npm-audit:qs": 1,
+            "security:npm-audit:swig": 1,
+            "security:npm-audit:uglify-js": 1,
+            "security:npm-audit:underscore": 1,
+            "security:npm-audit": 1,
+            "security:NoSQL injection ($where with interpolated input)": 1,
+            "security:eval()": 3,
+            "security:open redirect risk": 1,
+            "security:template auto-escaping disabled (XSS)": 1,
+            "security:secret": 2,
+            "security:secrets-scan": 1,
+            "links:dead-links": 1,
+            "secret-rotation:stale:private-key": 1,
+            "ssrf:tainted-url": 1,
+            "redos:nested-quantifier": 1,
+            "taint:sink:eval": 3,
+            "auth-bypass:idor-shadow": 1
+          }
+        }
+      },
+      {
+        "confidence": 0.6,
+        "precision": 87,
+        "recall": 0,
+        "rules": {
+          "precision": {
+            "quality:eval() usage detected": 9,
+            "a11y:html-lang": 5,
+            "a11y:img-alt": 11,
+            "a11y:input-label": 37,
+            "perf:lazy-loading": 2,
+            "security:eval()": 3,
+            "syntax": 1,
+            "quality:innerHTML assignment detected — use textContent or sanitize": 2,
+            "perf:render-blocking": 2,
+            "security:innerHTML assignment": 2,
+            "a11y:invalid-role": 3,
+            "retry-hygiene:unbounded-loop": 4,
+            "security:sql-injection": 6
+          },
+          "recall": {}
+        }
+      },
+      {
+        "confidence": 0.4,
+        "precision": 55,
+        "recall": 0,
+        "rules": {
+          "precision": {
+            "html:unclosed:html": 1,
+            "html:unclosed:body": 1,
+            "security:open redirect risk": 4,
+            "security:path-traversal": 1,
+            "log-pii:sensitive-arg": 1,
+            "cookie-sec:js-weak-secret": 3,
+            "taint:sink:redirect": 3,
+            "error-swallow:log-and-eat": 8,
+            "secrets": 4,
+            "a11y:contrast-static": 1,
+            "data:migration-drop": 2,
+            "sql:drop-table": 2,
+            "perf:render-blocking": 1,
+            "perf:interval-cleanup": 1,
+            "sql:drop-column": 1,
+            "sql:add-notnull-no-default": 1,
+            "sql:set-notnull": 3,
+            "error-swallow:empty-catch": 1,
+            "race-condition:fs-toctou": 2,
+            "resource-leak:setinterval": 1,
+            "openapi-drift:undocumented-route:GET:/": 1,
+            "data:pii:PII in logs": 2,
+            "error-swallow:catch-noop": 2,
+            "redos:user-controlled-regex": 1,
+            "money-float:arithmetic": 7
+          },
+          "recall": {}
+        }
+      },
+      {
+        "confidence": 0.3,
+        "precision": 13,
+        "recall": 0,
+        "rules": {
+          "precision": {
+            "secrets": 13
+          },
+          "recall": {}
+        }
+      },
+      {
+        "confidence": 0.24,
+        "precision": 18,
+        "recall": 0,
+        "rules": {
+          "precision": {
+            "quality:innerHTML assignment detected — use textContent or sanitize": 8,
+            "security:innerHTML assignment": 8,
+            "security:CSRF protection disabled": 2
+          },
+          "recall": {}
+        }
+      },
+      {
+        "confidence": 0.2,
+        "precision": 12,
+        "recall": 1,
+        "rules": {
+          "precision": {
+            "security:secret": 1,
+            "quality:commented-code": 7,
+            "shell:eval-var": 2,
+            "bash-safety:pipe-true": 1,
+            "ci-security:secret-echo": 1
+          },
+          "recall": {
+            "security:NoSQL injection ($where with interpolated input)": 1
+          }
+        }
+      },
+      {
+        "confidence": 0.12,
+        "precision": 9,
+        "recall": 0,
+        "rules": {
+          "precision": {
+            "secrets": 5,
+            "quality:commented-code": 4
+          },
+          "recall": {}
+        }
+      }
+    ],
+    "sweep": [
+      {
+        "threshold": 0.5,
+        "precisionBlocking": 309,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.6,
+        "precisionBlocking": 309,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.65,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.7,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": true
+      },
+      {
+        "threshold": 0.75,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.8,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.85,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.9,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 0.95,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      },
+      {
+        "threshold": 1,
+        "precisionBlocking": 222,
+        "recallBlocking": 57,
+        "shipped": false
+      }
+    ],
+    "gap": {
+      "below": 0.6,
+      "above": 1
+    },
+    "softened": {
+      "precisionTotal": 416,
+      "precisionBlocking": 222,
+      "precisionSoftened": 194,
+      "recallTotal": 58,
+      "recallBlocking": 57,
+      "recallLost": 1
+    },
+    "recallRepos": [
+      {
+        "name": "NodeGoat",
+        "blocking": 57,
+        "floor": 40,
+        "held": true
+      }
+    ]
+  },
+  "calibrationNote": "Every error-severity finding of this run, by confidence, against the shipped block threshold 0.7. Written by the same run as the table above."
 }
