@@ -57,6 +57,27 @@ describe('isEntryPoint — files loaded by their tooling, hooks, assets, fixture
   });
 });
 
+describe('isEntryPoint — Python files a framework loads by name or by settings string (KI #96)', () => {
+  it('Django app modules the registry imports, and the files a server or the CLI loads', () => {
+    for (const f of ['shop/apps.py', 'shop/models.py', 'shop/admin.py', 'shop/urls.py', 'shop/middleware.py', 'proj/settings.py',
+      'proj/wsgi.py', 'proj/asgi.py', 'app.py', 'shop/tasks.py', 'manage.py', 'conftest.py', 'src/pkg/__main__.py']) {
+      assert.equal(isEntryPoint(abs(f), root), true, f);
+    }
+  });
+  it('directories Django loads from: templatetags/, backends/, middleware/, management/commands/', () => {
+    for (const f of ['shop/templatetags/shop_tags.py', 'django/core/cache/backends/redis.py', 'django/middleware/locale.py',
+      'shop/management/commands/rebuild.py']) {
+      assert.equal(isEntryPoint(abs(f), root), true, f);
+    }
+  });
+  it('negative: an ordinary module beside them is not, and the Python-only segments do not exempt JS', () => {
+    for (const f of ['shop/services.py', 'shop/signals.py', 'shop/views.py', 'shop/management/base.py',
+      'src/middleware/auth.js', 'src/backends/redis.ts']) {
+      assert.equal(isEntryPoint(abs(f), root), false, f);
+    }
+  });
+});
+
 describe('manifestEntrypoints — what a package.json names is run, not imported', () => {
   it('main, bin and a script argument resolve to absolute paths', () => {
     const refs = manifestEntrypoints([root]);

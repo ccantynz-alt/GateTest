@@ -8,6 +8,7 @@ const BaseModule = require('./base-module');
 const { buildDeadCodeIndex } = require('./dead-code-index');
 const { isEntryPoint, manifestEntrypoints } = require('../core/entrypoints');
 const { buildImportGraph, reverseGraph, JS_EXTS } = require('../core/import-graph');
+const { pythonImporters } = require('../core/python-imports');
 const { parseExportsWithAcorn } = require('./dead-code-extractor');
 
 // Directory excludes beyond what `BaseModule._collectFiles` already skips
@@ -20,8 +21,13 @@ const ALL_EXTS_MAIN = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.p
 // Test files are executed by the runner, never imported — their top-level
 // exports are incidental (a local `run` helper, a mock), so "unused export"
 // analysis on them is pure noise (and "delete this dead code" is dangerous
-// advice for test code). Matches *.test.*, *.spec.*, and /tests|__tests__/.
-const TEST_FILE_RE = /(?:^|[\\/])(?:tests?|__tests__)[\\/]|\.(?:test|spec)\.[a-z]+$/i;
+// advice for test code). Matches *.test.*, *.spec.*, /tests|__tests__/, and
+// the Python runner conventions — pytest collects `test_*.py` / `*_test.py`
+// and loads `conftest.py` by name; Django's runner discovers `test*.py`
+// (`tests.py`). Extended 2026-09-05 (KI #96 Python): a module read only by
+// `tests/test_x.py` was already test-only, one read only by a sibling
+// `test_x.py` was not.
+const TEST_FILE_RE = /(?:^|[\\/])(?:tests?|__tests__)[\\/]|\.(?:test|spec)\.[a-z]+$|(?:^|[\\/])(?:test_[^\\/]*|[^\\/]*_test|tests?|conftest)\.py$/i;
 
 const FRAMEWORK_RESERVED = new Set([
   'default', 'metadata', 'generateMetadata', 'generateStaticParams',
@@ -101,14 +107,15 @@ class DeadCodeModule extends BaseModule {
   }
 
   /**
-   * Who imports each JS/TS file, per src/core/import-graph.js — the one
-   * import graph, with path aliases, workspace packages and registry path
-   * strings resolved (KI #96). Test files count as importers only of
-   * themselves' kind: a module whose sole importer is its own test has no
-   * production reader.
+   * Who imports each file — JS/TS per src/core/import-graph.js (path aliases,
+   * workspace packages and registry path strings resolved), Python per
+   * src/core/python-imports.js (relative imports, src layout, dotted string
+   * literals) — KI #96. Test files are never production readers: a module
+   * whose sole importer is its own test has no production reader.
    */
   _buildReach(files, projectRoot) {
     const jsFiles = files.filter((f) => JS_EXTS.includes(path.extname(f).toLowerCase()));
+    const pyFiles = files.filter((f) => path.extname(f).toLowerCase() === '.py');
     // Docs sites import components from .mdx — a reader the JS-only walk
     // never sees (trpc's www/: five components "unreachable" for this).
     // They are importers only; nothing under them is ever a finding.
@@ -116,9 +123,10 @@ class DeadCodeModule extends BaseModule {
     const graph = buildImportGraph({ projectRoot, files: jsFiles.concat(mdx) });
     const rev = reverseGraph(graph.fullGraph);
     const productionImporters = new Map();
-    for (const f of jsFiles) {
-      const importers = [...(rev.get(f) || [])].filter((i) => !TEST_FILE_RE.test(graph.rel(i)));
-      productionImporters.set(f, importers);
+    const production = (importers) => [...importers].filter((i) => !TEST_FILE_RE.test(graph.rel(i)));
+    for (const f of jsFiles) productionImporters.set(f, production(rev.get(f) || []));
+    for (const [f, importers] of pythonImporters(pyFiles, projectRoot)) {
+      productionImporters.set(f, production(importers));
     }
     return { productionImporters, rel: graph.rel };
   }
@@ -195,12 +203,13 @@ class DeadCodeModule extends BaseModule {
       if (info.exports.length === 0) continue;
       if (this._isEntryPoint(file, index.projectRoot)) continue;
       if (TEST_FILE_RE.test(info.rel)) continue;
-      // JS/TS: the import graph decides (aliases, workspaces, registry
-      // strings resolved). Python keeps the index's own resolution.
-      const viaGraph = reach && reach.productionImporters.has(file);
-      if (viaGraph) {
-        if (reach.productionImporters.get(file).length > 0) continue;
-      } else if (index.referencedFiles.has(path.normalize(file))) continue;
+      // The import graphs decide (JS/TS: aliases, workspaces, registry
+      // strings; Python: relative imports, src layout, dotted literals). The
+      // index's `referencedFiles` no longer backs this rule — it fed Python
+      // specifiers through the JS resolver and called every package file an
+      // orphan (flask 10/10 false, django 351).
+      const importers = reach && reach.productionImporters.get(path.normalize(file));
+      if (importers && importers.length > 0) continue;
 
       const wsPkg = index.fileWorkspacePackage && index.fileWorkspacePackage.get(file);
       if (wsPkg && index.importedWorkspacePackages && index.importedWorkspacePackages.has(wsPkg)) {
