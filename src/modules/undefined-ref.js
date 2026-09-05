@@ -349,6 +349,15 @@ class UndefinedRefModule extends BaseModule {
     for (const m of src.matchAll(/^\s*import\s+(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]+)\}\s+from/gm)) {
       this._parseDestructureNames(m[1]).forEach((n) => scope.add(n));
     }
+    // `import X, { Y } from '...'` / `import X, * as NS from '...'` — the
+    // default binding of a combined import. Prisma imports every driver and
+    // target this way (`import postgresTarget, { PostgresContractSerializer }
+    // from '@internal/target-postgres/runtime'`, postgres.ts:30); the plain
+    // default-import regex above needs `X from` adjacent, so `postgresTarget`
+    // was never harvested and every `target: postgresTarget` fired (2026-09-05).
+    for (const m of src.matchAll(/^\s*import\s+([A-Za-z_$][\w$]*)\s*,\s*[{*]/gm)) {
+      scope.add(m[1]);
+    }
     // `import X = require(...)` (TS namespace/CommonJS interop)
     for (const m of src.matchAll(/^\s*import\s+([A-Za-z_$][\w$]*)\s*=\s*require\(/gm)) {
       scope.add(m[1]);
@@ -390,7 +399,15 @@ class UndefinedRefModule extends BaseModule {
       const decl = UndefinedRefModule._readDeclaration(src, start);
       if (!decl) continue;
       for (const piece of UndefinedRefModule._splitTopLevel(decl)) {
-        const name = piece.trim().split(/[\s:[{=]/)[0];
+        const trimmed = piece.trim();
+        if (trimmed[0] === '{' || trimmed[0] === '[') {
+          // `const a = 1, { b } = o` — a destructuring declarator in a
+          // multi-declarator statement.
+          const inner = UndefinedRefModule._readBalanced(trimmed, 0);
+          if (inner !== null) this._parseDestructureNames(inner).forEach((n) => scope.add(n));
+          continue;
+        }
+        const name = trimmed.split(/[\s:[{=]/)[0];
         if (/^[A-Za-z_$][\w$]*$/.test(name)) scope.add(name);
       }
     }
@@ -409,32 +426,22 @@ class UndefinedRefModule extends BaseModule {
     for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?type\s+([A-Za-z_$][\w$]*)\s*[=<]/g)) {
       scope.add(m[1]);
     }
-    // Destructure declarations: `const { x, y } = ...` and `const [a, b] = ...`
-    for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+\{([^}]+)\}\s*=/g)) {
-      this._parseDestructureNames(m[1]).forEach((n) => scope.add(n));
-    }
-    for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+\[([^\]]+)\]\s*=/g)) {
-      for (const piece of m[1].split(',')) {
-        const name = piece.trim().split(/[\s=]/)[0].replace(/^\.\.\./, '');
-        if (/^[A-Za-z_$][\w$]*$/.test(name)) scope.add(name);
-      }
+    // Destructure declarations anywhere: `const { x, y } = ...`,
+    // `let [a, b] = ...`, `for (const { a } of ...)`, and the TypeScript-
+    // annotated form `const { raw: rawSqlTag }: SqliteStaticContext<T> = ...`
+    // (prisma sqlite.ts:148). Nothing but a destructuring pattern can follow
+    // `const {` / `const [`, so the pattern is read with a balanced bracket
+    // walk and whatever follows it (`=`, `: Type =`, ` of`) is irrelevant —
+    // the old regexes required `}\s*=` and so lost every annotated binding.
+    for (const m of src.matchAll(/\b(?:const|let|var)\s+(?=[{[])/g)) {
+      const inner = UndefinedRefModule._readBalanced(src, m.index + m[0].length);
+      if (inner !== null) this._parseDestructureNames(inner).forEach((n) => scope.add(n));
     }
     // `for (const X of ...)`, `for (let X = 0; ...)`, `for (const X in ...)`.
     // The loop binding is in scope for the whole for-body — common cause
     // of false-positives until covered. Crontech FP class.
     for (const m of src.matchAll(/\bfor\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g)) {
       scope.add(m[1]);
-    }
-    // for (const { a, b } of ...) / for (const [a, b] of ...) — destructured
-    // loop binding.
-    for (const m of src.matchAll(/\bfor\s*\(\s*(?:const|let|var)\s+\{([^}]+)\}/g)) {
-      this._parseDestructureNames(m[1]).forEach((n) => scope.add(n));
-    }
-    for (const m of src.matchAll(/\bfor\s*\(\s*(?:const|let|var)\s+\[([^\]]+)\]/g)) {
-      for (const piece of m[1].split(',')) {
-        const name = piece.trim().split(/[\s=]/)[0].replace(/^\.\.\./, '');
-        if (/^[A-Za-z_$][\w$]*$/.test(name)) scope.add(name);
-      }
     }
 
     // Catch-clause binding: `catch (err)` / `catch (e)` — `err` is in
@@ -479,46 +486,71 @@ class UndefinedRefModule extends BaseModule {
       scope.add(m[1]);
     }
     // Function parameters at any level — broad-stroke heuristic that
-    // inflates the set conservatively. Pattern: `(name: Type, ...)` or
-    // `(name, ...)` after a `function`/arrow.
-    for (const m of src.matchAll(/(?:function\s*\*?\s*[A-Za-z_$\w$]*\s*\(|\(\s*)([^()]*?)\)\s*(?:=>|\{|:)/g)) {
-      const params = m[1];
-      // Split on commas at depth 0 only — primitive but works for typical
-      // signatures. Destructured params and defaults inflate the set further.
-      for (const piece of this._splitParams(params)) {
-        // Strip default values, type annotations, rest spread. Normalize
-        // whitespace FIRST — multi-line TS parameter lists have newlines
-        // inside each piece, and `.replace(/:.*$/, '')` doesn't span
-        // newlines (the `.` excludes `\n` and `$` without `m` flag means
-        // end-of-string, so a trailing `\n` blocks the match).
-        const flat = piece.replace(/\s+/g, ' ').trim();
-        // Strip default values, then type annotations, then rest-spread,
-        // then the TypeScript optional marker `?` (e.g. `projectName?: string`).
-        const cleaned = flat
-          .replace(/=.*$/, '')
-          .replace(/:.*$/, '')
-          .replace(/\?$/, '')
-          .trim()
-          .replace(/^\.\.\./, '');
-        if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
-          this._parseDestructureNames(cleaned.replace(/^[{[]/, '').replace(/[}\]]$/, ''))
-            .forEach((n) => scope.add(n));
-        } else if (/^[A-Za-z_$][\w$]*$/.test(cleaned)) {
-          scope.add(cleaned);
-        }
-      }
+    // inflates the set conservatively: every parenthesised group followed by
+    // `=>`, `{` or `:` (arrow, body, TS return type) is read as a parameter
+    // list. The group is found by a balanced walk, not `\([^()]*\)` — a
+    // parameter list that itself contains parentheses was invisible to the
+    // regex, so every parameter of that function was "undefined":
+    //   `...legacyPipes: (Type<PipeTransform> | PipeTransform)[]` (nest
+    //   route-params.decorator.ts:53), `middleware = [budgets({ ... })]`
+    //   (prisma runtime.ts:9), `refineFn?: (collection: X) => R` (prisma
+    //   collection.ts:532). All three blocked on 2026-09-05.
+    UndefinedRefModule._forEachParamList(src, (params) => this._harvestParamList(params, scope));
+
+    // Unparenthesised arrow parameter: `list.forEach(aliasName => { ... })`
+    // (nest repl-context.ts:130, route-conflict-detector.ts:41). No `(`
+    // precedes the name, so the parameter-list walk above cannot see it.
+    for (const m of src.matchAll(/(?<![\w$.])(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/g)) {
+      scope.add(m[1]);
     }
 
     return scope;
+  }
+
+  /**
+   * Add every binding of one parameter list to `scope`. Destructured
+   * parameters are parsed as patterns BEFORE the type-annotation strip —
+   * `{ logger: serverLogger, apollo }` (apollo-server usageReporting/plugin.ts:83)
+   * used to be cut at its first `:` into `{ logger`, so the renamed binding
+   * `serverLogger` was never declared and blocked.
+   */
+  _harvestParamList(params, scope) {
+    for (const piece of this._splitParams(params)) {
+      // Normalize whitespace FIRST — multi-line TS parameter lists have
+      // newlines inside each piece and `.replace(/:.*$/, '')` doesn't span
+      // them.
+      let flat = piece.replace(/\s+/g, ' ').trim();
+      // TS parameter properties: `constructor(private readonly db: Db)`.
+      flat = flat.replace(/^(?:(?:public|private|protected|readonly|override)\s+)+/, '');
+      flat = flat.replace(/^\.\.\./, '');
+      if (flat[0] === '{' || flat[0] === '[') {
+        const inner = UndefinedRefModule._readBalanced(flat, 0);
+        if (inner !== null) this._parseDestructureNames(inner).forEach((n) => scope.add(n));
+        continue;
+      }
+      // Strip default values, then type annotations, then the TypeScript
+      // optional marker `?` (e.g. `projectName?: string`).
+      const cleaned = flat
+        .replace(/=.*$/, '')
+        .replace(/:.*$/, '')
+        .replace(/\?$/, '')
+        .trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(cleaned)) scope.add(cleaned);
+    }
   }
 
   _splitParams(s) {
     const out = [];
     let depth = 0;
     let buf = '';
-    for (const ch of s) {
+    for (let i = 0; i < s.length; i += 1) {
+      const ch = s[i];
+      // `=>` is an arrow, not a closing generic — a function-typed parameter
+      // `(cb: (x: A) => B, next)` used to drive depth to -1 and swallow
+      // every parameter after it.
+      const arrow = ch === '>' && s[i - 1] === '=';
       if (ch === '(' || ch === '[' || ch === '{' || ch === '<') depth += 1;
-      else if (ch === ')' || ch === ']' || ch === '}' || ch === '>') depth -= 1;
+      else if (ch === ')' || ch === ']' || ch === '}' || (ch === '>' && !arrow)) depth -= 1;
       if (ch === ',' && depth === 0) { out.push(buf); buf = ''; continue; }
       buf += ch;
     }
@@ -540,9 +572,20 @@ class UndefinedRefModule extends BaseModule {
     }
     if (buf.trim()) pieces.push(buf);
     const names = [];
+    const nested = (pattern) => {
+      const inner = UndefinedRefModule._readBalanced(pattern, 0);
+      if (inner !== null) this._parseDestructureNames(inner).forEach((n) => names.push(n));
+    };
     for (const piece of pieces) {
       let s = piece.trim();
       if (!s) continue;
+      // Rest spread: `...rest` → rest
+      s = s.replace(/^\.\.\./, '').trim();
+      // Strip leading `type` modifier from TS type-only named imports
+      // (`import { type Foo } from`, `import { type Foo as Bar }`).
+      s = s.replace(/^type\s+/, '').trim();
+      // Nested pattern in an array pattern: `[{ a }, [b]]`.
+      if (s[0] === '{' || s[0] === '[') { nested(s); continue; }
       // Import rename: `someFunction as renamedHandler` → renamedHandler.
       // Must check `as` BEFORE the colon-rename rule so `{ type as foo }`
       // (TS `import { type X as Y }`) resolves correctly. Word-boundary
@@ -551,17 +594,16 @@ class UndefinedRefModule extends BaseModule {
       if (asMatch) {
         s = asMatch[1];
       } else {
-        // Object destructure rename: `x: y` → y is the binding
+        // Object destructure rename: `x: y` → y is the binding; the value
+        // may itself be a pattern: `x: { y, z }` / `x: [y]`.
         const colon = s.indexOf(':');
-        if (colon !== -1) s = s.slice(colon + 1).trim();
+        if (colon !== -1) {
+          s = s.slice(colon + 1).trim();
+          if (s[0] === '{' || s[0] === '[') { nested(s); continue; }
+        }
       }
       // Default value: `y = 1` → y
       s = s.replace(/=.*$/, '').trim();
-      // Rest spread: `...rest` → rest
-      s = s.replace(/^\.\.\./, '').trim();
-      // Strip leading `type` modifier from TS type-only named imports
-      // (`import { type Foo } from`): `type Foo` → `Foo`
-      s = s.replace(/^type\s+/, '').trim();
       if (/^[A-Za-z_$][\w$]*$/.test(s)) names.push(s);
     }
     return names;
@@ -717,6 +759,144 @@ UndefinedRefModule._splitTopLevel = function (text) {
   }
   if (cur.trim()) out.push(cur);
   return out;
+};
+
+/**
+ * Skip a quoted string starting at `src[i]` (`'`, `"` or a template
+ * literal, `${...}` included). Returns the index just past the closing
+ * quote. A `'` / `"` with no closing quote on the same line is NOT a string
+ * (JSX text: `<p>Don't panic</p>`) — returns i + 1 so the walk continues.
+ */
+UndefinedRefModule._skipQuoted = function (src, i) {
+  const quote = src[i];
+  if (quote === '`') return UndefinedRefModule._skipTemplate(src, i);
+  for (let j = i + 1; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '\\') { j++; continue; }
+    if (ch === '\n') return i + 1;
+    if (ch === quote) return j + 1;
+  }
+  return i + 1;
+};
+
+UndefinedRefModule._skipTemplate = function (src, i) {
+  let j = i + 1;
+  while (j < src.length) {
+    const ch = src[j];
+    if (ch === '\\') { j += 2; continue; }
+    if (ch === '`') return j + 1;
+    if (ch === '$' && src[j + 1] === '{') {
+      // `${ expr }` — code again, possibly with nested templates/braces.
+      let depth = 0;
+      j += 2;
+      while (j < src.length) {
+        const c = src[j];
+        if (c === '\'' || c === '"' || c === '`') { j = UndefinedRefModule._skipQuoted(src, j); continue; }
+        if (c === '{') depth++;
+        else if (c === '}') { if (depth === 0) break; depth--; }
+        j++;
+      }
+      j++;
+      continue;
+    }
+    j++;
+  }
+  return j;
+};
+
+// Characters after which a `/` starts a regex literal rather than a division.
+const REGEX_PRECEDERS = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^']);
+const REGEX_PRECEDING_WORDS = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'instanceof', 'new', 'delete', 'void', 'throw', 'yield', 'await']);
+
+/**
+ * Walk `src` calling `onCode(ch, i)` for every character that is code —
+ * comments, string / template literals and regex literals are skipped.
+ * Return `false` from `onCode` to stop early. Line-number-agnostic; used
+ * only to find balanced bracket groups. Hot path (runs once per file plus
+ * once per destructuring pattern): char codes, no per-char regex.
+ */
+UndefinedRefModule._walkCode = function (src, onCode) {
+  const len = src.length;
+  let i = 0;
+  let lastSig = '';
+  while (i < len) {
+    const ch = src[i];
+    const code = src.charCodeAt(i);
+    if (code === 47 /* / */) {
+      const next = src[i + 1];
+      if (next === '/') { i = src.indexOf('\n', i); if (i === -1) break; continue; }
+      if (next === '*') { const e = src.indexOf('*/', i + 2); if (e === -1) break; i = e + 2; continue; }
+      const word = (src.slice(Math.max(0, i - 12), i).match(/([A-Za-z_$][\w$]*)\s*$/) || [])[1];
+      if (lastSig === '' || REGEX_PRECEDERS.has(lastSig) || REGEX_PRECEDING_WORDS.has(word)) {
+        const end = UndefinedRefModule._skipRegex(src, i);
+        if (end !== -1) { i = end; lastSig = '/'; continue; }
+      }
+    } else if (code === 39 /* ' */ || code === 34 /* " */ || code === 96 /* ` */) {
+      i = UndefinedRefModule._skipQuoted(src, i); lastSig = ch; continue;
+    }
+    // Whitespace: space, tab, \n, \r, \f, \v.
+    if (code > 32 || (code !== 32 && code !== 9 && code !== 10 && code !== 13 && code !== 12 && code !== 11)) lastSig = ch;
+    if (onCode(ch, i) === false) return;
+    i++;
+  }
+};
+
+/** End index of the regex literal at `src[i]`, or -1 if it does not close on this line. */
+UndefinedRefModule._skipRegex = function (src, i) {
+  let inClass = false;
+  for (let j = i + 1; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === '\\') { j++; continue; }
+    if (ch === '\n') return -1;
+    if (ch === '[') inClass = true;
+    else if (ch === ']') inClass = false;
+    else if (ch === '/' && !inClass) {
+      j++;
+      while (/[a-z]/i.test(src[j] || '')) j++;
+      return j;
+    }
+  }
+  return -1;
+};
+
+/**
+ * Text between the bracket at `text[openIdx]` and its balanced partner
+ * (quotes and comments skipped), or null when it never closes.
+ */
+UndefinedRefModule._readBalanced = function (text, openIdx) {
+  const pairs = { '{': '}', '[': ']', '(': ')' };
+  const open = text[openIdx];
+  const close = pairs[open];
+  if (!close) return null;
+  let depth = 0;
+  let result = null;
+  UndefinedRefModule._walkCode(text.slice(openIdx), (ch, i) => {
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) { result = text.slice(openIdx + 1, openIdx + i); return false; }
+    }
+    return true;
+  });
+  return result;
+};
+
+/**
+ * Call `onParams(text)` with the inside of every parenthesised group that
+ * is followed by `=>`, `{` or `:` — the three things that can follow a
+ * parameter list (arrow, function body, TS return type). Balanced, so a
+ * parameter list containing parentheses is read whole.
+ */
+UndefinedRefModule._forEachParamList = function (src, onParams) {
+  const stack = [];
+  UndefinedRefModule._walkCode(src, (ch, i) => {
+    if (ch === '(') { stack.push(i); return true; }
+    if (ch !== ')' || stack.length === 0) return true;
+    const open = stack.pop();
+    const after = src.slice(i + 1, i + 40).replace(/^\s+/, '');
+    if (after.startsWith('=>') || after[0] === '{' || after[0] === ':') onParams(src.slice(open + 1, i));
+    return true;
+  });
 };
 
 module.exports = UndefinedRefModule;
