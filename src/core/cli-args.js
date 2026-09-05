@@ -85,6 +85,7 @@ const FLAG_SPEC = [
   { flags: ['--watch'], key: 'watch', type: 'boolean' },
   { flags: ['--sarif'], key: 'sarif', type: 'boolean' },
   { flags: ['--junit'], key: 'junit', type: 'boolean' },
+  { flags: ['--offline'], key: 'offline', type: 'boolean' },
   { flags: ['--compliance'], key: 'compliance', type: 'boolean' },
   { flags: ['--feedback'], key: 'feedback', type: 'boolean' },
   { flags: ['--monitor-heal'], key: 'monitorHeal', type: 'boolean' },

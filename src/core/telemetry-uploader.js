@@ -23,6 +23,7 @@ const path = require('path');
 
 const { SCAN_FINDINGS_FILE, telemetryEnabled } = require('./scan-telemetry');
 const { siteUrl } = require('./site-url');
+const { isOffline } = require('./offline');
 
 const DEFAULT_URL = process.env.GATETEST_TELEMETRY_URL || siteUrl('/api/telemetry/scan');
 const DEFAULT_BATCH = 200;
@@ -68,6 +69,7 @@ async function flush(opts = {}) {
   } = opts;
 
   try {
+    if (isOffline()) return { uploaded: 0, remaining: 0, reason: 'offline' };
     if (!telemetryEnabled(projectRoot)) return { uploaded: 0, remaining: 0, reason: 'opted-out' };
     if (!_fetch) return { uploaded: 0, remaining: 0, reason: 'no-fetch' };
 

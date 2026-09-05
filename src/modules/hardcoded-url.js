@@ -260,8 +260,12 @@ class HardcodedUrlModule extends BaseModule {
             line: i + 1,
             host,
             kind: 'localhost',
-            message: `${rel}:${i + 1} hardcoded \`${scheme}://${host}\` in source — localhost leaks break every non-developer machine the moment this ships`,
-            suggestion: 'Move the URL to a config file / env var (`process.env.API_BASE_URL`) with a documented default for local development. Guard any local-only fallback with `NODE_ENV !== "production"`.',
+            message: isTestFile
+              ? `${rel}:${i + 1} hardcoded \`${scheme}://${host}\` in a test file — a fixture, not a leak; reported so the address is on record`
+              : `${rel}:${i + 1} hardcoded \`${scheme}://${host}\` in source — localhost leaks break every non-developer machine the moment this ships`,
+            suggestion: isTestFile
+              ? 'Nothing to change unless the test is meant to reach a real service — then read the address from an env var so CI can point it elsewhere.'
+              : 'Move the URL to a config file / env var (`process.env.API_BASE_URL`) with a documented default for local development. Guard any local-only fallback with `NODE_ENV !== "production"`.',
           });
           continue;
         }
