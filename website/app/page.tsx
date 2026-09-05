@@ -39,6 +39,8 @@
 
 import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
+import HomePrecision from "./components/HomePrecision";
+import HomeHonest from "./components/HomeHonest";
 import HomeThreeDoors from "./components/HomeThreeDoors";
 import BeforeAfterDemo from "./components/BeforeAfterDemo";
 import HomeKills from "./components/HomeKills";
@@ -68,8 +70,10 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <HomePrecision />
         <HomeThreeDoors />
         <BeforeAfterDemo />
+        <HomeHonest />
         <HomeKills />
         <HomeModuleBreakdown />
         <HomeFlywheel />

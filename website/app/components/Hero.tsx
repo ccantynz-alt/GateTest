@@ -29,6 +29,12 @@ import { UrlScanFlow } from "./UrlScanFlow";
 import CountUp from "./CountUp";
 import LiveStats from "./LiveStats";
 import siteStats from "../data/site-stats.json";
+import precision from "../data/precision.json";
+
+// The corpus size in the headline is READ from the same file /precision
+// renders — never typed (doctrine §7). Repos with a ceiling are the precision
+// set; the recall floor (NodeGoat) is not a "real repository we scan clean".
+const CORPUS_SIZE = precision.repos.filter((r) => typeof r.ceiling === "number").length;
 
 const SAMPLE_URLS = [
   { label: "example.com", url: "https://example.com" },
@@ -68,17 +74,16 @@ export default function Hero() {
               <span>Live in beta &middot; {siteStats.modules.total} modules in the gate</span>
             </div>
 
-            <h1 className="font-display text-[2.7rem] leading-[1.04] sm:text-6xl lg:text-[4.1rem] font-extrabold text-gray-900 mb-6 fade-up">
-              Your CI just went red.
-              <br />
-              Minutes later, there&apos;s{" "}
-              <span className="text-[#0f766e]">a PR with the fix.</span>
+            <h1 className="font-display text-[2.7rem] leading-[1.04] sm:text-6xl lg:text-[4.1rem] font-extrabold text-gray-900 mb-6 fade-up" style={{ textWrap: "balance" }}>
+              The gate that{" "}
+              <span className="text-[#0f766e]">doesn&apos;t cry wolf.</span>
             </h1>
 
             <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-3 fade-up">
-              {siteStats.modules.total} checks. One gate. We catch the bug, security hole, or CI rot
-              that crashes your deploy &mdash; then open a pull request with the
-              fix already written, tested, and pair-reviewed by a second AI.
+              Measured on {CORPUS_SIZE} real repositories, the bad numbers published.
+              {siteStats.modules.total} checks in one gate: it blocks on your new code, not your
+              backlog, says what it didn&apos;t check, and opens the pull request with the fix
+              already written, tested, and pair-reviewed by a second AI.
             </p>
             <p className="text-base text-gray-500 mb-8 fade-up">
               Pay per scan &mdash; no seat licences, no minimum. Built on{" "}
