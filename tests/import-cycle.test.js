@@ -211,3 +211,56 @@ describe('ImportCycleModule — test path downgrade', () => {
     assert.strictEqual(hit.severity, 'warning');
   });
 });
+
+// ── KI #96 follow-up: NodeNext `.js`-for-`.ts` cycles, with type-only elision ──
+// Before the elision scanner, every edge written as `./x.js` for an `x.ts` on
+// disk was kept out of the cycle view (letting them in without elision made 15
+// false cycles on nest), so a NodeNext project got silence where nothing was
+// looked at. These controls plant the three shapes that view now tells apart.
+describe('ImportCycleModule — NodeNext (.js specifier for .ts) cycles', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ic-nodenext-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('POSITIVE CONTROL — a load-time cycle through .js specifiers IS an error', async () => {
+    write(tmp, 'src/a.ts', "import { B } from './b.js';\nexport class A extends B {}\n");
+    write(tmp, 'src/b.ts', "import { A } from './a.js';\nexport class B { static k = new A(); }\n");
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name && c.name.startsWith('import-cycle:cycle:'));
+    assert.ok(hit, 'the planted load-time cycle must be reported');
+    assert.strictEqual(hit.severity, 'error');
+    assert.deepStrictEqual([...hit.files].sort(), ['src/a.ts', 'src/b.ts']);
+  });
+
+  it('NEGATIVE CONTROL — the same pair used only as types is NOT a cycle (tsc elides both imports)', async () => {
+    // nest: packages/common/interfaces/middleware/*.interface.ts import each other as types.
+    write(tmp, 'src/a.ts', "import { B } from './b.js';\nexport interface A { b?: B }\n");
+    write(tmp, 'src/b.ts', "import { A } from './a.js';\nexport interface B { a?: A }\n");
+    const r = await run(tmp);
+    const hits = r.checks.filter((c) => c.passed === false && c.name && c.name.startsWith('import-cycle:'));
+    assert.deepStrictEqual(hits, []);
+  });
+
+  it('a cycle whose reads are all inside function bodies is a cycle-deferred WARNING, not an error', async () => {
+    // nest: packages/common/services/logger.service.ts <-> services/utils/is-log-level.util.ts
+    write(tmp, 'src/a.ts', "import { b } from './b.js';\nexport const LEVELS = ['x'];\nexport function a() { return b(); }\n");
+    write(tmp, 'src/b.ts', "import { LEVELS } from './a.js';\nexport function b() { return LEVELS.length; }\n");
+    const r = await run(tmp);
+    assert.ok(!r.checks.some((c) => c.name && c.name.startsWith('import-cycle:cycle:')), 'must not block');
+    const warn = r.checks.find((c) => c.name && c.name.startsWith('import-cycle:cycle-deferred:'));
+    assert.ok(warn, 'the deferred cycle must still be reported');
+    assert.strictEqual(warn.severity, 'warning');
+    assert.deepStrictEqual([...warn.files].sort(), ['src/a.ts', 'src/b.ts']);
+  });
+
+  it('the summary says what was not checked — JSX files and decorator metadata', async () => {
+    write(tmp, 'src/a.ts', 'export class A {}\n');
+    write(tmp, 'src/c.tsx', "import { A } from './a.js';\nexport const C = () => <A />;\n");
+    const r = await run(tmp);
+    const summary = r.checks.find((c) => c.name === 'import-cycle:summary');
+    assert.strictEqual(summary.jsxUncheckedCount, 1);
+    assert.ok(summary.notChecked.some((s) => /JSX/.test(s)));
+    assert.ok(summary.notChecked.some((s) => /emitDecoratorMetadata/.test(s)));
+    assert.ok(/Not checked:/.test(summary.message));
+  });
+});

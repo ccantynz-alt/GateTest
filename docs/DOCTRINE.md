@@ -76,6 +76,8 @@ is always toward the author's own repo.
 | What does this specifier resolve to — a tsconfig alias, a workspace package, a `.js` written for a `.ts`? | `src/core/module-resolution.js` (the import graph and the dead-code extractor both resolve through it) |
 | Is this file run rather than imported — a package main, a hook, a route file, a tool config, a fixture, a Django `apps.py`? | `src/core/entrypoints.js` |
 | What does this Python specifier resolve to — `from ..x import y`, a src-layout package, `'app.module.Class'` in a settings string? | `src/core/python-imports.js` (`deadCode` reads reachability through it; the extractor joins statement continuations with its `logicalLines`) |
+| Is this import emitted, and is its binding read while the module graph is still loading — type-only (elided), load-time, or deferred to call time? | `src/core/import-elision.js` (`importCycle` reads the `loadGraph` / `runtimeGraph` views it produces) |
+| Where do the strings, comments and regex literals begin and end in this source? | `src/core/source-strip.js` (`syntax.js`, the elision tokenizer and `aiHallucination`'s import harvester all mask through it) |
 | Which packages make up this workspace, which manifest governs a file, what does it declare? | `src/core/workspaces.js` (`listWorkspacePackages`, `nearestWorkspacePackage`, `manifestDeclares`) |
 | Where do the migrations live — and is that directory a migration tree or a framework? | `src/core/migration-dirs.js` |
 | Is this file a shell script? | `src/core/shell-files.js` (extension or shebang; binaries and prose out) |

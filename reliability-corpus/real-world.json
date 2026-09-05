@@ -52,8 +52,8 @@
       "name": "hono",
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
-      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
-      "maxBlocking": 27
+      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec; 2026-09-05 importCycle type-only elision: the four import cycles it blocked on read every binding inside function bodies — deferred, now a warning — ceiling ratchets down",
+      "maxBlocking": 23
     },
     {
       "name": "zod",
@@ -136,8 +136,8 @@
       "name": "trpc",
       "url": "https://github.com/trpc/trpc.git",
       "sha": "66d054454a3339dd8421da9dcf0648f92816f704",
-      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell",
-      "maxBlocking": 8
+      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell; 2026-09-05 importCycle type-only elision: its one import cycle ran through two `import { type X }` edges — elided, never a cycle in emitted JS — ceiling ratchets down",
+      "maxBlocking": 7
     },
     {
       "name": "apollo-server",
@@ -150,8 +150,8 @@
       "name": "prisma",
       "url": "https://github.com/prisma/prisma.git",
       "sha": "dd846dcc8f0653099d1a10c457b1603d96bfafc7",
-      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description",
-      "maxBlocking": 16
+      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description; 2026-09-05 importCycle type-only elision: the three import cycles it blocked on read their bindings in parameter defaults and method bodies — deferred, now a warning — ceiling ratchets down",
+      "maxBlocking": 13
     },
     {
       "name": "NodeGoat",

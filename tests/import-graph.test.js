@@ -347,3 +347,111 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
     assert.strictEqual(g.staticEdgeCount, 0);
   });
 });
+
+// ── KI #96 follow-up: type-only elision and the load / deferred split ────────
+// What tsc, esbuild and swc do to `import { A } from './a.js'` when A is only
+// ever a type: drop it. Until the graph modelled that, every NodeNext `.js`
+// specifier was kept out of the cycle view (letting them in produced 15 false
+// cycles on nest through `.interface.ts` files), so import-cycle reported
+// silence on every such project. Each control below names the corpus shape
+// it came from; the classifier was checked against `ts.transpileModule` on
+// 33,011 import statements across eight repositories (0 disagreements in
+// the elide-when-tsc-keeps direction outside JSX, which is not analysed).
+describe('import-graph — type-only elision (TypeScript NodeNext)', () => {
+  let E;
+  let g;
+  before(() => {
+    E = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-elide-'));
+    writeTree(E, {
+      'src/a.ts': 'export class A { static k = 1; }\n',
+      // POSITIVE CONTROL — used only in type positions (nest's *.interface.ts): elided.
+      'src/types-only.ts': "import { A } from './a.js';\nexport function f(x: A): Array<A> { return [x]; }\nexport interface I extends A { y?: A }\n",
+      // NEGATIVE CONTROL — the same import with ONE value use at module scope: load-time.
+      'src/value-use.ts': "import { A } from './a.js';\nexport class B extends A {}\n",
+      // The same import read only inside a function body: runtime, but deferred
+      // (the ESM shape of a lazy require — every nest/apollo/hono cycle was this).
+      'src/deferred-use.ts': "import { A } from './a.js';\nexport function make() { return new A(); }\n",
+      // Re-exports: `export { A } from` evaluates the module; `export type` does not.
+      'src/reexport-value.ts': "export { A } from './a.js';\n",
+      'src/reexport-type.ts': "export type { A } from './a.js';\n",
+      'src/reexport-inline-type.ts': "export { type A } from './a.js';\n",
+      // Inline `type` modifier on the only binding: elided (trpc's createUtilityFunctions).
+      'src/inline-type.ts': "import { type A } from './a.js';\nexport class C extends A {}\n",
+      // JavaScript has no types: an unused import still loads the module.
+      'src/plain.js': "import { A } from './a.js';\nexport const k = 1;\n",
+      // JSX is not analysed: kept as load-time and reported as unchecked.
+      'src/comp.tsx': "import { A } from './a.js';\nexport const C = () => <A />;\n",
+      // Multi-line import with a load-time use keeps the pre-existing 'multiline' kind.
+      'src/multi.ts': "import {\n  A,\n} from './a.js';\nexport const x = A.k;\n",
+    });
+    g = buildImportGraph({ projectRoot: E });
+  });
+  after(() => fs.rmSync(E, { recursive: true, force: true }));
+
+  const edge = (relFrom) => g.edges.find((e) => g.rel(e.from) === relFrom && g.rel(e.to) === 'src/a.ts');
+  const inView = (view, relFrom) => (g[view].get(path.join(E, relFrom)) || new Set()).has(path.join(E, 'src/a.ts'));
+
+  it('POSITIVE CONTROL — an import used only in type positions is elided (kind type, via ts-esm)', () => {
+    assert.deepStrictEqual({ kind: edge('src/types-only.ts').kind, via: edge('src/types-only.ts').via }, { kind: 'type', via: 'ts-esm' });
+    assert.ok(!inView('runtimeGraph', 'src/types-only.ts') && !inView('loadGraph', 'src/types-only.ts'));
+  });
+  it('NEGATIVE CONTROL — one value use at module scope makes it a load-time runtime edge', () => {
+    assert.deepStrictEqual({ kind: edge('src/value-use.ts').kind, use: edge('src/value-use.ts').use }, { kind: 'ts-esm', use: 'load' });
+    assert.ok(inView('runtimeGraph', 'src/value-use.ts') && inView('loadGraph', 'src/value-use.ts'));
+  });
+  it('a value use only inside a function body is a runtime edge that is deferred — in runtimeGraph, not loadGraph', () => {
+    assert.strictEqual(edge('src/deferred-use.ts').use, 'deferred');
+    assert.ok(inView('runtimeGraph', 'src/deferred-use.ts'));
+    assert.ok(!inView('loadGraph', 'src/deferred-use.ts'));
+  });
+  it('`export { A } from` is a load-time re-export; `export type` / `export { type A }` are elided', () => {
+    assert.strictEqual(edge('src/reexport-value.ts').use, 'load');
+    assert.strictEqual(edge('src/reexport-type.ts').kind, 'type');
+    assert.strictEqual(edge('src/reexport-inline-type.ts').kind, 'type');
+  });
+  it('an inline `type` modifier on the only binding elides the import even when the name is used as a value', () => {
+    // tsc erases the binding; `extends A` would be a compile error, not a runtime edge.
+    assert.strictEqual(edge('src/inline-type.ts').kind, 'type');
+  });
+  it('JavaScript is never elided — an unused import still loads the module', () => {
+    assert.deepStrictEqual({ kind: edge('src/plain.js').kind, use: edge('src/plain.js').use }, { kind: 'ts-esm', use: 'load' });
+  });
+  it('JSX is kept as load-time and reported as unchecked (Doctrine §6)', () => {
+    assert.strictEqual(edge('src/comp.tsx').use, 'load');
+    assert.deepStrictEqual(g.unchecked.jsx.map((f) => g.rel(f)), ['src/comp.tsx']);
+  });
+  it('a multi-line import keeps the multiline kind and enters runtimeGraph, never staticGraph', () => {
+    assert.deepStrictEqual({ kind: edge('src/multi.ts').kind, use: edge('src/multi.ts').use }, { kind: 'multiline', use: 'load' });
+    assert.ok(inView('runtimeGraph', 'src/multi.ts') && !inView('staticGraph', 'src/multi.ts'));
+  });
+  it('staticGraph still holds only kind static — the pre-elision view the extraction tests pinned', () => {
+    for (const e of g.edges) if (e.kind !== 'static') assert.ok(!g.staticGraph.get(e.from).has(e.to), `${e.kind} leaked into staticGraph`);
+  });
+});
+
+describe('import-graph — verbatimModuleSyntax disables elision, isolatedModules does not', () => {
+  // tsc keeps every import as written under verbatimModuleSyntax /
+  // preserveValueImports / importsNotUsedAsValues: preserve|error;
+  // `isolatedModules` alone (got's tsconfig) still elides.
+  const build = (tsconfig) => {
+    const R = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-import-graph-verbatim-'));
+    writeTree(R, {
+      'tsconfig.json': JSON.stringify({ compilerOptions: tsconfig }),
+      'src/a.ts': 'export class A {}\n',
+      'src/types-only.ts': "import { A } from './a.js';\nexport function f(x: A): A { return x; }\n",
+    });
+    const gr = buildImportGraph({ projectRoot: R });
+    const e = gr.edges.find((x) => gr.rel(x.from) === 'src/types-only.ts');
+    fs.rmSync(R, { recursive: true, force: true });
+    return e;
+  };
+  it('verbatimModuleSyntax: the type-only-used import is KEPT as a load-time edge', () => {
+    assert.deepStrictEqual({ kind: build({ verbatimModuleSyntax: true }).kind, use: build({ verbatimModuleSyntax: true }).use }, { kind: 'ts-esm', use: 'load' });
+  });
+  it('importsNotUsedAsValues: preserve — kept', () => {
+    assert.strictEqual(build({ importsNotUsedAsValues: 'preserve' }).kind, 'ts-esm');
+  });
+  it('isolatedModules alone — still elided (control for the flag above)', () => {
+    assert.strictEqual(build({ isolatedModules: true }).kind, 'type');
+  });
+});

@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-05T06:53:34.026Z",
+  "generatedAt": "2026-09-05T09:57:10.226Z",
   "source": "scripts/real-world-precision.js",
   "note": "Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit — run the script.",
   "engineVersion": "1.61.0",
-  "engineCommit": "87433247",
+  "engineCommit": "db06e31e",
   "repos": [
     {
       "name": "express",
@@ -45,9 +45,9 @@
       "name": "hono",
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
-      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
-      "blocking": 27,
-      "ceiling": 27,
+      "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec; 2026-09-05 importCycle type-only elision: the four import cycles it blocked on read every binding inside function bodies — deferred, now a warning — ceiling ratchets down",
+      "blocking": 23,
+      "ceiling": 23,
       "softened": 55
     },
     {
@@ -153,9 +153,9 @@
       "name": "trpc",
       "url": "https://github.com/trpc/trpc.git",
       "sha": "66d054454a3339dd8421da9dcf0648f92816f704",
-      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell",
-      "blocking": 8,
-      "ceiling": 8,
+      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell; 2026-09-05 importCycle type-only elision: its one import cycle ran through two `import { type X }` edges — elided, never a cycle in emitted JS — ceiling ratchets down",
+      "blocking": 7,
+      "ceiling": 7,
       "softened": 38
     },
     {
@@ -171,9 +171,9 @@
       "name": "prisma",
       "url": "https://github.com/prisma/prisma.git",
       "sha": "dd846dcc8f0653099d1a10c457b1603d96bfafc7",
-      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description",
-      "blocking": 16,
-      "ceiling": 16,
+      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description; 2026-09-05 importCycle type-only elision: the three import cycles it blocked on read their bindings in parameter defaults and method bodies — deferred, now a warning — ceiling ratchets down",
+      "blocking": 13,
+      "ceiling": 13,
       "softened": 19
     },
     {
@@ -191,7 +191,7 @@
     "bands": [
       {
         "confidence": 1,
-        "precision": 222,
+        "precision": 214,
         "recall": 57,
         "rules": {
           "precision": {
@@ -212,10 +212,6 @@
             "n-plus-one:query-in-loop": 2,
             "race-condition:fs-toctou": 1,
             "hardcoded-url:localhost": 4,
-            "import-cycle:cycle:src/jsx/base.ts|src/jsx/intrinsic-element/components.ts|src/jsx/context.ts|src/jsx/dom/context.ts": 1,
-            "import-cycle:cycle:src/jsx/dom/render.ts|src/jsx/hooks/index.ts": 1,
-            "import-cycle:cycle:src/jsx/components.ts|src/jsx/streaming.ts": 1,
-            "import-cycle:cycle:src/helper/streaming/index.ts|src/helper/streaming/text.ts": 1,
             "taint:sink:file-write": 1,
             "taint:sink:spawn": 2,
             "bash-safety:pipe-true": 3,
@@ -255,14 +251,10 @@
             "security:npm-audit": 1,
             "async-iteration:async-reduce": 6,
             "ci-security:shell-injection": 1,
-            "import-cycle:cycle:packages/react-query/src/shared/hooks/createHooksInternal.tsx|packages/react-query/src/utils/createUtilityFunctions.ts|packages/react-query/src/shared/index.ts|packages/react-query/src/shared/hooks/createRootHooks.tsx": 1,
             "security:sql-injection": 4,
             "security:sql-injection-scan": 1,
             "seo:description": 1,
             "seo:h1-missing": 1,
-            "import-cycle:cycle:packages/3-mongo-target/2-mongo-adapter/src/core/mongo-control-adapter.ts|packages/3-mongo-target/2-mongo-adapter/src/core/runner-deps.ts": 1,
-            "import-cycle:cycle:packages/3-targets/3-targets/postgres/src/core/migrations/control-policy.ts|packages/3-targets/3-targets/postgres/src/core/migrations/issue-planner.ts": 1,
-            "import-cycle:cycle:packages/3-targets/6-adapters/sqlite/src/core/adapter.ts|packages/3-targets/6-adapters/sqlite/src/core/control-adapter.ts": 1,
             "taint:sink:sql-query": 1
           },
           "recall": {
@@ -420,61 +412,61 @@
     "sweep": [
       {
         "threshold": 0.5,
-        "precisionBlocking": 309,
+        "precisionBlocking": 301,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.6,
-        "precisionBlocking": 309,
+        "precisionBlocking": 301,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.65,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.7,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": true
       },
       {
         "threshold": 0.75,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.8,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.85,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.9,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 0.95,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       },
       {
         "threshold": 1,
-        "precisionBlocking": 222,
+        "precisionBlocking": 214,
         "recallBlocking": 57,
         "shipped": false
       }
@@ -484,8 +476,8 @@
       "above": 1
     },
     "softened": {
-      "precisionTotal": 416,
-      "precisionBlocking": 222,
+      "precisionTotal": 408,
+      "precisionBlocking": 214,
       "precisionSoftened": 194,
       "recallTotal": 58,
       "recallBlocking": 57,

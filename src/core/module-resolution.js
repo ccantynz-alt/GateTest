@@ -77,17 +77,58 @@ function stripJsoncLite(src) {
   return out.replace(/,\s*([}\]])/g, '$1');
 }
 
+// The compilerOptions that change what the emitted JavaScript imports. A child
+// tsconfig's explicit value wins over the one it `extends`.
+const ELISION_FLAGS = ['verbatimModuleSyntax', 'preserveValueImports', 'importsNotUsedAsValues', 'emitDecoratorMetadata'];
+
 function readTsconfig(file, depth = 0) {
   let cfg;
   try { cfg = JSON.parse(stripJsoncLite(fs.readFileSync(file, 'utf8'))); } catch { return null; }
   if (!cfg || typeof cfg !== 'object') return null;
   const co = cfg.compilerOptions || {};
-  let base = { baseUrl: co.baseUrl, paths: co.paths, dir: path.dirname(file) };
+  const flags = {};
+  for (const k of ELISION_FLAGS) if (co[k] !== undefined) flags[k] = co[k];
+  let base = { baseUrl: co.baseUrl, paths: co.paths, dir: path.dirname(file), flags };
   if (cfg.extends && typeof cfg.extends === 'string' && cfg.extends.startsWith('.') && depth < 3) {
     const parent = readTsconfig(path.resolve(path.dirname(file), cfg.extends.endsWith('.json') ? cfg.extends : `${cfg.extends}.json`), depth + 1);
-    if (parent) base = { baseUrl: base.baseUrl || parent.baseUrl, paths: base.paths || parent.paths, dir: base.paths ? base.dir : parent.dir };
+    if (parent) base = { baseUrl: base.baseUrl || parent.baseUrl, paths: base.paths || parent.paths, dir: base.paths ? base.dir : parent.dir, flags: { ...parent.flags, ...flags } };
   }
   return base;
+}
+
+const nearestCache = new Map(); // dir → tsconfig | null
+/**
+ * The tsconfig.json governing a directory: the closest one walking up, stopping
+ * at `stopDir`. Null when there is none (a plain JS project).
+ */
+function nearestTsconfig(dir, stopDir) {
+  if (nearestCache.has(dir)) return nearestCache.get(dir);
+  let found = null;
+  let cur = dir;
+  for (;;) {
+    found = readTsconfig(path.join(cur, 'tsconfig.json'));
+    if (found) break;
+    if (cur === stopDir || path.dirname(cur) === cur) break;
+    cur = path.dirname(cur);
+  }
+  nearestCache.set(dir, found);
+  return found;
+}
+
+/**
+ * Does tsc drop an import whose bindings are only used as types? Yes unless
+ * the project says otherwise: `verbatimModuleSyntax` / `preserveValueImports`
+ * keep every import as written; `importsNotUsedAsValues: preserve` keeps the
+ * module load (a side-effect import), `error` forces `import type` for
+ * anything type-only, so what is left as a plain import is a value import.
+ * `isolatedModules` alone does NOT change elision.
+ */
+function elisionMode(dir, stopDir) {
+  const cfg = nearestTsconfig(dir, stopDir);
+  const f = (cfg && cfg.flags) || {};
+  const elide = !(f.verbatimModuleSyntax === true || f.preserveValueImports === true
+    || f.importsNotUsedAsValues === 'preserve' || f.importsNotUsedAsValues === 'error');
+  return { elide, decoratorMetadata: f.emitDecoratorMetadata === true, configured: !!cfg };
 }
 
 function loadPathAliases(dir) {
@@ -273,4 +314,4 @@ function tsEquivalents(base) {
   return JS_TO_TS[ext].map((e) => stem + e);
 }
 
-module.exports = { tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSources, resolveAlias, stripJsoncLite };
+module.exports = { tsEquivalents, resolvePackageEntry, resolvePackageSubpath, compiledToSources, resolveAlias, stripJsoncLite, elisionMode };
