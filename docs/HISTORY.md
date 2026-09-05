@@ -440,6 +440,28 @@ a catch that calls `process.exit` was "log-and-eat"; `@/` alias imports were
 orphans; and a CRLF→LF rewrite by a scripted edit read as a 510-line change.
 The lessons became `docs/DOCTRINE.md`.
 
+**Later the same day — the other five languages.** Rust, PHP, C#, Kotlin and
+Swift had never been measured. tokio-rs/axum, laravel/framework,
+jasontaylordev/CleanArchitecture, ktorio/ktor and vapor/vapor at pinned
+commits: first contact 28 / 28 / 39 / 21 / 6 blocking, after 6 / 4 / 13 / 7 /
+1. Every drop was a scanner defect: `$redis->eval($lua)` read as PHP eval
+(23 of laravel's 28); `todo!()` inside `#[cfg(test)]` modules (13 of axum's
+28); `dtolnay/rust-toolchain@stable` and a repository's own reusable workflow
+on `@main` treated as third-party supply-chain risk; two SPA `index.html`
+shells scored as public pages (26 of CleanArchitecture's 39); a `test.html`
+under Maven's `test-resources/` scored as a page (14 of ktor's 21); a Gradle
+compile failure in our environment and a bare `node --test` on an Angular
+`test.ts` reported as "Unit tests failed"; a UTF-8 BOM and a `vscode/`
+settings file reported as invalid JSON; a README without an "install"
+heading blocking three of the five. Each fix shipped with a control pair;
+the eleven original repos held their ceilings. One scope fix went too wide on
+the first cut and was pulled back before it shipped: a SPA shell's `<body>` is
+rendered at runtime, but its `<head>` and `<html>` are the file's own, so
+`visual:viewport` and `a11y:html-lang` still fire on it — both shells in
+CleanArchitecture carried both, so the numbers did not move; the control
+tests are what would have caught it later. NodeGoat 59 → 58: the finding
+that left was `docs:readme-usage`, deliberately downgraded to a warning.
+
 ### v1.61.1 (2026-09-04) — the gate can fail again
 
 **The single most important fact in this file changed: GateTest now ENFORCES

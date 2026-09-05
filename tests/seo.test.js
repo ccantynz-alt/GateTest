@@ -116,3 +116,17 @@ describe('SeoModule — sitemap/robots only for deployable sites', () => {
     } finally { fs.rmSync(r, { recursive: true, force: true }); }
   });
 });
+
+describe('SeoModule — a SPA shell is not scored', () => {
+  let tmp;
+  before(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-seo-spa-')); });
+  after(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  it('Angular index.html produces no seo findings; a content page still does', async () => {
+    write(tmp, 'src/index.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>App</title></head><body><app-root></app-root></body></html>\n');
+    write(tmp, 'public/about.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>About</title></head><body><main><p>About us and what we do here, at some length so it is a page.</p></main></body></html>\n');
+    const checks = await runOn(tmp);
+    const failed = failing(checks).filter((c) => /^seo:/.test(c.id)).map((c) => c.id);
+    assert.ok(!failed.some((n) => n.includes('src/index.html')), `shell scored: ${failed.join(', ')}`);
+    assert.ok(failed.some((n) => n.includes('about.html')), 'positive control: the content page is still scored');
+  });
+});

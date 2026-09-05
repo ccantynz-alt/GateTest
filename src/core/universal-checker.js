@@ -224,7 +224,12 @@ const LANGUAGE_SPECS = {
     extensions: ['.php'],
     testFilePattern: /Test\.php$|(^|\/)tests?\//i,
     patterns: [
-      { name: 'eval', pattern: /\beval\s*\(/, severity: 'error',
+      // `(?<![\w$>:])` — `$redis->eval($lua)` and `Redis::eval(...)` are Lua
+      // EVAL on a Redis connection, not PHP eval. 23 of laravel/framework's
+      // 28 blocking findings (2026-09-05) were that method.
+      // `(?<!function\s)` — laravel's PhpRedisConnection DEFINES
+      // `public function eval($script, …)`; a method definition is not a call.
+      { name: 'eval', pattern: /(?<![\w$>:])(?<!function\s)eval\s*\(/, severity: 'error',
         message: 'eval() in PHP — arbitrary code execution',
         suggestion: 'Refactor. eval is almost never the right answer.' },
       { name: 'mysql-legacy', pattern: /\bmysql_(query|connect|fetch_)/, severity: 'error',
@@ -345,8 +350,15 @@ function runLanguageChecks(lang, projectRoot, result, options = {}) {
     filesScanned += 1;
 
     const lines = content.split('\n');
+    // Rust keeps its unit tests INSIDE the source file, under
+    // `#[cfg(test)] mod tests { … }` at the bottom. The path pattern cannot
+    // see that; the file's own text can. From that attribute to EOF the
+    // rules run at test severity — axum's `todo!()` / `unimplemented!()`
+    // inside `mod tests` were 13 of its 28 blocking findings (2026-09-05).
+    let inTestScope = Boolean(isTest);
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
+      if (spec.name === 'rust' && !inTestScope && /^\s*#\[cfg\(test\)\]/.test(line)) inTestScope = true;
       // Skip obvious comments and string-only lines where heuristics often
       // fire false positives. This is intentional: we prefer missing a
       // genuine issue to burning trust on a bad warning.
@@ -365,7 +377,7 @@ function runLanguageChecks(lang, projectRoot, result, options = {}) {
         // were test files; on django @b3f4d83, 30 of 39 `sql-concat` were.
         // Errors drop to warning (still reported, no longer a build verdict);
         // warnings and below drop to info, as before.
-        if (isTest) severity = severity === 'error' ? 'warning' : 'info';
+        if (inTestScope) severity = severity === 'error' ? 'warning' : 'info';
         if (!p.pattern.test(line)) continue;
 
         // A pattern may prove a matched line is materially safer than the

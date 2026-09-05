@@ -47,6 +47,12 @@ describe('VisualModule — viewport', () => {
     const f = await scan({ 'index.html': '<html><head><title>x</title></head><body></body></html>' });
     assert.ok(ids(f).includes('visual:viewport:index.html'), ids(f).join());
   });
+  it('POSITIVE: a SPA shell (Angular <app-root>) without a viewport meta still fails — the shell OWNS its <head>', async () => {
+    // The body is rendered at runtime; the <head> is not. A shell missing the
+    // viewport tag renders the whole application at desktop width on mobile.
+    const f = await scan({ 'src/index.html': '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>App</title></head><body><app-root></app-root></body></html>' });
+    assert.ok(ids(f).includes('visual:viewport:src/index.html'), ids(f).join());
+  });
   it('NEGATIVE: a fragment (no <head>) and a Next.js layout.tsx (framework injects viewport) are silent', async () => {
     const f = await scan({
       'templates/nav.html': '<div th:fragment="nav"><html-ish></div>',

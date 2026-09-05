@@ -214,7 +214,9 @@ class SyntaxModule extends BaseModule {
     // had never once run.
     let content;
     try {
-      content = fs.readFileSync(file, 'utf-8');
+      // A UTF-8 BOM is not JSON to JSON.parse but every editor that writes
+      // one (Visual Studio's launchSettings.json) reads it back fine.
+      content = fs.readFileSync(file, 'utf-8').replace(/^\uFEFF/, '');
       JSON.parse(content);
       result.addCheck(`json:${relPath}`, true);
     } catch (err) {

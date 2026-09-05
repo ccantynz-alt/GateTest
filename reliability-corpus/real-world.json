@@ -10,7 +10,7 @@
     "cannot make.",
     "",
     "maxBlocking is a CEILING, not a target. It ratchets DOWN as precision",
-    "improves and must never be raised to make a build pass \u2014 raising it is how",
+    "improves and must never be raised to make a build pass — raising it is how",
     "you go back to shipping a gate that blocks express. If a change genuinely",
     "makes a repo noisier, that is the finding.",
     "",
@@ -31,7 +31,7 @@
       "name": "flask",
       "url": "https://github.com/pallets/flask.git",
       "sha": "d318b683471101618febed18996405ad26462110",
-      "why": "Python \u2014 proves the non-JS rules are held to the same bar",
+      "why": "Python — proves the non-JS rules are held to the same bar",
       "maxBlocking": 2
     },
     {
@@ -45,7 +45,7 @@
       "name": "got",
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
-      "why": "TypeScript HTTP client with a benchmark/ tree \u2014 a known scope trap",
+      "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
       "maxBlocking": 15
     },
     {
@@ -59,21 +59,21 @@
       "name": "zod",
       "url": "https://github.com/colinhacks/zod.git",
       "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
-      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow \u2014 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
+      "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
       "maxBlocking": 20
     },
     {
       "name": "django",
       "url": "https://github.com/django/django.git",
       "sha": "b3f4d83aad7f589f165a6d8b020b7acba4936f35",
-      "why": "Python at scale \u2014 the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
+      "why": "Python at scale — the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
       "maxBlocking": 65
     },
     {
       "name": "rails",
       "url": "https://github.com/rails/rails.git",
       "sha": "1ec64ce82451c52d7407fa665ea5f95291430c23",
-      "why": "Ruby at scale \u2014 instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
+      "why": "Ruby at scale — instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
       "maxBlocking": 47
     },
     {
@@ -87,14 +87,49 @@
       "name": "gin",
       "url": "https://github.com/gin-gonic/gin.git",
       "sha": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
-      "why": "Go \u2014 the ignored-error idiom the go module could not see until 2026-09-04",
+      "why": "Go — the ignored-error idiom the go module could not see until 2026-09-04",
       "maxBlocking": 2
+    },
+    {
+      "name": "axum",
+      "url": "https://github.com/tokio-rs/axum.git",
+      "sha": "8b30afbfeee457146d29c9c9db47f0ae621a22a8",
+      "why": "Rust — first contact 28 blocking: todo!()/unimplemented!() inside #[cfg(test)] modules, dtolnay/rust-toolchain@stable read as a branch pin; what remains is third-party actions on @master and one real unimplemented!()",
+      "maxBlocking": 6
+    },
+    {
+      "name": "laravel",
+      "url": "https://github.com/laravel/framework.git",
+      "sha": "cdbd17f7e3257e8ae4207d3c3bef6058452d5f72",
+      "why": "PHP — first contact 28 blocking, 23 of them `$redis->eval($lua)` read as PHP eval(); what remains is real eval(var_export()) in the config cache and an unguarded rm -rf in a release script",
+      "maxBlocking": 4
+    },
+    {
+      "name": "cleanarchitecture",
+      "url": "https://github.com/jasontaylordev/CleanArchitecture.git",
+      "sha": "3a06afb9258c1f5a9d8e7103bd1479246fa4166a",
+      "why": "C# + Angular + React — first contact 39 blocking, 26 of them SEO/a11y rules on the two SPA index.html shells; what remains is real: strict:false, a committed .env, unlabeled inputs, log-and-eat catches in a React component",
+      "maxBlocking": 13
+    },
+    {
+      "name": "ktor",
+      "url": "https://github.com/ktorio/ktor.git",
+      "sha": "f92fad04353817c7eacf8599c8d69d517ba4882c",
+      "why": "Kotlin — first contact 21 blocking, 14 of them a test.html under test-resources/ scored as a public page, plus a Gradle compile failure in our environment reported as failing tests; what remains is six real TODO() stubs and one third-party workflow on @main",
+      "maxBlocking": 7
+    },
+    {
+      "name": "vapor",
+      "url": "https://github.com/vapor/vapor.git",
+      "sha": "630763c5e0de50b2ac8c7e9a20d6c3ec5709a4c8",
+      "why": "Swift — first contact 6 blocking: its own reusable workflows on @main and README section gaps; what remains is a *.key file the .gitignore does not cover",
+      "maxBlocking": 1
     },
     {
       "name": "NodeGoat",
       "url": "https://github.com/OWASP/NodeGoat.git",
       "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
-      "why": "OWASP's deliberately vulnerable app \u2014 the recall floor",
+      "why": "OWASP's deliberately vulnerable app — the recall floor",
       "minBlocking": 40
     }
   ]

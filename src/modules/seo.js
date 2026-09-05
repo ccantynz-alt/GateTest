@@ -6,7 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
-const { isNonUserFacingPage } = require('../core/scan-scope');
+const { isNonUserFacingPage, isSpaShell } = require('../core/scan-scope');
 
 class SeoModule extends BaseModule {
   constructor() {
@@ -90,6 +90,8 @@ class SeoModule extends BaseModule {
       return false;
     }
     if (!/<html[\s>]/i.test(content) || !/<head[\s>]/i.test(content)) return false;
+    // A SPA shell renders its page at runtime; the file has nothing to score.
+    if (isSpaShell(content)) return false;
     // Template inheritance: the child declares extends/replace and inherits its head.
     if (/\{%\s*extends\b|th:replace=|th:insert=|<%-?\s*(layout|extends)\b|\{\{>\s*layout/i.test(content)) return false;
     return true;

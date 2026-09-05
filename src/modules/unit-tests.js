@@ -157,7 +157,11 @@ class UnitTestsModule extends BaseModule {
     // Check for test directories
     const testDirs = ['tests', 'test', '__tests__', 'spec'];
     for (const dir of testDirs) {
-      if (fs.existsSync(path.join(projectRoot, dir))) {
+      // Only when the directory holds JavaScript node can run. Node 22
+      // strips types by default, so a bare `node --test` on a repo whose
+      // only `test.ts` is an Angular/Karma harness "ran" it and reported
+      // "Unit tests failed" (CleanArchitecture, 2026-09-05).
+      if (fs.existsSync(path.join(projectRoot, dir)) && this._hasRunnableJsTests(path.join(projectRoot, dir))) {
         return { name: 'Node.js test runner', command: 'node --test 2>&1' };
       }
     }
@@ -177,7 +181,25 @@ class UnitTestsModule extends BaseModule {
   }
 
   _looksLikeMissingToolchain(out) {
-    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies/i.test(out);
+    // Each alternation is a runner that never reached a test: a missing
+    // binary (`/bin/sh: 1: vendor/bin/phpunit: not found` — laravel, where
+    // composer had not run), a missing module, or a BUILD that failed before
+    // the test task (ktor's Gradle compile under a toolchain this box does
+    // not have). "Unit tests failed" would blame the customer's suite for
+    // our environment.
+    return /ModuleNotFoundError|No module named|command not found|is not recognized as an internal|ENOENT|not found: |: not found\b|Cannot find module|npm ERR! missing script|could not determine executable to run|Could not find a version that satisfies|SDK location not found|Could not resolve all (?:files|dependencies)|Unsupported class file major version|Execution failed for task '[^']*:compile|Compilation error\. See log|BUILD FAILURE[\s\S]*COMPILATION ERROR/i.test(out);
+  }
+
+  /** Does a test directory contain anything `node --test` can actually run? */
+  _hasRunnableJsTests(dir, depth = 0) {
+    if (depth > 3) return false;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; } // error-ok — unreadable dir has no runnable tests
+    for (const e of entries) {
+      if (e.isFile() && /\.(?:js|mjs|cjs)$/.test(e.name)) return true;
+      if (e.isDirectory() && e.name !== 'node_modules' && this._hasRunnableJsTests(path.join(dir, e.name), depth + 1)) return true;
+    }
+    return false;
   }
 
   _firstLine(out) {

@@ -541,3 +541,51 @@ jobs:
     );
   });
 });
+
+// 2026-09-05: every Rust repo was blocked on `dtolnay/rust-toolchain@stable`
+// (a toolchain channel, that action's documented use) and vapor/ktor on their
+// OWN reusable workflows at @main. Both are mutable and stay reported — as
+// warnings. A third-party action on a branch is the supply-chain risk and
+// stays an error.
+describe('CiSecurityModule — branch refs: channel and own-workflow are warnings', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-pin-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const WF = (uses) => `name: ci\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n`;
+  async function pinSeverity(uses, env = {}) {
+    const saved = process.env.GITHUB_REPOSITORY;
+    if (env.GITHUB_REPOSITORY) process.env.GITHUB_REPOSITORY = env.GITHUB_REPOSITORY; else delete process.env.GITHUB_REPOSITORY;
+    try {
+      writeWorkflow(tmp, 'ci.yml', WF(uses));
+      const r = await run(tmp);
+      const c = r.checks.find((x) => !x.passed && /branch-pin/.test(x.name));
+      return c ? c.severity : null;
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_REPOSITORY; else process.env.GITHUB_REPOSITORY = saved;
+    }
+  }
+  it('dtolnay/rust-toolchain@stable is a warning', async () => {
+    assert.strictEqual(await pinSeverity('dtolnay/rust-toolchain@stable'), 'warning');
+  });
+  it("the repository's own reusable workflow on main is a warning", async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor' }), 'warning');
+  });
+  it("someone else's reusable workflow on main is still an error", async () => {
+    assert.strictEqual(await pinSeverity('other-org/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor' }), 'error');
+  });
+  it('a third-party action on a branch is still an error', async () => {
+    assert.strictEqual(await pinSeverity('someone/action@main'), 'error');
+  });
+});
+
+describe('CiSecurityModule — taiki-e/install-action@<tool> is a channel, not a branch', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-taiki-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  it('warns rather than errors', async () => {
+    writeWorkflow(tmp, 'ci.yml', 'name: ci\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: taiki-e/install-action@cargo-hack\n');
+    const r = await run(tmp);
+    const c = r.checks.find((x) => !x.passed && /branch-pin/.test(x.name));
+    assert.strictEqual(c && c.severity, 'warning');
+  });
+});

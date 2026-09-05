@@ -104,7 +104,7 @@ function stripJsonc(text) {
 // a known directory — a repo's own `data/config.json` is still strict JSON and
 // a trailing comma there is a real defect worth reporting.
 const JSONC_FILE_RE =
-  /(^|\/)(?:tsconfig(?:\.[^/]*)?\.json|jsconfig(?:\.[^/]*)?\.json|devcontainer\.json|\.eslintrc\.json|typedoc\.json)$|(^|\/)\.vscode\/[^/]+\.json$|(^|\/)\.devcontainer\/[^/]+\.json$/i;
+  /(^|\/)(?:tsconfig(?:\.[^/]*)?\.json|jsconfig(?:\.[^/]*)?\.json|devcontainer\.json|\.eslintrc\.json|typedoc\.json)$|(^|\/)\.?vscode\/[^/]+\.json$|(^|\/)\.devcontainer\/[^/]+\.json$/i;
 
 /**
  * True when `relPath` names a file whose format permits comments and trailing

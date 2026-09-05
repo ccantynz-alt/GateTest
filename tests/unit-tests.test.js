@@ -80,3 +80,33 @@ describe('UnitTestsModule — toolchain detection beyond Node', () => {
     assert.match(src, /if \(\/\^GATETEST_\/\.test\(k\)\) delete env\[k\]/);
   });
 });
+
+// 2026-09-05: laravel (`/bin/sh: 1: vendor/bin/phpunit: not found`), ktor (a
+// Gradle compile failure under a toolchain this box lacks) and
+// CleanArchitecture (`node --test` running an Angular `test.ts`) all reported
+// "Unit tests failed" for what was our environment.
+describe('UnitTestsModule — an environment that cannot run the suite is not a failing suite', () => {
+  const mod = new UnitTestsModule();
+  for (const out of [
+    '/bin/sh: 1: vendor/bin/phpunit: not found',
+    "Execution failed for task ':build-settings-logic:compileKotlin'.\n> Compilation error. See log for more details\nBUILD FAILED in 1m 38s",
+    'SDK location not found. Define a valid SDK location',
+  ]) {
+    it(`treats "${out.split('\n')[0].slice(0, 50)}" as a missing toolchain`, () => {
+      assert.strictEqual(mod._looksLikeMissingToolchain(out), true);
+    });
+  }
+  it('a real assertion failure is still a failure', () => {
+    assert.strictEqual(mod._looksLikeMissingToolchain('AssertionError: expected 1 to equal 2\n  at test.js:12'), false);
+  });
+  it('node --test is only chosen when the test dir holds JavaScript', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ut-js-'));
+    try {
+      fs.mkdirSync(path.join(tmp, 'test'), { recursive: true });
+      fs.writeFileSync(path.join(tmp, 'test', 'test.ts'), 'import "zone.js/testing";\n');
+      assert.strictEqual(mod._hasRunnableJsTests(path.join(tmp, 'test')), false);
+      fs.writeFileSync(path.join(tmp, 'test', 'a.test.js'), 'const t = require("node:test"); t("x", () => {});\n');
+      assert.strictEqual(mod._hasRunnableJsTests(path.join(tmp, 'test')), true);
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+});

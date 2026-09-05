@@ -47,6 +47,8 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     // js_tests/, hono's runtime tests in runtime-tests/. Both were
     // application code to every path predicate until 2026-09-05.
     'js_tests/admin/inlines.test.js',
+    'pkg/testdata/fixture.go',
+    'ktor-server/core/test-resources/testdir/test.html',
     'py_tests/a.py',
     'runtime-tests/lambda/mock.ts',
   ];
@@ -59,6 +61,7 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'protest.js',
     'src/manifest/x.js',      // ends in "test" with no separator
     'src/greatest_hits.js',
+    'src/testdatabase.go',
   ];
 
   for (const p of MATCH) {

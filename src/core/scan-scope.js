@@ -71,7 +71,10 @@ function isIllustrationPath(relPath) {
 // `integration-tests`), or is a `perf-`/`bench-` compound (`perf-measures`,
 // `bench-target`) is a harness.
 const HARNESS_DIR_RE =
-  /(^|\/)(?:tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?|[a-z0-9]+[-_](?:tests?|specs?|benchmarks?)|(?:perf|bench)[-_][a-z0-9_-]+)\//i;
+  // `testdata` (Go), `test-resources` / `test-fixtures` (Maven, Gradle):
+  // ktor's `test-resources/testdir/test.html` was scored as a public page
+  // and produced 14 of its 21 blocking findings (2026-09-05).
+  /(^|\/)(?:tests?|spec|specs|__tests__|e2e|cypress|playwright|perf|bench|benchmarks?|testdata|test[-_]?resources|test[-_]?fixtures|[a-z0-9]+[-_](?:tests?|specs?|benchmarks?)|(?:perf|bench)[-_][a-z0-9_-]+)\//i;
 
 /**
  * True when `relPath` is a document nobody navigates to as a user: a demo, a
@@ -94,9 +97,32 @@ function isNonUserFacingPage(relPath) {
   return isIllustrationPath(norm) || HARNESS_DIR_RE.test(norm);
 }
 
+/**
+ * A single-page-app SHELL: a full HTML document whose body is only the mount
+ * point the framework renders into (`<app-root>`, `<div id="root">`,
+ * `<div id="app">`). Angular's and React's `index.html` are this shape.
+ * It has no title copy, no h1, no meta description and no landmarks because
+ * the application supplies those at runtime — scoring it as a public page
+ * produced 26 of CleanArchitecture's 39 blocking findings (2026-09-05).
+ * @param {string} content
+ */
+function isSpaShell(content) {
+  const html = String(content || '');
+  const m = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (!m) return false;
+  const body = m[1]
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const hasMount = /<app-root\b|<(?:div|main)[^>]*\bid=["'](?:root|app|__next|__nuxt|svelte|q-app)["']/i.test(body);
+  const text = body.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
+  return hasMount && text.length < 40;
+}
+
 module.exports = {
   isIllustrationPath,
   isNonUserFacingPage,
+  isSpaShell,
   ILLUSTRATION_DIR_RE,
   HARNESS_DIR_RE,
 };

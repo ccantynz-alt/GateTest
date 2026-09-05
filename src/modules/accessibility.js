@@ -6,7 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
-const { isNonUserFacingPage } = require('../core/scan-scope');
+const { isNonUserFacingPage, isSpaShell } = require('../core/scan-scope');
 
 // Named CSS colors mapped to RGB values
 const NAMED_COLORS = {
@@ -64,12 +64,19 @@ class AccessibilityModule extends BaseModule {
         // (Craig 2026-09-01, "keep the a11y blocking, thats quality").
         if (isNonUserFacingPage(normalised)) continue;
         const content = fs.readFileSync(file, 'utf-8');
+        // An Angular / React index.html shell OWNS its <head> — `<html lang>`
+        // is checked here like any full document — but its <body> is a mount
+        // point the application fills at runtime: no images, headings or
+        // landmarks to audit in the file (the live a11y probe covers the
+        // rendered page). CleanArchitecture's two shells were told they had
+        // no <main> and no <h1> (2026-09-05).
+        this._checkLanguageAttribute(relPath, content, result);
+        if (isSpaShell(content)) continue;
 
         this._checkImages(relPath, content, result);
         this._checkFormLabels(relPath, content, result);
         this._checkHeadingHierarchy(relPath, content, result);
         this._checkAriaUsage(relPath, content, result);
-        this._checkLanguageAttribute(relPath, content, result);
         this._checkLandmarks(relPath, content, result);
         this._checkFocusManagement(relPath, content, result);
         this._checkReducedMotion(relPath, content, result);
