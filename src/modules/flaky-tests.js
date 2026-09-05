@@ -78,8 +78,11 @@ const BaseModule = require('./base-module');
 const EXTRA_EXCLUDES = ['.terraform'];
 
 const TEST_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
-const TEST_FILE_RE = /\.(?:test|spec)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts)$/i;
-const TEST_DIR_RE = /(?:^|\/)(?:tests?|__tests__|spec)(?:\/|$)/;
+// Which files are test suites is "is this a test path" (one definition,
+// `BaseModule._isTestPath`) narrowed to the JS/TS extensions. This module
+// kept its own two regexes until 2026-09-05 and they had drifted: django's
+// `js_tests/` and hono's `runtime-tests/` (a segment ENDING in a test word)
+// were never scanned, so a `.only(` left in either was invisible.
 
 // Fake-timer / mock hints — if ANY of these appear in the file, we
 // soften the real-clock / real-timer / real-network rules.
@@ -193,7 +196,7 @@ class FlakyTestsModule extends BaseModule {
     // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104);
     // the test-file predicate is applied on top of it.
     const files = this._collectFiles(projectRoot, [...TEST_EXTS], EXTRA_EXCLUDES)
-      .filter((f) => this._isTestFile(f));
+      .filter((f) => this._isTestFile(f, projectRoot));
 
     if (files.length === 0) {
       result.addCheck('flaky-tests:no-files', true, {
@@ -219,13 +222,9 @@ class FlakyTestsModule extends BaseModule {
     });
   }
 
-  _isTestFile(full) {
-    const basename = path.basename(full);
-    const ext = path.extname(basename).toLowerCase();
-    if (!TEST_EXTS.has(ext)) return false;
-    if (TEST_FILE_RE.test(basename)) return true;
-    // Under a tests/ / __tests__/ / spec/ directory
-    return TEST_DIR_RE.test(full.replace(/\\/g, '/'));
+  _isTestFile(full, projectRoot) {
+    if (!TEST_EXTS.has(path.extname(full).toLowerCase())) return false;
+    return this._isTestPath(path.relative(projectRoot, full));
   }
 
   _scanFile(file, projectRoot, result) {

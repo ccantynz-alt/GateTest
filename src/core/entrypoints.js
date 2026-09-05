@@ -29,6 +29,21 @@ const ENTRYPOINT_SEGMENTS = new Set([
   'api', 'public', 'integrations', 'hooks', 'assets', 'static',
 ]);
 
+// Python-only directory conventions — every one is a place Django loads code
+// from BY NAME OR BY SETTINGS STRING, so "nothing imports it" is its normal
+// state. Scoped to `.py` files: an Express app's `middleware/auth.js` is
+// ordinary imported code and an unimported one is a real orphan.
+//   templatetags/   `{% load name %}` → get_installed_libraries() imports every
+//                   module under `<app>/templatetags/`.
+//   backends/       import_string(settings.X) — SESSION_ENGINE, CACHES BACKEND,
+//                   DATABASES ENGINE, EMAIL_BACKEND, TEMPLATES BACKEND, TASKS
+//                   BACKEND, AUTHENTICATION_BACKENDS (13 of django's 23
+//                   residual orphans on 2026-09-05 were these plug-points).
+//   middleware/     MIDDLEWARE setting strings (django/middleware/locale.py).
+//   management/commands/  find_commands() imports `<name>.py` for `manage.py <name>`.
+const PY_ENTRYPOINT_SEGMENTS = new Set(['templatetags', 'backends', 'middleware']);
+const MANAGEMENT_COMMANDS_RE = /(?:^|\/)management\/commands\//;
+
 // Inputs and scaffolding, not modules: fixture data, example apps, docs,
 // benchmark scripts, and the application-under-test trees an integration
 // or e2e suite spins up (nest's `integration/<case>/src` is imported only by
@@ -44,6 +59,20 @@ const ENTRYPOINT_BASENAMES = new Set([
   'main.js', 'main.ts', 'main.py', '__init__.py', '__main__.py',
   'app.js', 'app.ts', 'server.js', 'server.ts',
   'conftest.py', 'setup.py', 'manage.py',
+  // Python files a framework or the interpreter loads BY NAME. The loading
+  // rule is the justification; a name without one does not belong here.
+  'apps.py',     // Django: AppConfig.create() imports `<app>.apps` for every INSTALLED_APPS entry (3.2+)
+  'models.py',   // Django: AppConfig.import_models() imports `<app>.models` at registry setup
+  'admin.py',    // Django: admin.autodiscover() → autodiscover_modules('admin') on every app
+  'urls.py',     // Django: ROOT_URLCONF / include('app.urls') name it by dotted string, never by import
+  'settings.py', // Django: DJANGO_SETTINGS_MODULE names it from the environment
+  'wsgi.py',     // WSGI server loads `project.wsgi:application` from its command line; `flask run` also probes it
+  'asgi.py',     // ASGI server loads `project.asgi:application` the same way
+  'app.py',      // Flask: `flask run` auto-detects app.py in the working directory
+  'tasks.py',    // Celery: autodiscover_tasks() imports `<app>.tasks` for every installed app
+  'middleware.py', // Django: MIDDLEWARE setting names `<app>.middleware.Class` by string (Next's middleware.ts is in TOOL_FILE_RE)
+  // NOT here: signals.py — Django has no loader for it; a project imports it
+  // from apps.py ready(), an ordinary import the Python graph sees.
 ]);
 
 // Framework conventions: Next.js route files and metadata files, plus the
@@ -105,9 +134,12 @@ function isEntryPoint(file, projectRoot, manifestRefs) {
   if (ENTRYPOINT_BASENAMES.has(base)) return true;
   if (FRAMEWORK_FILE_RE.test(base) || METADATA_FILE_RE.test(base) || TOOL_FILE_RE.test(base)) return true;
   const segments = rel.split('/').slice(0, -1);
+  const py = base.endsWith('.py');
   for (const seg of segments) {
     if (ENTRYPOINT_SEGMENTS.has(seg) || FIXTURE_SEGMENTS.has(seg) || seg.endsWith('-corpus')) return true;
+    if (py && PY_ENTRYPOINT_SEGMENTS.has(seg)) return true;
   }
+  if (py && MANAGEMENT_COMMANDS_RE.test(rel)) return true;
   if (manifestRefs && manifestRefs.has(path.resolve(file))) return true;
   return false;
 }

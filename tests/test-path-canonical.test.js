@@ -51,6 +51,18 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'ktor-server/core/test-resources/testdir/test.html',
     'py_tests/a.py',
     'runtime-tests/lambda/mock.ts',
+    // Python runners discover tests by BASENAME (2026-09-05): pytest collects
+    // `test_*.py` / `*_test.py` and loads `conftest.py` by name; Django's
+    // runner finds an app's single `tests.py`. django's own `scripts/tests.py`
+    // (233 lines of unittest.TestCase) was application code to this
+    // predicate — four "unused export" warnings on its test classes.
+    'app/test_views.py',
+    'pkg/views_test.py',
+    'app/tests.py',
+    'conftest.py',
+    'src/pkg/conftest.py',
+    'scripts/tests.py',
+    'django/test/testcases.py', // by its `test/` DIRECTORY, unchanged — see below
   ];
   const NO_MATCH = [
     'src/app.js',
@@ -62,6 +74,25 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'src/manifest/x.js',      // ends in "test" with no separator
     'src/greatest_hits.js',
     'src/testdatabase.go',
+    // The Python basename branch is a whole word at end-of-path: the test
+    // word inside an identifier is not a test file.
+    'contest.py',
+    'src/latest.py',
+    'src/attestation.py',
+    'src/testing.py',
+    'src/testcases.py',         // django/test/testcases.py matches by DIRECTORY, never by name
+    'src/testutils.py',
+    'test_data.json',           // not .py — a fixture only by its directory
+    'pytest.ini',
+    'src/test_views.pyc',
+    'a/test_x.py/b.js',         // the basename must END the path
+    // Bare `test.py` is not a test: pytest never collects it, and both in
+    // the corpus are shipped code — django/core/management/commands/test.py
+    // IS the `manage.py test` command; django/contrib/messages/test.py is a
+    // public assertion mixin. Matching the name would silence checks on
+    // files that exist because they RUN tests.
+    'django/core/management/commands/test.py',
+    'django/contrib/messages/test.py',
   ];
 
   for (const p of MATCH) {
@@ -119,11 +150,15 @@ describe('KI #77 — the drift cannot come back', () => {
   // for all 20 modules.
   const ALLOWED_OWN_PATTERN = new Set(['base-module.js', 'claude-compliance.js']);
 
-  it('no module re-declares its own TEST_PATH_RE', () => {
+  it('no module re-declares its own TEST_PATH_RE — under that name or another', () => {
+    // dead-code.js kept a `TEST_FILE_RE` for months: the same question under
+    // a different name, invisible to a guard that only knew one spelling,
+    // and drifted (it counted `test.py` as a test). The guard now catches the
+    // shape, not the label.
     const offenders = fs
       .readdirSync(MODULES_DIR)
       .filter((f) => f.endsWith('.js') && !ALLOWED_OWN_PATTERN.has(f))
-      .filter((f) => /const\s+TEST_PATH_RE\s*=/.test(fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')));
+      .filter((f) => /const\s+TEST_(?:PATH|FILE|DIR)_RE\s*=/.test(fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')));
     assert.deepStrictEqual(offenders, [], 'use this._isTestPath() instead of a local copy');
   });
 
@@ -134,6 +169,7 @@ describe('KI #77 — the drift cannot come back', () => {
       'cookie-security.js', 'log-pii.js', 'money-float.js', 'tls-security.js',
       'homoglyph.js', 'error-swallow.js', 'redos.js', 'datetime-bug.js',
       'feature-flag.js', 'cron-expression.js', 'cross-file-taint.js',
+      'dead-code.js',
     ];
     for (const f of migrated) {
       const src = fs.readFileSync(path.join(MODULES_DIR, f), 'utf8');
