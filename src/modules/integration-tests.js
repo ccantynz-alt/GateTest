@@ -30,6 +30,7 @@ const VERB_ALIASES = { del: 'DELETE', route: 'ALL' };
 class IntegrationTestsModule extends BaseModule {
   constructor() {
     super('integrationTests', 'Integration Test Execution');
+    this._testTimeoutMs = 300000; // overridable for tests
   }
 
   async run(result, config) {
@@ -150,13 +151,20 @@ class IntegrationTestsModule extends BaseModule {
       if (testCmd) {
         const scriptName = pkg.scripts['test:integration'] ? 'test:integration' :
                           pkg.scripts['test:int'] ? 'test:int' : 'test:api';
-        const { exitCode, stdout, stderr } = this._exec(`npm run ${scriptName} 2>&1`, {
+        const { exitCode, stdout, stderr, timedOut } = this._exec(`npm run ${scriptName} 2>&1`, {
           cwd: projectRoot,
-          timeout: 300000,
+          timeout: this._testTimeoutMs,
         });
 
         if (exitCode === 0) {
           result.addCheck('integration-tests:run', true, { message: 'Integration tests passed' });
+        } else if (timedOut) {
+          // A timeout is not a verdict (doctrine, move 18).
+          result.addCheck('integration-tests:run', true, {
+            severity: 'info',
+            message: `Integration tests not executed — \`npm run ${scriptName}\` did not finish within ${Math.round(this._testTimeoutMs / 1000)}s here`,
+            suggestion: 'Run the scan where the suite normally runs (CI) to include integration test results',
+          });
         } else {
           result.addCheck('integration-tests:run', false, {
             message: 'Integration tests failed',

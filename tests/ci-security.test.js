@@ -553,15 +553,22 @@ describe('CiSecurityModule — branch refs: channel and own-workflow are warning
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
   const WF = (uses) => `name: ci\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ${uses}\n`;
   async function pinSeverity(uses, env = {}) {
-    const saved = process.env.GITHUB_REPOSITORY;
-    if (env.GITHUB_REPOSITORY) process.env.GITHUB_REPOSITORY = env.GITHUB_REPOSITORY; else delete process.env.GITHUB_REPOSITORY;
+    const saved = { GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY, GITHUB_WORKSPACE: process.env.GITHUB_WORKSPACE };
+    // GITHUB_REPOSITORY only names the scanned project when the scan targets
+    // the workflow's own checkout — so the workspace is set to tmp here.
+    if (env.GITHUB_REPOSITORY) { process.env.GITHUB_REPOSITORY = env.GITHUB_REPOSITORY; process.env.GITHUB_WORKSPACE = env.GITHUB_WORKSPACE || tmp; } else { delete process.env.GITHUB_REPOSITORY; delete process.env.GITHUB_WORKSPACE; }
     try {
+      if (env.remote) {
+        const { execFileSync } = require('child_process');
+        execFileSync('git', ['init', '-q'], { cwd: tmp });
+        execFileSync('git', ['remote', 'add', 'origin', env.remote], { cwd: tmp });
+      }
       writeWorkflow(tmp, 'ci.yml', WF(uses));
       const r = await run(tmp);
       const c = r.checks.find((x) => !x.passed && /branch-pin/.test(x.name));
       return c ? c.severity : null;
     } finally {
-      if (saved === undefined) delete process.env.GITHUB_REPOSITORY; else process.env.GITHUB_REPOSITORY = saved;
+      for (const k of Object.keys(saved)) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
     }
   }
   it('dtolnay/rust-toolchain@stable is a warning', async () => {
@@ -575,6 +582,16 @@ describe('CiSecurityModule — branch refs: channel and own-workflow are warning
   });
   it('a third-party action on a branch is still an error', async () => {
     assert.strictEqual(await pinSeverity('someone/action@main'), 'error');
+  });
+  // CI's corpus job scans vapor with GITHUB_REPOSITORY=crclabs-hq/GateTest:
+  // vapor's own reusable workflows came back as third-party errors (1 → 4,
+  // 2026-09-05). The scanned project's remote decides; the env var only
+  // when the project IS the workflow's workspace.
+  it("the scanned project's remote wins over GITHUB_REPOSITORY when the project is not the workspace", async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'crclabs-hq/GateTest', GITHUB_WORKSPACE: '/somewhere/else', remote: 'https://github.com/vapor/vapor.git' }), 'warning');
+  });
+  it('GITHUB_REPOSITORY alone, for a root that is NOT the workspace, makes nothing "our own"', async () => {
+    assert.strictEqual(await pinSeverity('vapor/ci/.github/workflows/test.yml@main', { GITHUB_REPOSITORY: 'vapor/vapor', GITHUB_WORKSPACE: '/somewhere/else' }), 'error');
   });
 });
 

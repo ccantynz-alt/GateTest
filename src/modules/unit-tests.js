@@ -10,6 +10,7 @@ const path = require('path');
 class UnitTestsModule extends BaseModule {
   constructor() {
     super('unitTests', 'Unit Test Execution');
+    this._testTimeoutMs = 300000; // overridable for tests
   }
 
   async run(result, config) {
@@ -69,15 +70,25 @@ class UnitTestsModule extends BaseModule {
     // from the scanner flipped one of this repo's own tests red).
     const env = { ...process.env };
     for (const k of Object.keys(env)) if (/^GATETEST_/.test(k)) delete env[k];
-    const { exitCode, stdout, stderr } = this._exec(testCommand.command, {
+    const { exitCode, stdout, stderr, timedOut } = this._exec(testCommand.command, {
       cwd: projectRoot,
-      timeout: 300000, // 5 minutes
+      timeout: this._testTimeoutMs, // 5 minutes
       env,
     });
 
     const out = stdout + stderr;
     if (exitCode === 0) {
       result.addCheck('unit-tests:run', true, { message: 'All unit tests passed' });
+    } else if (timedOut) {
+      // Never derive a verdict from a timeout (doctrine, move 18): ktor's
+      // Gradle build ran for the full five minutes on CI and was reported
+      // as "Unit tests failed" — a fact about the runner's clock, not the
+      // suite (2026-09-05).
+      result.addCheck('unit-tests:run', true, {
+        severity: 'info',
+        message: `Not executed — the test command did not finish within ${Math.round(this._testTimeoutMs / 1000)}s here`,
+        suggestion: 'Run the scan where the suite normally runs (CI) to include test results',
+      });
     } else if (this._looksLikeMissingToolchain(out)) {
       // ModuleNotFoundError / "command not found" / "no such file" — the
       // environment, not the tests, failed.

@@ -91,3 +91,22 @@ describe('IntegrationTestsModule — one route grammar, real test discovery (KI 
     assert.ok(found && /1 integration test file/.test(found.message), JSON.stringify(found));
   });
 });
+
+describe('IntegrationTestsModule — a timeout is not a verdict', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-integ-to-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const w = (rel, c) => { const f = path.join(tmp, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, typeof c === 'string' ? c : JSON.stringify(c)); };
+  it('a script that does not finish in time is "not executed", reported as info', async () => {
+    w('package.json', { name: 'svc', scripts: { 'test:integration': 'node -e "setTimeout(() => {}, 20000)"' }, devDependencies: { vitest: '^1' } });
+    fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
+    w('src/app.js', "app.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', () => {});\n");
+    const mod = new IntegrationTestsModule();
+    mod._testTimeoutMs = 1500;
+    const r = makeResult();
+    await mod.run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } });
+    const rc = r.checks.find((x) => x.name === 'integration-tests:run');
+    assert.ok(rc && rc.passed && rc.severity === 'info' && /did not finish/.test(rc.message), JSON.stringify(rc));
+  });
+});

@@ -386,17 +386,28 @@ class CiSecurityModule extends BaseModule {
   _repoOwner(projectRoot) {
     if (this._ownerCache && this._ownerCache.root === projectRoot) return this._ownerCache.owner;
     let owner = null;
-    const envRepo = process.env.GITHUB_REPOSITORY;
-    if (envRepo && envRepo.includes('/')) owner = envRepo.split('/')[0].toLowerCase();
+    // The project's own remote first. GITHUB_REPOSITORY names the repo the
+    // WORKFLOW runs in, which is only the project being scanned when the
+    // scan targets the workspace checkout: on CI the corpus job scans
+    // vapor with GITHUB_REPOSITORY=crclabs-hq/GateTest, and vapor's own
+    // reusable workflows on @main came back as third-party errors (1 → 4,
+    // 2026-09-05). The env var is the fallback for a checkout with no
+    // remote, and only when the root IS the workspace.
+    try {
+      const url = require('child_process').execFileSync('git', ['config', '--get', 'remote.origin.url'], {
+        cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      const m = url.match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/);
+      if (m) owner = m[1].toLowerCase();
+    } catch { owner = null; } // error-ok — no git or no remote: try the workflow's own identity below
     if (!owner) {
-      try {
-        const url = require('child_process').execFileSync('git', ['config', '--get', 'remote.origin.url'], {
-          cwd: projectRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-        }).trim();
-        const m = url.match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/);
-        if (m) owner = m[1].toLowerCase();
-      } catch { owner = null; } // error-ok — no git or no remote: nothing is "our own" then, every branch ref stays an error
+      const envRepo = process.env.GITHUB_REPOSITORY;
+      const workspace = process.env.GITHUB_WORKSPACE;
+      const isWorkspace = workspace && path.resolve(workspace) === path.resolve(projectRoot);
+      if (envRepo && envRepo.includes('/') && isWorkspace) owner = envRepo.split('/')[0].toLowerCase();
     }
+    // Still nothing: no remote, not the workspace — nothing is "our own",
+    // every branch ref stays an error.
     this._ownerCache = { root: projectRoot, owner };
     return owner;
   }
