@@ -49,6 +49,9 @@ async function ensureSchema(): Promise<void> {
         total_warnings INTEGER,
         modules      JSONB
       )`;
+      // Per-rule fired / silenced counts (the Fifty, move 07) — added after
+      // the table shipped, so ALTER rather than a second CREATE.
+      await sql`ALTER TABLE scan_findings ADD COLUMN IF NOT EXISTS rules JSONB`;
       await sql`CREATE INDEX IF NOT EXISTS scan_findings_ts_idx ON scan_findings(ts DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS scan_findings_source_idx ON scan_findings(source)`;
     } catch (err) { // error-ok — log-and-continue; never block the caller
@@ -73,6 +76,7 @@ export interface SanitizedScanRecord {
   totalErrors: number;
   totalWarnings: number;
   modules: Array<{ name: string; errors: number; warnings: number; soft: number; status: string }>;
+  rules: Array<{ id: string; fired: number; silenced: number }>;
 }
 
 export type SanitizeResult =
@@ -124,10 +128,10 @@ export async function recordScanBatch(rawRecords: unknown[]): Promise<IngestResu
     for (const r of clean) {
       await sql`
         INSERT INTO scan_findings
-          (source, suite, gate_status, duration_ms, module_count, total_errors, total_warnings, modules)
+          (source, suite, gate_status, duration_ms, module_count, total_errors, total_warnings, modules, rules)
         VALUES
           (${r.source}, ${r.suite}, ${r.gateStatus}, ${r.durationMs}, ${r.moduleCount},
-           ${r.totalErrors}, ${r.totalWarnings}, ${JSON.stringify(r.modules)})
+           ${r.totalErrors}, ${r.totalWarnings}, ${JSON.stringify(r.modules)}, ${JSON.stringify(r.rules || [])})
       `;
     }
     return { ok: true, accepted: clean.length, rejected };
@@ -135,5 +139,49 @@ export async function recordScanBatch(rawRecords: unknown[]): Promise<IngestResu
     // eslint-disable-next-line no-console
     console.warn("[scan-telemetry] recordScanBatch failed:", (err as Error)?.message);
     return { ok: false, accepted: 0, rejected, reason: (err as Error)?.message || "persistence-failed" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Read side — the rule-noise leaderboard (the Fifty, move 07). Returns the
+// raw per-scan rule arrays for the window; the maths lives in the pure
+// rule-noise.js so it is unit-tested without a database.
+// ---------------------------------------------------------------------------
+
+interface RuleNoiseRow {
+  ts: string;
+  rules: Array<{ id: string; fired: number; silenced: number }>;
+}
+
+type RuleNoiseRead =
+  | { ok: true; rows: RuleNoiseRow[]; windowDays: number }
+  | { ok: false; reason: string; windowDays: number };
+
+export async function readRuleNoiseRows(opts: { days?: number; limit?: number } = {}): Promise<RuleNoiseRead> {
+  const windowDays = Math.max(1, Math.min(365, Math.round(opts.days ?? 90)));
+  const limit = Math.max(1, Math.min(50000, Math.round(opts.limit ?? 20000)));
+  if (!process.env.DATABASE_URL) return { ok: false, reason: "persistence unavailable", windowDays };
+  try {
+    await ensureSchema();
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT ts, rules FROM scan_findings
+      WHERE rules IS NOT NULL AND jsonb_array_length(rules) > 0
+        AND ts > NOW() - (${windowDays} || ' days')::interval
+      ORDER BY ts DESC
+      LIMIT ${limit}
+    `) as unknown as Array<{ ts: string | Date; rules: unknown }>;
+    return {
+      ok: true,
+      windowDays,
+      rows: rows.map((r) => ({
+        ts: r.ts instanceof Date ? r.ts.toISOString() : String(r.ts),
+        rules: Array.isArray(r.rules) ? (r.rules as RuleNoiseRow["rules"]) : [],
+      })),
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[scan-telemetry] readRuleNoiseRows failed:", (err as Error)?.message);
+    return { ok: false, reason: (err as Error)?.message || "read-failed", windowDays };
   }
 }

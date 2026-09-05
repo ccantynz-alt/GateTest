@@ -113,7 +113,7 @@ vendor/**
 
 Suppressed findings are excluded from the gate decision and every failure count, but stay visible in a `suppressedChecks` list — nothing is silently hidden. Two more controls:
 
-- `gatetest --noise` — ranks your noisiest modules and prints the exact ignore line to copy.
+- `gatetest --noise` — ranks your noisiest modules and prints the exact ignore line to copy. The same signal, aggregated across every opted-in scan, is published rule by rule at [gatetest.io/noise](https://gatetest.io/noise).
 - **Auto-softening** — a module you chronically dismiss stops blocking the gate on its own (never on thin evidence: it takes repeated dismissals at a high fire-rate).
 
 Project-wide options live in `.gatetest.json` (suites, per-module config, severity overrides) — run `gatetest --init` to scaffold one.
