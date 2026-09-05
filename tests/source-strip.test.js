@@ -75,6 +75,26 @@ describe('source-strip — regex versus division', () => {
   });
 });
 
+describe('source-strip — the two defects the slice-based scanner fixed (2026-09-05)', () => {
+  it('a line comment inside a template hole does not end the hole — the closing backtick closes the template, not opens one', () => {
+    // trpc www/src/theme/BlogPostPage/Metadata/index.tsx: the old machine
+    // returned to the plain state after the comment, read `}` as code and the
+    // closing backtick as a NEW template, and blanked the rest of the file.
+    const src = 't = `${f({\n  // note\n  a: 1,\n})}`;\nimport x from "./after";\n';
+    const out = strip(src);
+    assert.ok(out.endsWith('import x from "       ";\n'), 'code after the template survives: ' + JSON.stringify(out));
+  });
+  it('a backslash-newline inside a template or a string keeps the newline (line numbers after it hold)', () => {
+    const out = strip('u = `a \\\nb`; v = "c \\\nd"; w = 1;');
+    assert.ok(out.endsWith(' w = 1;'), out);
+  });
+  it('NEGATIVE CONTROL — a `}` inside a nested string within a hole does not close the hole either', () => {
+    const out = strip('t = `${g("}")} tail`; z = 2;');
+    assert.ok(out.endsWith('; z = 2;'), out);
+    assert.ok(!out.includes('tail'), out);
+  });
+});
+
 describe('source-strip — robustness', () => {
   it('CRLF: the `\\n` stays; a `\\r` inside a line comment is masked like the rest of the comment', () => {
     // Length and every `\n` position are preserved (the helper asserts both),
