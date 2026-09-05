@@ -29,6 +29,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // runner writes from its own measurement — the same contract as
     // site-stats.json. Refreshed on the nightly, so "weekly" is honest.
     { url: `${base}/precision`, lastModified: now, changeFrequency: "weekly", priority: 0.85 },
+    // /changelog renders website/app/data/changelog.json, generated from the
+    // main branch history at build time and on the nightly.
+    { url: `${base}/changelog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${base}/how-it-works`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/quickstart`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },

@@ -79,7 +79,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 36 | Badges as the distribution channel | done | graded badge redirect; free scan ends with the badge (PR #423) |
 | 37 | Free scan as the primary call to action | **Craig** | — |
 | 38 | Keep the comparison pages dated and factual | done | git-dated `ComparisonReviewed` (PR #423) |
-| 39 | A real changelog page | open | `docs/HISTORY.md` is prose; needs a structured source |
+| 39 | A real changelog page | done | the structured source is the main branch itself: `scripts/generate-changelog.js` reads the first-parent history into `website/app/data/changelog.json` (PR, date, area by file count, modules touched via the registry, version bumps as facts on the commit that made them; direct commits included as such) — regenerated at website prebuild on a full clone and on the nightly; `/changelog` renders it, `tests/changelog-sync.test.js` holds the file to the repo and the page to the file |
 | 40 | Three case studies with numbers | **Craig** | — |
 
 ## E. Enterprise readiness (41–46)
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-Nothing pre-authorised is left in the Fifty (20 and 42 merged, 39 in PR #439). Open pre-authorised code work lives in the Known Issues (`docs/ROADMAP.md`): KI #77 (the 22 split/join module pairs), KI #96 (dead-code through indirection), KI #52 (link checking).
+Nothing pre-authorised is left in the Fifty (20, 39 and 42 merged). Open pre-authorised code work lives in the Known Issues (`docs/ROADMAP.md`): KI #77 (the 22 split/join module pairs), KI #96 (dead-code through indirection), KI #52 (link checking).
 Waiting on Craig: 15, 22, 29, 35, 37, 40, 41, 43, 44, 45, 47, 48, 49, 50.

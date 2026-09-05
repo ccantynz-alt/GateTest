@@ -81,6 +81,16 @@ export function getModuleBySlug(slug: string): ResolvedModule | null {
 }
 
 /**
+ * The slug a module NAME (registry key, e.g. "hardcodedUrl") resolves to,
+ * or null when no page exists for it — so a caller linking by name never
+ * emits a dead /modules/... href. Used by /changelog.
+ */
+export function getSlugForModuleName(name: string): string | null {
+  const slug = moduleNameToSlug(name);
+  return buildModuleIndex().has(slug) ? slug : null;
+}
+
+/**
  * Get related modules — same category, excluding the current one.
  * Used for cross-linking on each module page.
  */
