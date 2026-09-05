@@ -185,6 +185,18 @@ GateTest/
 | `integrations/husky/pre-push` | Local pre-push gate for protected platforms | Any change to local enforcement |
 | `integrations/scripts/install.sh` | One-command installer into a protected repo | Any change to install flow |
 | `tests/integrations.test.js` | Tripwire that prevents silent removal of protection | DO NOT modify without Craig auth |
+| `src/modules/base-module.js` | `_collectFiles` (the ONE file walk — honours `--diff`, excludes, `_respectsIncremental`), `_isTestPath` / exported `TEST_PATH_RE` | Adding a walk or a test-path test anywhere — don't; import these |
+| `src/core/route-grammar.js` | One answer to "is this file an HTTP handler / is session middleware in play" across Express, Fastify, Hono, Koa, Nest, Next, CJS+ESM | Any module that gates a rule on "this looks like an API" |
+| `src/core/scan-scope.js` | Illustration / harness directory definitions shared by every module | Downgrading or skipping by directory |
+| `src/core/ignore-file.js` | `.gatetestignore` grammar, matcher, and `suggestLine` (the exact line offered beside a finding, verified against the matcher) | Changing suppression or the hint |
+| `src/core/report-provenance.js` | Report provenance, findings digest (shared with the determinism gate), HMAC signature, `verifyReport` | Changing the JSON report or `gatetest verify-report` |
+| `src/core/ci-run-url.js` | The Actions run URL / `gatetest replay` command printed under a blocked gate | Changing CI-facing output |
+| `src/reporters/sarif-reporter.js` | SARIF level = the level the GATE used; security-severity banded by effective level; suppressed findings dropped | Anything Code Scanning will show |
+| `website/app/lib/changed-lines.js` | Line-level PR attribution (Myers diff, edit cap) — `inDiff` vs `inChangedFile` | Changing what "in this change" means |
+| `website/app/lib/github-callback.js` | The PR comment: ranked findings, attribution tags, "not checked" disclosure, the `@gatetest ignore` reply | Any change to what a reviewer reads |
+| `scripts/real-world-precision.js` + `reliability-corpus/real-world.json` | The precision gate: pinned third-party repos, ceilings that only ratchet down, `--write-json` for `/precision` | Any rule change — run it |
+| `scripts/determinism-check.js` | Same tree, same findings; `fingerprint` shared with provenance | Any runner / walker / module file-set change — run it |
+| `scripts/generate-build-info.js` | Build stamp + per-page git dates for `/compare/*` (`pageUpdated`) | Adding a page that must carry a date |
 
 ---
 

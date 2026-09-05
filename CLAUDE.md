@@ -35,8 +35,10 @@ The Bible holds **rules + current truth only**. Deep reference material lives in
 | `docs/MODULES.md` | Adding/changing a module, or writing competitive/marketing copy about module coverage |
 | `docs/ROADMAP.md` | Picking up new work — evolution tiers, Inclusive Agentic QA spec, **open Known Issues**, remote-MCP distribution plan |
 | `docs/HISTORY.md` | Wondering whether something was already built/decided — completed build plans, all version changelogs, resolved Known Issues |
+| `docs/DOCTRINE.md` | Before touching the engine or a rule — the fourteen working principles, each with the defect that proved it and the method that prevents it |
+| `docs/THE-FIFTY.md` | Picking up new work — the current fifty-move plan with status and evidence per move; the work queue |
 
-**Session-start rule:** read this file end to end, then `docs/ROADMAP.md` for open work. Never re-implement something without checking `docs/HISTORY.md` first.
+**Session-start rule:** read this file end to end, then `docs/DOCTRINE.md`, then `docs/THE-FIFTY.md` and the Known Issues in `docs/ROADMAP.md` for open work. Never re-implement something without checking `docs/HISTORY.md` first.
 
 ---
 
@@ -128,6 +130,29 @@ The following actions require **explicit authorization from Craig BEFORE executi
 
 ---
 
+## ENGINEERING DOCTRINE (READ THIS EVERY SESSION)
+
+Fourteen principles, each paid for by a defect that reached this codebase.
+The method for each — how to write the control pair, how to run the corpus,
+how to brief an agent — lives in `docs/DOCTRINE.md`. The principles:
+
+1. **The bug that matters most is "reports success while doing nothing."** Prefer three-state answers: clean, found, **not checked** — and print the third.
+2. **Precision is measured on code we did not write.** `scripts/real-world-precision.js` over `reliability-corpus/real-world.json`; ceilings only ratchet down; NodeGoat is a floor. A rule change is unvalidated until the corpus says otherwise.
+3. **No rule ships without a control pair** — the real line that fires it, and the idiom beside it that must stay quiet. A probe that reports *silence* needs its own positive control first.
+4. **One definition, imported.** Files a module sees, test paths, harness dirs, route handlers, the import graph, a finding's identity, the ignore line, the domain, the counts — each has one home (table in `docs/DOCTRINE.md` §4). A second answer to any of these is a bug.
+5. **Segments, not substrings; tokens, not substrings.** `includes('.git')` matches `.github`; `/==[^=]/` matches inside `===`. `tests/test-path-canonical.test.js` forbids the shape — extend its word list, don't fix one instance.
+6. **Say what was not checked** wherever the report is read: console, PR comment, JSON provenance. A pass from a fallback never wears the green tick.
+7. **Generated over typed.** Counts, corpus numbers, dates, permission lists come from scripts and are import-checked by tests.
+8. **Verify in the environment that decides, after the last edit.** Fast suite plain **and** under `GITHUB_ACTIONS=true`; quick self-scan last; corpus on rule changes; determinism check on module changes.
+9. **Our own scanner reviewing our own PR is the best bug report we get.** Every bot finding on this repo is closed against one defendant — the code or the rule — never ignored.
+10. **Expect the worst of prior work, and prove it either way.** Run a subsystem end to end on real input before trusting its comments; reconstruct and diff when replacing.
+11. **Parallelise mechanical work; verify by reconstruction.** Agents get exact files, the tests to run, the control to show, and "do not commit"; the orchestrator runs the sweep and commits in units.
+12. **Edit files the way their bytes are stored.** CRLF and BOMs survive scripted edits; a diff far larger than the change is a line-ending accident.
+13. **Commit as coherent units; push and merge without being asked** (Craig). One cause per commit with the measurement in the message; a red PR is never "waiting on review".
+14. **Speed is a precision feature.** Measure wall-clock before and after any change to the runner, a walker, or a file set.
+
+---
+
 ## ALWAYS-ON MODE — NEVER IDLE (READ THIS EVERY SESSION)
 
 **Idle Claude = lost revenue. Craig's directive:** *"if you're coding and you see something that's broken you fix it, if you think you have an advanced feature that needs adding just add it. We can't have you sitting idle — that's loss of revenue, downtime, loss of coding time."*
@@ -143,15 +168,17 @@ While working on any task in this repo, if you observe any of the following, **a
 
 ### The loop
 
-Every turn ends with the **sweep checklist**:
-- [ ] `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` — all pass (the bare `node --test` form hangs for HOURS locally — a leaked timer/socket keeps the runner alive; CI got the same force-exit fix in `180bf7c`)
-- [ ] The same suite once more with the Actions environment — `GITHUB_ACTIONS=true CI=true GITHUB_REPOSITORY=crclabs-hq/GateTest GITHUB_RUN_ID=1 node --test …` — because `src/index.js` auto-attaches the annotations + CI-summary reporters under `GITHUB_ACTIONS=true` and anything keyed on that env is invisible locally (2026-09-05: four reporter tests were green here and red in CI for exactly this)
-- [ ] `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` — heavy suite (subprocess/CLI tests moved here in v1.57.1); non-blocking in CI but must be green before shipping
-- [ ] `cd website && npx next build` — zero errors
-- [ ] `node bin/gatetest.js --list` — all modules load
-- [ ] `GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --suite quick --parallel` — GATE: PASSED, 0 blocking, run AFTER the last edit (2026-09-05: a new env var read in code without a `.env.example` line blocked CI's self-scan; the earlier green self-scan predated the edit)
-- [ ] `grep -rn "TODO\|FIXME" src/ website/app/ --include="*.js" --include="*.ts" --include="*.tsx"` — none left unresolved in code you touched
-- [ ] Known Issues table reviewed — any HIGH item still in the pre-authorization scope gets picked up
+Every turn ends with the **sweep checklist**, in this order — the self-scan and the corpus go LAST because they judge the tree as it will be pushed:
+1. `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` — all pass (the bare `node --test` form hangs for HOURS locally — a leaked timer/socket keeps the runner alive; CI got the same force-exit fix in `180bf7c`)
+2. The same suite under the Actions environment — `GITHUB_ACTIONS=true CI=true GITHUB_REPOSITORY=crclabs-hq/GateTest GITHUB_RUN_ID=1 node --test …` — `src/index.js` auto-attaches two reporters under that env and anything keyed on it is invisible locally (2026-09-05: four reporter tests green here, red in CI)
+3. `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` — heavy suite; non-blocking in CI but green before shipping
+4. `npx eslint .` — exit 0 (the root config ignores `website/`; `cd website && npx eslint` covers it)
+5. `cd website && npx tsc --noEmit && npx next build` — zero errors
+6. `node bin/gatetest.js --list` — 121 modules, matches `src/core/registry.js`
+7. `grep -rn "TODO\|FIXME" src/ website/app/ --include="*.js" --include="*.ts" --include="*.tsx"` — none left in code you touched
+8. **If a rule's recall or scope changed:** `node scripts/real-world-precision.js` — 11/11 at ceilings. **If a module's file set or the runner changed:** `node scripts/determinism-check.js`.
+9. **Last:** `GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --suite quick --parallel` — GATE: PASSED, 0 blocking, run AFTER the final edit (2026-09-05: an env var read without a `.env.example` line blocked CI's self-scan; the earlier green scan predated the edit)
+10. Known Issues (`docs/ROADMAP.md`) and `docs/THE-FIFTY.md` reviewed — any HIGH item in the pre-authorisation scope gets picked up; any move that landed gets its status and evidence
 
 If the sweep is red, **fix it before stopping**. The Stop hook enforces this.
 
@@ -477,9 +504,10 @@ When something breaks:
 1. Run ALL tests — `node --test --test-force-exit --test-timeout=60000 tests/*.test.js` (fast) + `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` (heavy)
 2. Build website — `cd website && npx next build`
 3. Verify all modules load — `node bin/gatetest.js --list`
-4. Update Known Issues in `docs/ROADMAP.md` if anything found (resolved ones move to `docs/HISTORY.md`)
-5. Commit and push everything
+4. Update Known Issues in `docs/ROADMAP.md` if anything found (resolved ones move to `docs/HISTORY.md`); update `docs/THE-FIFTY.md` status for any move that landed
+5. Commit and push everything; open the PR as a draft, drive it green, merge it, restart the branch from `main` — a branch left unmerged is work the customer cannot use
 6. Leave the codebase in a WORKING state
+7. If a principle in `docs/DOCTRINE.md` was proven or disproven this session, change it there and say why
 
 ### MCP Debug Protocol — MANDATORY
 When debugging ANY issue in this repo or any customer repo via GateTest MCP:
@@ -614,167 +642,16 @@ number.
 were on 120 modules; rewriting the label falsifies evidence instead of updating
 a claim.
 
-### v1.61.1 (2026-09-04) — the gate can fail again
+### v1.61.2 (2026-09-05) — current truth
 
-**The single most important fact in this file changed: GateTest now ENFORCES
-for customers. It did not before.**
+- **The gate enforces for customers.** `integrations/github-actions/gatetest-gate.yml` and `action.yml` block on PRs (`--diff` / `--pr` scope) and on full runs against `.gatetest/baseline.json`; `--report-only` is forbidden on the gate by `tests/integrations.test.js`. Before 2026-09-04 every customer ran advisory.
+- **Precision is measured on eleven third-party repositories** (`reliability-corpus/real-world.json`: express 0, flask 2, fastify 5, got 15, hono 33, zod 20, django 65, rails 47, spring-petclinic 9, gin 2; NodeGoat floor 40, measured 59). CI job "real repos must not be blocked"; rendered at `/precision` from `website/app/data/precision.json`, regenerated nightly.
+- **Diff scans report only the diff** (runner-level `_scopeResultToChangedFiles`), one file walk for 36 modules, quick `--diff` on a PR ≈ 8s; full self-scan ≈ 65s with mutation deferred to `mutation-nightly.yml`.
+- **Every JSON report carries provenance and a signature** (`src/core/report-provenance.js`, `GATETEST_REPORT_SIGNING_KEY`, `gatetest verify-report`). SARIF reports the level the gate used. A CI job asserts same tree → same findings.
+- **Hosted PR comments** attribute findings by line (`inDiff` / `inChangedFile`), say what was not checked, and carry the exact `@gatetest ignore …` reply per finding. The CLI prints the exact `.gatetestignore` line and, in CI, the `gatetest replay` command under a blocked gate.
+- **Open, measured:** KI #106 — eleven modules still gate on a framework marker their rules do not need; KI #105 — stale Code Scanning categories need an API delete.
 
-Both shipped enforcement surfaces were advisory for everyone except us:
-
-| Surface | Customer behaviour before |
-|---|---|
-| `integrations/github-actions/gatetest-gate.yml` | `--report-only` on both PR and push |
-| `action.yml` (the Marketplace action) | `block` input defaulted to `'false'` → `--report-only` |
-
-`--report-only`'s own `--help` text is *"Report findings but NEVER fail the
-gate."* Admin repos (`GATETEST_ADMIN`, `crclabs-hq`) got `--fix` and real
-enforcement; every paying customer got a report that could not fail their
-build. **A gate that cannot say no is a linter with better marketing.**
-
-The justification written into both files was real — a mature repo should not
-eat years of backlog on day one — but *never fail* is a permanent answer to a
-first-run problem. The fix is scoping, which both files already had and were
-not relying on:
-
-- **PR runs enforce**, scoped by `--diff` / `--pr`, so an author is only ever
-  blocked on code they just wrote. Existing debt lives in files the diff never
-  opens.
-- **Full-repo runs enforce against `.gatetest/baseline.json`** — the "clean as
-  you code" machinery from KI #66, built long ago and never wired into the
-  shipped gate. First run grandfathers what is already there and passes; every
-  run after fails on NEW findings only.
-- `action.yml` `block` now defaults to `true`. Setting it `false` still works
-  and emits a `::warning` saying the gate cannot fail.
-
-Measured end to end on `colinhacks/zod` @ HEAD:
-
-```
-no baseline              50 blocking   exit 1
-gatetest --baseline     554 grandfathered
-re-scan                   0 blocking   exit 0   "Nothing NEW is blocking"
-+ planted danger.js       5 blocking   exit 1
-```
-
-That last run caught a command injection (`exec` with interpolated
-`req.query`), a hardcoded `sk_live` key, and an unauthenticated `/admin/run`
-route — **through a 554-finding baseline.** Adoptable and still able to fail.
-
-`tests/integrations.test.js` gains the tripwire: no gate invocation may carry
-`--report-only`, and the full-scan path must keep a baseline ramp. Turning
-enforcement on without a ramp only moves the failure from "never blocks" to
-"blocks everyone on day one", and that gets uninstalled faster.
-
-**Precision work that made enforcement defensible.** Six third-party repos
-cloned fresh and scanned (`--suite full`); every one was blocked beforehand:
-
-| Repo | Before | After |
-|---|---|---|
-| express | 2 | **0** |
-| flask | 2 | 2 |
-| fastify | 6 | 5 |
-| got | 20 | 16 |
-| zod | 51 | 50 |
-| hono | 55 | 37 |
-
-OWASP/NodeGoat still blocks with 60, so recall is intact. Twelve defects, all
-failing toward silence or toward blocking clean code — among them
-`Promise.all()` counting as a SQL sink, `RegExp.prototype.exec()` as a
-command-execution sink, `.github/` excluded by a `.git` substring match,
-`server/api/` invisible to `authBypass`, and `.npmrc` reported CRITICAL merely
-for being tracked. See `docs/HISTORY.md` and PR #419 for the full list.
-
-**Corpus grown to 11 repos, four of them non-JavaScript (2026-09-05).** The
-engine advertises eight languages; until this pass its false-positive rate was
-measured on JavaScript plus Flask. First contact, `--suite full`, blocking:
-
-| Repo | First scan | After | What was wrong |
-|---|---|---|---|
-| django/django | 89 | **65** | 74 of 76 "secrets" were `password='secret'` fixtures under tests/; `datetime.now(tz)` read as naive; `def eval(self, …)` read as a call |
-| rails/rails | 56 | **47** | `pg_conn.exec("NOTIFY #{…}")` read as a shell; `class_eval reader, __FILE__, line` read as eval; error-severity rules stayed blocking inside test/ |
-| spring-petclinic | 9 | 9 | — |
-| gin-gonic/gin | 2 | 2 | — |
-
-One regression caught by the same gate: a first fix for the Ruby backtick form
-matched every error message with a backtick-quoted word before an
-interpolation and took Rails from 56 to **127**. Narrowed to a command literal
-that opens an expression and closes on the same line. The lesson is the
-session's: **added recall is unvalidated until the corpus says otherwise.**
-
-Django's remaining 65 and Rails' 47 are honest residue, not bugs — the ORM's
-SQL compiler in `django/db` building SQL by string, `rails runner` evaluating
-stdin by design, `datetime.now()` for a file timestamp. A scanner should
-report those; the project is right to ignore them. Ceilings are pinned at the
-measured numbers and ratchet down from here.
-
-**Two things every future session should carry from this:**
-
-1. **The recurring bug shape is a substring test where a segment test was
-   meant.** `includes('.git')` matches `.github`; `includes('test')` matches
-   `src/latest/` and `attestation.js`. `tests/test-path-canonical.test.js` now
-   forbids the shape across all 121 modules — it found five more the moment it
-   ran.
-2. **Precision is measured on third-party repos, never on this one.** Every
-   rule here was tuned against this repo, which is why they looked clean here
-   and blocked express. Clone real repos and scan them before believing any
-   precision claim.
-
-**Known gaps, measured and open:** a full self-scan does not finish (`timeout
-1200`, exit 124, still inside `mutation`, against the §9 bar of 60s);
-`checkTsSyntax` cannot verify when `typescript` is absent and now says so
-rather than reporting "all clean"; `npm run lint` is red on main with 7
-pre-existing errors.
-
-### errorSwallow precision, 2026-09-04 — measured on zod, not on us
-
-The worst repo in the corpus was `colinhacks/zod` @7a002366: **50 blocking, 33
-of them from one module.** Two separate causes, and fixing either alone would
-have hidden the other:
-
-| | zod | got | hono |
-|---|---|---|---|
-| before | 50 | 16 | 37 |
-| after | **20** | **15** | **33** |
-
-express 0, flask 2, fastify 5 unchanged; **OWASP/NodeGoat still blocks with
-60**, so this is precision, not silence. Ceilings in
-`reliability-corpus/real-world.json` ratcheted down to match.
-
-1. **Scope.** 23 of the 33 were benchmark harnesses — `packages/zod/src/v3/
-   benchmarks/` times the *throw* path, and was told 22 times it had erased an
-   error. The module already treated a test file as harness code; a benchmark
-   is the same kind of code. It now asks `HARNESS_DIR_RE` from
-   `src/core/scan-scope.js` instead of knowing only about tests. Reduced
-   severity, not removal — exactly what the module already did for tests.
-
-2. **Rule precision.** 7 were in shipped source, and all 7 were the parsing
-   idiom, not a swallow:
-   `if (def.coerce) try { payload.value = Number(payload.value); } catch {}`
-   followed by `if (typeof input === "number") return payload;`. The
-   discriminator is **not** "is this a parser" but *can the code around the
-   catch observe the failure* — `src/core/guarded-catch.js` recognises two
-   shapes (the try exits on success and an alternative follows; or the try
-   only assigns a target the following code TESTS). A target that is merely
-   *read* afterwards still blocks, because `try { user = await find(id) }
-   catch {} return user` cannot tell "no user" from "database down".
-
-**Do not widen this into an exclusion.** Both fixes ship with control pairs in
-`tests/guarded-catch.test.js` and `tests/error-swallow.test.js`: every negative
-control (the idiom stays quiet) is paired with a positive control (the swallow
-it resembles still blocks). Two zod findings deliberately still block —
-`scripts/compile-fuzz.ts` builds a debug string with a `""` default that
-nothing ever checks — and that is the rule working, not a gap.
-
-Third defect, found by self-scan in the same pass: the module reported the
-examples in its own documentation. A `catch {}` inside a `/** ... */` block was
-executable code as far as it was concerned, at ERROR severity. `_isExecutableAt`
-now answers that from the masked copy the guard analysis already builds.
-
-Fourth defect, caught by a control test before it shipped and the reason to
-write the masker's tests in both directions: a regex literal carrying a quote
-(`/["']/`) desynced `maskNonCode`, blanking the rest of the file — after which
-every finding below it read as prose and was **dropped**. Precision work fails
-toward silence far more quietly than it fails toward noise, so every masking
-change needs a test that a real finding survives it.
+The narratives for 2026-09-04/05 (how each number was reached, which fixes regressed and were caught) live in `docs/HISTORY.md` under "VERSION CHANGELOGS".
 
 ### THE DOMAIN — gatetest.io (moved 2026-07-30)
 
