@@ -69,7 +69,7 @@ is always toward the author's own repo.
 | Question | One place |
 |---|---|
 | Which files does a module see? | `BaseModule._collectFiles` (honours `--diff`, the exclude list, `_respectsIncremental`) |
-| Is this a test path? | `BaseModule._isTestPath` / exported `TEST_PATH_RE` |
+| Is this a test path? | `src/core/test-paths.js` (`isTestPath`, `TEST_PATH_RE`) — modules reach it as `BaseModule._isTestPath`; core files (dependency reachability, session telemetry) import it directly. `tests/test-path-canonical.test.js` forbids any other declaration in `src/modules` and `src/core` |
 | Is this an illustration / harness dir? | `src/core/scan-scope.js` |
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
 | What depends on what? | `src/core/import-graph.js` |
