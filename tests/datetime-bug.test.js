@@ -285,3 +285,40 @@ describe('DatetimeBugModule — comment stripping', () => {
     assert.strictEqual(hits.length, 0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Measured on django/django @b3f4d83 (2026-09-05): 11 `naive-now` blocking
+// findings, 4 of them `datetime.now(tz)` — a positional tz argument, which
+// makes the result AWARE. The rule looked for keyword spellings only.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('datetime-bug — naive-now judges the argument, not the spelling', () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const DatetimeBug = require('../src/modules/datetime-bug');
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-dt-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  async function naive(src) {
+    fs.mkdirSync(path.join(tmp, 'app'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'app', 'm.py'), src);
+    const checks = [];
+    await new DatetimeBug().run({ checks, addCheck: (n, p, d = {}) => checks.push({ name: n, passed: p, ...d }), addInfo() {} }, { projectRoot: tmp });
+    return checks.filter((c) => !c.passed && c.name.startsWith('datetime-bug:naive-now')).length;
+  }
+  it('a positional tz is aware', async () => {
+    // django/core/mail/message.py:358 · humanize.py:197 · timesince.py:68
+    assert.strictEqual(await naive('msg["Date"] = datetime.now(tz)\n'), 0);
+    assert.strictEqual(await naive('today = datetime.now(tzinfo).date()\n'), 0);
+    assert.strictEqual(await naive('now = datetime.now(UTC if is_aware(value) else None)\n'), 0);
+  });
+  it('keyword tz is still aware', async () => {
+    assert.strictEqual(await naive('now = datetime.now(tz=timezone.utc)\n'), 0);
+  });
+  it('an empty call is naive and still fires', async () => {
+    // django/contrib/auth/tokens.py:129 — reported, and Django means it.
+    assert.strictEqual(await naive('return datetime.now()\n'), 1);
+    assert.strictEqual(await naive('timestamp = datetime.datetime.now().strftime("%Y")\n'), 1);
+  });
+  it('an explicit None is naive and still fires', async () => {
+    assert.strictEqual(await naive('now = datetime.now(None)\n'), 1);
+  });
+});

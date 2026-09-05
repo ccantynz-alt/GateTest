@@ -47,3 +47,50 @@ describe('PythonModule — exec/eval are builtins, not methods (2026-08-18 audit
     assert.strictEqual(rule('eval').test('    return eval(expr)'), true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Measured on django/django @b3f4d83 (2026-09-05), --suite full: 89 blocking.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('PythonModule — django @b3f4d83', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-py-django-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  async function scan(rel, source) {
+    const f = path.join(tmp, rel);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, source);
+    const result = makeResult();
+    await new PythonModule().run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && c.name.startsWith('python:'));
+  }
+  const rules = (found) => found.map((c) => c.name.split(':')[1]);
+
+  it('`def eval(self, context)` is a definition, not a call to the builtin', async () => {
+    // django/template/smartif.py:59 — expression nodes define an eval method.
+    // Four of Django's eight real-source hits were definitions.
+    const found = await scan('app/smartif.py', 'class Op:\n    def eval(self, context):\n        return True\n');
+    assert.deepStrictEqual(rules(found).filter((r) => r === 'eval'), []);
+  });
+
+  it('a real eval call still fires', async () => {
+    const found = await scan('app/q.py', 'return eval(code, {}, {"datetime": datetime})\n');
+    assert.ok(rules(found).includes('eval'));
+  });
+
+  it('sql-concat inside a test tree is a warning, not an error', async () => {
+    // tests/backends/tests.py — 30 of 39 sql-concat findings were the test
+    // suite building the SQL it then asserts on.
+    const found = await scan('tests/backends/tests.py',
+      'cursor.execute("SELECT * FROM t WHERE id = " + str(pk))\n');
+    const sc = found.find((c) => c.name.startsWith('python:sql-concat'));
+    assert.ok(sc, 'still reported');
+    assert.strictEqual(sc.severity, 'warning');
+  });
+
+  it('sql-concat in application code is still an error', async () => {
+    const found = await scan('app/views.py', 'cursor.execute("SELECT * FROM t WHERE id = " + str(pk))\n');
+    const sc = found.find((c) => c.name.startsWith('python:sql-concat'));
+    assert.ok(sc); assert.strictEqual(sc.severity, 'error');
+  });
+});

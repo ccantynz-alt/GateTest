@@ -43,6 +43,12 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'src/foo.spec.ts',
     'src/foo.stories.tsx',
     'app/test_thing.spec.py',
+    // Compound test dirs with a separator — django's QUnit suite lives in
+    // js_tests/, hono's runtime tests in runtime-tests/. Both were
+    // application code to every path predicate until 2026-09-05.
+    'js_tests/admin/inlines.test.js',
+    'py_tests/a.py',
+    'runtime-tests/lambda/mock.ts',
   ];
   const NO_MATCH = [
     'src/app.js',
@@ -51,6 +57,8 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'src/latest/x.js',
     'src/attestation.js',
     'protest.js',
+    'src/manifest/x.js',      // ends in "test" with no separator
+    'src/greatest_hits.js',
   ];
 
   for (const p of MATCH) {
