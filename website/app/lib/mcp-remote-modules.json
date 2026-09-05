@@ -225,7 +225,7 @@
     },
     {
       "name": "webHeaders",
-      "description": "Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, Express, Fastify, nginx"
+      "description": "Web Headers — CSP/HSTS/XFO/CORS misconfig across Next.js, Vercel, Netlify, nginx, Apache, Caddy and server source in any language"
     },
     {
       "name": "typescriptStrictness",
