@@ -110,3 +110,12 @@ describe('UnitTestsModule — an environment that cannot run the suite is not a 
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 });
+
+// A Gradle daemon outlives the module's timeout kill and keeps writing into
+// the checkout (ktor on CI, 2026-09-05). The build must run in the child.
+describe('UnitTestsModule — Gradle runs without a daemon', () => {
+  it('the Gradle command carries --no-daemon', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'modules', 'unit-tests.js'), 'utf8');
+    assert.match(src, /name: 'Gradle', command: 'gradle test --no-daemon/);
+  });
+});

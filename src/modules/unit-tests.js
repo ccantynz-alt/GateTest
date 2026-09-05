@@ -154,7 +154,12 @@ class UnitTestsModule extends BaseModule {
       { files: ['go.mod'], name: 'go test', command: 'go test ./... 2>&1', needsBinary: 'go' },
       { files: ['Cargo.toml'], name: 'cargo test', command: 'cargo test 2>&1', needsBinary: 'cargo' },
       { files: ['pom.xml'], name: 'Maven', command: 'mvn -q test 2>&1', needsBinary: 'mvn' },
-      { files: ['build.gradle', 'build.gradle.kts'], name: 'Gradle', command: 'gradle test 2>&1', needsBinary: 'gradle' },
+      // --no-daemon: the build runs in the child process this module can
+      // kill on timeout. With the daemon, Gradle spawns a detached JVM that
+      // outlives the timeout, keeps writing into the checkout, and on CI
+      // made the corpus script's temp-dir cleanup throw ENOTEMPTY after a
+      // gate that had already PASSED (ktor, 2026-09-05).
+      { files: ['build.gradle', 'build.gradle.kts'], name: 'Gradle', command: 'gradle test --no-daemon --console=plain 2>&1', needsBinary: 'gradle' },
       { files: ['Gemfile'], name: 'RSpec', command: 'bundle exec rspec 2>&1', needsBinary: 'bundle' },
       { files: ['composer.json'], name: 'PHPUnit', command: 'vendor/bin/phpunit 2>&1', needsBinary: 'php' },
     ];

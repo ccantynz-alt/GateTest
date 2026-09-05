@@ -88,6 +88,24 @@ function scan(dir) {
   return Number(m[1]);
 }
 
+/**
+ * Remove the clone directory. Never throws: the verdict was computed before
+ * this runs, and a cleanup failure is not a measurement. On CI a Gradle
+ * daemon left behind by ktor's timed-out test run was still writing into
+ * the directory, `rmSync` threw ENOTEMPTY, and a gate that had PASSED on
+ * all sixteen repos exited 1 (2026-09-05). Retries cover a process that is
+ * still exiting; anything else is reported and left for the runner.
+ */
+function removeTmp(dir) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+    return true;
+  } catch (err) { // error-ok — reported below, the gate's verdict stands
+    process.stderr.write(`(cleanup) could not remove ${dir}: ${err.message} — the verdict above stands\n`);
+    return false;
+  }
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
@@ -146,7 +164,7 @@ function main() {
       }
     }
   } finally {
-    if (!opts.keep) fs.rmSync(tmp, { recursive: true, force: true });
+    if (!opts.keep) removeTmp(tmp);
   }
 
   if (opts.update) {
@@ -192,4 +210,6 @@ function main() {
   console.log(`REAL-WORLD PRECISION GATE: PASSED (${measured.length} repo(s))\n`);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { removeTmp };
