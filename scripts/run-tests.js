@@ -44,18 +44,42 @@ function parseArgs(argv) {
   return opts;
 }
 
+/** One TAP line from the child: totals, named results, and the end marker. */
+function absorbLine(res, self, line, child) {
+  res.lines.push(line);
+  const m = SUMMARY_RE.exec(line);
+  if (m) res[m[1]] = Number(m[2]);
+  // Node reports the FILE as a test of its own when it has no tests (or
+  // when its event loop never drained) — a file with nothing in it says
+  // `# tests 1 / # pass 1`. Count results that are not the file itself.
+  const r = RESULT_RE.exec(line);
+  if (r && !self.has(r[2].trim())) res.named += 1;
+  if (END_RE.test(line)) {
+    // Every result is in. A leaked timer / socket / child in the test
+    // process is the runner's problem no longer — end it now.
+    res.finished = true;
+    child.kill('SIGTERM');
+    setTimeout(() => child.kill('SIGKILL'), 2000).unref();
+  }
+}
+
+/** Spawn one plain `node --test` for a file, TAP on stdout. */
+function spawnTestFile(file, opts) {
+  // NODE_TEST_CONTEXT is what a `node --test` parent stamps on its children;
+  // inherited here it makes the child refuse to run ("called recursively").
+  // Dropping it lets this runner be invoked from inside a test.
+  const { NODE_TEST_CONTEXT, ...env } = process.env; // eslint-disable-line no-unused-vars
+  return spawn(process.execPath, ['--test', `--test-timeout=${opts.timeout}`, '--test-reporter=tap', file], {
+    stdio: ['ignore', 'pipe', 'pipe'], env,
+  });
+}
+
 /** Run one file; resolve with its parsed result. Never rejects. */
 function runFile(file, opts) {
   return new Promise((resolve) => {
     const res = { file, tests: 0, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 0, named: 0, finished: false, exitCode: null, lines: [] };
     const self = new Set([file, path.resolve(file)]);
-    // NODE_TEST_CONTEXT is what a `node --test` parent stamps on its children;
-    // inherited here it makes the child refuse to run ("called recursively").
-    // Dropping it lets this runner be invoked from inside a test.
-    const { NODE_TEST_CONTEXT, ...env } = process.env; // eslint-disable-line no-unused-vars
-    const child = spawn(process.execPath, ['--test', `--test-timeout=${opts.timeout}`, '--test-reporter=tap', file], {
-      stdio: ['ignore', 'pipe', 'pipe'], env,
-    });
+    const child = spawnTestFile(file, opts);
     let buf = '';
     let done = false;
     const finish = (why) => {
@@ -66,32 +90,15 @@ function runFile(file, opts) {
       resolve(res);
     };
     const timer = setTimeout(() => { res.timedOut = true; child.kill('SIGKILL'); }, opts.fileTimeout);
-    const onLine = (line) => {
-      res.lines.push(line);
-      const m = SUMMARY_RE.exec(line);
-      if (m) res[m[1]] = Number(m[2]);
-      // Node reports the FILE as a test of its own when it has no tests (or
-      // when its event loop never drained) — a file with nothing in it says
-      // `# tests 1 / # pass 1`. Count results that are not the file itself.
-      const r = RESULT_RE.exec(line);
-      if (r && !self.has(r[2].trim())) res.named += 1;
-      if (END_RE.test(line)) {
-        // Every result is in. A leaked timer / socket / child in the test
-        // process is the runner's problem no longer — end it now.
-        res.finished = true;
-        child.kill('SIGTERM');
-        setTimeout(() => child.kill('SIGKILL'), 2000).unref();
-      }
-    };
     child.stdout.on('data', (d) => {
       buf += d;
       let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) { onLine(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
+      while ((nl = buf.indexOf('\n')) >= 0) { absorbLine(res, self, buf.slice(0, nl), child); buf = buf.slice(nl + 1); }
     });
     child.stderr.on('data', (d) => { for (const l of String(d).split('\n')) if (l) res.lines.push(`stderr: ${l}`); });
     child.on('error', (err) => { res.lines.push(`spawn error: ${err.message}`); finish('spawn-error'); });
     child.on('close', (code, signal) => {
-      if (buf) onLine(buf);
+      if (buf) absorbLine(res, self, buf, child);
       res.exitCode = code;
       res.signal = signal;
       finish(res.finished ? 'summary' : (res.timedOut ? 'file-timeout' : 'ended-before-summary'));
