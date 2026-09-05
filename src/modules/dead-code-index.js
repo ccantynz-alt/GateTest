@@ -14,7 +14,6 @@ const {
 function buildDeadCodeIndex(files, projectRoot) {
   const perFile = new Map();
   const importedNames = new Set();
-  const referencedFiles = new Set();
   // Files imported as a WHOLE module somewhere (namespace/default/whole-require/
   // dynamic import). Their exports can't be proven unused — skip flagging them.
   const namespaceReferencedFiles = new Set();
@@ -78,16 +77,14 @@ function buildDeadCodeIndex(files, projectRoot) {
           seenPackageSurfaces.add(wsKey);
           populatePackageSurface(
             workspacePackages.get(wsKey), wsKey,
-            referencedFiles, importedNames, workspacePackagesWithSurface,
+            importedNames, workspacePackagesWithSurface,
           );
         }
       }
-      const resolved = resolveImportPath(file, p, projectRoot, workspacePackages);
-      if (resolved) referencedFiles.add(resolved);
     }
   }
 
-  return { perFile, importedNames, referencedFiles, namespaceReferencedFiles, projectRoot, importedWorkspacePackages, fileWorkspacePackage, workspacePackagesWithSurface };
+  return { perFile, importedNames, namespaceReferencedFiles, projectRoot, importedWorkspacePackages, fileWorkspacePackage, workspacePackagesWithSurface };
 }
 
 // The workspace reader lives in src/core/workspaces.js (one definition —

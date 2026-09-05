@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolvePackageEntry, resolveAlias, stripJsoncLite, tsEquivalents } = require('../core/module-resolution');
+const { logicalLines } = require('../core/python-imports');
 const BaseModule = require('./base-module');
 
 const JS_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
@@ -277,12 +278,13 @@ function buildPackageExportSurface(entryFile, pkgDir, seen = new Set()) {
 }
 
 // Merge a workspace package's entry surface into the global index sets (Phase 1B precision suppression).
-function populatePackageSurface(pkgDir, pkgName, referencedFiles, importedNames, workspacePackagesWithSurface) {
+// File reachability is the import graphs' job (src/core/import-graph.js,
+// src/core/python-imports.js); this merges only the NAMES the package exports.
+function populatePackageSurface(pkgDir, pkgName, importedNames, workspacePackagesWithSurface) {
   const entryFile = resolvePackageEntry(pkgDir, ALL_EXTS);
   if (!entryFile) return;
   try {
-    const { reachableFiles, exportedNames } = buildPackageExportSurface(entryFile, pkgDir);
-    for (const f of reachableFiles) referencedFiles.add(f);
+    const { exportedNames } = buildPackageExportSurface(entryFile, pkgDir);
     for (const n of exportedNames) importedNames.add(n);
     workspacePackagesWithSurface.add(pkgName);
   } catch { /* non-blocking — blanket suppression fallback stays in effect */ }
@@ -449,16 +451,11 @@ function extractPyExports(content) {
 function extractPyImports(content) {
   const names = new Set();
   const paths = new Set();
-  // Join the two Python statement-continuation forms into single logical
-  // lines BEFORE the per-line regexes run. Without this, every name after
-  // the `(` in `from x import (\n  a,\n  b,\n)` was invisible, so the
-  // exporting module's `a` and `b` were reported as dead (2026-08-18 audit
-  // residue: python deadCode multi-line imports).
-  const joined = content
-    .replace(/\\\r?\n/g, ' ') // backslash continuation
-    .replace(/^([ \t]*(?:from[ \t]+[.\w]+[ \t]+)?import[ \t][^\n(]*)\(([^)]*)\)/gm,
-      (whole, head, body) => head + body.replace(/#[^\r\n]*/g, '').replace(/[\r\n]+/g, ' '));
-  const lines = joined.split(/\r?\n/);
+  // Statement continuations (backslash, parenthesised import list) are joined
+  // into logical lines first — one definition, src/core/python-imports.js.
+  // Without it every name after the `(` in `from x import (\n  a,\n  b,\n)`
+  // was invisible (2026-08-18 audit residue: python deadCode multi-line imports).
+  const lines = logicalLines(content);
   for (const line of lines) {
     let m = line.match(/^\s*from\s+([.\w]+)\s+import\s+(.+?)(?:\s*#.*)?$/);
     if (m) {
