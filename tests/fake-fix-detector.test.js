@@ -356,3 +356,135 @@ describe('FakeFixDetectorModule — commented-out-code is a token, not a prefix'
     assert.ok(!findFailure(result, 'commented-out-code'), failedCheckNames(result).join(', '));
   });
 });
+
+// ─── a PR is judged against its base, not its last commit (the Fifty, move 30) ──
+
+describe('fakeFixDetector — diff base on a multi-commit pull request', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { execFileSync } = require('node:child_process');
+
+  function repo(skipSubject = 'fix: skip the failing test') {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ffd-'));
+    const git = (...a) => execFileSync('git', a, { cwd: tmp, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const commit = (file, content, msg) => {
+      fs.mkdirSync(path.dirname(path.join(tmp, file)), { recursive: true });
+      fs.writeFileSync(path.join(tmp, file), content);
+      git('add', file); git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', msg);
+    };
+    git('init', '-q', '-b', 'main');
+    commit('tests/add.test.js', "test('adds negatives', () => { assert.equal(add(-1, -2), -3); });\n", 'base');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    git('checkout', '-q', '-b', 'fix/negatives');
+    commit('tests/add.test.js', "test.skip('adds negatives', () => { assert.equal(add(-1, -2), -3); });\n", skipSubject);
+    commit('src/add.js', 'module.exports = { add: (a, b) => a + b };\n', 'fix: tidy');   // the LAST commit is innocent
+    return tmp;
+  }
+
+  async function run(tmp, runnerOptions, env = {}) {
+    const saved = process.env.GITHUB_BASE_REF;
+    if ('GITHUB_BASE_REF' in env) process.env.GITHUB_BASE_REF = env.GITHUB_BASE_REF; else delete process.env.GITHUB_BASE_REF;
+    try {
+      const config = new GateTestConfig(tmp);
+      config._runnerOptions = runnerOptions;
+      const result = new TestResult('fakeFixDetector');
+      await new FakeFixDetector().run(result, config);
+      const names = result.checks.map((c) => c.name);
+      names.failed = failedCheckNames(result);
+      names.skip = result.checks.find((c) => !c.passed && c.name.includes('test-skip-added')) || null;
+      return names;
+    } finally {
+      if (saved === undefined) delete process.env.GITHUB_BASE_REF; else process.env.GITHUB_BASE_REF = saved;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+  const skipped = (names) => names.failed.some((n) => n.includes('test-skip-added'));
+
+  it('POSITIVE: with --pr / --since (incrementalSince) the .skip from the first commit is found', async () => {
+    assert.equal(skipped(await run(repo(), { incrementalSince: 'origin/main' })), true);
+  });
+
+  it('POSITIVE: on GitHub Actions GITHUB_BASE_REF names the base', async () => {
+    assert.equal(skipped(await run(repo(), {}, { GITHUB_BASE_REF: 'main' })), true);
+  });
+
+  it('CONTROL: with no base the module reads the last commit only — the hole this closes', async () => {
+    assert.equal(skipped(await run(repo(), {})), false);
+  });
+
+  it('CONTROL: an unfetched base ref falls through instead of reporting nothing', async () => {
+    const names = await run(repo(), { incrementalSince: 'origin/no-such-branch' });
+    assert.ok(names.includes('fake-fix:scanning'), names.join(', '));
+    assert.ok(!names.includes('fake-fix:no-diff'), names.join(', '));
+    assert.equal(skipped(names), false, 'the fallback is the last commit, which is innocent');
+  });
+});
+
+describe('fakeFixDetector — a skipped test blocks only when the commit calls itself a fix (the Fifty, move 30)', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { execFileSync } = require('node:child_process');
+
+  function repo(skipSubject, { commitSkip = true } = {}) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ffd2-'));
+    const git = (...a) => execFileSync('git', a, { cwd: tmp, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const write = (file, content) => { fs.mkdirSync(path.dirname(path.join(tmp, file)), { recursive: true }); fs.writeFileSync(path.join(tmp, file), content); };
+    const commit = (file, content, msg) => { write(file, content); git('add', file); git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', msg); };
+    git('init', '-q', '-b', 'main');
+    commit('tests/add.test.js', "test('adds negatives', () => { assert.equal(add(-1, -2), -3); });\n", 'base');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    git('checkout', '-q', '-b', 'topic');
+    const skipped = "test.skip('adds negatives', () => { assert.equal(add(-1, -2), -3); });\n";
+    if (commitSkip) commit('tests/add.test.js', skipped, skipSubject); else write('tests/add.test.js', skipped);
+    return tmp;
+  }
+  async function run(tmp, runnerOptions) {
+    try {
+      const config = new GateTestConfig(tmp);
+      config._runnerOptions = runnerOptions;
+      const result = new TestResult('fakeFixDetector');
+      await new FakeFixDetector().run(result, config);
+      return result.checks.find((c) => !c.passed && c.name.includes('test-skip-added')) || null;
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  }
+
+  it('POSITIVE: "fix: negatives test" that skips the test is an ERROR and names the commit', async () => {
+    const hit = await run(repo('fix: negatives test'), { incrementalSince: 'origin/main' });
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+    assert.match(hit.explanation, /Added by "fix: negatives test"/);
+  });
+
+  for (const subject of ['Skip a test for now', 'test: migrate to vitest', 'Tweaks']) {
+    it(`NEGATIVE: "${subject}" (got, nest, got — real history) is reported as a WARNING, not blocked`, async () => {
+      const hit = await run(repo(subject), { incrementalSince: 'origin/main' });
+      assert.ok(hit, 'still reported');
+      assert.strictEqual(hit.severity, 'warning');
+      assert.match(hit.explanation, /no commit touching this file in the range calls itself a fix/);
+    });
+  }
+
+  it('NEGATIVE: an uncommitted .skip is a warning — there is no commit to judge yet', async () => {
+    const hit = await run(repo('unused', { commitSkip: false }), {});
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.match(hit.explanation, /Not yet committed/);
+  });
+
+  it('CONTROL: "resolved flaky kafka test" and "hotfix" count as fix-shaped', async () => {
+    for (const subject of ['Resolved the flaky kafka test', 'hotfix: skip until the broker is back']) {
+      const hit = await run(repo(subject), { incrementalSince: 'origin/main' });
+      assert.strictEqual(hit && hit.severity, 'error', subject);
+    }
+  });
+
+  it('CONTROL: an injected diff keeps the declared severity — no git to ask', async () => {
+    const result = new TestResult('fakeFixDetector');
+    await new FakeFixDetector().run(result, makeConfig('diff --git a/tests/a.test.js b/tests/a.test.js\n--- a/tests/a.test.js\n+++ b/tests/a.test.js\n@@ -1,1 +1,1 @@\n-test(\'x\', () => {});\n+test.skip(\'x\', () => {});\n'));
+    const hit = findFailure(result, 'test-skip-added');
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+});

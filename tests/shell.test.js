@@ -51,6 +51,34 @@ describe('ShellModule — discovery', () => {
     const r = await run(tmp);
     assert.ok(r.checks.find((c) => c.name === 'shell:no-files'));
   });
+
+  // KI #106 control pair — files are chosen by src/core/shell-files.js, not
+  // by extension: an extensionless deploy script with a bash shebang is the
+  // commonest place for `rm -rf $DIR/` and was never opened before.
+  const DEPLOY = '#!/usr/bin/env bash\nset -e\nrm -rf $DIR/\n';
+
+  it('POSITIVE: extensionless bin/deploy with a bash shebang FIRES unsafe-rm', async () => {
+    write(tmp, 'bin/deploy', DEPLOY);
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name === 'shell:unsafe-rm:bin/deploy:3');
+    assert.ok(hit, r.checks.map((c) => c.name).join(', '));
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('NEGATIVE: the same bytes under LICENSE, or under a node shebang, are not shell', async () => {
+    write(tmp, 'LICENSE', DEPLOY);
+    write(tmp, 'bin/cli', '#!/usr/bin/env node\nconst DIR = "x";\nrequire("child_process").execSync("rm -rf $DIR/");\n');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'shell:no-files'), r.checks.map((c) => c.name).join(', '));
+  });
+
+  it('a .ksh file is scanned; a .sh still is', async () => {
+    write(tmp, 'a.ksh', DEPLOY);
+    write(tmp, 'b.sh', DEPLOY);
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'shell:unsafe-rm:a.ksh:3'));
+    assert.ok(r.checks.find((c) => c.name === 'shell:unsafe-rm:b.sh:3'));
+  });
 });
 
 describe('ShellModule — shebang + set -e', () => {

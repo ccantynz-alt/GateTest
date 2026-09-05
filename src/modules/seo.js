@@ -97,16 +97,56 @@ class SeoModule extends BaseModule {
     return true;
   }
 
-  /** Signals that this repository is (or contains) a deployable website. */
+  /**
+   * Signals that this repository is a deployable website, decided at the
+   * ROOT: the sitemap/robots probes below look at root-relative paths, so a
+   * docs site living in a subfolder (`website/`, `docs/`) of a library is
+   * not recognised here — recognising it without re-rooting the probes would
+   * guarantee a false "no sitemap" on every such library. `website/app/…`
+   * is the one subfolder both sides agree on. A framework CONFIG alone is
+   * not a site where the same config also builds libraries (Vite, Svelte),
+   * and Hugo's older `config.toml` is a generic filename — those need the
+   * app's own tree beside them (KI #106, 2026-09-05).
+   */
   static looksLikeWebsite(projectRoot) {
+    const has = (rel) => fs.existsSync(path.join(projectRoot, rel));
+    const anyOf = (base, exts) => exts.some((e) => has(`${base}.${e}`));
+    const JS = ['js', 'ts', 'mjs', 'cjs'];
     const markers = [
       'index.html', 'public/index.html', 'static/index.html', 'dist/index.html',
       'app/layout.tsx', 'app/layout.jsx', 'app/layout.js', 'src/app/layout.tsx', 'website/app/layout.tsx',
       'pages/index.tsx', 'pages/index.jsx', 'pages/index.js', 'src/pages/index.tsx',
-      'nuxt.config.ts', 'nuxt.config.js', 'svelte.config.js', 'astro.config.mjs', 'gatsby-config.js',
-      '_config.yml', 'mkdocs.yml', 'docusaurus.config.js', 'docusaurus.config.ts', 'hugo.toml',
+      // Remix, Angular (its src/index.html is a SPA shell, never a scored page)
+      'app/root.tsx', 'app/root.jsx', 'angular.json',
+      // Jekyll, MkDocs, Hugo (current config names), Eleventy's dotfile
+      '_config.yml', 'mkdocs.yml', 'hugo.toml', 'hugo.yaml', 'hugo.json', '.eleventy.js',
     ];
-    return markers.some((m) => fs.existsSync(path.join(projectRoot, m)));
+    if (markers.some(has)) return true;
+    if (['remix.config', 'nuxt.config', 'astro.config', 'gatsby-config', 'docusaurus.config', 'eleventy.config'].some((c) => anyOf(c, JS))) return true;
+    if (anyOf('svelte.config', JS) && has('src/routes')) return true;
+    if (anyOf('vite.config', JS) && (has('src/index.html') || has('web/index.html'))) return true;
+    return has('config.toml') && has('content');
+  }
+
+  /**
+   * Whether a framework emits the file at build time from a declaration
+   * rather than a checked-in copy: Docusaurus (classic preset) and Hugo emit
+   * sitemap.xml unconditionally; Hugo emits robots.txt behind
+   * `enableRobotsTXT`; Astro / Nuxt / Gatsby / Jekyll / next-sitemap declare
+   * a plugin or integration whose name carries the word.
+   */
+  static generatedAtBuild(projectRoot, kind) {
+    const has = (rel) => fs.existsSync(path.join(projectRoot, rel));
+    const JS = ['js', 'ts', 'mjs', 'cjs'];
+    const configs = ['astro.config', 'nuxt.config', 'gatsby-config', 'svelte.config', 'next-sitemap.config', 'eleventy.config', 'hugo']
+      .flatMap((base) => [...JS, 'toml', 'yaml', 'json'].map((e) => `${base}.${e}`))
+      .concat(['_config.yml', '.eleventy.js', 'config.toml', 'config.yaml']);
+    if (kind === 'sitemap' && (has('docusaurus.config.js') || has('docusaurus.config.ts') || has('hugo.toml') || has('hugo.yaml'))) return true;
+    const re = kind === 'sitemap' ? /sitemap/i : /robots/i;
+    return configs.some((rel) => {
+      if (!has(rel)) return false;
+      try { return re.test(fs.readFileSync(path.join(projectRoot, rel), 'utf-8')); } catch { return false; } // error-ok — unreadable config is "not declared"
+    });
   }
 
   _checkTitle(relPath, content, config, result) {
@@ -249,46 +289,43 @@ class SeoModule extends BaseModule {
   }
 
   _checkSitemap(projectRoot, result) {
-    // Accept static files OR Next.js App Router / Nuxt / SvelteKit route-based generation
-    const sitemapPaths = [
-      'sitemap.xml', 'public/sitemap.xml', 'static/sitemap.xml',
+    // Static files OR route-based generation (Next App Router / Pages, Nuxt
+    // server routes, SvelteKit +server, Remix flat routes, Astro pages,
+    // Angular src/) OR a build-time declaration (generatedAtBuild).
+    this._checkSiteFile(projectRoot, result, 'sitemap', [
+      'sitemap.xml', 'public/sitemap.xml', 'static/sitemap.xml', 'src/sitemap.xml',
       'app/sitemap.ts', 'app/sitemap.js', 'app/sitemap.tsx',
       'website/app/sitemap.ts', 'website/app/sitemap.js',
       'src/app/sitemap.ts', 'src/app/sitemap.js',
-      'pages/sitemap.xml.ts', 'pages/sitemap.xml.js',
-    ];
-    const found = sitemapPaths.some(p => fs.existsSync(path.join(projectRoot, p)));
-
-    if (!found) {
-      result.addCheck('seo:sitemap', false, {
-        severity: 'warning',
-        message: 'No sitemap.xml found',
-        suggestion: 'Generate a sitemap.xml for search engine discovery',
-      });
-    } else {
-      result.addCheck('seo:sitemap', true);
-    }
+      'pages/sitemap.xml.ts', 'pages/sitemap.xml.js', 'src/pages/sitemap.xml.ts', 'src/pages/sitemap.xml.js',
+      'server/routes/sitemap.xml.ts', 'server/routes/sitemap.xml.js',
+      'src/routes/sitemap.xml/+server.ts', 'src/routes/sitemap.xml/+server.js',
+      'app/routes/sitemap[.]xml.tsx', 'app/routes/sitemap[.]xml.ts',
+      'next-sitemap.config.js', 'next-sitemap.config.cjs', 'next-sitemap.config.mjs',
+    ], 'No sitemap.xml found', 'Generate a sitemap.xml for search engine discovery');
   }
 
   _checkRobotsTxt(projectRoot, result) {
-    // Accept static files OR Next.js App Router / Nuxt / SvelteKit route-based generation
-    const robotsPaths = [
-      'robots.txt', 'public/robots.txt', 'static/robots.txt',
+    this._checkSiteFile(projectRoot, result, 'robots', [
+      'robots.txt', 'public/robots.txt', 'static/robots.txt', 'src/robots.txt',
       'app/robots.ts', 'app/robots.js', 'app/robots.tsx',
       'website/app/robots.ts', 'website/app/robots.js',
       'src/app/robots.ts', 'src/app/robots.js',
-      'pages/robots.txt.ts', 'pages/robots.txt.js',
-    ];
-    const found = robotsPaths.some(p => fs.existsSync(path.join(projectRoot, p)));
+      'pages/robots.txt.ts', 'pages/robots.txt.js', 'src/pages/robots.txt.ts', 'src/pages/robots.txt.js',
+      'server/routes/robots.txt.ts', 'server/routes/robots.txt.js',
+      'src/routes/robots.txt/+server.ts', 'src/routes/robots.txt/+server.js',
+      'app/routes/robots[.]txt.tsx', 'app/routes/robots[.]txt.ts',
+    ], 'No robots.txt found', 'Create a robots.txt to guide search engine crawlers');
+  }
 
+  _checkSiteFile(projectRoot, result, kind, paths, message, suggestion) {
+    const id = kind === 'sitemap' ? 'seo:sitemap' : 'seo:robots-txt';
+    const found = paths.some((p) => fs.existsSync(path.join(projectRoot, p)))
+      || SeoModule.generatedAtBuild(projectRoot, kind);
     if (!found) {
-      result.addCheck('seo:robots-txt', false, {
-        severity: 'warning',
-        message: 'No robots.txt found',
-        suggestion: 'Create a robots.txt to guide search engine crawlers',
-      });
+      result.addCheck(id, false, { severity: 'warning', message, suggestion });
     } else {
-      result.addCheck('seo:robots-txt', true);
+      result.addCheck(id, true);
     }
   }
 }

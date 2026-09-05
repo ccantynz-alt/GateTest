@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { removeTmp } = require('../scripts/real-world-precision');
+const { removeTmp, ratchetManifest } = require('../scripts/real-world-precision');
 
 describe('real-world-precision — removeTmp', () => {
   it('removes a clone directory and reports success', () => {
@@ -34,5 +34,32 @@ describe('real-world-precision — removeTmp', () => {
       process.stderr.write = originalWrite;
     }
     assert.match(written.join(''), /the verdict above stands/);
+  });
+});
+
+// The Fifty, move 06: ceilings ratchet on a schedule. The nightly runs the
+// corpus with --ratchet; every ceiling above its measured count comes down to
+// it, nothing goes up, floors are never touched.
+describe('real-world-precision — ratchetManifest', () => {
+  const manifest = () => ({ repos: [
+    { name: 'express', maxBlocking: 3 },
+    { name: 'hono', maxBlocking: 27 },
+    { name: 'NodeGoat', minBlocking: 40 },
+  ] });
+  it('lowers a ceiling to the measured count and reports the change', () => {
+    const m = manifest();
+    const changes = ratchetManifest(m, [{ name: 'express', blocking: 0 }, { name: 'hono', blocking: 27 }, { name: 'NodeGoat', blocking: 57 }]);
+    assert.deepEqual(changes, [{ name: 'express', from: 3, to: 0 }]);
+    assert.equal(m.repos[0].maxBlocking, 0);
+    assert.equal(m.repos[1].maxBlocking, 27);
+  });
+  it('NEVER raises a ceiling, never touches a floor, ignores repos it did not measure', () => {
+    const m = manifest();
+    const changes = ratchetManifest(m, [{ name: 'express', blocking: 9 }, { name: 'NodeGoat', blocking: 10 }]);
+    assert.deepEqual(changes, []);
+    assert.equal(m.repos[0].maxBlocking, 3);
+    assert.equal(m.repos[1].maxBlocking, 27);
+    assert.equal(m.repos[2].minBlocking, 40);
+    assert.equal(m.repos[2].maxBlocking, undefined);
   });
 });

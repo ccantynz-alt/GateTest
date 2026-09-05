@@ -652,7 +652,7 @@ a claim.
 - **Diff scans report only the diff** (runner-level `_scopeResultToChangedFiles`), one file walk for 36 modules, quick `--diff` on a PR ≈ 8s; full self-scan ≈ 65s with mutation deferred to `mutation-nightly.yml`.
 - **Every JSON report carries provenance and a signature** (`src/core/report-provenance.js`, `GATETEST_REPORT_SIGNING_KEY`, `gatetest verify-report`). SARIF reports the level the gate used. A CI job asserts same tree → same findings.
 - **Hosted PR comments** attribute findings by line (`inDiff` / `inChangedFile`), say what was not checked, and carry the exact `@gatetest ignore …` reply per finding. The CLI prints the exact `.gatetestignore` line and, in CI, the `gatetest replay` command under a blocked gate.
-- **Open, measured:** KI #106 — eleven modules still gate on a framework marker their rules do not need; KI #105 — stale Code Scanning categories need an API delete.
+- **KI #106 closed (2026-09-05):** no module decides "nothing to check" from a framework marker its rules do not need — 15 of 15 fixed, three new one-definition homes (`src/core/workspaces.js`, `migration-dirs.js`, `shell-files.js`), corpus 20/20 at ceilings. **Open, measured:** KI #105 — stale Code Scanning categories need an API delete; KI #107 — prSize on the Dogfood job's depth-1 checkout.
 
 The narratives for 2026-09-04/05 (how each number was reached, which fixes regressed and were caught) live in `docs/HISTORY.md` under "VERSION CHANGELOGS".
 
