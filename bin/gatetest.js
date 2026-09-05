@@ -634,53 +634,21 @@ async function main() {
   // for entry-level users. Suppressed for machine-readable output modes and
   // when the developer opted into automation (--auto-pr / --sarif / --junit).
   if (!args.sarif && !args.junit && !args.githubAnnotations && !args.reportOnly) {
-    printPlainSummary(summary);
+    printPlainSummary(summary, projectRoot);
   }
 
   process.exit(summary.gateStatus === 'PASSED' ? 0 : 1);
 }
 
 /**
- * A short, human-first recap after a scan: what happened, and the ONE next
- * command to run. Written for someone who has never used GateTest — no jargon,
- * no wall of findings (the reporter already printed those). The developer-facing
- * machine output modes skip this entirely.
+ * The plain-English recap lives in src/core/plain-summary.js so its copy is
+ * tested without running a scan; this only decides the context and prints.
  */
-function printPlainSummary(summary) {
-  const c = { g: '\x1b[32m', y: '\x1b[33m', r: '\x1b[31m', b: '\x1b[36m', bold: '\x1b[1m', dim: '\x1b[2m', off: '\x1b[0m' };
-  const checks = summary.checks || {};
-  const blocking = checks.blockingErrors || 0;
-  const soft = checks.softErrors || 0;
-  const warnings = checks.warnings || 0;
-
-  console.log(`  ${c.dim}${'─'.repeat(52)}${c.off}`);
-
-  // Baseline transparency — never let grandfathered findings look like a
-  // clean bill of health.
-  const baselined = checks.baselined || 0;
-  if (baselined > 0) {
-    console.log(`  ${c.dim}${baselined} pre-existing finding(s) baselined — not blocking. Refresh: gatetest --baseline${c.off}`);
+function printPlainSummary(summary, projectRoot) {
+  const { plainSummaryLines, plainSummaryContext } = require('../src/core/plain-summary');
+  for (const line of plainSummaryLines(summary, plainSummaryContext(summary, projectRoot))) {
+    console.log(line);
   }
-
-  if (summary.gateStatus === 'PASSED') {
-    console.log(`  ${c.g}${c.bold}✓ You're good.${c.off} Nothing${baselined > 0 ? ' NEW' : ''} is blocking this commit.`);
-    if (soft || warnings) {
-      console.log(`  ${c.dim}${soft + warnings} low-priority note(s) noted — worth a look, but not blockers.${c.off}`);
-    }
-    console.log(`  ${c.dim}Next: commit with confidence.${c.off}\n`);
-    return;
-  }
-
-  // BLOCKED
-  const issueWord = blocking === 1 ? 'issue is' : 'issues are';
-  console.log(`  ${c.r}${c.bold}✗ ${blocking} ${issueWord} blocking this commit.${c.off}`);
-  if (soft) console.log(`  ${c.dim}(+${soft} low-confidence finding(s) shown but NOT blocking.)${c.off}`);
-  console.log('');
-  console.log(`  ${c.bold}What now?${c.off} Pick one:`);
-  console.log(`    ${c.b}gatetest fix --apply${c.off}   ${c.dim}— let AI fix them, then review the diff (needs ANTHROPIC_API_KEY)${c.off}`);
-  console.log(`    ${c.b}gatetest --noise${c.off}       ${c.dim}— if these look like false alarms, see which modules are noisy${c.off}`);
-  console.log(`    ${c.dim}add a line to ${c.off}${c.bold}.gatetestignore${c.off}${c.dim} — permanently silence a check you've judged safe${c.off}`);
-  console.log('');
 }
 
 /**

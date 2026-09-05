@@ -74,6 +74,8 @@ That installs three things:
 2. `.husky/pre-push` — local pre-push hook (requires `npx husky init` once)
 3. `.gatetest.json` — protection marker telling future automation this repo is protected
 
+**What the first CI run does.** Pull requests are judged on the files they change, so they enforce from the first run. A full-repo run (a push to `main`) that finds no `.gatetest/baseline.json` snapshots the findings already present, passes, and prints a notice; commit that file (`gatetest --baseline` produces the same one locally) and every full run after it fails on **new** findings only. Nothing is hidden — baselined findings stay in every report, marked as pre-existing.
+
 ---
 
 ## Turn ON auto-fix (one secret, every repo, forever)
