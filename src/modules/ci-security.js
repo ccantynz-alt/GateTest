@@ -172,7 +172,7 @@ class CiSecurityModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file).replace(/\\/g, '/');
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     let hasPermissionsBlock = false;

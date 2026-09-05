@@ -4,6 +4,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { splitLines, detectEol } = require('../core/text-lines');
 const fs = require('fs');
 const path = require('path');
 
@@ -276,9 +277,12 @@ class LintModule extends BaseModule {
         autoFix: () => {
           try {
             const raw = fs.readFileSync(file, 'utf-8');
-            let fixed = raw.split('\n').map(l => l.trimEnd()).join('\n');
+            // Keep the file's own line endings: trimEnd() strips a CRLF
+            // file's `\r` and a '\n' join would rewrite every ending (KI #77).
+            const eol = detectEol(raw);
+            let fixed = splitLines(raw).map(l => l.trimEnd()).join(eol);
             // Remove triple+ blank lines
-            fixed = fixed.replace(/\n{3,}/g, '\n\n');
+            fixed = fixed.replace(/(?:\r?\n){3,}/g, eol + eol);
             fs.writeFileSync(file, fixed, 'utf-8');
             return { fixed: true, description: `Fixed markdown whitespace in ${relPath}`, filesChanged: [relPath] };
           } catch { return { fixed: false }; }

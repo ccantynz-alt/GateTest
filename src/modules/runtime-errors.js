@@ -153,7 +153,7 @@ class RuntimeErrorsModule extends BaseModule {
     page.on('pageerror', (err) => {
       captured.pageErrors.push({
         message: err && err.message ? String(err.message) : String(err),
-        stack: err && err.stack ? String(err.stack).split('\n').slice(0, 5).join('\n') : null,
+        stack: err && err.stack ? String(err.stack).split(/\r?\n/).slice(0, 5).join('\n') : null,
       });
     });
 

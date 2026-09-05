@@ -109,7 +109,7 @@ class TerraformModule extends BaseModule {
     }
 
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     // Track open resource blocks so we can report resource-scoped issues.

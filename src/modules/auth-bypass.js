@@ -424,7 +424,7 @@ class AuthBypassDetector extends BaseModule {
       if (!hasRoutes) continue;
       routeFiles++;
 
-      const lines = content.split('\n');
+      const lines = content.split(/\r?\n/);
       const issues = this._findUnauthenticatedRoutes(file, rel, content, lines);
 
       if (issues.length === 0) continue;
@@ -527,7 +527,7 @@ class AuthBypassDetector extends BaseModule {
       const m = windowText.match(clientRe);
       if (!m) continue;
       const matchedUpTo = windowText.slice(0, m.index + m[0].length);
-      const lineIdx = sessionLine + matchedUpTo.split('\n').length - 1; // 0-indexed into lines
+      const lineIdx = sessionLine + matchedUpTo.split(/\r?\n/).length - 1; // 0-indexed into lines
       const line = lines[lineIdx] || '';
       if (/^\s*(?:\/\/|\*)/.test(line)) continue;
       if (/\bidor-ok\b/.test(line) || (lineIdx > 0 && /\bidor-ok\b/.test(lines[lineIdx - 1]))) continue;
@@ -562,7 +562,7 @@ class AuthBypassDetector extends BaseModule {
         const method = m[1];
         sawNextExport = true;
         const matchIdx = m.index;
-        const lineNo   = content.slice(0, matchIdx).split('\n').length;
+        const lineNo   = content.slice(0, matchIdx).split(/\r?\n/).length;
         const lineText = lines[lineNo - 1] || '';
 
         if (lineText.includes('// auth-public') || lineText.includes('// no-auth')) continue;
@@ -621,7 +621,7 @@ class AuthBypassDetector extends BaseModule {
         const key = `${method}:${routePath}:${matchIdx}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const lineNo   = content.slice(0, matchIdx).split('\n').length;
+        const lineNo   = content.slice(0, matchIdx).split(/\r?\n/).length;
         const lineText = lines[lineNo - 1] || '';
 
         if (lineText.includes('// auth-public') || lineText.includes('// no-auth')) continue;

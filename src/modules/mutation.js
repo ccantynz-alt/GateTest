@@ -9,6 +9,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { splitLines, joinLines } = require('../core/text-lines');
 const { JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const fs = require('fs');
 const path = require('path');
@@ -201,7 +202,7 @@ class MutationModule extends BaseModule {
 
       const relPath = path.relative(projectRoot, file);
       const original = fs.readFileSync(file, 'utf-8');
-      const lines = original.split('\n');
+      const lines = splitLines(original);
 
       for (const mutation of MUTATIONS) {
         if (totalMutants >= maxMutants || budgetExhausted) break;
@@ -225,7 +226,7 @@ class MutationModule extends BaseModule {
 
           const mutated = [...lines];
           mutated[i] = mutatedLine;
-          const mutatedSource = mutated.join('\n');
+          const mutatedSource = joinLines(mutated, original);
 
           totalMutants++;
 

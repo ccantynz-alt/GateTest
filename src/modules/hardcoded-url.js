@@ -191,7 +191,7 @@ class HardcodedUrlModule extends BaseModule {
     // localhost findings were under `benchmarks/`, and 3 more under
     // `runtime-tests/`. Scope, not severity: these stay visible at info.
     const isTestFile = this._isTestPath(rel) || isNonUserFacingPage(rel);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     let inBlockComment = false;
