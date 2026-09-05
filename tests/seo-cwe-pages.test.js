@@ -80,7 +80,9 @@ test("find/[slug]/page.tsx: generateStaticParams + generateMetadata exported", (
 
 test("find/[slug]/page.tsx: canonical URL points at /find/<slug>", () => {
   const src = fs.readFileSync(CWE_PAGE_PATH, "utf8");
-  assert.match(src, /https:\/\/gatetest\.io\/find\/\$\{cwe\.slug\}/);
+  // The canonical is built on SITE_URL, never a domain literal (the Bible:
+  // THE DOMAIN). This test used to pin the literal.
+  assert.match(src, /\$\{SITE_URL\}\/find\/\$\{cwe\.slug\}/);
   assert.match(src, /alternates:\s*\{\s*canonical/);
 });
 

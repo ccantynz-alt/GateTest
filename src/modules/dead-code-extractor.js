@@ -32,6 +32,100 @@ function resolvePackageEntry(pkgDir) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// tsconfig / jsconfig `paths` aliases.
+//
+// `import X from "@/app/components/X"` is how every Next.js app in the world
+// imports its own files, and until 2026-09-05 this resolver returned null for
+// any specifier that did not start with `.` or `/` — so a component imported
+// only through the alias was reported as an orphaned module (it happened to
+// website/app/components/ComparisonReviewed.tsx, imported by seven pages).
+// The nearest tsconfig.json / jsconfig.json walking up from the importing file
+// is consulted, `extends` is followed, and the config is read once per
+// directory. JSONC is tolerated: tsconfig files carry comments.
+// ---------------------------------------------------------------------------
+const aliasCache = new Map(); // dir → [{ prefix, wildcard, targets: [abs base] }] | null
+
+function stripJsoncLite(src) {
+  let out = '';
+  let i = 0;
+  let inStr = null;
+  while (i < src.length) {
+    const ch = src[i];
+    const next = src[i + 1];
+    if (inStr) {
+      out += ch;
+      if (ch === '\\') { out += next || ''; i += 2; continue; }
+      if (ch === inStr) inStr = null;
+      i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inStr = ch; out += ch; i += 1; continue; }
+    if (ch === '/' && next === '/') { while (i < src.length && src[i] !== '\n') i += 1; continue; }
+    if (ch === '/' && next === '*') { i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1; i += 2; continue; }
+    out += ch;
+    i += 1;
+  }
+  return out.replace(/,\s*([}\]])/g, '$1');
+}
+
+function readTsconfig(file, depth = 0) {
+  let cfg;
+  try { cfg = JSON.parse(stripJsoncLite(fs.readFileSync(file, 'utf8'))); } catch { return null; }
+  if (!cfg || typeof cfg !== 'object') return null;
+  const co = cfg.compilerOptions || {};
+  let base = { baseUrl: co.baseUrl, paths: co.paths, dir: path.dirname(file) };
+  if (cfg.extends && typeof cfg.extends === 'string' && cfg.extends.startsWith('.') && depth < 3) {
+    const parent = readTsconfig(path.resolve(path.dirname(file), cfg.extends.endsWith('.json') ? cfg.extends : `${cfg.extends}.json`), depth + 1);
+    if (parent) base = { baseUrl: base.baseUrl || parent.baseUrl, paths: base.paths || parent.paths, dir: base.paths ? base.dir : parent.dir };
+  }
+  return base;
+}
+
+function loadPathAliases(dir) {
+  if (aliasCache.has(dir)) return aliasCache.get(dir);
+  let entries = null;
+  for (const name of ['tsconfig.json', 'jsconfig.json']) {
+    const cfg = readTsconfig(path.join(dir, name));
+    if (!cfg || !cfg.paths || typeof cfg.paths !== 'object') continue;
+    const baseDir = path.resolve(cfg.dir, cfg.baseUrl || '.');
+    entries = [];
+    for (const [pattern, targets] of Object.entries(cfg.paths)) {
+      if (!Array.isArray(targets)) continue;
+      const wildcard = pattern.endsWith('*');
+      entries.push({
+        prefix: wildcard ? pattern.slice(0, -1) : pattern,
+        wildcard,
+        targets: targets.map((t) => path.resolve(baseDir, wildcard && t.endsWith('*') ? t.slice(0, -1) : t)),
+      });
+    }
+    break;
+  }
+  aliasCache.set(dir, entries);
+  return entries;
+}
+
+/** Absolute base paths an aliased specifier maps to, or null when no alias applies. */
+function resolveAlias(fromFile, importPath, projectRoot) {
+  const root = path.resolve(projectRoot);
+  let dir = path.dirname(path.resolve(fromFile));
+  for (;;) {
+    const aliases = loadPathAliases(dir);
+    if (aliases) {
+      for (const a of aliases) {
+        if (a.wildcard ? importPath.startsWith(a.prefix) : importPath === a.prefix) {
+          const rest = a.wildcard ? importPath.slice(a.prefix.length) : '';
+          return a.targets.map((t) => (a.wildcard ? path.join(t, rest) : t));
+        }
+      }
+    }
+    if (dir === root || !dir.startsWith(root)) return null;
+    const up = path.dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+}
+
 function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages = null) {
   if (!importPath) return null;
   if (workspacePackages && !importPath.startsWith('.') && !importPath.startsWith('/')) {
@@ -41,10 +135,23 @@ function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages 
         : workspacePackages.get(importPath.split('/')[0]));
     if (pkgDir) return resolvePackageEntry(pkgDir);
   }
-  if (!importPath.startsWith('.') && !importPath.startsWith('/')) return null;
+  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+    const bases = resolveAlias(fromFile, importPath, projectRoot);
+    if (!bases) return null;
+    for (const b of bases) {
+      const hit = resolveFromBase(b);
+      if (hit) return hit;
+    }
+    return null;
+  }
   const base = importPath.startsWith('/')
     ? path.join(projectRoot, importPath)
     : path.resolve(path.dirname(fromFile), importPath);
+  return resolveFromBase(base);
+}
+
+/** The on-disk file a base path (without or with an extension) denotes, or null. */
+function resolveFromBase(base) {
   // TypeScript's NodeNext/ESM convention writes the OUTPUT extension in the
   // specifier: `import … from "./external.js"` resolves to `external.ts` on
   // disk. Without this, the candidates for "./external.js" are `external.js`,
@@ -76,7 +183,7 @@ function resolveImportPath(fromFile, importPath, projectRoot, workspacePackages 
     try {
       const st = fs.statSync(c);
       if (st.isFile()) return path.normalize(c);
-    } catch { /* keep going */ }
+    } catch { continue; } // error-ok — not this candidate; the next spelling may exist
   }
   return null;
 }
@@ -504,7 +611,7 @@ function extractPyImports(content) {
 
 module.exports = {
   ALL_EXTS, JS_EXTS, PY_EXTS,
-  resolvePackageEntry, resolveImportPath,
+  resolvePackageEntry, resolveImportPath, resolveAlias, stripJsoncLite,
   extractJsExports, parseExportsWithAcorn,
   buildPackageExportSurface, populatePackageSurface,
   extractJsImports, extractPyExports, extractPyImports,

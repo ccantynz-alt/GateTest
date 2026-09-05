@@ -780,3 +780,51 @@ describe('ErrorSwallowModule — clean baseline', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+// A catch that ends the process is the opposite of a swallow — nothing
+// downstream runs to be misled. `console.error(...); process.exit(2)` is the
+// standard CLI shape and was reported as log-and-eat (2026-09-05).
+describe('ErrorSwallowModule — log then exit is handling, not eating', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-exit-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  for (const terminal of ['process.exit(2);', 'process.exitCode = 1;']) {
+    it(`does not report a catch that logs and then \`${terminal}\``, async () => {
+      write(tmp, 'bin/cli.js', [
+        'function main(file) {',
+        '  let report;',
+        '  try {',
+        '    report = JSON.parse(require("fs").readFileSync(file, "utf8"));',
+        '  } catch (err) {',
+        '    console.error(`cannot read ${file}: ${err.message}`);',
+        `    ${terminal}`,
+        '  }',
+        '  return report;',
+        '}',
+        'module.exports = main;',
+        '',
+      ].join('\n'));
+      const r = await run(tmp);
+      assert.strictEqual(r.checks.find((c) => c.name.startsWith('error-swallow:log-and-eat:')), undefined);
+    });
+  }
+
+  it('still reports the same catch without the exit (positive control)', async () => {
+    write(tmp, 'bin/cli.js', [
+      'function main(file) {',
+      '  let report;',
+      '  try {',
+      '    report = JSON.parse(require("fs").readFileSync(file, "utf8"));',
+      '  } catch (err) {',
+      '    console.error(`cannot read ${file}: ${err.message}`);',
+      '  }',
+      '  return report;',
+      '}',
+      'module.exports = main;',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('error-swallow:log-and-eat:')));
+  });
+});

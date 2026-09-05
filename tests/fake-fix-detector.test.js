@@ -303,3 +303,30 @@ describe('FakeFixDetectorModule — strict-to-loose is a token, not a substring'
     assert.ok(!findFailure(result, 'strict-to-loose'));
   });
 });
+
+// A fix lives in source: documentation hunks are not scanned by the pattern
+// engine. A docs table naming `@ts-ignore` / `as any` lit up five rules on
+// 2026-09-05 when a CRLF→LF rewrite made docs/ARCHITECTURE.md one big hunk.
+describe('FakeFixDetectorModule — documentation is not source', () => {
+  async function run(diff) {
+    const mod = new FakeFixDetector();
+    const result = new TestResult('fakeFixDetector');
+    result.start();
+    await mod.run(result, makeConfig(diff));
+    return result;
+  }
+  const PROSE = [
+    ' | module | what it flags |',
+    '-| ts | flags `@ts-ignore` and `as any` |',
+    '+| ts | flags `@ts-ignore`, `as any`, and `if (false)` dead-code guards; unreasoned `@ts-ignore` is a warning |',
+    '+Also: `catch (err) {}` and `test.skip(` are symptom patches, and `!==` becoming `==` is a relaxed check.',
+  ];
+  it('ignores a Markdown hunk that names every pattern', async () => {
+    const r = await run(['diff --git a/docs/ARCH.md b/docs/ARCH.md', '--- a/docs/ARCH.md', '+++ b/docs/ARCH.md', '@@ -1,3 +1,4 @@', ...PROSE].join('\n'));
+    assert.deepStrictEqual(failedCheckNames(r), [], 'prose in docs must not read as a fake fix');
+  });
+  it('still fires on the same text inside a source file', async () => {
+    const r = await run(['diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,2 @@', ' const x = 1;', '-const y: number = load();', '+// @ts-ignore', '+const y = load() as any;'].join('\n'));
+    assert.ok(failedCheckNames(r).length > 0, 'positive control');
+  });
+});

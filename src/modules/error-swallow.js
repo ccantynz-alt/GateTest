@@ -556,6 +556,11 @@ class ErrorSwallowModule extends BaseModule {
     if (/\breject\s*\(/.test(body)) return false;
     if (/\breturn\s+.*\berr(?:or)?\b/.test(body)) return false;
     if (/\bnext\s*\(\s*\w+/.test(body)) return false; // Express-style next(err)
+    // A catch that ends the process is the opposite of a swallow: nothing
+    // downstream runs to be misled. `console.error(...); process.exit(2)`
+    // is the standard CLI shape and was reported as log-and-eat until
+    // 2026-09-05 (bin/gatetest.js verify-report).
+    if (/\bprocess\.(?:exit\s*\(|exitCode\s*=)/.test(body)) return false;
     // Every non-empty line must look like a log call
     return lines.every((l) => /^console\.(?:log|warn|error|info|debug)\s*\(/.test(l)
       || /^(?:log|logger)\.(?:log|warn|error|info|debug)\s*\(/.test(l));

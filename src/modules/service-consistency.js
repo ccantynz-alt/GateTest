@@ -206,7 +206,9 @@ class ServiceConsistency extends BaseModule {
       try {
         const content = fs.readFileSync(full, 'utf-8');
         found.push({ rel, absPath: full, type, content });
-      } catch { /* skip */ }
+      } catch { // error-ok — a service file that cannot be read is left out of the comparison; there is nothing to compare it against
+        continue;
+      }
     }
     return found;
   }

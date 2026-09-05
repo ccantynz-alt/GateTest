@@ -469,6 +469,12 @@ class FakeFixDetectorModule extends BaseModule {
     const hunks = this._parseDiff(diff);
 
     for (const hunk of hunks) {
+      // A fix lives in source. A Markdown, YAML or lock-file hunk cannot
+      // relax a comparison or skip a test, but its PROSE can name every
+      // pattern below — a doc table that says "flags `@ts-ignore` and
+      // `as any`" lit up five rules on 2026-09-05 when a line-ending change
+      // made the whole file a hunk. Same file set the AI engine uses.
+      if (!this._isSourceFile(hunk.file)) continue;
       // Files that INTENTIONALLY contain bug-shape patterns and must never
       // hard-error:
       //   - website/app/for/* — marketing demo pages showing the patterns

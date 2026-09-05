@@ -44,8 +44,9 @@ describe('generate-build-info dates every comparison slug', () => {
     });
     const info = JSON.parse(fs.readFileSync(out, 'utf8'));
     assert.ok(info.pageUpdated && typeof info.pageUpdated === 'object');
-    let depth = 0;
-    try { depth = Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: ROOT, stdio: 'pipe' }).toString().trim()); } catch { /* no git */ }
+    let depth;
+    try { depth = Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: ROOT, stdio: 'pipe' }).toString().trim()); }
+    catch { depth = 0; } // no git → the generator must have written an empty map, asserted below
     if (depth >= 2) {
       for (const slug of COMPARISON_SLUGS) {
         assert.match(String(info.pageUpdated[slug]), /^\d{4}-\d{2}-\d{2}$/, `${slug} must be dated`);
