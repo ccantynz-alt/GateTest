@@ -29,7 +29,7 @@ class GithubAnnotationsReporter {
   _onSuiteEnd(summary) {
     // A blocked gate leads with the command that reproduces it locally
     // (move 28) — one notice, in the checks tab where the red X is read.
-    if (summary && summary.gateStatus !== 'PASSED') {
+    if (summary && summary.gateStatus === 'BLOCKED') {
       const replay = replayCommand();
       if (replay) {
         process.stdout.write(`::notice title=GateTest — reproduce locally::${this._escapeData(replay)}\n`);
