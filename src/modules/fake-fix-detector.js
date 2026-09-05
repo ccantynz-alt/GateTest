@@ -147,6 +147,19 @@ function isWholeLineComment(sourceLine) {
     || (t.startsWith('/*') && t.endsWith('*/')) || t.startsWith('/*');
 }
 
+/**
+ * A skipped test blocks only when the commit that skipped it calls itself a
+ * fix. Measured 2026-09-05 on ~14,000 commits across ten real repositories
+ * (express, fastify, hono, zod, got, nest, trpc, prisma, apollo-server,
+ * NodeGoat): eleven `.skip` additions, every one in a commit titled "Skip a
+ * test for now", "test: migrate to vitest", "Tweaks" or a merge — deliberate,
+ * visible decisions, none a fix hiding its own failure. Those stay reported
+ * as warnings; the dishonest shape ("fix: negatives test" that skips the
+ * failing test) blocks (the Fifty, move 30).
+ */
+const TEST_DISABLING_RULES = new Set(['test-skip-added', 'test-xit-added']);
+const FIX_SUBJECT_RE = /\b(?:fix(?:es|ed|ing)?|bug(?:fix)?|hotfix|patch(?:es|ed)?|repair(?:s|ed)?|resolv(?:e|es|ed))\b/i;
+
 const PATTERN_RULES = [
   // --- Test disabling (high confidence) ---
   {
@@ -368,7 +381,7 @@ class FakeFixDetectorModule extends BaseModule {
     // 1. Pattern engine — always runs when enabled.
     let patternFindings = [];
     if (patternEnabled) {
-      patternFindings = this._runPatternEngine(diff);
+      patternFindings = this._judgeDisabledTests(projectRoot, this._runPatternEngine(diff));
       this._recordFindings(result, patternFindings, 'pattern');
     }
 
@@ -432,6 +445,7 @@ class FakeFixDetectorModule extends BaseModule {
   _getDiff(projectRoot, runnerOptions, moduleConfig) {
     // Explicit diff provided (e.g. tests or CI). Empty string counts — it
     // means "no changes", not "fall through to git".
+    this._diffSource = { kind: 'injected' };
     if (moduleConfig.diff != null) return moduleConfig.diff;
     if (runnerOptions.diff != null) return runnerOptions.diff;
 
@@ -442,21 +456,74 @@ class FakeFixDetectorModule extends BaseModule {
     // changes — the reliability corpus flagged GateTest's own commit as 20
     // "fake fixes" in a fixture that had not changed (2026-08-18).
     const against = moduleConfig.against || runnerOptions.against;
+    // A pull request is judged against ITS BASE, not its last commit. `--pr`
+    // / `--since` set incrementalSince and GitHub Actions names the base in
+    // GITHUB_BASE_REF; before this the module read `HEAD~1 HEAD` on a
+    // multi-commit PR, so a `test.skip` added in any commit but the last was
+    // never analysed (the Fifty, move 30, 2026-09-05). An unfetched ref fails
+    // the command and falls through to the local shapes below.
+    const inferredBase = !against && (
+      runnerOptions.incrementalSince
+      || (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : null)
+    );
+    // Each command carries the commit range it covers (`null` = not yet
+    // committed) so a finding can ask which commits touched its file.
+    const ranged = (ref) => ({ cmd: `git diff --unified=3 ${ref}...HEAD -- .`, range: `${ref}..HEAD` });
     const commands = against
-      ? [`git diff --unified=3 ${against}...HEAD -- .`]
+      ? [ranged(against)]
       : [
-          'git diff --unified=3 --cached -- .',          // staged
-          'git diff --unified=3 -- .',                    // working tree
-          'git diff --unified=3 HEAD~1 HEAD -- .',        // last commit
+          ...(inferredBase ? [ranged(inferredBase)] : []),
+          { cmd: 'git diff --unified=3 --cached -- .', range: null },     // staged
+          { cmd: 'git diff --unified=3 -- .', range: null },              // working tree
+          { cmd: 'git diff --unified=3 HEAD~1 HEAD -- .', range: 'HEAD~1..HEAD' }, // last commit
         ];
 
-    for (const cmd of commands) {
+    for (const { cmd, range } of commands) {
       const { stdout, exitCode } = this._exec(cmd, { cwd: projectRoot });
       if (exitCode === 0 && stdout && stdout.trim()) {
+        this._diffSource = range ? { kind: 'range', range } : { kind: 'uncommitted' };
         return stdout;
       }
     }
     return '';
+  }
+
+  /**
+   * The subject of the first commit in `range` that touched `file` and calls
+   * itself a fix, or null. Answers only what git can answer: an injected diff
+   * (tests, hosted scans handing over a payload) has no commits, and the rule
+   * keeps its declared severity there.
+   */
+  _fixCommitTouching(projectRoot, range, file) {
+    const { stdout, exitCode } = this._exec(`git log --format=%s ${range} -- "${file}"`, { cwd: projectRoot });
+    if (exitCode !== 0 || !stdout) return null;
+    for (const subject of stdout.split(/\r?\n/)) {
+      if (subject && FIX_SUBJECT_RE.test(subject)) return subject.trim();
+    }
+    return null;
+  }
+
+  /**
+   * Decide whether each skipped/disabled test blocks: error when a fix-shaped
+   * commit touched the file in the analysed range, warning (still reported)
+   * otherwise, including uncommitted changes where no commit exists yet.
+   */
+  _judgeDisabledTests(projectRoot, findings) {
+    const src = this._diffSource || { kind: 'injected' };
+    if (src.kind === 'injected') return findings;
+    for (const f of findings) {
+      if (!TEST_DISABLING_RULES.has(f.ruleId)) continue;
+      const subject = src.kind === 'range' ? this._fixCommitTouching(projectRoot, src.range, f.file) : null;
+      if (subject) {
+        f.explanation += ` Added by "${subject}" — a commit that calls itself a fix and skips the test instead.`;
+      } else {
+        f.severity = 'warning';
+        f.explanation += src.kind === 'uncommitted'
+          ? ' Not yet committed — reported, not blocking. A commit that calls itself a fix and skips this test will block.'
+          : ' Reported, not blocking: no commit touching this file in the range calls itself a fix. If this was meant as one, fix the test instead.';
+      }
+    }
+    return findings;
   }
 
   _countChangedFiles(diff) {
