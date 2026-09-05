@@ -23,6 +23,7 @@
  */
 
 const { ANTI_INJECTION_PREAMBLE, wrapUntrusted, scanOutputForLeaks } = require('./prompt-injection-guard');
+const { SITE_URL } = require('./site-url');
 
 /**
  * Build the prompt. Exposed for tests.
@@ -240,7 +241,7 @@ function renderExecutiveSummary(result, { hostname } = {}) {
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('<sub>This executive summary is part of the <a href="https://gatetest.io">GateTest $399 Forensic</a> tier. It synthesises the per-finding diagnosis and cross-finding correlation reports into a single read for senior stakeholders.</sub>');
+  lines.push(`<sub>This executive summary is part of the <a href="${SITE_URL}">GateTest $399 Forensic</a> tier. It synthesises the per-finding diagnosis and cross-finding correlation reports into a single read for senior stakeholders.</sub>`);
   return lines.join('\n');
 }
 

@@ -33,6 +33,7 @@
  */
 
 const { ANTI_INJECTION_PREAMBLE, wrapUntrusted, scanOutputForLeaks } = require('./prompt-injection-guard');
+const { SITE_URL } = require('./site-url');
 
 /**
  * Build the prompt for Claude. Exposed for tests so the prompt
@@ -336,7 +337,7 @@ function renderDiagnosesReport(diagnoses, summary) {
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('<sub>This report is part of the <a href="https://gatetest.io">GateTest $399 Nuclear</a> tier. Each diagnosis is reasoned from your specific evidence — not a category-matched template.</sub>');
+  lines.push(`<sub>This report is part of the <a href="${SITE_URL}">GateTest $399 Nuclear</a> tier. Each diagnosis is reasoned from your specific evidence — not a category-matched template.</sub>`);
   return lines.join('\n');
 }
 

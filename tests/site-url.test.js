@@ -217,12 +217,51 @@ describe('site-url — no new hardcoded domains', () => {
     'website/app/lib/weekly-digest.js',
     'website/app/api/score/route.ts',
     'website/app/badge/[owner]/[repo]/route.ts',
+    // The badge page's embed snippets — pasted into READMEs we can never
+    // edit. Four literals lived here until 2026-09-05.
+    'website/app/badge/page.tsx',
     'website/app/layout.tsx',
     // The cross-product discovery map. A wrong domain here doesn't break a
     // page a human would notice — it hands every sibling service a dead URL
     // to poll. Production was serving `https://gatetest.ai` in this field on
     // 2026-08-05, long after that domain started returning NXDOMAIN.
     'website/app/api/platform-status/route.ts',
+    // 2026-09-05 sweep: every remaining runtime literal in website/app moved
+    // onto the helper — Stripe/portal/fleet/watch base URLs, API JSON
+    // responses, e-mail bodies, PR/issue/report footers, bot User-Agents,
+    // JSON-LD, and the code snippets customers copy off the docs pages.
+    'website/app/api/billing/portal/route.ts',
+    'website/app/api/checkout/route.ts',
+    'website/app/api/heal/sentry-webhook/route.ts',
+    'website/app/api/integrations/ai-generators/route.ts',
+    'website/app/api/mcp/route.ts',
+    'website/app/api/scan/fleet/route.ts',
+    'website/app/api/slack/events/route.ts',
+    'website/app/api/v1/scan/route.ts',
+    'website/app/api/watches/tick/route.ts',
+    'website/app/components/url-scan-flow-export.tsx',
+    'website/app/docs/api/page.tsx',
+    'website/app/find/[slug]/page.tsx',
+    'website/app/find/page.tsx',
+    'website/app/for/[country]/page.tsx',
+    'website/app/github/setup/page.tsx',
+    'website/app/lib/ai-handoff.js',
+    'website/app/lib/architecture-annotator.js',
+    'website/app/lib/ciso-report-generator.js',
+    'website/app/lib/cross-finding-correlator.js',
+    'website/app/lib/dependency-upgrade-patcher.js',
+    'website/app/lib/digest-mailer.js',
+    'website/app/lib/executive-summary.js',
+    'website/app/lib/nuclear-diagnoser.js',
+    'website/app/lib/pair-review.js',
+    'website/app/lib/pentest/http-client.js',
+    'website/app/lib/pr-composer.js',
+    'website/app/lib/trainers/hacker-news-monitor.js',
+    'website/app/lib/url-stack-detector.js',
+    'website/app/mcp/page.tsx',
+    'website/app/playground/page.tsx',
+    'website/app/regulation/page.tsx',
+    'website/app/score/[owner]/[repo]/page.tsx',
   ];
 
   for (const rel of GUARDED) {

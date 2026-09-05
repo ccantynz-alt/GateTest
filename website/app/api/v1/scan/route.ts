@@ -23,6 +23,7 @@ import {
 } from "@/app/lib/api-key";
 import { runScan, runScanDirect } from "@/app/lib/scan-executor";
 import { notifyScanComplete } from "@/app/lib/slack-notifier";
+import { siteUrl } from "@/app/lib/site-url";
 
 const ALLOWED_TIERS = new Set(["quick", "full", "smart"]);
 
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest) {
   if (slackWebhook && !result.error) {
     void notifyScanComplete(payload, {
       webhookUrl: slackWebhook,
-      scanUrl: repoUrl ? `${process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io"}/scan/status?repo=${encodeURIComponent(repoUrl)}` : undefined,
+      scanUrl: repoUrl ? siteUrl(`/scan/status?repo=${encodeURIComponent(repoUrl)}`) : undefined,
     }).catch(() => { /* best-effort — slack errors never surface to the API caller */ });
   }
 
@@ -206,6 +207,6 @@ export async function GET() {
         },
       },
     },
-    docs: "https://gatetest.io/docs/api",
+    docs: siteUrl("/docs/api"),
   });
 }

@@ -36,6 +36,7 @@
  */
 
 const { ANTI_INJECTION_PREAMBLE, wrapUntrusted, scanOutputForLeaks } = require('./prompt-injection-guard');
+const { SITE_URL } = require('./site-url');
 
 /**
  * Build the prompt. Exposed for tests.
@@ -276,7 +277,7 @@ function renderCorrelationReport(result) {
   }
   lines.push('---');
   lines.push('');
-  lines.push('<sub>Cross-finding correlation is part of the <a href="https://gatetest.io">GateTest $399 Forensic</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>');
+  lines.push(`<sub>Cross-finding correlation is part of the <a href="${SITE_URL}">GateTest $399 Forensic</a> tier. No per-finding scanner can see these patterns — only an agent reading all findings together can identify the attack chains.</sub>`);
   return lines.join('\n');
 }
 

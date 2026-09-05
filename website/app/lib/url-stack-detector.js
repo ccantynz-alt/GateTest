@@ -16,6 +16,7 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const { siteUrl } = require('./site-url');
 
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BODY_BYTES = 200 * 1024; // 200 KB — enough for HTML <head> + early body
@@ -30,7 +31,7 @@ function fetchProbe(url, timeoutMs = FETCH_TIMEOUT_MS) {
     const req = client.get(url, {
       timeout: timeoutMs,
       headers: {
-        'User-Agent': 'GateTest/1.0 (URL Stack Detector +https://gatetest.io/bot)',
+        'User-Agent': `GateTest/1.0 (URL Stack Detector +${siteUrl('/bot')})`,
         Accept: 'text/html,application/xhtml+xml,*/*',
       },
     }, (res) => {

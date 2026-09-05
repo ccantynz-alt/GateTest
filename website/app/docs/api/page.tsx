@@ -1,4 +1,5 @@
 ﻿import type { Metadata } from "next";
+import { SITE_URL } from "@/app/lib/site-url";
 
 export const metadata: Metadata = {
   title: "API Reference — GateTest",
@@ -6,7 +7,7 @@ export const metadata: Metadata = {
     "GateTest public API v1 — scan any repo or upload files directly. Bearer auth, JSON response, idempotency support.",
 };
 
-const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
+const curlQuick = `curl -X POST ${SITE_URL}/api/v1/scan \\
   -H "Authorization: Bearer gt_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -14,7 +15,7 @@ const curlQuick = `curl -X POST https://gatetest.io/api/v1/scan \\
     "tier": "quick"
   }'`;
 
-const curlDirect = `curl -X POST https://gatetest.io/api/v1/scan \\
+const curlDirect = `curl -X POST ${SITE_URL}/api/v1/scan \\
   -H "Authorization: Bearer gt_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -26,7 +27,7 @@ const curlDirect = `curl -X POST https://gatetest.io/api/v1/scan \\
     "project": "zoobicon"
   }'`;
 
-const curlFullIdem = `curl -X POST https://gatetest.io/api/v1/scan \\
+const curlFullIdem = `curl -X POST ${SITE_URL}/api/v1/scan \\
   -H "Authorization: Bearer gt_live_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: scan-20260415-build-847" \\
@@ -74,7 +75,7 @@ const responseExample = `{
 
 const nodeExample = `import fetch from "node-fetch";
 
-const res = await fetch("https://gatetest.io/api/v1/scan", {
+const res = await fetch("${SITE_URL}/api/v1/scan", {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.GATETEST_API_KEY}\`,

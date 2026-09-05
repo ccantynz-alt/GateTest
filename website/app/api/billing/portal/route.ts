@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { SITE_URL } from "@/app/lib/site-url";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createLimiter, PRESETS } = require("@lib/rate-limit") as {
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       sendBillingPortalEmail: (opts: { to: string; links: Array<{ url: string; source: string }> }) => Promise<{ ok: boolean; error?: string }>;
     };
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://gatetest.io";
+    const baseUrl = SITE_URL;
     const result = await requestPortalLink(email, {
       sql: getDb(),
       sendEmailFn: sendBillingPortalEmail,

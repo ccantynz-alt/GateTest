@@ -12,6 +12,7 @@
  */
 
 const https = require('https');
+const { SITE_URL } = require('./site-url');
 
 /**
  * Sending address. DELIBERATELY still on the legacy domain after the
@@ -158,7 +159,7 @@ function buildDigestEmailHtml(digest) {
   <tr><td style="padding:20px 0 0;border-top:1px solid #1e293b;text-align:center;">
     <p style="margin:0;font-size:12px;color:#475569;">
       GateTest &nbsp;&middot;&nbsp;
-      <a href="https://gatetest.io" style="color:#475569;text-decoration:none;">gatetest.io</a>
+      <a href="${SITE_URL}" style="color:#475569;text-decoration:none;">gatetest.io</a>
       &nbsp;&middot;&nbsp; Weekly developer digest
     </p>
     ${unsubscribeUrl ? `<p style="margin:10px 0 0;font-size:11px;"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#374151;text-decoration:underline;">Unsubscribe</a></p>` : ''}
@@ -341,13 +342,13 @@ async function sendApiKeyEmail(opts) {
       <a href="mailto:hello@gatetest.ai" style="color:#22c55e;">hello@gatetest.ai</a>.
     </p>
 
-    <a href="https://gatetest.io/mcp" style="display:inline-block;background:#22c55e;color:#09090b;font-weight:700;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:8px;">
+    <a href="${SITE_URL}/mcp" style="display:inline-block;background:#22c55e;color:#09090b;font-weight:700;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:8px;">
       View Tool Reference →
     </a>
   </td></tr>
   <tr><td style="padding-top:24px;text-align:center;">
     <p style="color:#52525b;font-size:11px;margin:0;">
-      GateTest · <a href="https://gatetest.io" style="color:#52525b;">gatetest.io</a>
+      GateTest · <a href="${SITE_URL}" style="color:#52525b;">gatetest.io</a>
     </p>
   </td></tr>
 </table>

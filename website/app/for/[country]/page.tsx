@@ -151,14 +151,14 @@ export default async function CountryPage({ params }: PageParams) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "GateTest", item: "https://gatetest.io" },
-      { "@type": "ListItem", position: 2, name: "For", item: "https://gatetest.io/for" },
-      { "@type": "ListItem", position: 3, name: "Countries", item: "https://gatetest.io/for" },
+      { "@type": "ListItem", position: 1, name: "GateTest", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "For", item: `${SITE_URL}/for` },
+      { "@type": "ListItem", position: 3, name: "Countries", item: `${SITE_URL}/for` },
       {
         "@type": "ListItem",
         position: 4,
         name: data.name,
-        item: `https://gatetest.io/for/${data.slug}`,
+        item: `${SITE_URL}/for/${data.slug}`,
       },
     ],
   };

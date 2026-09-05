@@ -22,6 +22,8 @@
  * AND from `node:test` in tests/ai-handoff.test.js.
  */
 
+const { SITE_URL } = require('./site-url');
+
 const SUPPORTED_FORMATS = [
   'claude-code',
   'cursor',
@@ -356,7 +358,7 @@ function formatForGitHubIssue(findings, opts = {}) {
     '',
     meta,
     '',
-    '> Filed automatically from a [GateTest](https://gatetest.io) scan. GateTest runs 121 modules covering security, supply-chain, accessibility, infra hygiene, AI-app safety, and more.',
+    `> Filed automatically from a [GateTest](${SITE_URL}) scan. GateTest runs 121 modules covering security, supply-chain, accessibility, infra hygiene, AI-app safety, and more.`,
     '',
     `**Summary:** ${c.total} finding${c.total === 1 ? '' : 's'} — ${c.error} error${c.error === 1 ? '' : 's'}, ${c.warning} warning${c.warning === 1 ? '' : 's'}, ${c.info} info.`,
     '',
