@@ -13,11 +13,11 @@ Status legend: **done** (merged or in the open PR, with evidence) · **partial**
 
 | Metric | Now | Was |
 |---|---|---|
-| Real repos in the corpus at their ceilings | 16 / 16 — all eight languages | 6, all blocked |
+| Real repos in the corpus at their ceilings | 20 / 20 — all eight languages, four monorepos | 6, all blocked |
 | Blocking on express · django · rails | 0 · 64 · 46 | 2 · 89 · 56 (first contact) |
 | PR diff scan | 8s | 17s, and it scanned everything |
 | Full self-scan | 65s (mutation deferred to nightly) | never finished |
-| Tests passing | 8,335 | 7,790 |
+| Tests passing | 8,600+ | 7,790 |
 
 The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 `scripts/real-world-precision.js`; rendered at `/precision`.
@@ -29,14 +29,14 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 01 | Split zod's 50 into scope vs rule precision | done | 50 → 20; harness scope + guarded-catch classifier (PR #419) |
 | 02 | Wire every module to one file walk | done | 36 walks → `_collectFiles`, file sets proven identical; KI #104 (PR #423) |
 | 03 | No rule ships without a control pair | done — policy | `docs/DOCTRINE.md` §3; every 2026-09-05 fix shipped both |
-| 04 | Grow the real-world corpus to 20 repos | partial 16/20 | Rust (axum 28→6), PHP (laravel 28→4), C# (CleanArchitecture 39→13), Kotlin (ktor 21→7), Swift (vapor 6→1) added 2026-09-05; next: monorepos (nest, trpc), generated code, heavy TS |
+| 04 | Grow the real-world corpus to 20 repos | done | Rust (axum 28→6), PHP (laravel 28→4), C# (CleanArchitecture 39→13), Kotlin (ktor 21→7), Swift (vapor 6→1); then the monorepos — nest 39→9, trpc 33→8, apollo-server 4→0, prisma 90→16 — all 2026-09-05, PR #426 |
 | 05 | Add Django, Rails, Spring, a Go service | done | seven rule defects, each a real line (PR #422); the remaining five languages followed under 04 |
 | 06 | Ratchet the ceilings on a schedule | open | monthly review; ceilings only go down |
 | 07 | Per-rule false-positive rate from the flywheel | open | telemetry records dismissals; needs the leaderboard |
 | 08 | Retire any rule above 20% FP that can't be fixed | open | depends on 07 |
 | 09 | Recalibrate confidence against the corpus | open | 0.7 was chosen, not derived |
 | 10 | Hunt the substring-vs-segment shape everywhere | done | guard extended to src/core, bin, website analysers; five recall holes closed (PR #423) |
-| 11 | Audit every early return that assumes a framework | partial 4/15 | `src/core/route-grammar.js`; the other 11 are KI #106 |
+| 11 | Audit every early return that assumes a framework | partial 9/15 | `src/core/route-grammar.js` (4, PR #423); webHeaders, integrationTests, webhookPayload, cacheHeaders, monorepoConstraints + one `src/core/workspaces.js` (5, PR #426); the other 8 are KI #106 |
 | 12 | Publish the precision numbers, including the bad ones | done | `/precision`, generated, sync-tested (PR #422) |
 
 ## B. Honesty (13–22)
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-04 (corpus to 20 — four repos left: monorepos and generated code), the 11 gates in KI #106, 23, 30, 46.
+the 8 gates left in KI #106, 06 (schedule the ratchet), 23, 30, 46.
 Waiting on Craig: 15, 29, 35, 41.

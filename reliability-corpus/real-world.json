@@ -126,6 +126,34 @@
       "maxBlocking": 1
     },
     {
+      "name": "nest",
+      "url": "https://github.com/nestjs/nest.git",
+      "sha": "39fbddae51281ca56bf2fed9123d98e61509066c",
+      "why": "TypeScript monorepo (npm workspaces) with an integration/ e2e tree and sample apps — first contact 39 blocking: a logger class told it uses console, tsconfig flags as build verdicts, mongodb://localhost fixtures as secrets, `.catch(() => {})` on a stored promise the caller awaits; what remains is six `reduce(async …)` in the e2e app, two npm-audit advisories and one committed PKCS#8 key",
+      "maxBlocking": 9
+    },
+    {
+      "name": "trpc",
+      "url": "https://github.com/trpc/trpc.git",
+      "sha": "66d054454a3339dd8421da9dcf0648f92816f704",
+      "why": "pnpm monorepo with members under examples/* and www — first contact 33 blocking: build configs and a CLI told they log to console, an OG-image generator scored as a web page, an Algolia search key as a secret, ternary env fallbacks as hardcoded URLs; what remains is four <img> without alt, a real import cycle, a silent connect in a constructor and `${{ github.event.release.tag_name }}` in a shell",
+      "maxBlocking": 8
+    },
+    {
+      "name": "apollo-server",
+      "url": "https://github.com/apollographql/apollo-server.git",
+      "sha": "53ac3c13fcf36dd22fb0dbb757a270ae58e89227",
+      "why": "npm-workspaces monorepo with a docs site — first contact 4 blocking: a CA bundle read as a private key, a README link the resolver could not follow, a destructured parameter the scope harvester missed; nothing remains",
+      "maxBlocking": 0
+    },
+    {
+      "name": "prisma",
+      "url": "https://github.com/prisma/prisma.git",
+      "sha": "dd846dcc8f0653099d1a10c457b1603d96bfafc7",
+      "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description",
+      "maxBlocking": 16
+    },
+    {
       "name": "NodeGoat",
       "url": "https://github.com/OWASP/NodeGoat.git",
       "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
