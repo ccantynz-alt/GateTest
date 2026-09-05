@@ -2,39 +2,9 @@
  * Base Module - Abstract base class for all GateTest test modules.
  */
 
-/**
- * Canonical "is this test/fixture code?" pattern — the union of the 6
- * drifted copies it replaces. Forward slashes only; `_isTestPath()` owns
- * normalising the input, so callers must go through it rather than testing
- * this directly (that omission is the Windows bug it was built to fix).
- *
- * Three branches: a directory segment anywhere in the path, a conventional
- * `.test.<ext>` / `.spec.<ext>` suffix, or a Python runner basename.
- * Language list covers the runtimes GateTest scans.
- */
-const TEST_PATH_RE =
-  // `[a-z0-9]+[-_](?:tests?|specs?)` — django keeps its QUnit suite in
-  // `js_tests/`, hono its runtime tests in `runtime-tests/`. A segment that
-  // ENDS in a test word with a separator before it is a test dir; `contest`,
-  // `latest`, `tester.js` have no separator and stay application code.
-  //
-  // `(?:test_[^/]*|[^/]*_test|tests|conftest)\.py` — the Python runners
-  // find tests by BASENAME, not by suffix: pytest collects `test_*.py` and
-  // `*_test.py` and loads `conftest.py` by name; Django's runner discovers
-  // `test*.py`, so an app ships a single `tests.py` beside `views.py`. The
-  // whole basename is matched at end-of-path (`[^/]*` cannot cross a
-  // segment), and the loading rule is the same as the directory branch: a
-  // test WORD with a separator (`_`) or nothing on the far side. `contest`,
-  // `latest`, `attestation`, `testing`, `testcases`, `testutils` carry the
-  // word inside an identifier and stay application code — django's
-  // `django/test/testcases.py` is test-support code classified by its
-  // `test/` directory, never by its name. Bare `test.py` is deliberately
-  // NOT here: pytest does not collect it, and the two in the corpus are both
-  // shipped code — `django/core/management/commands/test.py` IS the
-  // `manage.py test` command, and `django/contrib/messages/test.py` is a
-  // public assertion mixin. Matching it would silence checks on files that
-  // exist precisely because they run tests, not because they are tests.
-  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus|testdata|test[-_]?resources|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$|(?:^|\/)(?:test_[^/]*|[^/]*_test|tests|conftest)\.py$/i;
+// "Is this a test path" has ONE definition, src/core/test-paths.js; this
+// class exposes it to every module as `_isTestPath` and `TEST_PATH_RE`.
+const { TEST_PATH_RE, isTestPath } = require('../core/test-paths');
 
 class BaseModule {
   constructor(name, description) {
@@ -195,8 +165,7 @@ class BaseModule {
    * @returns {boolean}
    */
   _isTestPath(relPath) {
-    if (typeof relPath !== 'string' || !relPath) return false;
-    return TEST_PATH_RE.test(relPath.replace(/\\/g, '/'));
+    return isTestPath(relPath);
   }
 
   /**

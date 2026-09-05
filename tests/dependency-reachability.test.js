@@ -92,3 +92,23 @@ describe('security module — npm audit is reachability-gated (source contract)'
     assert.match(src, /reachability: item\.class/);
   });
 });
+
+describe('dependency-reachability — production source is "not a test path" (one definition) AND "shipped"', () => {
+  const { collectImportedPackages } = require('../src/core/dependency-reachability');
+  it('a package imported only from a test tree the canonical predicate knows (runtime-tests/, conftest.py-style basenames) is not reachable; scripts/ and tool configs are not shipped; src/ is', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-dep-reach-paths-'));
+    const w = (rel, body) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), body); };
+    // Before 2026-09-05 this file's private regexes did not know a segment
+    // ENDING in a test word, so hono's runtime-tests/ counted as production.
+    w('runtime-tests/lambda/mock.ts', "import 'only-in-runtime-tests';\n");
+    w('scripts/release.js', "require('only-in-scripts');\n");
+    w('vite.config.ts', "import 'only-in-config';\n");
+    w('src/app.js', "require('really-imported');\n");
+    const imported = collectImportedPackages(root);
+    fs.rmSync(root, { recursive: true, force: true });
+    assert.ok(imported.has('really-imported'), 'POSITIVE CONTROL — src/ is production');
+    for (const name of ['only-in-runtime-tests', 'only-in-scripts', 'only-in-config']) {
+      assert.ok(!imported.has(name), `${name} must not count as production`);
+    }
+  });
+});
