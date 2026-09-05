@@ -183,6 +183,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Same history as the Quality Gate job above. At depth 1 prSize
+          # finds no merge-base and reports "PR-size check skipped", so the
+          # two self-scan jobs measured different things on the same PR
+          # (KI #107): one blocked #426 at 3,526 lines, the other said
+          # nothing.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
