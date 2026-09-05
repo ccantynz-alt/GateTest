@@ -65,7 +65,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 27 | Merge-queue and monorepo path filters | open | — |
 | 28 | One-command local reproduction of a CI failure | done | blocked gate leads with `gatetest replay <run-url>` (PR #423) |
 | 29 | Lead with the fake-fix detector | **Craig** | positioning |
-| 30 | Make `test.skip` in a "fix" commit block | open | measure on the corpus first |
+| 30 | Make `test.skip` in a "fix" commit block | done | measured first: eleven `.skip` additions in ~14,000 commits across ten real repos, none in a fix-shaped commit. Now: `fake-fix:test-skip-added` scores 1.0 in a test file (it was soft), fakeFixDetector diffs a PR against its base instead of its last commit, and the finding blocks only when a commit touching the file calls itself a fix — otherwise a warning, still reported |
 
 ## D. The website as a machine (31–40)
 
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-the 8 gates left in KI #106, 06 (schedule the ratchet), 30, 46.
+the 8 gates left in KI #106, 06 (schedule the ratchet), 46.
 Waiting on Craig: 15, 29, 35, 41.
