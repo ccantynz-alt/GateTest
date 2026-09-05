@@ -210,17 +210,31 @@ class BaseModule {
   }
 
   _isInsideStringLiteral(line, index) {
-    let state = null;
+    // A stack: each entry is a quote character, or '{' for a `${ … }`
+    // template expression. Code inside `${}` IS code — until 2026-09-05
+    // `apiKey = \`${Math.random()}\`` read as prose to every rule that used
+    // this guard, and the security module worked around it by anchoring its
+    // regex at the line start, which in turn fired on Math.random() inside
+    // a plain string (the inert-fixture sweep caught that).
+    const stack = [];
     for (let j = 0; j < index && j < line.length; j += 1) {
       const ch = line[j];
-      if (state) {
+      const top = stack[stack.length - 1];
+      if (top === "'" || top === '"' || top === '`') {
         if (ch === '\\') { j += 1; continue; }
-        if (ch === state) state = null;
+        if (ch === top) { stack.pop(); continue; }
+        if (top === '`' && ch === '$' && line[j + 1] === '{') { stack.push('{'); j += 1; }
         continue;
       }
-      if (ch === "'" || ch === '"' || ch === '`') state = ch;
+      // in code (top-level or inside a template expression)
+      if (ch === "'" || ch === '"' || ch === '`') { stack.push(ch); continue; }
+      if (top === '{') {
+        if (ch === '{') stack.push('{');
+        else if (ch === '}') stack.pop();
+      }
     }
-    return state !== null;
+    const top = stack[stack.length - 1];
+    return top === "'" || top === '"' || top === '`';
   }
 
   // A `/` opens a regex literal (not a division operator) when the last

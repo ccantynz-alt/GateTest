@@ -6,7 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
-const { isNonUserFacingPage, isSpaShell } = require('../core/scan-scope');
+const { isNonUserFacingPage, isSpaShell, isImageRenderer } = require('../core/scan-scope');
 
 // Named CSS colors mapped to RGB values
 const NAMED_COLORS = {
@@ -37,18 +37,8 @@ const NAMED_COLORS = {
 // real page it stays an error.
 const FRAGMENT_PATH_RE = /(^|\/)(fragments?|partials?|includes?|_includes|components?|snippets?|layouts?)\//i;
 
-/**
- * JSX that is RASTERISED, not served: `new ImageResponse(<div>…</div>)` from
- * `@vercel/og` / `next/og`, or a satori / workers-og render. The markup
- * becomes a PNG — no screen reader, no keyboard, no DOM. An `<img>` without
- * alt inside it is a paint instruction (trpc www/og-image/pages/api/_ref/
- * vercel.tsx:34). Identified by the call or the import, never by path: the
- * playground page beside it (www/og-image/pages/index.tsx) IS a page.
- */
-const IMAGE_RENDERER_RE = /\bnew\s+ImageResponse\s*\(|\bsatori\s*\(|from\s+['"](?:satori|workers-og|@cf-wasm\/og|@vercel\/og|next\/og)['"]/;
-function isImageRenderer(content) {
-  return IMAGE_RENDERER_RE.test(String(content || ''));
-}
+// `isImageRenderer` lives in src/core/scan-scope.js beside isSpaShell (one
+// definition); re-exported below for callers that still reach it here.
 
 class AccessibilityModule extends BaseModule {
   constructor() {

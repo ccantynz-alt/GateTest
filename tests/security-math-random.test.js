@@ -47,8 +47,7 @@ describe('security: Math.random() — positive controls (the dangerous shape sti
     'const otp = Math.floor(100000 + Math.random() * 900000);',
     'const code = Math.floor(100000 + Math.random() * 900000); // SMS verification',
     "user.resetToken = Math.random().toString(36).substring(7);",
-    // `const apiKey = \`${Math.random()}\`` — inside a template literal; the
-    // in-string guard hides it until it learns `${}` is code (next PR).
+    'const apiKey = `${Math.random()}`;', // inside a template literal: `${}` is code to the guard
     'const API_KEY = Math.random().toString(16);',
     "res.cookie('sessionId', Math.random().toString(36));",
     'req.session.id = Math.random();',
@@ -100,10 +99,9 @@ describe('security: Math.random() — negative controls (an id is not a secret)'
 describe('security: Math.random() — identifier-keyed, so a test tree is a warning', () => {
   // trpc/trpc packages/react-query/test/overrides.test.tsx:74 — a react-query
   // cache-busting nonce inside a test. Still reported, not a verdict.
-  // The trpc line is `nonce-${Math.random()}` inside a template literal; the
-  // in-string guard hides that shape until it learns `${}` is code (next PR),
-  // so the same identifier-keyed split is proven on the bare call here.
-  const line = '    const nonce = Math.random().toString(36);\n';
+  // trpc's real line — inside a template literal, which the in-string guard
+  // now reads as code.
+  const line = '    const nonce = `nonce-${Math.random()}`;\n';
 
   it('the trpc test nonce is a warning', async () => {
     const found = await randomIn('packages/react-query/test/overrides.test.tsx', line);

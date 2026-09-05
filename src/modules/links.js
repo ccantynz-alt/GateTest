@@ -6,10 +6,9 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
-// One definition, imported (Doctrine 4): `isImageRenderer` lives in the a11y
-// module today; its permanent home is src/core/scan-scope.js beside isSpaShell,
-// so every module that reads JSX shares one answer to "is this a web page?".
-const { isImageRenderer } = require('./accessibility');
+// One definition, imported (doctrine §4): src/core/scan-scope.js answers
+// "is this JSX a web page or a picture?" for every module that reads JSX.
+const { isImageRenderer } = require('../core/scan-scope');
 
 // A docs-site route is written the way the SITE serves it, not the way the
 // repository stores it: `../getting-started`, `adapters/standalone`,

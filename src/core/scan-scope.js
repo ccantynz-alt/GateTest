@@ -119,10 +119,26 @@ function isSpaShell(content) {
   return hasMount && text.length < 40;
 }
 
+/**
+ * JSX that is RASTERISED, not served: `new ImageResponse(<div>…</div>)` from
+ * `@vercel/og` / `next/og`, or a satori / workers-og render. The markup
+ * becomes a PNG — no screen reader, no keyboard, no DOM, no links. An
+ * `<img>` without alt or an `href="#"` inside it is a paint instruction
+ * (trpc www/og-image/pages/api/_ref/vercel.tsx, 2026-09-05). Identified by
+ * the call or the import, never by path: the playground page beside it
+ * (www/og-image/pages/index.tsx) IS a page.
+ * @param {string} content
+ */
+const IMAGE_RENDERER_RE = /\bnew\s+ImageResponse\s*\(|\bsatori\s*\(|from\s+['"](?:satori|workers-og|@cf-wasm\/og|@vercel\/og|next\/og)['"]/;
+function isImageRenderer(content) {
+  return IMAGE_RENDERER_RE.test(String(content || ''));
+}
+
 module.exports = {
   isIllustrationPath,
   isNonUserFacingPage,
   isSpaShell,
+  isImageRenderer,
   ILLUSTRATION_DIR_RE,
   HARNESS_DIR_RE,
 };
