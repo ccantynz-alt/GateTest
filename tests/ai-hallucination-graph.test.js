@@ -52,8 +52,11 @@ describe('ai-hallucination — package imports come from the one import graph', 
     write('src/both.ts', "import type { T } from 'ghost-both';\nimport both from 'ghost-both';\nexport const b: T = both;\n");
     write('src/docs.tsx', "import Link from '@docusaurus/Link';\nexport const L = () => <Link to=\"/\" />;\n");
     write('src/ok.js', "const e = require('express');\nmodule.exports = e;\n");
-    // A file under a dot-directory: the module sees it, the graph does not.
+    // A file under a dot-directory: read like any other since the walk
+    // stopped skipping dot-directories (src/core/walk-excludes.js, 2026-09-05).
     write('.configs/build.config.js', "import ghost from 'ghost-dotdir';\nexport default ghost;\n");
+    // A file over the graph's 2 MB cap: the module sees it, the graph does not.
+    write('src/huge.js', "import ghost from 'ghost-huge';\n" + '/*' + ' '.repeat(2 * 1024 * 1024 + 10) + '*/\nexport default ghost;\n');
   });
   after(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -87,12 +90,17 @@ describe('ai-hallucination — package imports come from the one import graph', 
     assert.strictEqual(c.line, 2);
   });
 
-  it('a file the graph did not read is NOT CHECKED — named in the summary, its imports neither reported nor passed', async () => {
+  it('a dot-directory file is read like any other — its undeclared import is reported', async () => {
     const checks = await scan();
-    assert.ok(!has(checks, 'ghost-dotdir'), 'the graph never read .configs/, so nothing can be reported from it');
+    assert.ok(has(checks, 'ghost-dotdir'), `the graph reads .configs/: ${unknown(checks).map((c) => c.name).join(', ')}`);
+  });
+
+  it('a file the graph did not read (over its size cap) is NOT CHECKED — named in the summary, its imports neither reported nor passed', async () => {
+    const checks = await scan();
+    assert.ok(!has(checks, 'ghost-huge'), 'the graph never read src/huge.js, so nothing can be reported from it');
     const nc = checks.find((c) => c.name === 'ai-hallucination:not-checked');
     assert.ok(nc, 'the not-checked summary must be present');
-    assert.deepStrictEqual(nc.notChecked, ['.configs/build.config.js']);
+    assert.deepStrictEqual(nc.notChecked, ['src/huge.js']);
     assert.match(nc.message, /NOT checked/);
   });
 });

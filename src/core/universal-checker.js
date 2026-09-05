@@ -23,11 +23,7 @@ const path = require('path');
 /**
  * Skip these files & directories entirely.
  */
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', '.venv', 'venv', 'target', 'vendor', '.gradle',
-  '.dart_tool', 'Pods', '.mypy_cache', '.pytest_cache',
-];
+const { WALK_EXCLUDES: DEFAULT_EXCLUDES } = require('./walk-excludes');
 
 /**
  * Patterns are applied per line. Comments that look like examples are

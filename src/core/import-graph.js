@@ -50,10 +50,11 @@ const { readImports } = require('./ts-tokens');
 const { stripStringsAndComments } = require('./source-strip');
 const { classifyUses, statementUses } = require('./import-elision');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
+// One definition of what a walk skips (Doctrine §4). This walker used to
+// carry its own list AND skip every dot-directory, so `.storybook/`,
+// `.configs/` and trpc's `examples/.experimental/` were invisible to the
+// graph while every module walking with BaseModule scanned them.
+const { WALK_EXCLUDE_SET: EXCLUDE_DIRS } = require('./walk-excludes');
 
 const JS_EXTS = ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts'];
 const JS_EXT_SET = new Set(JS_EXTS);
@@ -125,7 +126,6 @@ function collectSourceFiles(root) {
     }
     for (const e of entries) {
       if (EXCLUDE_DIRS.has(e.name)) continue;
-      if (e.name.startsWith('.') && e.name !== '.') continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
         walk(full);

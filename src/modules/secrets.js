@@ -6,6 +6,7 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+const { WALK_EXCLUDES } = require('../core/walk-excludes');
 
 /**
  * Values that ANNOUNCE they are not credentials.
@@ -727,7 +728,7 @@ class SecretsModule extends BaseModule {
     // tests/test_apps/.env, gin's testdata/certificate/*.pem) — their
     // presence is not evidence that a real secret is about to leak, so they
     // do not make the missing-pattern advisory a blocking error.
-    const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'vendor', '.gatetest',
+    const SKIP = new Set([...WALK_EXCLUDES,
       'test', 'tests', '__tests__', 'spec', 'specs', 'fixtures', 'fixture', 'testdata', 'test_apps', 'examples', 'example', 'docs', 'benchmarks', 'known-bad', 'reliability-corpus']);
     const matches = (name) => (
       pattern === '.env'

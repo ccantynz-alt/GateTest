@@ -417,6 +417,25 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-05 — one definition of what a walk skips
+
+"Which directories does a walk never enter" had one home
+(`src/core/walk-excludes.js`, three importers) and fifteen other answers —
+the import graph (and so importCycle, deadCode, spineHealth, aiHallucination,
+dependencyReachability), crossFileTaint, undefinedRef, openapiDrift,
+workspaces, safe-fs, universal-checker, the gitignore hard-skips, memory,
+env-integrity, mutation, secrets and syntax — each a different subset with a
+different extra. The import graph's copy also skipped every dot-directory, so
+`.storybook/`, `.configs/` and trpc's `examples/.experimental/` were invisible
+to the graph while the modules walking with the home list scanned them;
+undefinedRef's skipped `bin/`, where a Node project's CLIs live; safe-fs's
+skipped a directory named `env`, which is NodeGoat's `config/env`. The home is
+now the union, every walker imports it, and `tests/walk-excludes.test.js`
+forbids the shape of a private copy anywhere under `src/` — its first run
+found the last six. Measured on fourteen corpus repositories across six walker
+modules: finding sets identical everywhere; determinism 1,292 = 1,292; corpus
+20/20 at ceilings. One definition, not a new signal.
+
 ### 2026-09-05 — the test runner counted whatever finished first
 
 Noticed because the same four test files reported 59, 48 and 55 passes on
