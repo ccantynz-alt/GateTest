@@ -573,9 +573,12 @@ paths default to Sonnet (flat-rate / no per-scan payment — Fable isn't funded
 there, but BYOK users may pick it since the spend is theirs).
 MCP server: `bin/gatetest-mcp.mjs`, 24 tools (run_tests / stream_logs / query_db / http_request restored to tools/list 2026-07-11 — they had handlers but were never registered).
 **Flywheel (v1.59.0, 2026-07-11):** EVERY scan (not just fixes) now feeds the
-flywheel — anonymized module+count signal to `~/.gatetest/telemetry/scan-findings.jsonl`
-+ best-effort upload to `POST /api/telemetry/scan` (opt-out: `GATETEST_NO_TELEMETRY=1`
-or `.gatetest.json {telemetry:false}`; NEVER code/paths/findings). **False-positive
+flywheel — anonymized module+count signal, and since 2026-09-05 per-rule
+`fired` / `silenced` counts (rule IDS only, `src/core/rule-identity.js`), to
+`~/.gatetest/telemetry/scan-findings.jsonl` + best-effort upload to
+`POST /api/telemetry/scan` (opt-out: `GATETEST_NO_TELEMETRY=1` or `.gatetest.json
+{telemetry:false}`; NEVER code/paths/findings/repo names). The silenced rate is
+published rule by rule at `/noise` (the Fifty, move 07). **False-positive
 control:** repo-root `.gatetestignore` suppresses findings (`module:rule` | `module`
 | `*:rule` | `module:rule@glob` | `path/**`); `gatetest --noise` shows noisy modules;
 chronically-dismissed high-fire modules auto-soften below the block threshold. See
@@ -647,7 +650,7 @@ a claim.
 - **The gate enforces for customers.** `integrations/github-actions/gatetest-gate.yml` and `action.yml` block on PRs (`--diff` / `--pr` scope) and on full runs against `.gatetest/baseline.json`; `--report-only` is forbidden on the gate by `tests/integrations.test.js`. Before 2026-09-04 every customer ran advisory.
 - **Precision is measured on twenty third-party repositories — all eight advertised languages and four monorepos** (`reliability-corpus/real-world.json`; ceilings after the 2026-09-05 passes: express 0, flask 2, fastify 3, got 14, hono 27, zod 5, django 60, rails 41, spring-petclinic 8, gin 2, axum 5, laravel 4, CleanArchitecture 11, ktor 7, vapor 0, nest 9, trpc 8, apollo-server 0, prisma 16; NodeGoat floor 40, measured 57). The monorepos were first-contact 39 / 33 / 4 / 90 — every drop was a scanner defect with the line that exposed it, and every ceiling drop since is diffed engine-against-engine on a fresh clone before it is accepted. CI job "real repos must not be blocked"; rendered at `/precision` from `website/app/data/precision.json`, regenerated nightly.
 - **Diff scans report only the diff** (runner-level `_scopeResultToChangedFiles`), one file walk for 36 modules, quick `--diff` on a PR ≈ 8s; full self-scan ≈ 65s with mutation deferred to `mutation-nightly.yml`.
-- **Every JSON report carries provenance and a signature** (`src/core/report-provenance.js`, `GATETEST_REPORT_SIGNING_KEY`, `gatetest verify-report`). SARIF reports the level the gate used. A CI job asserts same tree → same findings.
+- **Every JSON report carries provenance and a signature** (`src/core/report-provenance.js`, `GATETEST_REPORT_SIGNING_KEY`, `gatetest verify-report`). SARIF reports the level the gate used. A CI job asserts same tree → same findings. **`gatetest --compliance` writes the compliance evidence pack** (OWASP / SOC 2 / CIS control by control, three-state, signed the same way; `src/core/compliance-evidence.js`); the mapping table lives in `src/core/compliance-mappings.js` and the website + SARIF import it.
 - **Hosted PR comments** attribute findings by line (`inDiff` / `inChangedFile`), say what was not checked, and carry the exact `@gatetest ignore …` reply per finding. The CLI prints the exact `.gatetestignore` line and, in CI, the `gatetest replay` command under a blocked gate.
 - **KI #106 closed (2026-09-05):** no module decides "nothing to check" from a framework marker its rules do not need — 15 of 15 fixed, three new one-definition homes (`src/core/workspaces.js`, `migration-dirs.js`, `shell-files.js`), corpus 20/20 at ceilings. **Open, measured:** KI #105 — stale Code Scanning categories need an API delete; KI #107 — prSize on the Dogfood job's depth-1 checkout.
 

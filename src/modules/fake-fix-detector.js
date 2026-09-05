@@ -333,6 +333,11 @@ const PATTERN_RULES = [
     id: 'threshold-lowered',
     direction: 'added',
     codeOnly: true,
+    // A `threshold: 0.7` in a TEST file is fixture data, not a gate policy
+    // (tests/compliance-evidence.test.js's runner-summary fixture was
+    // reported as "Threshold value changed", PR #433, 2026-09-05). The
+    // rule is about config: jest coverageThreshold, sonar gates, .gatetest.json.
+    notInTests: true,
     pattern: /^\+.*(coverage|threshold|minScore|maxErrors)\s*[:=]\s*\d/i,
     severity: 'info',
     title: 'Threshold value changed',
@@ -592,6 +597,7 @@ class FakeFixDetectorModule extends BaseModule {
           // `+`/`-` diff marker is stripped first so the comment test sees
           // the source line as written.
           if (rule.codeOnly && isWholeLineComment(line.slice(1))) continue;
+          if (rule.notInTests && this._isTestPath(hunk.file)) continue;
 
           if (rule.pattern.test(line)) {
             findings.push({

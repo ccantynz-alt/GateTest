@@ -168,6 +168,9 @@ export default function PrecisionPage() {
             The corpus manifest and the runner are in the repository, so anyone can re-run the table.{" "}
             <Link href="/modules" className="text-teal-400 hover:underline">
               What the 121 modules check &rarr;
+            </Link>{" "}
+            <Link href="/noise" className="text-teal-400 hover:underline">
+              Which rules teams silence &rarr;
             </Link>
           </p>
         </section>
