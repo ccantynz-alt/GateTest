@@ -24,6 +24,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { workspacePackageNames } = require('../core/workspaces');
+const { stripStringsAndComments } = require('../core/source-strip');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
 
@@ -160,16 +161,32 @@ function barePackage(specifier) {
 
 // ─── import harvester ─────────────────────────────────────────────────────
 
-const IMPORT_RE  = /^\s*import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]/gm;
-const REQUIRE_RE = /(?:^|[^/])\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/gm;
+// `[ \t]*`, not `\s*`: on the masked text a blanked doc comment is pure
+// whitespace, and `^\s*import` would start the match lines above the import.
+// The `d` flag gives the specifier group's own offsets, which is where the
+// raw text is read and which line the finding is on.
+const IMPORT_RE  = /^[ \t]*import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]/gmd;
+const REQUIRE_RE = /(?:^|[^/])\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/gmd;
 
+// Harvested from the MASKED text — comments gone, string contents blanked,
+// every offset preserved (src/core/source-strip.js, the one definition of
+// where a string or comment begins and ends) — so an import that lives in a
+// comment or a fixture string is never an import. The specifier itself is
+// read back from the raw text at the same offsets. Before 2026-09-05 this
+// scanned raw text with a whole-line comment guard, so a trailing
+// `// import x = require('…')` after code was reported as a hallucinated
+// package named `…` — on our own ts-tokens.js.
 function harvestImports(content) {
+  const masked = stripStringsAndComments(content);
   const imports = [];
-  let m;
-  IMPORT_RE.lastIndex = 0;
-  while ((m = IMPORT_RE.exec(content)) !== null) imports.push({ specifier: m[1], index: m.index });
-  REQUIRE_RE.lastIndex = 0;
-  while ((m = REQUIRE_RE.exec(content)) !== null) imports.push({ specifier: m[1], index: m.index });
+  for (const re of [IMPORT_RE, REQUIRE_RE]) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(masked)) !== null) {
+      const [start, end] = m.indices[1];
+      imports.push({ specifier: content.slice(start, end), index: start });
+    }
+  }
   return imports;
 }
 
@@ -320,26 +337,13 @@ class AiHallucinationDetector extends BaseModule {
         const lineText = lines[lineNo - 1] || '';
         if (lineText.includes('// hallucination-ok')) continue;
 
-        // An "import" inside a string literal or a comment is not an import.
-        //
-        // This module had NO string guard — it was one of the unguarded modules
-        // KI #77 recorded — and it is the single biggest remaining source of its
-        // false positives. Measured on this repo: 30 findings from
-        // tests/security-policy-applier.test.js and 17 from
-        // tests/prompt-safety.test.js, all of them FIXTURES, e.g.
+        // An "import" inside a string literal or a comment is not an import —
+        // harvestImports works on the masked source, so neither reaches here.
+        // (History: this module had NO string guard — one of the unguarded
+        // modules KI #77 recorded — and fixture strings alone produced 47
+        // findings on this repo, e.g.
         //   assert.equal(detectFramework("const express = require('express');"), 'express')
-        // A module that tests framework detection has to contain sample code as
-        // data, and scanning that data as if it were code reports the fixture's
-        // dependencies as the project's hallucinations. The giveaway was two of
-        // the top "packages" being `${importPath}` and `*.node`, which cannot
-        // appear in a real specifier.
-        //
-        // Guarded by COLUMN, not by line: a genuine `import x from 'pkg'` has its
-        // match at the start of the line, so the quoted specifier never makes it
-        // look string-enclosed.
-        if (this._isCommentLine(lineText)) continue;
-        const lineStart = content.lastIndexOf('\n', index - 1) + 1;
-        if (this._isInsideStringLiteral(lineText, index - lineStart)) continue;
+        // The column-based guard that replaced it missed trailing comments.)
         // Type-only imports are erased at compile time — treat as warning, not error
         const isTypeOnly = /^\s*import\s+type\b/.test(lineText);
 
