@@ -91,3 +91,45 @@ describe('workspaces — members', () => {
     assert.deepEqual([...ws.workspacePackageNames(tmp)], ['@acme/a']);
   });
 });
+
+describe('workspaces — which manifest governs a file, and what it declares (one definition, KI #106)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ws-m-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const w = (rel, c) => { const f = path.join(tmp, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, typeof c === 'string' ? c : JSON.stringify(c)); };
+
+  it('manifestDeclares: a Set of names, a RegExp over the name, or a predicate — in any dependency field', () => {
+    w('package.json', { devDependencies: { zod: '3' }, peerDependencies: { '@trpc/server': '11' } });
+    assert.equal(ws.manifestDeclares(tmp, new Set(['zod'])), true);
+    assert.equal(ws.manifestDeclares(tmp, new Set(['prop-types'])), false);
+    assert.equal(ws.manifestDeclares(tmp, /(?:^|[@/.-])trpc(?:$|[/.-])/), true);
+    assert.equal(ws.manifestDeclares(tmp, (k) => k.startsWith('@types/')), false);
+    assert.deepEqual(ws.DEP_FIELDS, ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']);
+  });
+
+  it('manifestDeclares: no manifest, or invalid JSON, declares nothing — it never throws', () => {
+    assert.equal(ws.manifestDeclares(path.join(tmp, 'nowhere'), new Set(['zod'])), false);
+    w('package.json', '{ not json');
+    assert.equal(ws.manifestDeclares(tmp, new Set(['zod'])), false);
+  });
+
+  it('nearestWorkspacePackage: deepest member wins, segment-anchored, null when the root governs', () => {
+    const members = [
+      { rel: 'packages/a' }, { rel: 'packages/ab' }, { rel: 'examples/minimal' }, { rel: 'examples/minimal/client' },
+    ];
+    assert.equal(ws.nearestWorkspacePackage(members, 'packages/ab/src/x.tsx').rel, 'packages/ab', 'packages/a must not claim packages/ab');
+    assert.equal(ws.nearestWorkspacePackage(members, 'packages/a/src/x.tsx').rel, 'packages/a');
+    assert.equal(ws.nearestWorkspacePackage(members, 'examples/minimal/client/app.tsx').rel, 'examples/minimal/client', 'deepest wins');
+    assert.equal(ws.nearestWorkspacePackage(members, 'examples/minimal/server/index.ts').rel, 'examples/minimal');
+    assert.equal(ws.nearestWorkspacePackage(members, 'packages/a'), members[0], 'the member dir itself');
+    assert.equal(ws.nearestWorkspacePackage(members, 'src/index.ts'), null);
+  });
+
+  it('zodSchema and trpcContract import these — neither carries a private copy', () => {
+    for (const mod of ['zod-schema', 'trpc-contract']) {
+      const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', `${mod}.js`), 'utf-8');
+      assert.match(src, /manifestDeclares, nearestWorkspacePackage \} = require\('\.\.\/core\/workspaces'\)/, mod);
+      assert.doesNotMatch(src, /function nearestMember|const DEP_FIELDS|function manifestDeclares/, `${mod} re-declares a workspaces helper`);
+    }
+  });
+});

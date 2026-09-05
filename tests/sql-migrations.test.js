@@ -239,3 +239,74 @@ describe('SqlMigrationsModule — summary', () => {
     assert.match(summary.message, /1 file\(s\)/);
   });
 });
+
+/**
+ * KI #106 (the Fifty, move 11) — the directory convention is the shared
+ * one in src/core/migration-dirs.js, not a private list. What changed:
+ * Liquibase `db/changelog`, Alembic `alembic/versions`, Drizzle beside its
+ * config and Atlas (`atlas.sum`) are now found; a bare `migration` /
+ * `migrate` segment anywhere no longer is — in the corpus it only ever
+ * named a framework's migration implementation or docs.
+ */
+describe('SqlMigrationsModule — shared migration-dir convention', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-sql-dirs-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const LAYOUTS = [
+    ['Flyway', 'src/main/resources/db/migration/V2__drop.sql'],
+    ['Liquibase', 'src/main/resources/db/changelog/changes/002_drop.sql'],
+    ['Alembic (alembic/versions)', 'alembic/versions/1975ea83b712_drop.sql'],
+    ['golang-migrate', 'db/migrations/000002_drop.up.sql'],
+    ['TypeORM-style src/migrations', 'src/migrations/1700000000000-drop.sql'],
+    ['Laravel database/migrations', 'database/migrations/2014_10_12_000000_drop.sql'],
+    ['EF Core Migrations/', 'Migrations/20240101120000_Drop.sql'],
+    ['hand-named raw SQL set', 'migrations/drop_legacy.sql'],
+  ];
+  for (const [label, file] of LAYOUTS) {
+    it(`POSITIVE: ${label} — only that layout present, its DROP TABLE is reported`, async () => {
+      writeMigration(tmp, file, 'DROP TABLE users;');
+      const r = await run(tmp);
+      assert.strictEqual(r.checks.find((c) => c.name === 'sql:no-files'), undefined, `${label}: reported as no migrations`);
+      const hit = r.checks.find((c) => c.name.startsWith('sql:drop-table:'));
+      assert.ok(hit, `${label}: no drop-table finding`);
+      assert.strictEqual(hit.file.replace(/\\/g, '/'), file);
+    });
+  }
+
+  it('POSITIVE: Drizzle — drizzle/ beside drizzle.config.ts', async () => {
+    writeMigration(tmp, 'drizzle.config.ts', 'export default {}');
+    writeMigration(tmp, 'drizzle/0001_drop.sql', 'DROP TABLE users;');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('sql:drop-table:')));
+  });
+
+  it('POSITIVE: Atlas — a dir holding atlas.sum', async () => {
+    writeMigration(tmp, 'schema/atlas.sum', 'h1:x');
+    writeMigration(tmp, 'schema/20240101120000_drop.sql', 'DROP TABLE users;');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('sql:drop-table:')));
+  });
+
+  it('NEGATIVE: a directory that merely contains the word is not a migration dir', async () => {
+    writeMigration(tmp, 'src/migrationsHelper/drop.sql', 'DROP TABLE users;');
+    writeMigration(tmp, 'docs/migration-guide/drop.sql', 'DROP TABLE users;');
+    writeMigration(tmp, 'src/migrations2/drop.sql', 'DROP TABLE users;');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'sql:no-files'));
+  });
+
+  it('NEGATIVE: a bare `migration` segment is a framework dir, not a tree', async () => {
+    // rails activerecord/lib/active_record/migration, prisma packages/…/tooling/migration
+    writeMigration(tmp, 'lib/active_record/migration/compatibility.sql', 'DROP TABLE users;');
+    writeMigration(tmp, 'packages/tooling/migration/render.sql', 'DROP TABLE users;');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'sql:no-files'));
+  });
+
+  it('NEGATIVE: a dir named migrations holding only source is skipped', async () => {
+    writeMigration(tmp, 'packages/postgres/src/core/migrations/op-factory-call.ts', 'const x = "DROP TABLE";');
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name === 'sql:no-files'));
+  });
+});

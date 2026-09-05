@@ -50,6 +50,28 @@ const MODULE_SOURCE_RE = /(?:^|\/)src[\\/]modules[\\/]/;
 
 const SCAN_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 
+// A file is "AI-adjacent" — and its lines are worth the rules below — when
+// it names a provider or gateway in ANY of the ways real code does. Until
+// 2026-09-05 (KI #106) only the literal tokens `openai` / `anthropic`
+// opened a file: a raw `fetch('https://api.openai.com/v1/chat/completions')`
+// gateway, Bedrock, Vertex / Gemini, Ollama, the Vercel AI SDK and LangChain
+// were never read, although the deprecated-model, temperature, public-key
+// and injection rules key on nothing provider-specific.
+const AI_ADJACENT_RE = new RegExp([
+  // the two names, any casing, as words
+  String.raw`\b(?:openai|anthropic)\b`,
+  // SDK packages / imports (JS and Python)
+  String.raw`@anthropic-ai\/sdk|@anthropic\/sdk|openai\/openai|@google\/generative-ai|@google\/genai|@google-cloud\/vertexai|@aws-sdk\/client-bedrock-runtime|@azure\/openai|@azure-rest\/ai-inference|@mistralai\/|cohere-ai|groq-sdk|together-ai|openrouter|@ai-sdk\/|@langchain\/|['"]langchain|['"]ollama['"]|['"]ai['"]|['"]replicate['"]`,
+  String.raw`\bfrom\s+(?:openai|anthropic|google\.generativeai|google\.genai|vertexai|langchain\w*|litellm|ollama|cohere|mistralai|groq)\b\s+import|\bimport\s+(?:openai|anthropic|google\.generativeai|vertexai|langchain\w*|litellm|ollama|cohere|mistralai|groq)\b`,
+  String.raw`boto3[\s\S]{0,60}?bedrock-runtime|['"]bedrock-runtime['"]`,
+  // raw endpoints — the gateway shape
+  String.raw`api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|aiplatform\.googleapis\.com|bedrock-runtime\.[a-z0-9-]+\.amazonaws\.com|openrouter\.ai\/api|api\.mistral\.ai|api\.groq\.com|api\.together\.xyz|api\.cohere\.(?:ai|com)|openai\.azure\.com|:11434\b`,
+  // model identifiers in a string
+  String.raw`['"\x60](?:gpt-[345o]|o[134](?:-mini)?\b|claude-|gemini-|text-davinci|text-bison|palm-|mistral-(?:large|medium|small|tiny)|mixtral-|llama-?[23]|command-r)`,
+  // the SDK client classes / calls the max_tokens rule understands
+  String.raw`\bGoogleGenerativeAI\b|\bInvokeModel(?:WithResponseStream)?Command\b|\bChat(?:OpenAI|Anthropic|GoogleGenerativeAI|Bedrock|VertexAI|Ollama|Groq|Mistral)\b|\b(?:generateText|streamText|generateObject|streamObject)\s*\(`,
+].join('|'), 'i');
+
 // Client-bundled env prefixes. NEXT_PUBLIC_* (Next.js), VITE_* (Vite),
 // REACT_APP_* (CRA), EXPO_PUBLIC_* (Expo), PUBLIC_* (SvelteKit).
 const PUBLIC_ENV_PREFIX = /\b(NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|PUBLIC_)/;
@@ -117,6 +139,14 @@ const MODEL_LIFECYCLE = [
   ['claude-opus-4-1-20250805', '2026-08-05'],
 ];
 
+// The output-cap field each provider's call takes — named in the finding so
+// the fix is copy-paste, not a translation exercise.
+const CAP_FIELD_NAME = {
+  openai: '`max_tokens`', 'openai-py': '`max_tokens`', anthropic: '`max_tokens`', 'anthropic-py': '`max_tokens`',
+  gateway: '`max_tokens` in the JSON body', gemini: '`generationConfig.maxOutputTokens`', 'gemini-py': '`max_output_tokens`',
+  bedrock: '`max_tokens` / `maxTokens` / `max_gen_len` in the body', 'ai-sdk': '`maxOutputTokens`',
+  langchain: '`maxTokens`', 'langchain-py': '`max_tokens=`',
+};
 const DEPRECATED_MODELS = MODEL_LIFECYCLE.map(([id]) => id);
 const RETIREMENT_DATES = new Map(MODEL_LIFECYCLE);
 
@@ -188,12 +218,7 @@ class PromptSafetyModule extends BaseModule {
   _looksAiAdjacent(file) {
     try {
       const content = fs.readFileSync(file, 'utf-8');
-      return (
-        /\b(openai|anthropic|Anthropic|OpenAI)\b/.test(content) ||
-        /from\s+openai\s+import|from\s+anthropic\s+import/.test(content) ||
-        /@anthropic-ai\/sdk|@anthropic\/sdk|openai\/openai/.test(content) ||
-        PUBLIC_ENV_PREFIX.test(content)
-      );
+      return AI_ADJACENT_RE.test(content) || PUBLIC_ENV_PREFIX.test(content);
     } catch {
       return false;
     }
@@ -213,8 +238,8 @@ class PromptSafetyModule extends BaseModule {
     // defines the patterns produces false positives on the patterns themselves.
     if (MODULE_SOURCE_RE.test(rel.replace(/\\/g, '/'))) return 0;
 
-    const relUnix = rel.replace(/\\/g, '/');
-    const isTest = /(?:^|\/)(?:tests?|__tests__|spec|fixtures?|e2e)(?:\/|$)|\.(?:test|spec)\.[a-z]+$/i.test(relUnix);
+    // One definition of "is this a test path" (doctrine §4).
+    const isTest = this._isTestPath(rel);
 
     const lines = content.split(/\r?\n/);
     let issues = 0;
@@ -304,21 +329,46 @@ class PromptSafetyModule extends BaseModule {
     // body is captured greedily; we then check for `max_tokens`.
     // (?:[\s\S]*?\}) catches the closing brace for JS object literals;
     // for Python we also accept `)`.
+    // Each entry: the call, the captured argument body, and the field(s)
+    // that cap output for THAT provider. A body that carries any of them is
+    // fine; a body that carries none is the unbounded-output bug.
     const patterns = [
       { re: /(?:openai|OpenAI)[\s\S]{0,80}?chat\.completions\.create\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
-        kind: 'openai' },
+        kind: 'openai', cap: /max_(?:completion_)?tokens\s*[:=]/ },
       { re: /(?:anthropic|Anthropic)[\s\S]{0,80}?messages\.create\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
-        kind: 'anthropic' },
+        kind: 'anthropic', cap: /max_tokens\s*[:=]/ },
       { re: /(?:openai|OpenAI)[\s\S]{0,80}?chat\.completions\.create\s*\(([\s\S]*?)\)/g,
-        kind: 'openai-py' },
+        kind: 'openai-py', cap: /max_(?:completion_)?tokens\s*[:=]/ },
       { re: /(?:anthropic|Anthropic)[\s\S]{0,80}?messages\.create\s*\(([\s\S]*?)\)/g,
-        kind: 'anthropic-py' },
+        kind: 'anthropic-py', cap: /max_tokens\s*[:=]/ },
+      // Raw gateway: fetch/axios/request to the provider's REST endpoint with
+      // a JSON body. The body is what the provider bills on.
+      { re: /['"\x60]https?:\/\/api\.(?:openai|anthropic)\.com\/[^'"\x60]*['"\x60][\s\S]{0,500}?JSON\.stringify\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+        kind: 'gateway', cap: /max_(?:completion_)?tokens\s*[:=]/ },
+      // Google Gemini / Vertex: generateContent({ generationConfig: { maxOutputTokens } })
+      { re: /\bgenerateContent(?:Stream)?\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+        kind: 'gemini', cap: /max_?[oO]utput_?[tT]okens\s*[:=]/ },
+      { re: /\bgenerate_content\s*\(([\s\S]*?)\)/g,
+        kind: 'gemini-py', cap: /max_output_tokens\s*[:=]/ },
+      // AWS Bedrock: InvokeModelCommand({ body: JSON.stringify({ max_tokens | maxTokens | max_gen_len | maxTokenCount }) })
+      { re: /\bInvokeModel(?:WithResponseStream)?Command\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+        kind: 'bedrock', cap: /max_tokens|maxTokens|max_gen_len|maxTokenCount|max_tokens_to_sample/ },
+      // Vercel AI SDK: generateText / streamText / generateObject / streamObject({ maxTokens | maxOutputTokens })
+      { re: /\b(?:generateText|streamText|generateObject|streamObject)\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+        kind: 'ai-sdk', cap: /max(?:Output)?Tokens\s*:/ },
+      // LangChain: new ChatOpenAI({ maxTokens }) / ChatAnthropic({ maxTokens }) / ChatBedrock / ChatGoogleGenerativeAI
+      { re: /\bnew\s+Chat(?:OpenAI|Anthropic|Bedrock|GoogleGenerativeAI|VertexAI|Groq|Mistral)\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+        kind: 'langchain', cap: /max_?[tT]okens|maxOutputTokens/ },
+      // (?<!new\s) — the JS form is `new ChatOpenAI({…})`, matched above; the
+      // Python constructor has no `new` and takes kwargs, not an object.
+      { re: /(?<!new\s)\bChat(?:OpenAI|Anthropic|Bedrock|GoogleGenerativeAI|VertexAI|Groq|MistralAI)\s*\(([\s\S]*?)\)/g,
+        kind: 'langchain-py', cap: /max_(?:output_)?tokens\s*=|max(?:Output)?Tokens\s*:/ },
     ];
-    for (const { re, kind } of patterns) {
+    for (const { re, kind, cap } of patterns) {
       let m;
       while ((m = re.exec(content)) !== null) {
         const body = m[1];
-        if (/max_tokens\s*[:=]/.test(body)) continue;
+        if (cap.test(body)) continue;
         const idx = m.index;
         const beforeMatch = content.slice(0, idx);
         const lineNo = beforeMatch.split(/\r?\n/).length;
@@ -332,8 +382,8 @@ class PromptSafetyModule extends BaseModule {
           file: rel,
           line: lineNo,
           api: kind,
-          message: `${kind} call has no \`max_tokens\` — an attacker crafting a long prompt can run up your bill indefinitely`,
-          suggestion: 'Always set `max_tokens` to the smallest value that fits your use case. This also caps worst-case latency.',
+          message: `${kind} call sets no output cap (${CAP_FIELD_NAME[kind] || 'max_tokens'}) — an attacker crafting a long prompt can run up your bill indefinitely`,
+          suggestion: `Always set ${CAP_FIELD_NAME[kind] || 'max_tokens'} to the smallest value that fits your use case. This also caps worst-case latency.`,
         });
       }
     }

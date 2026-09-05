@@ -558,6 +558,82 @@ export default function Button({ label }: Props) {
     await m.run(result, { projectRoot: tmp });
     assert.strictEqual(result.warningChecks.length, 0);
   });
+
+  // KI #106 — the gate read only the ROOT package.json; in a workspace the
+  // dependency lives in the member. Control pair: the member shape fires,
+  // a repo with zod nowhere stays skipped.
+  const COMPONENT = `
+export default function Button({ label }: { label: string }) {
+  return <button>{label}</button>;
+}
+`;
+
+  it('workspace member with zod in ITS package.json is checked (positive control)', async () => {
+    const Mod = require('../src/modules/zod-schema');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*'] }));
+    write(tmp, 'packages/ui/package.json', JSON.stringify({ name: '@mono/ui', dependencies: { zod: '^3' } }));
+    write(tmp, 'packages/ui/src/Button.tsx', COMPONENT);
+    // a sibling member WITHOUT zod cannot import it — its component is not judged
+    write(tmp, 'packages/site/package.json', JSON.stringify({ name: '@mono/site', dependencies: {} }));
+    write(tmp, 'packages/site/src/Card.tsx', COMPONENT.replace('Button', 'Card'));
+    const result = makeResult('zodSchemaPresence');
+    await m.run(result, { projectRoot: tmp });
+    const files = result.warningChecks.map(c => c.file);
+    assert.deepStrictEqual(files, ['packages/ui/src/Button.tsx']);
+  });
+
+  it('member containment is segment-anchored: packages/a does not claim packages/ab', async () => {
+    const Mod = require('../src/modules/zod-schema');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*'] }));
+    write(tmp, 'packages/a/package.json', JSON.stringify({ name: 'a', dependencies: { zod: '^3' } }));
+    write(tmp, 'packages/ab/package.json', JSON.stringify({ name: 'ab', dependencies: {} }));
+    write(tmp, 'packages/a/src/A.tsx', COMPONENT.replace('Button', 'A'));
+    write(tmp, 'packages/ab/src/Ab.tsx', COMPONENT.replace('Button', 'Ab'));
+    const result = makeResult('zodSchemaPresence');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(result.warningChecks.map(c => c.file), ['packages/a/src/A.tsx']);
+  });
+
+  it('root zod still covers every member (hoisted install)', async () => {
+    const Mod = require('../src/modules/zod-schema');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', workspaces: ['packages/*'], devDependencies: { zod: '^3' } }));
+    write(tmp, 'packages/site/package.json', JSON.stringify({ name: 'site', dependencies: {} }));
+    write(tmp, 'packages/site/src/Card.tsx', COMPONENT.replace('Button', 'Card'));
+    const result = makeResult('zodSchemaPresence');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(result.warningChecks.map(c => c.file), ['packages/site/src/Card.tsx']);
+  });
+
+  it('prop-types is validation the rule accepts, so it opens the gate too', async () => {
+    const Mod = require('../src/modules/zod-schema');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { 'prop-types': '^15' } }));
+    write(tmp, 'src/Button.jsx', 'export default function Button({ label }) { return <button>{label}</button>; }\n');
+    write(tmp, 'src/Card.jsx', 'import PropTypes from "prop-types";\nexport default function Card({ title }) { return <b>{title}</b>; }\nCard.propTypes = { title: PropTypes.string };\n');
+    const result = makeResult('zodSchemaPresence');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(result.warningChecks.map(c => c.file), ['src/Button.jsx']);
+  });
+
+  it('a workspace with zod nowhere stays skipped (negative control)', async () => {
+    const Mod = require('../src/modules/zod-schema');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*'] }));
+    write(tmp, 'packages/ui/package.json', JSON.stringify({ name: 'ui', dependencies: { react: '^18' } }));
+    write(tmp, 'packages/ui/src/Button.tsx', COMPONENT);
+    const result = makeResult('zodSchemaPresence');
+    await m.run(result, { projectRoot: tmp });
+    assert.strictEqual(result.warningChecks.length, 0);
+    assert.ok(result.checks.some(c => c.name === 'zod-schema:not-installed'), 'should report the skip');
+  });
 });
 
 // ─── Bundle Size ───────────────────────────────────────────────────────────
@@ -665,6 +741,163 @@ const data = trpc.getUsers.useQuery(); // typo: "getUsers" not "getUser"
     const result = makeResult('trpcContract');
     await m.run(result, { projectRoot: tmp });
     assert.ok(result.errorChecks.length > 0, 'Should flag undefined procedure');
+  });
+
+  // KI #106 — the gate read only the ROOT package.json. The tRPC monorepo
+  // itself (root never lists @trpc/*) reported "not installed"; once it
+  // ran, its own examples produced 62 errors, every one a harvester
+  // defect. Each shape below is a control pair.
+  const undefinedCalls = (result) => result.errorChecks.map(c => c.name.replace('trpc-contract:undefined-call:', '')).sort();
+
+  // A real router: several keys, function bodies with braces, an inline
+  // nested router and an inline nested object. `[^}]{0,2000}` saw only `list`.
+  const ROUTER = `
+import { z } from 'zod';
+export const appRouter = router({
+  list: publicProcedure.query(async () => { const rows = await db.find({ a: 1 }); return rows; }),
+  add: publicProcedure.input(z.object({ title: z.string().regex(/[{}]/) })).mutation(({ input }) => {
+    return db.insert({ ...input });
+  }),
+  admin: router({
+    secret: publicProcedure.query(() => ({ secret: 'sauce' })),
+  }),
+  examples: {
+    iterable: publicProcedure.query(async function* () { yield 1; }),
+  },
+});
+`;
+
+  it('workspace member with @trpc in ITS package.json opens the gate (positive control)', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*'] }));
+    write(tmp, 'packages/api/package.json', JSON.stringify({ name: '@mono/api', dependencies: { '@trpc/server': '^11' } }));
+    write(tmp, 'packages/api/src/router.ts', ROUTER);
+    write(tmp, 'packages/web/package.json', JSON.stringify({ name: '@mono/web', dependencies: { '@mono/api': 'workspace:*' } }));
+    write(tmp, 'packages/web/src/page.tsx', `
+import { api } from '~/utils/api';
+const a = api.list.useQuery();
+const b = api.add.useMutation();
+const c = api.admin.secret.useQuery();
+const d = api.examples.iterable.useQuery();
+const e = api.lsit.useQuery(); // typo
+const f = api.admin.public.useQuery(); // not in the inline nested router
+`);
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['admin.public', 'lsit']);
+  });
+
+  it('a workspace with tRPC nowhere stays skipped (negative control)', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*'] }));
+    write(tmp, 'packages/api/package.json', JSON.stringify({ name: 'api', dependencies: { express: '^4' } }));
+    write(tmp, 'packages/api/src/router.ts', ROUTER);
+    write(tmp, 'packages/web/src/page.tsx', 'const e = trpc.lsit.useQuery();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.strictEqual(result.errorChecks.length, 0);
+    assert.ok(result.checks.some(c => c.name === 'trpc-contract:not-installed'));
+  });
+
+  it('a trpc-ish package name is a token, not a substring', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { 'nestjs-trpc': '^1' } }));
+    write(tmp, 'src/router.ts', ROUTER);
+    write(tmp, 'src/page.tsx', 'const e = trpc.lsit.useQuery();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['lsit']);
+  });
+
+  it('routers are harvested from any file, not only paths named router/trpc/api/server', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { '@trpc/server': '^11' } }));
+    write(tmp, 'lib/gateway.ts', ROUTER);
+    write(tmp, 'src/page.tsx', 'const a = trpc.list.useQuery();\nconst b = trpc.lsit.useQuery();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['lsit']);
+  });
+
+  it('an alias to a router in the tree closes the namespace; an alias to one outside stays open', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { '@trpc/server': '^11' } }));
+    write(tmp, 'server-a/router.ts', 'export const serverA_appRouter = router({\n  greet: publicProcedure.input(z.string()).query(({ input }) => ({ greeting: `hi ${input}` })),\n});\n');
+    write(tmp, 'gateway/index.ts', "import { serverA_appRouter } from '../server-a/router';\nimport { router01 } from '@ext/router01';\nconst appRouter = router({\n  serverA: serverA_appRouter,\n  posts: postsRouter,\n  router01,\n});\n");
+    write(tmp, 'app/index.ts', 'const a = trpc.serverA.greet.query("x");\nconst b = trpc.serverA.greeet.query("x");\nconst c = trpc.posts.anything.query();\nconst d = trpc.router01.foo.query();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['serverA.greeet']);
+  });
+
+  it('`api` / `client` count only when imported or created from a tRPC factory; `trpc` always', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { '@trpc/client': '^11' } }));
+    write(tmp, 'src/router.ts', ROUTER);
+    // @trpc/client's own wsLink.ts: a WebSocket connection object named `client`
+    write(tmp, 'src/links/wsLink.ts', 'export function wsLink(opts) {\n  const { client } = opts;\n  return client.connectionState.subscribe({ next() {} });\n}\n');
+    write(tmp, 'src/a.ts', "import { client } from './trpc';\nconst x = client.nope.query();\n");
+    write(tmp, 'src/b.ts', "const api = createTRPCClient<AppRouter>({ links: [] });\nconst y = api.nada.query();\n");
+    write(tmp, 'src/c.ts', 'const z = trpc.zilch.useQuery();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['nada', 'nope', 'zilch']);
+  });
+
+  it('a call site on a comment line (JSDoc usage example) is prose, not a call', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { '@trpc/react-query': '^11' } }));
+    write(tmp, 'src/router.ts', ROUTER);
+    write(tmp, 'src/rsc.tsx', '/**\n * @example\n * const { data: post } = trpc.post.get.useQuery(postId);\n */\nexport const HydrateClient = () => null;\n// const x = trpc.post.other.useQuery();\n');
+    write(tmp, 'src/real.tsx', 'const { data: post } = trpc.post.get.useQuery(postId);\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['post.get']);
+    assert.strictEqual(result.errorChecks[0].file, 'src/real.tsx');
+  });
+
+  it('test paths are out of scope: a test that calls not.found to assert the error is correct code', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'app', dependencies: { '@trpc/server': '^11' } }));
+    write(tmp, 'src/router.ts', ROUTER);
+    write(tmp, 'src/smoke.test.ts', 'const r = await waitError(trpc.not.found.query(), TRPCClientError);\n');
+    write(tmp, 'test/server/index.ts', 'const r = trpc.notfound.query();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.strictEqual(result.errorChecks.length, 0);
+  });
+
+  it('gitignored router directory → call sites reported NOT CHECKED, never missing', async () => {
+    const Mod = require('../src/modules/trpc-contract');
+    const m   = new Mod();
+    const tmp = makeTmp();
+    write(tmp, 'package.json', JSON.stringify({ name: 'mono', private: true, workspaces: ['examples/*'] }));
+    write(tmp, 'examples/big/package.json', JSON.stringify({ name: 'big', dependencies: { '@trpc/next': '^11' }, scripts: { postinstall: 'tsx scripts/codegen' } }));
+    write(tmp, 'examples/big/.gitignore', '.next\nsrc/server/routers\nnode_modules\n');
+    write(tmp, 'examples/big/src/pages/index.tsx', 'const q = trpc.router99.greeting.useQuery();\n');
+    write(tmp, 'examples/small/package.json', JSON.stringify({ name: 'small', dependencies: { '@trpc/next': '^11' } }));
+    write(tmp, 'examples/small/src/server/router.ts', ROUTER);
+    write(tmp, 'examples/small/src/pages/index.tsx', 'const q = trpc.router98.greeting.useQuery();\n');
+    const result = makeResult('trpcContract');
+    await m.run(result, { projectRoot: tmp });
+    assert.deepStrictEqual(undefinedCalls(result), ['router98.greeting']);
+    assert.ok(result.checks.some(c => c.name === 'trpc-contract:not-checked:examples/big' && /NOT CHECKED/.test(c.message)));
   });
 });
 

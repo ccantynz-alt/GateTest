@@ -335,9 +335,14 @@ class FlakyTestsModule extends BaseModule {
       }
 
       // 5. Real network
-      const fetchCall = /\bfetch\s*\(\s*['"`]https?:\/\//.test(line);
-      const axiosCall = /\baxios\.(?:get|post|put|delete|patch|head)\s*\(\s*['"`]https?:\/\//.test(line);
-      const httpCall = /\b(?:https?)\.request\s*\(/.test(line);
+      // Matched OUTSIDE string literals: a test that writes source fixtures
+      // (`write(tmp, 'src/gateway.ts', 'fetch("https://api.openai.com…')`)
+      // contains the call as DATA — three such lines in our own
+      // tests/prompt-safety.test.js were reported as real network calls
+      // (2026-09-05, PR #431). Same guard the .skip rule already uses.
+      const fetchCall = matchOutsideString(line, /\bfetch\s*\(\s*['"`]https?:\/\//) !== null;
+      const axiosCall = matchOutsideString(line, /\baxios\.(?:get|post|put|delete|patch|head)\s*\(\s*['"`]https?:\/\//) !== null;
+      const httpCall = matchOutsideString(line, /\b(?:https?)\.request\s*\(/) !== null;
       // A LOOPBACK request is not a real-network call. There is no DNS to
       // hiccup and no third party to return a 5xx — the two failures this
       // rule's own message names. It is a test talking to a server the test

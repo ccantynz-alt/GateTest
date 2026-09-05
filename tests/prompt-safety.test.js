@@ -486,3 +486,88 @@ describe('PromptSafetyModule — self-scan fixture false positives', () => {
     assert.ok(r.checks.find((c) => c.name.startsWith('prompt-safety:prompt-injection:')));
   });
 });
+
+// KI #106 (the Fifty, move 11): a file was "AI-adjacent" only if it carried
+// the literal token `openai` or `anthropic`. A raw-fetch gateway, Bedrock,
+// Gemini / Vertex, the Vercel AI SDK, LangChain and Ollama were never read,
+// although the deprecated-model, temperature, public-key and injection rules
+// key on nothing provider-specific — and the output-cap rule knew only two
+// call shapes. Each new shape below has its positive and negative control.
+describe('PromptSafetyModule — every provider opens the file, every call shape has its cap (KI #106)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ps-gate-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const noCap = (r) => r.checks.filter((c) => !c.passed && c.name.startsWith('prompt-safety:no-max-tokens:')).map((c) => c.name);
+  const scannedAi = (r) => !r.checks.some((c) => c.name === 'prompt-safety:no-ai-code');
+
+  it('a raw-fetch gateway to api.openai.com is opened; no max_tokens in the JSON body fires; with it, quiet', async () => {
+    write(tmp, 'src/gateway.ts', [
+      'export async function complete(messages: unknown[]) {',
+      '  const r = await fetch("https://api.openai.com/v1/chat/completions", {',
+      '    method: "POST", headers: { Authorization: `Bearer ${process.env.KEY}` },',
+      '    body: JSON.stringify({ model: "gpt-4o", messages }),',
+      '  });',
+      '  return r.json();',
+      '}',
+      '',
+    ].join('\n'));
+    let r = await run(tmp);
+    assert.ok(scannedAi(r), 'the gateway file must be AI-adjacent');
+    assert.strictEqual(noCap(r).length, 1, noCap(r).join());
+    assert.ok(noCap(r)[0].includes(':gateway:'));
+    write(tmp, 'src/gateway.ts', 'fetch("https://api.openai.com/v1/chat/completions", { body: JSON.stringify({ model: "gpt-4o", messages, max_tokens: 512 }) });\n');
+    r = await run(tmp);
+    assert.deepStrictEqual(noCap(r), []);
+  });
+
+  it('Gemini generateContent without generationConfig.maxOutputTokens fires; with it, quiet; a CMS generateContent with no AI signal is never opened', async () => {
+    write(tmp, 'src/gemini.ts', 'import { GoogleGenerativeAI } from "@google/generative-ai";\nconst model = new GoogleGenerativeAI(key).getGenerativeModel({ model: "gemini-1.5-pro" });\nconst out = await model.generateContent({ contents: [{ role: "user", parts: [{ text: q }] }] });\n');
+    let r = await run(tmp);
+    assert.ok(noCap(r).some((n) => n.includes(':gemini:')), noCap(r).join());
+    write(tmp, 'src/gemini.ts', 'import { GoogleGenerativeAI } from "@google/generative-ai";\nconst out = await model.generateContent({ contents, generationConfig: { maxOutputTokens: 1024 } });\n');
+    r = await run(tmp);
+    assert.deepStrictEqual(noCap(r), []);
+    fs.rmSync(path.join(tmp, 'src', 'gemini.ts'));
+    write(tmp, 'src/cms.ts', 'export function generateContent({ template, data }) { return render(template, data); }\n');
+    r = await run(tmp);
+    assert.ok(!scannedAi(r), 'a CMS helper with no provider signal is not AI code');
+  });
+
+  it('Bedrock InvokeModelCommand with no cap in the body fires; max_gen_len (Llama) or maxTokenCount (Titan) is a cap', async () => {
+    write(tmp, 'src/bedrock.js', 'const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");\nconst cmd = new InvokeModelCommand({ modelId: "anthropic.claude-3", body: JSON.stringify({ messages }) });\n');
+    let r = await run(tmp);
+    assert.ok(noCap(r).some((n) => n.includes(':bedrock:')), noCap(r).join());
+    write(tmp, 'src/bedrock.js', 'const cmd = new InvokeModelCommand({ modelId: "meta.llama3", body: JSON.stringify({ prompt, max_gen_len: 512 }) });\nconst t = new InvokeModelCommand({ modelId: "amazon.titan", body: JSON.stringify({ inputText, textGenerationConfig: { maxTokenCount: 256 } }) });\n');
+    r = await run(tmp);
+    assert.deepStrictEqual(noCap(r), []);
+  });
+
+  it('Vercel AI SDK generateText / streamText without maxOutputTokens fires; LangChain ChatOpenAI without maxTokens fires; each with the cap is quiet', async () => {
+    write(tmp, 'src/ai.ts', 'import { generateText } from "ai";\nimport { openai } from "@ai-sdk/openai";\nconst { text } = await generateText({ model: openai("gpt-4o"), prompt });\n');
+    write(tmp, 'src/chain.ts', 'import { ChatOpenAI } from "@langchain/openai";\nconst llm = new ChatOpenAI({ model: "gpt-4o", temperature: 0 });\n');
+    let r = await run(tmp);
+    assert.ok(noCap(r).some((n) => n.includes(':ai-sdk:')), noCap(r).join());
+    assert.ok(noCap(r).some((n) => n.includes(':langchain:')), noCap(r).join());
+    write(tmp, 'src/ai.ts', 'import { streamText } from "ai";\nconst s = streamText({ model, prompt, maxOutputTokens: 800 });\n');
+    write(tmp, 'src/chain.ts', 'import { ChatOpenAI } from "@langchain/openai";\nconst llm = new ChatOpenAI({ model: "gpt-4o", maxTokens: 400 });\n');
+    r = await run(tmp);
+    assert.deepStrictEqual(noCap(r), []);
+  });
+
+  it('Python: google.generativeai generate_content without max_output_tokens fires; langchain ChatAnthropic(max_tokens=…) is quiet', async () => {
+    write(tmp, 'app/llm.py', 'import google.generativeai as genai\nmodel = genai.GenerativeModel("gemini-1.5-flash")\nresp = model.generate_content(prompt)\n');
+    write(tmp, 'app/chain.py', 'from langchain_anthropic import ChatAnthropic\nllm = ChatAnthropic(model="claude-sonnet-5", max_tokens=1024)\n');
+    const r = await run(tmp);
+    assert.ok(noCap(r).some((n) => n.includes(':gemini-py:')), noCap(r).join());
+    assert.ok(!noCap(r).some((n) => n.includes('chain.py')), noCap(r).join());
+  });
+
+  it('a deprecated model id in an Ollama / OpenRouter file is found now that the file is opened; a file that merely mentions "AI" in prose is not', async () => {
+    write(tmp, 'src/router.ts', 'const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { body: JSON.stringify({ model: "claude-2.1", messages, max_tokens: 200 }) });\n');
+    write(tmp, 'src/about.ts', 'export const blurb = "We use AI to summarise your inbox.";\n');
+    const r = await run(tmp);
+    assert.ok(r.checks.some((c) => !c.passed && c.name.startsWith('prompt-safety:deprecated-model:claude-2.1:src/router.ts')), r.checks.filter((c) => !c.passed).map((c) => c.name).join());
+    const scanning = r.checks.find((c) => c.name === 'prompt-safety:scanning');
+    assert.ok(scanning && /1 AI/.test(scanning.message), JSON.stringify(scanning));
+  });
+});

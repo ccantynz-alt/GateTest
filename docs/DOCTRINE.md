@@ -73,6 +73,9 @@ is always toward the author's own repo.
 | Is this an illustration / harness dir? | `src/core/scan-scope.js` |
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
 | What depends on what? | `src/core/import-graph.js` |
+| Which packages make up this workspace, which manifest governs a file, what does it declare? | `src/core/workspaces.js` (`listWorkspacePackages`, `nearestWorkspacePackage`, `manifestDeclares`) |
+| Where do the migrations live — and is that directory a migration tree or a framework? | `src/core/migration-dirs.js` |
+| Is this file a shell script? | `src/core/shell-files.js` (extension or shebang; binaries and prose out) |
 | What is this finding's identity? | `src/core/report-provenance.js` `fingerprintFindings` (shared with the determinism gate) |
 | Which OWASP / SOC 2 / CIS control does a module speak to? | `src/core/compliance-mappings.js` (the website and the SARIF reporter import it) |
 | Which `.gatetestignore` line silences it? | `src/core/ignore-file.js` `suggestLine` (verified against the matcher) |

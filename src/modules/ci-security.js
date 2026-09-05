@@ -1,18 +1,35 @@
 /**
- * CI Security Module — hardens GitHub Actions / GitLab CI workflows.
+ * CI Security Module — hardens CI pipeline definitions.
  *
  * Supply-chain attackers target CI before application code — pinning,
  * permissions, and untrusted-input handling are the three big wins this
- * module enforces across every `.github/workflows/*.yml` and
- * `.gitlab-ci.yml` in the repo.
+ * module enforces. Discovery covers GitHub Actions (`.github/workflows/*`),
+ * GitLab CI (`.gitlab-ci.yml`), CircleCI (`.circleci/*.yml`), Azure
+ * Pipelines (`azure-pipelines.yml`), Bitbucket Pipelines
+ * (`bitbucket-pipelines.yml`) and Buildkite (`.buildkite/*.yml`). The
+ * GitHub-specific rules (pinning, pwn-request, permissions) run on GitHub
+ * files only; shell injection and secrets-in-logs are generic and run on
+ * every host (KI #106, 2026-09-05 — before that the module opened GitHub
+ * and GitLab files only, and GitLab's `script:` lists were never read).
  *
  * Rules implemented (all line-heuristic, zero network, zero deps):
  *   - `uses: owner/action@<branch>` — pin to a SHA or at least a tag
  *   - `pull_request_target` trigger — warns, then errors if checkout
  *     pulls the PR head commit (the pwn-request sink)
- *   - `run:` containing `${{ github.event.* }}` / `${{ github.head_ref }}`
- *     — shell injection surface
- *   - `run:` echoing `${{ secrets.* }}` — leaks to logs
+ *   - shell text containing an expansion the HOST substitutes before the
+ *     shell runs and an outsider controls: `${{ github.event.* }}` /
+ *     `${{ github.head_ref }}`, `<< pipeline.git.branch >>`,
+ *     `$(Build.SourceBranchName)`, `$BUILDKITE_BRANCH` (interpolated by
+ *     `pipeline upload`) — command injection. A host env var read by the
+ *     shell (`$CIRCLE_BRANCH`, `$BITBUCKET_BRANCH`, `$CI_COMMIT_REF_NAME`)
+ *     is the SAFE idiom and stays quiet — until the script re-parses it as
+ *     code (`eval`, `sh -c`, `python -c`, `node -e`), which fires on every
+ *     host including GitHub's `$GITHUB_HEAD_REF`.
+ *   - shell text echoing `${{ secrets.* }}` or a `$VAR` whose name says it
+ *     is a secret (`*_TOKEN`, `*_SECRET`, `*PASSWORD*`, `*_API_KEY`…) to
+ *     stdout — leaks to logs. Redirected to a file, piped (`docker login
+ *     --password-stdin`) or captured (`<(echo …)`, `$(echo …)`) is not
+ *     stdout and stays quiet.
  *   - `continue-on-error: true` on a step that runs `gatetest` —
  *     explicitly forbidden by the Bible (Forbidden #24: never soft-fail
  *     the gate)
@@ -50,6 +67,43 @@ const TAG_LOOKS_SEMVER = /^v?\d+(\.\d+)*([.-][A-Za-z0-9_.-]+)?$/;
 // Pull-request-target + untrusted checkout is the classic pwn-request.
 const DANGEROUS_PR_REF = /github\.event\.pull_request\.head\.(sha|ref)|github\.head_ref/;
 
+// Per host: where shell text lives (`keys`), the expansions the host
+// substitutes into that text BEFORE the shell runs and an outsider controls
+// (`template` — the injection surface; commit SHAs and numeric ids are
+// omitted by construction, they cannot carry shell metacharacters), and the
+// env vars that carry outsider text (`env` — safe to read as `$VAR`, unsafe
+// when re-parsed as code). `<< pipeline.parameters.* >>` is NOT untrusted:
+// it is declared and typed by the maintainer in the same file (nest
+// .circleci/config.yml line 115 uses one in `run:`).
+const HOSTS = {
+  github: { label: 'GitHub event', keys: ['run'], template: null,
+    env: 'GITHUB_(?:HEAD_REF|REF_NAME|REF)' },
+  gitlab: { label: 'GitLab CI', keys: ['script', 'before_script', 'after_script'], template: null,
+    env: 'CI_(?:COMMIT_(?:REF_NAME|REF_SLUG|BRANCH|TAG|MESSAGE|TITLE|DESCRIPTION|AUTHOR)|MERGE_REQUEST_(?:SOURCE_BRANCH_NAME|TARGET_BRANCH_NAME|TITLE|DESCRIPTION|LABELS))' },
+  circleci: { label: 'CircleCI pipeline', keys: ['run', 'command'],
+    template: /<<\s*pipeline\.git\.(?:branch|tag)\s*>>/,
+    env: 'CIRCLE_(?:BRANCH|TAG|PR_USERNAME|PR_REPONAME|USERNAME)' },
+  azure: { label: 'Azure Pipelines', keys: ['script', 'bash', 'pwsh', 'powershell', 'inlineScript'],
+    template: /\$\((?:Build\.(?:SourceBranch(?:Name)?|SourceVersionMessage|RequestedFor(?:Email)?)|System\.PullRequest\.(?:SourceBranch|TargetBranch|SourceRepositoryUri))\)/i,
+    env: 'BUILD_(?:SOURCEBRANCH(?:NAME)?|SOURCEVERSIONMESSAGE|REQUESTEDFOR(?:EMAIL)?)|SYSTEM_PULLREQUEST_(?:SOURCEBRANCH|TARGETBRANCH)' },
+  bitbucket: { label: 'Bitbucket Pipelines', keys: ['script', 'after-script'], template: null,
+    env: 'BITBUCKET_(?:BRANCH|TAG|PR_DESTINATION_BRANCH)' },
+  // `buildkite-agent pipeline upload` interpolates `$VAR` into the YAML
+  // before the shell sees it; `$$VAR` is the escape that defers to the shell.
+  buildkite: { label: 'Buildkite build', keys: ['command', 'commands'],
+    template: /(?<!\$)\$\{?BUILDKITE_(?:BRANCH|TAG|MESSAGE|LABEL|BUILD_AUTHOR(?:_EMAIL)?|BUILD_CREATOR(?:_EMAIL)?|PULL_REQUEST_(?:BASE_BRANCH|REPO))\b/,
+    env: 'BUILDKITE_(?:BRANCH|TAG|MESSAGE|LABEL|BUILD_AUTHOR(?:_EMAIL)?|BUILD_CREATOR(?:_EMAIL)?|PULL_REQUEST_(?:BASE_BRANCH|REPO))' },
+};
+for (const h of Object.values(HOSTS)) {
+  h.keyRe = new RegExp(`^\\s*(?:-\\s*)?(?:${h.keys.join('|')})\\s*:`);
+  // The value is re-parsed as code: `eval "$X"`, `sh -c "… $X"`, `python -c`…
+  h.reparseRe = new RegExp(`\\b(?:eval|(?:ba|z|da)?sh\\s+-c|python[23]?\\s+-c|node\\s+-e|ruby\\s+-e|perl\\s+-e)\\b.*\\$\\{?(?:${h.env})\\b`);
+}
+// `echo … $NPM_TOKEN` / `${DB_PASSWORD}` / `$(MY_SECRET)` — a secret named as
+// one. Matched on the text after `echo`; a redirect or pipe means it did not
+// reach stdout.
+const SECRET_VAR_RE = /\$[{(]?[A-Za-z0-9_]*?(?:SECRET|TOKEN|PASSWORD|PASSWD|API_KEY|PRIVATE_KEY|ACCESS_KEY|CREDENTIALS?)[A-Za-z0-9_]*\b/i;
+
 class CiSecurityModule extends BaseModule {
   constructor() {
     super('ciSecurity', 'CI Security — action pinning, pwn-request, shell injection, secrets-in-logs, permissions, forbidden soft-fail');
@@ -85,15 +139,28 @@ class CiSecurityModule extends BaseModule {
 
   _findWorkflows(projectRoot) {
     const out = [];
-    const workflowsDir = path.join(projectRoot, '.github', 'workflows');
-    if (fs.existsSync(workflowsDir)) {
-      for (const name of fs.readdirSync(workflowsDir)) {
-        if (/\.ya?ml$/i.test(name)) out.push(path.join(workflowsDir, name));
+    for (const dir of [['.github', 'workflows'], ['.circleci'], ['.buildkite']]) {
+      const abs = path.join(projectRoot, ...dir);
+      if (!fs.existsSync(abs)) continue;
+      for (const name of fs.readdirSync(abs)) {
+        if (/\.ya?ml$/i.test(name)) out.push(path.join(abs, name));
       }
     }
-    const gitlab = path.join(projectRoot, '.gitlab-ci.yml');
-    if (fs.existsSync(gitlab)) out.push(gitlab);
+    for (const name of ['.gitlab-ci.yml', 'azure-pipelines.yml', 'azure-pipelines.yaml', 'bitbucket-pipelines.yml']) {
+      const abs = path.join(projectRoot, name);
+      if (fs.existsSync(abs)) out.push(abs);
+    }
     return out;
+  }
+
+  /** Which CI host owns this file — decides the shell grammar and which rules apply. */
+  static hostOf(rel) {
+    if (/(?:^|\/)\.github\/workflows\/[^/]+$/.test(rel)) return 'github';
+    if (/(?:^|\/)\.circleci\/[^/]+$/.test(rel)) return 'circleci';
+    if (/(?:^|\/)\.buildkite\/[^/]+$/.test(rel)) return 'buildkite';
+    if (/(?:^|\/)azure-pipelines\.ya?ml$/.test(rel)) return 'azure';
+    if (/(?:^|\/)bitbucket-pipelines\.yml$/.test(rel)) return 'bitbucket';
+    return 'gitlab';
   }
 
   _scanFile(file, projectRoot, result) {
@@ -111,7 +178,8 @@ class CiSecurityModule extends BaseModule {
     let hasPermissionsBlock = false;
     let hasPullRequestTarget = false;
     let hasCheckoutPrHead = false;
-    let isGitHubActions = rel.includes('.github/workflows');
+    const host = HOSTS[CiSecurityModule.hostOf(rel)];
+    const isGitHubActions = host === HOSTS.github;
     // `workflow_run` trigger downstream of another workflow needs explicit
     // `actions: read` to fetch the upstream run's logs/artifacts via API.
     // Default GITHUB_TOKEN omits the `actions:` scope.
@@ -246,10 +314,11 @@ class CiSecurityModule extends BaseModule {
         }
       }
 
-      // `run:` line — track as "last run" and scan for injection / secrets
-      if (/^\s*(?:-\s*)?run\s*:/.test(line)) {
+      // Shell-text key for this host (`run:`, `script:`, `command:`…) —
+      // track as "last run" and scan for injection / secrets
+      if (host.keyRe.test(line)) {
         lastRun = trimmed;
-        issues += this._scanRunInjection(line, lines, i, rel, result);
+        issues += this._scanRunInjection(line, lines, i, rel, result, host);
       }
 
       // continue-on-error: true on the GATE step itself (not on auxiliary
@@ -335,28 +404,82 @@ class CiSecurityModule extends BaseModule {
   }
 
   /**
-   * Scan a `run:` line and (for pipe `|` blocks) the lines that follow it
-   * for shell-injection and secrets-echo patterns.
+   * The shell text that starts at a shell key: the inline value, a `|` / `>`
+   * block scalar, or a list of commands (`script:` / `commands:`). A map
+   * value (CircleCI `run:` → `name:` / `command:`) is not shell text — its
+   * `command:` key is scanned on its own turn. The block ends where the
+   * indentation returns to the KEY's column, so a sibling `env:` mapping
+   * after `- run: |` is not read as part of the script.
    */
-  _scanRunInjection(startLine, lines, startIdx, rel, result) {
-    let issues = 0;
+  _collectShellBlock(startLine, lines, startIdx) {
     const block = [startLine];
-    // If it's a block scalar (| or >) collect until indentation drops.
-    const indentMatch = startLine.match(/^(\s*)/);
-    const baseIndent = indentMatch ? indentMatch[1].length : 0;
-    if (/run\s*:\s*[|>]/.test(startLine)) {
-      for (let j = startIdx + 1; j < lines.length; j += 1) {
-        const l = lines[j];
-        if (!l.trim()) { block.push(l); continue; }
-        const ind = l.match(/^(\s*)/)[1].length;
-        if (ind <= baseIndent) break;
-        block.push(l);
-      }
+    const m = startLine.match(/^(\s*)(-\s*)?[\w-]+\s*:\s*(.*)$/);
+    if (!m) return block;
+    const baseIndent = m[1].length + (m[2] ? m[2].length : 0);
+    const value = m[3];
+    const isBlockScalar = /^[|>]/.test(value);
+    if (value.trim() && !isBlockScalar) return block;
+    const indentOf = (l) => l.match(/^(\s*)/)[1].length;
+    if (!isBlockScalar) {
+      const next = lines.slice(startIdx + 1).find((l) => l.trim());
+      if (!next || !/^\s*-\s/.test(next) || indentOf(next) <= baseIndent) return block;
     }
+    for (let j = startIdx + 1; j < lines.length; j += 1) {
+      const l = lines[j];
+      if (!l.trim()) { block.push(l); continue; }
+      if (indentOf(l) <= baseIndent) break;
+      block.push(l);
+    }
+    return block;
+  }
+
+  /**
+   * Scan a shell-text key and its block for shell-injection and
+   * secrets-echo patterns. `host` is the HOSTS entry for the file.
+   */
+  _scanRunInjection(startLine, lines, startIdx, rel, result, host = HOSTS.github) {
+    let issues = 0;
+    const block = this._collectShellBlock(startLine, lines, startIdx);
 
     for (let k = 0; k < block.length; k += 1) {
       const l = block[k];
       const lineNo = startIdx + 1 + k;
+      const injection = this._injectionOn(l, host);
+      if (injection) {
+        issues += this._flag(result, `ci-security:shell-injection:${rel}:${lineNo}`, {
+          severity: 'error',
+          file: rel,
+          line: lineNo,
+          message: `Untrusted ${host.label} data ${injection.how} — command injection risk`,
+          suggestion: injection.fix,
+        });
+      }
+      // `echo` whose output is captured — `<(echo "$PGPASSWORD")` (django
+      // postgis.yml:63, an initdb --pwfile), `$(echo …)`, backticks — or
+      // redirected / piped never reaches stdout.
+      const echoed = /\becho\b(.*)$/.exec(l);
+      const captured = echoed && /(?:[<$]\(|`)\s*$/.test(l.slice(0, echoed.index));
+      const secretEnv = echoed && !captured && SECRET_VAR_RE.test(echoed[1]) && !/[|>]/.test(echoed[1]);
+      if (/\becho\b.*\$\{\{\s*secrets\./.test(l) || secretEnv) {
+        issues += this._flag(result, `ci-security:secret-echo:${rel}:${lineNo}`, {
+          severity: 'error',
+          file: rel,
+          line: lineNo,
+          message: 'Secret piped to `echo` — shows up in logs and in any downstream action that reads stdout',
+          suggestion: 'Never echo secrets. Pass them via env vars; the host may mask them but logs can still leak transformed versions.',
+        });
+      }
+    }
+    return issues;
+  }
+
+  /**
+   * Why a line is injectable, or null. Three shapes: a GitHub event
+   * expansion with a free-text leaf, a host template expansion of an
+   * outsider-controlled value, or a host env var re-parsed as code.
+   */
+  _injectionOn(l, host) {
+    if (host === HOSTS.github) {
       // A `github.event.*` expansion is injectable when the value is free
       // text an outsider controls (`head_ref`, `pull_request.title`,
       // `comment.body`, `release.tag_name`). A commit SHA (40 hex chars) or a
@@ -367,25 +490,20 @@ class CiSecurityModule extends BaseModule {
       const eventExpansion = /\$\{\{\s*github\.event\.([\w.]+)/.exec(l);
       const safeLeaf = eventExpansion && /(?:^|\.)(?:sha|number|id|node_id|run_number|run_id)$/.test(eventExpansion[1]);
       if ((eventExpansion && !safeLeaf) || /\$\{\{\s*github\.head_ref\s*\}\}/.test(l)) {
-        issues += this._flag(result, `ci-security:shell-injection:${rel}:${lineNo}`, {
-          severity: 'error',
-          file: rel,
-          line: lineNo,
-          message: 'Untrusted GitHub event data interpolated into a shell script — command injection risk',
-          suggestion: 'Assign to an env var via `env:` with ${{ github.event.* }} and reference it as $VAR in the shell. GitHub Actions expansion into a shell is unsafe.',
-        });
+        return { how: 'interpolated into a shell script', fix: 'Assign to an env var via `env:` with ${{ github.event.* }} and reference it as $VAR in the shell. GitHub Actions expansion into a shell is unsafe.' };
       }
-      if (/\becho\b.*\$\{\{\s*secrets\./.test(l)) {
-        issues += this._flag(result, `ci-security:secret-echo:${rel}:${lineNo}`, {
-          severity: 'error',
-          file: rel,
-          line: lineNo,
-          message: 'Secret piped to `echo` — shows up in logs and in any downstream action that reads stdout',
-          suggestion: 'Never echo secrets. Pass them via env vars; GitHub masks them but logs can still leak transformed versions.',
-        });
-      }
+    } else if (host.template && host.template.test(l)) {
+      return {
+        how: 'expanded into a shell script before the shell runs',
+        fix: host === HOSTS.buildkite
+          ? 'Escape it as `$$BUILDKITE_VAR` so the shell, not `buildkite-agent pipeline upload`, expands it at run time — as data, not as script text.'
+          : 'Map the value to an env var (`env:` / `environment:`) and read it as `$VAR` in the shell; the host expands template syntax into the script text itself.',
+      };
     }
-    return issues;
+    if (host.reparseRe.test(l)) {
+      return { how: 're-parsed as code (`eval` / `-c` / `-e`)', fix: 'Reading `$VAR` is safe; re-parsing it as script text is not. Pass the value as an argument or quote it as data.' };
+    }
+    return null;
   }
 
   /**

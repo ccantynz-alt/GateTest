@@ -6,12 +6,18 @@
  */
 
 const BaseModule = require('./base-module');
+const { collectShellScripts } = require('../core/shell-files');
 const fs   = require('fs');
 const path = require('path');
 
 const SWALLOW_OK = /gatetest:swallow-ok/;
+/** `[ -d x ]`, `[[ ! -f x ]]`, `test -s x`, `if ! [ -e x ]`, `$?` — a decision on the artefact. */
+const OUTCOME_TEST_RE = /(?:^|\s|!)(?:\[\[?\s+!?\s*-[a-zA-Z]\s|test\s+!?\s*-[a-zA-Z]\s)|\$\?/;
 
-const SHELL_EXTS = ['.sh', '.bash'];
+// Which files are shell scripts is decided ONCE in src/core/shell-files.js
+// (KI #106): `.sh`/`.bash`/`.zsh`/`.ksh` plus extensionless shebang scripts.
+// This module's private list used to be `['.sh', '.bash']` — no `.zsh`, and
+// `bin/deploy` with `#!/usr/bin/env bash` on line one was never opened.
 const YAML_EXTS = ['.yml', '.yaml'];
 
 /**
@@ -183,15 +189,15 @@ class BashSafetyModule extends BaseModule {
 
     // One shared walk for both kinds (KI #104) — it replaced a private glob
     // whose exclude test also matched ancestor segments of the project path.
-    const files = this._collectFiles(root, [...SHELL_EXTS, ...YAML_EXTS]);
+    const { scripts, others: yaml } = collectShellScripts(this, root, YAML_EXTS);
 
     // Shell scripts
-    for (const file of files.filter((f) => SHELL_EXTS.includes(path.extname(f).toLowerCase()))) {
+    for (const file of scripts) {
       this._scanFile(file, path.relative(root, file), result, 'shell');
     }
 
     // CI YAML — extract run: blocks
-    for (const file of files.filter((f) => YAML_EXTS.includes(path.extname(f).toLowerCase()))) {
+    for (const file of yaml) {
       this._scanFile(file, path.relative(root, file), result, 'yaml');
     }
 
@@ -235,11 +241,14 @@ class BashSafetyModule extends BaseModule {
         // to emit only `fix` with an absolute path, which surfaced as
         // `message: null` findings (2026-08-18 audit residue).
         const inspected = rule.swallowGuard && this._capturedForInspection(lines, idx, mode);
+        const tested = !inspected && rule.swallowGuard && this._outcomeTestedBelow(lines, idx, mode);
         result.addCheck(`bash-safety:${rule.code}:${rel}:${lineNum}`, false, {
-          severity: inspected ? 'warning' : rule.severity,
+          severity: inspected || tested ? 'warning' : rule.severity,
           file: rel,
           line: lineNum,
-          message: rule.message(rawLine) + (inspected ? ' — the captured output is read below; make sure an empty result on failure is not treated as success' : ''),
+          message: rule.message(rawLine)
+            + (inspected ? ' — the captured output is read below; make sure an empty result on failure is not treated as success' : '')
+            + (tested ? ' — the outcome is tested on the next line; make sure that test covers the failure, not only the happy path' : ''),
           fix: `${rel}:${lineNum} — ${rule.message(rawLine)}\nFix: handle the error explicitly or add "# gatetest:swallow-ok reason=\\"<reason>\\"" if intentional.`,
         });
       }
@@ -310,6 +319,30 @@ class BashSafetyModule extends BaseModule {
     for (let i = idx + 1; i < limit; i++) {
       if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(lines[i])) break;
       if (ref.test(lines[i])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Is the swallowed command's OUTCOME tested within the next three code
+   * lines — `[ -d "$DIR/.git" ]`, `test -f …`, `$?`? Then the exit code was
+   * swallowed so the script could decide on the artefact instead: our own
+   * integrations/husky/pre-push:88 — `git clone … 2>/dev/null || true`
+   * followed by `if [ ! -d "$GATETEST_CACHE/.git" ]; then … exit 0`
+   * (surfaced the day bashSafety learned to open extensionless hooks, KI
+   * #106, 2026-09-05). Downgraded, not exempted, for the same reason as
+   * `_capturedForInspection`: the rule cannot see whether the test covers
+   * the failure. Blank lines and comments do not count toward the three.
+   */
+  _outcomeTestedBelow(lines, idx, mode) {
+    let seen = 0;
+    for (let i = idx + 1; i < lines.length && seen < 3; i++) {
+      const raw = lines[i];
+      if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(raw)) break;
+      const code = maskNonCode(raw).trim();
+      if (!code) continue;
+      seen++;
+      if (OUTCOME_TEST_RE.test(code)) return true;
     }
     return false;
   }

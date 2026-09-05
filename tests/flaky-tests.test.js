@@ -368,3 +368,34 @@ describe('FlakyTestsModule — clean baseline', () => {
     assert.match(summary.message, /1 file\(s\)/);
   });
 });
+
+describe('FlakyTestsModule — real-network is matched outside string literals (PR #431 bot finding)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-flaky-str-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('NEGATIVE: a fixture STRING containing fetch("https://…") is data, not a call', async () => {
+    write(tmp, 'prompt-safety.test.js', [
+      'it("opens a raw-fetch gateway", async () => {',
+      "  write(tmp, 'src/gateway.ts', 'const r = await fetch(\"https://api.openai.com/v1/chat/completions\", { body: JSON.stringify({ model: \"gpt-4o\" }) });\\n');",
+      '  const r = await run(tmp);',
+      '  assert.ok(r);',
+      '});',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.ok(!r.checks.find((c) => c.name.startsWith('flaky-tests:real-network:')), r.checks.map((c) => c.name).join(', '));
+  });
+
+  it('POSITIVE: the same call as code, in the same kind of file, still fires', async () => {
+    write(tmp, 'gateway.test.js', [
+      'it("hits the gateway", async () => {',
+      '  const r = await fetch("https://api.openai.com/v1/chat/completions");',
+      '  assert.ok(r.ok);',
+      '});',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.ok(r.checks.find((c) => c.name.startsWith('flaky-tests:real-network:')));
+  });
+});
