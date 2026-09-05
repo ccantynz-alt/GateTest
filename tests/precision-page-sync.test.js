@@ -95,3 +95,12 @@ describe('the page reads the JSON and nothing else', () => {
     }
   });
 });
+
+describe('/precision — the calibration section renders the file, never a typed number', () => {
+  it('reads precision.calibration and says so when it is not measured', () => {
+    const src = fs.readFileSync(PAGE_PATH, 'utf8');
+    assert.match(src, /precision as \{ calibration\?/);
+    assert.match(src, /calibrationNote/);
+    assert.doesNotMatch(src, /threshold of 0\.\d/);
+  });
+});
