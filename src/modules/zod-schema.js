@@ -7,6 +7,11 @@
  *   - Self-documenting prop shapes.
  *   - AI-generated props verified against the schema at runtime.
  *
+ * Gate (KI #106, 2026-09-05): a file is judged when the manifest that
+ * governs it — the workspace member containing it, or the root — declares
+ * `zod` or `prop-types`. It used to be "zod in the ROOT package.json", which
+ * skipped every monorepo whose members carry their own dependencies.
+ *
  * This module flags React component files (.tsx) that:
  *   1. Export a default function/const/class (the component).
  *   2. Accept a props argument (not void/no-arg).
@@ -31,6 +36,7 @@ const fs   = require('fs');
 const path = require('path');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
+const { listWorkspacePackages, manifestDeclares, nearestWorkspacePackage } = require('../core/workspaces');
 
 // ─── patterns ─────────────────────────────────────────────────────────────
 
@@ -59,6 +65,21 @@ function hasSegment(rel, name) {
   return typeof rel === 'string' && rel.split(/[\\/]+/).includes(name);
 }
 
+// ─── which manifest governs a file ─────────────────────────────────────────
+//
+// KI #106: the gate used to be "zod in the ROOT package.json". In a
+// workspace the dependency lives in the member's manifest (trpc:
+// `packages/*`, `www`; prisma: `packages/**`), so every component in a
+// monorepo whose root did not happen to list zod was never read. The
+// decision is now per file: the manifest that governs it — the workspace
+// member containing it, else the root — must declare a validation
+// library the rule accepts. Root deps are hoisted in npm/yarn workspaces,
+// so a root declaration still covers every member (the pre-fix behaviour
+// is a strict subset of this one).
+
+/** The rule accepts a Zod schema OR PropTypes as validation, so either one opens it. */
+const VALIDATION_LIBS = new Set(['zod', 'prop-types']);
+
 class ZodSchemaPresence extends BaseModule {
   constructor() {
     super('zodSchemaPresence', 'Zod Schema Presence — flags React components without runtime prop validation');
@@ -67,23 +88,15 @@ class ZodSchemaPresence extends BaseModule {
   async run(result, config) {
     const projectRoot = config.projectRoot;
 
-    // Only applicable if zod is installed
-    const pkgPath = path.join(projectRoot, 'package.json');
-    let zodInstalled = false;
-    if (fs.existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        zodInstalled = !!(
-          (pkg.dependencies || {}).zod ||
-          (pkg.devDependencies || {}).zod
-        );
-      } catch { /* skip */ }
-    }
+    // Which manifests declare a validation library the rule accepts?
+    const rootHasLib = manifestDeclares(projectRoot, VALIDATION_LIBS);
+    const members    = listWorkspacePackages(projectRoot);
+    const memberHasLib = new Map(members.map((m) => [m.rel, manifestDeclares(m.dir, VALIDATION_LIBS)]));
 
-    if (!zodInstalled) {
+    if (!rootHasLib && ![...memberHasLib.values()].some(Boolean)) {
       result.addCheck('zod-schema:not-installed', true, {
         severity: 'info',
-        message: 'Zod is not installed — schema presence check skipped. Consider adding zod for runtime prop validation.',
+        message: 'Zod is not installed (root or any workspace member) — schema presence check skipped. Consider adding zod for runtime prop validation.',
       });
       return;
     }
@@ -102,6 +115,11 @@ class ZodSchemaPresence extends BaseModule {
         rel.endsWith('/loading.tsx') || rel.endsWith('/error.tsx') ||
         hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')
       ) continue;
+
+      // The manifest governing this file must declare the library: the
+      // member containing it, or the root (hoisted).
+      const member = nearestWorkspacePackage(members, rel.split(path.sep).join('/'));
+      if (!rootHasLib && !(member && memberHasLib.get(member.rel))) continue;
 
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }

@@ -3,8 +3,11 @@
  *
  * Shell scripts are the soft underbelly of every repo: they run with full
  * developer/CI privileges, are almost never unit-tested, and a single
- * unquoted variable can become `rm -rf /`. This module walks every `.sh`,
- * `.bash`, `.zsh` file and flags the highest-impact classes of mistake:
+ * unquoted variable can become `rm -rf /`. This module scans every shell
+ * script — `.sh` / `.bash` / `.zsh` / `.ksh` by extension, plus every
+ * extensionless file with a shell shebang (`bin/deploy`, `.githooks/pre-push`,
+ * `scripts/release` — decided once in `src/core/shell-files.js`, KI #106) —
+ * and flags the highest-impact classes of mistake:
  *
  *   - curl | sh / wget | bash          → remote-exec (supply-chain)
  *   - `rm -rf $VAR`                    → empty-var root-wipe
@@ -26,8 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
-
-const SHELL_EXTENSIONS = new Set(['.sh', '.bash', '.zsh']);
+const { collectShellScripts } = require('../core/shell-files');
 
 // Hard-coded credentials baked into scripts — same catalogue as secrets
 // module but trimmed to the patterns that show up in CI/ops scripts most.
@@ -54,8 +56,9 @@ class ShellModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104).
-    const scripts = this._collectFiles(projectRoot, [...SHELL_EXTENSIONS]);
+    // Shared walk + shared "is this a shell script" (KI #104 / #106) —
+    // honours --diff/--pr scoping and finds extensionless shebang scripts.
+    const { scripts } = collectShellScripts(this, projectRoot);
 
     if (scripts.length === 0) {
       result.addCheck('shell:no-files', true, {
