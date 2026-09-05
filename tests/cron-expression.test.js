@@ -340,3 +340,43 @@ describe('CronExpressionModule — self-scan fixture false positives', () => {
     assert.ok(r.checks.find((c) => c.name && c.name.startsWith('cron:out-of-range:')));
   });
 });
+
+// Control pair for the one-stripper migration (2026-09-05): the scheduler
+// call is located on the masked line (BaseModule._maskedLines), so a call
+// quoted in a string, a template literal or a block comment is data; the
+// real one beside them is still validated. The per-line quote counter this
+// replaced could not see a template or a block comment that spans lines.
+describe('CronExpressionModule — strings, templates and comments are not schedules', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-cron-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a cron call inside a string, a template or a comment is not validated; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/a.ts', [
+      'const doc = "cron.schedule(\'60 0 * * *\', run)";',
+      'const tpl = `',
+      '  cron.schedule(\'61 0 * * *\', run)',
+      '`;',
+      '/* example:',
+      '   cron.schedule(\'62 0 * * *\', run)',
+      '*/',
+      'cron.schedule(\'63 0 * * *\', run);',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const bad = r.checks.filter((c) => !c.passed && c.name.startsWith('cron:'));
+    assert.deepStrictEqual(bad.map((c) => [c.name.split(':')[1], c.line]), [['out-of-range', 8]]);
+    assert.match(bad[0].message, /63/);
+  });
+
+  it('Python: the stripper runs one line at a time, so an apostrophe in a `#` comment does not swallow the file', async () => {
+    write(tmp, 'src/jobs.py', [
+      "# don't run twice",
+      "trigger = CronTrigger.from_crontab('60 0 * * *')  # example: CronTrigger.from_crontab('61 0 * * *')",
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const bad = r.checks.filter((c) => !c.passed && c.name.startsWith('cron:'));
+    assert.deepStrictEqual(bad.map((c) => [c.name.split(':')[1], c.line]), [['out-of-range', 2]]);
+  });
+});

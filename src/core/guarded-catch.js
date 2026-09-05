@@ -85,11 +85,6 @@ const LOOKBEHIND_LINES = 120;
 const LOOKAHEAD_LINES = 60;
 const AFTER_LINES = 40;
 
-// A `/` starts a REGEX literal (rather than division) only where a value
-// cannot already have been produced. Testing the last significant character
-// is the standard cheap disambiguation.
-const REGEX_ALLOWED_AFTER = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '~', '^', '<', '>', '\n']);
-const REGEX_ALLOWED_AFTER_WORD = /\b(?:return|typeof|instanceof|in|of|case|do|else|yield|await|delete|void|new)$/;
 
 /**
  * Replace the *contents* of string literals, comments and regex literals with
@@ -106,66 +101,6 @@ const REGEX_ALLOWED_AFTER_WORD = /\b(?:return|typeof|instanceof|in|of|case|do|el
  * the mask — and `_isExecutableAt` then reads those findings as prose and
  * drops them. Caught by a control test before this shipped.
  */
-function maskNonCode(text) {
-  const src = String(text);
-  const out = new Array(src.length);
-  let i = 0;
-  const push = (ch) => { out[i] = ch; i += 1; };
-  let state = 'code';
-  let quote = '';
-  let lastSignificant = '';
-  let inCharClass = false;
-  // Last few code characters, for the keyword form of the regex test. Kept as
-  // a rolling window so the check stays O(1) per slash on a large file.
-  let recent = '';
-  const remember = (ch) => { recent = (recent + ch).slice(-16); };
-  while (i < src.length) {
-    const ch = src[i];
-    const next = src[i + 1];
-    if (state === 'code') {
-      if (ch === '/' && next === '/') { push(' '); push(' '); state = 'line-comment'; continue; }
-      if (ch === '/' && next === '*') { push(' '); push(' '); state = 'block-comment'; continue; }
-      if (ch === '/'
-        && (REGEX_ALLOWED_AFTER.has(lastSignificant)
-          || REGEX_ALLOWED_AFTER_WORD.test(recent.trimEnd()))) {
-        push('/');
-        state = 'regex';
-        inCharClass = false;
-        continue;
-      }
-      if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; push(ch); state = 'string'; lastSignificant = ch; remember(ch); continue; }
-      if (!/\s/.test(ch)) lastSignificant = ch;
-      remember(ch);
-      push(ch);
-      continue;
-    }
-    if (state === 'regex') {
-      if (ch === '\\') { push(' '); if (i < src.length) push(' '); continue; }
-      if (ch === '\n') { push('\n'); state = 'code'; continue; } // unterminated: bail out
-      if (ch === '[') { inCharClass = true; push(' '); continue; }
-      if (ch === ']') { inCharClass = false; push(' '); continue; }
-      if (ch === '/' && !inCharClass) { push('/'); state = 'code'; lastSignificant = '/'; continue; }
-      push(' ');
-      continue;
-    }
-    if (state === 'line-comment') {
-      if (ch === '\n') { push('\n'); state = 'code'; continue; }
-      push(' ');
-      continue;
-    }
-    if (state === 'block-comment') {
-      if (ch === '*' && next === '/') { push(' '); push(' '); state = 'code'; continue; }
-      push(ch === '\n' ? '\n' : ' ');
-      continue;
-    }
-    // state === 'string'
-    if (ch === '\\') { push(' '); if (i < src.length) push(' '); continue; }
-    if (ch === quote) { push(ch); state = 'code'; lastSignificant = ch; remember(ch); continue; }
-    push(ch === '\n' ? '\n' : ' ');
-  }
-  return out.join('');
-}
-
 /**
  * Walk forward from the `{` at/after `hintIdx` on `startLine` and return the
  * position of its matching `}`. `masked` must be the masked line array.
@@ -538,7 +473,7 @@ function enclosingContext(masked, line, col) {
  * Classify the empty catch whose `catch` keyword matched at
  * (`catchLine`, `catchIdx`).
  *
- * @param {string[]} masked - maskNonCode(fileContent).split('\n')
+ * @param {string[]} masked - stripStringsAndComments(fileContent).split('\n')
  * @returns {{guarded: boolean, shape?: string, target?: string}}
  */
 function classifyEmptyCatch(masked, catchLine, catchIdx) {
@@ -568,7 +503,6 @@ function classifyEmptyCatch(masked, catchLine, catchIdx) {
 
 module.exports = {
   classifyEmptyCatch,
-  maskNonCode,
   enclosingContext,
   isTeardownName,
   // exported for direct unit tests of the individual judgements

@@ -1,3 +1,5 @@
+const path = require('path');
+const { SHELL_EXTENSIONS, SNIFF_BYTES, headIsShellScript } = require('./shell-files');
 'use strict';
 /**
  * Source stripper — ONE definition of "what is a string / comment / regex
@@ -30,7 +32,11 @@
 // Comments never change state here; the newline after a backslash stays.
 const REGEX_PRECEDERS = /[=(,;:!&|?{}[\n+\-*<>%^~]/;
 const FLAG_RE = /[gimsuy]/;
-const NL_RE = /[^\n]/g;
+// A `\r` is kept as well as `\n`: every consumer splits raw and masked text
+// with the same /\r?\n/, and a `\r` masked to a space inside a comment left
+// the masked line one character longer than its raw line on CRLF files
+// (found by the race-condition migration, 2026-09-05).
+const NL_RE = /[^\n\r]/g;
 const mask = (s) => s.replace(NL_RE, ' ');
 
 function stripStringsAndComments(src) {
@@ -149,4 +155,219 @@ function stripStringsAndComments(src) {
   emitCode(n);
   return parts.join('');
 }
-module.exports = { stripStringsAndComments };
+/**
+ * The Python counterpart: `#` comments, '…' / "…" strings (escapes honoured,
+ * unterminated ones end at the line), and triple-quoted strings that span
+ * lines. Offset-preserving like the JS stripper — every masked character is
+ * a space, `\n` and `\r` stay. An f-string's `{…}` hole is masked with the
+ * string: the rules that read Python decide on the call shape around the
+ * string and read names from the raw line. Before this, prompt-safety's
+ * Python scan kept a per-line quote counter, where an apostrophe in a
+ * `# don't` comment opened a "string" that ran to the next quote (2026-09-05).
+ */
+function stripPythonStringsAndComments(src) {
+  const n = src.length;
+  const parts = [];
+  let copyFrom = 0;
+  const emitMasked = (from, to) => {
+    if (from > copyFrom) parts.push(src.slice(copyFrom, from));
+    parts.push(mask(src.slice(from, to)));
+    copyFrom = to;
+  };
+  let i = 0;
+  while (i < n) {
+    const ch = src[i];
+    if (ch === '#') {
+      let j = src.indexOf('\n', i); if (j === -1) j = n;
+      emitMasked(i, j); i = j;
+      continue;
+    }
+    if (ch === '\'' || ch === '"') {
+      const triple = src[i + 1] === ch && src[i + 2] === ch;
+      const open = triple ? ch + ch + ch : ch;
+      const from = i + open.length; // first content character
+      let j = from;
+      let closed = false;
+      while (j < n) {
+        const c = src[j];
+        if (c === '\\') { j += 2; continue; }
+        if (!triple && c === '\n') break; // unterminated: the string ends at the line
+        if (src.startsWith(open, j)) { closed = true; break; }
+        j += 1;
+      }
+      const to = Math.min(j, n); // content ends here; a closing delimiter is kept as code
+      if (to > from) emitMasked(from, to);
+      i = closed ? to + open.length : to;
+      continue;
+    }
+    i += 1;
+  }
+  if (copyFrom < n) parts.push(src.slice(copyFrom));
+  return parts.join('');
+}
+
+/**
+ * Line-level fallback for the languages neither stripper parses (Ruby, Go,
+ * shell, YAML, …): `#` and `//` line comments, a block comment that opens and
+ * closes on the line, and single-line quotes. Positions stay stable. JS/TS go
+ * through stripStringsAndComments and Python through
+ * stripPythonStringsAndComments — this is only for the rest, and it lives
+ * here so there is one place that knows how little it knows.
+ */
+function stripLineLiterals(line) {
+  const out = [];
+  let inS = false; let inD = false; let inT = false;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+    if (!inS && !inD && !inT && ch === '/' && line[i + 1] === '/') {
+      // Rest of line is a line comment.
+      while (i < line.length) { out.push(' '); i += 1; }
+      break;
+    }
+    if (!inS && !inD && !inT && ch === '#') {
+      // Python / shell / YAML comment.
+      while (i < line.length) { out.push(' '); i += 1; }
+      break;
+    }
+    if (!inS && !inD && !inT && ch === '/' && line[i + 1] === '*') {
+      out.push(' '); out.push(' '); i += 2;
+      while (i < line.length) {
+        if (line[i] === '*' && line[i + 1] === '/') {
+          out.push(' '); out.push(' '); i += 2; break;
+        }
+        out.push(' '); i += 1;
+      }
+      continue;
+    }
+    if (ch === '\\') {
+      out.push(ch);
+      if (i + 1 < line.length) { out.push(line[i + 1]); i += 2; continue; }
+      i += 1; continue;
+    }
+    if (!inD && !inT && ch === '\'') { inS = !inS; out.push(' '); i += 1; continue; }
+    if (!inS && !inT && ch === '"') { inD = !inD; out.push(' '); i += 1; continue; }
+    if (!inS && !inD && ch === '`') { inT = !inT; out.push(' '); i += 1; continue; }
+    if (inS || inD || inT) { out.push(' '); i += 1; continue; }
+    out.push(ch); i += 1;
+  }
+  return out.join('');
+}
+
+/**
+ * What kind of text sits at column `col` of line `i`: 'code', 'string'
+ * (a string or template literal), 'regex' or 'comment'. Decided from the mask
+ * alone: a masked character that differs from the raw one is inside some
+ * literal; strings keep their delimiters on the masked line and comments
+ * leave nothing, so the parity of quote characters before the column tells
+ * the two apart (a masked string interior never contains a quote, and code
+ * never contains a bare one). A blank masked line — the inside of a
+ * template or block comment spanning lines — defers to the nearest
+ * non-blank masked line above.
+ */
+function literalKindAt(rawLines, maskedLines, i, col) {
+  const raw = rawLines[i] || '';
+  const masked = maskedLines[i] || '';
+  if (col < 0 || col >= raw.length || masked[col] === raw[col]) return 'code';
+  for (let k = i; k >= 0; k -= 1) {
+    const before = k === i ? masked.slice(0, col) : (maskedLines[k] || '');
+    if (!before.trim()) continue;
+    for (const q of ['"', "'", '`']) {
+      let count = 0;
+      for (let j = 0; j < before.length; j += 1) if (before[j] === q) count += 1;
+      if (count % 2 === 1) return 'string';
+    }
+    return before.trimEnd().endsWith('/') ? 'regex' : 'comment';
+  }
+  return 'comment';
+}
+
+// Shell (moved here from src/modules/bash-safety.js, 2026-09-05): its own
+// grammar — single quotes expand nothing, double quotes keep `$( … )` as code,
+// `#` opens a comment only at a word start.
+/**
+ * Blank out the CONTENTS of quoted strings and of trailing `#` comments while
+ * preserving length, so every pattern below matches shell CODE only.
+ *
+ * `$( ... )` re-enters code even inside double quotes, because it is code —
+ * `NODE_BIN="$(command -v node || true)"` must still be analysed.
+ *
+ * Without this: a comment explaining why a `|| true` is safe was itself a
+ * finding, `echo "|| true"` was a finding, and a jq program containing a
+ * literal `|` broke the pipeline splitter below.
+ */
+function stripShellLiterals(raw) {
+  const stack = [];
+  let out = '';
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    const ctx = stack[stack.length - 1];
+    if (ctx === 'sq') {                       // single quotes: nothing expands
+      out += c === "'" ? (stack.pop(), c) : ' ';
+      continue;
+    }
+    if (ctx === 'dq') {                       // double quotes: only $( ) is code
+      if (c === '\\' && i + 1 < raw.length) { out += '  '; i++; continue; }
+      if (c === '"') { stack.pop(); out += c; continue; }
+      if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
+      out += ' ';
+      continue;
+    }
+    if (c === "'") { stack.push('sq'); out += c; continue; }
+    if (c === '"') { stack.push('dq'); out += c; continue; }
+    if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
+    if (c === ')' && ctx === 'cmd') { stack.pop(); out += c; continue; }
+    if (c === '#' && stack.length === 0 && (i === 0 || /[\s;&|(]/.test(raw[i - 1]))) {
+      out += ' '.repeat(raw.length - i);
+      break;
+    }
+    out += c;
+  }
+  return out;
+}
+
+
+/**
+ * Split an expression on `sep` at bracket depth 0, outside strings and
+ * comments — argument lists, declarator lists, object entries. Depth is
+ * counted on the masked expression (a bracket or separator inside a string is
+ * neither) and the pieces are sliced from the raw one. `angle` also counts
+ * `<`/`>` (TypeScript generics in a declarator list). Two modules carried
+ * their own copy of this walk before 2026-09-05 (undefined-ref,
+ * inner-html-safety).
+ */
+function splitTopLevel(expr, sep, { angle = false } = {}) {
+  const code = stripStringsAndComments(expr);
+  const parts = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < code.length; i += 1) {
+    const ch = code[i];
+    if (ch === '(' || ch === '[' || ch === '{' || (angle && ch === '<')) depth += 1;
+    else if (ch === ')' || ch === ']' || ch === '}' || (angle && ch === '>')) depth = Math.max(0, depth - 1);
+    else if (ch === sep && depth === 0) { parts.push(expr.slice(from, i)); from = i + 1; }
+  }
+  parts.push(expr.slice(from));
+  return parts;
+}
+
+// Which stripper a file gets — decided once, here, for every reader
+// (BaseModule._maskedLines and the confidence scorer). Until 2026-09-05 the
+// scorer ran the JS stripper on everything: in ktor's `gradlew` the case
+// pattern `/*)` on line 80 opened a phantom block comment that never closed,
+// and every finding below it — a real `eval "set -- $(…)"` on line 241 —
+// scored 0.2 and slipped under the gate (KI #85's class, on a shell file).
+const HASH_COMMENT_EXT_RE = /\.(?:rb|yml|yaml|toml|ini|cfg|conf|pl|pm|r|env|properties|gitignore|dockerignore)$/i;
+const HASH_COMMENT_BASENAME_RE = /^(?:dockerfile|containerfile|makefile|gnumakefile|gemfile|rakefile|procfile|brewfile|justfile)(?:[-_.].*)?$/i;
+function maskSource(sourceText, filePath = '') {
+  const text = String(sourceText);
+  const base = path.basename(filePath || '');
+  const ext = path.extname(base).toLowerCase();
+  if (ext === '.py') return stripPythonStringsAndComments(text);
+  const shell = SHELL_EXTENSIONS.includes(ext) || (ext === '' && base !== '' && headIsShellScript(Buffer.from(text.slice(0, SNIFF_BYTES), 'utf8')));
+  if (shell) return text.split('\n').map(stripShellLiterals).join('\n');
+  if (HASH_COMMENT_EXT_RE.test(base) || HASH_COMMENT_BASENAME_RE.test(base)) return text.split('\n').map(stripLineLiterals).join('\n');
+  return stripStringsAndComments(text);
+}
+
+module.exports = { stripStringsAndComments, stripPythonStringsAndComments, stripLineLiterals, stripShellLiterals, literalKindAt, splitTopLevel, maskSource };

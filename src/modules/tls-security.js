@@ -88,15 +88,35 @@ const PY_EXTS = new Set(['.py']);
 
 const SUPPRESS_RE = /\btls-ok\b/;
 
-// JS/TS patterns.
+// JS/TS patterns — every one is matched on the MASKED line
+// (BaseModule._maskedLines): string, template, regex and comment bodies are
+// blanked there, so `rejectUnauthorized: false` in a docstring, in a fixture
+// string, or in a test's `assert.doesNotMatch(out, /rejectUnauthorized: false/)`
+// cannot fire (self-scan 2026-07-15), and neither can one in a block comment
+// or template literal that started on an earlier line (2026-09-05).
 const JS_REJECT_UNAUTHORIZED_RE = /\brejectUnauthorized\s*:\s*false\b/;
 // Require `process.env.` / `process.env[...]` prefix so the rule only
 // fires on an actual Node env write, not on prose / error-message text
-// that references the variable name.
+// that references the variable name. The bracket key and the `"0"` are
+// string bodies — blanked on the masked line — so the SHAPE is matched
+// there and the full pattern is then confirmed on the raw line at the same
+// offset (the mask preserves offsets; sticky regex).
+const JS_NODE_TLS_ENV_SHAPE_RE =
+  /process\.env\s*(?:\.\s*NODE_TLS_REJECT_UNAUTHORIZED|\[\s*['"] *['"]\s*\])\s*=/;
 const JS_NODE_TLS_ENV_RE =
-  /process\.env\s*(?:\.\s*NODE_TLS_REJECT_UNAUTHORIZED|\[\s*['"]NODE_TLS_REJECT_UNAUTHORIZED['"]\s*\])\s*=\s*['"]?0['"]?/;
+  /process\.env\s*(?:\.\s*NODE_TLS_REJECT_UNAUTHORIZED|\[\s*['"]NODE_TLS_REJECT_UNAUTHORIZED['"]\s*\])\s*=\s*['"]?0['"]?/y;
 const JS_STRICT_SSL_RE = /\bstrictSSL\s*:\s*false\b/;
 const JS_INSECURE_RE = /\binsecure\s*:\s*true\b/;
+
+const JS_ENV_BYPASS_RULE = {
+  id: 'js-env-bypass',
+  message: '`NODE_TLS_REJECT_UNAUTHORIZED = "0"` globally disables TLS validation for the entire Node process. Every outbound HTTPS call becomes vulnerable to MITM.',
+};
+const JS_RULES = [
+  { re: JS_REJECT_UNAUTHORIZED_RE, id: 'js-reject-unauthorized', message: '`rejectUnauthorized: false` disables TLS cert validation — every cert, including attacker-issued ones, is trusted. MITM risk.' },
+  { re: JS_STRICT_SSL_RE, id: 'js-strict-ssl', message: '`strictSSL: false` disables TLS cert validation in the `request` / `superagent` / `got` family.' },
+  { re: JS_INSECURE_RE, id: 'js-insecure-flag', message: '`insecure: true` disables TLS validation in several HTTP-client configurations.' },
+];
 
 // Python patterns.
 // `verify=False`, `verify_ssl=False`, `ssl=False` — but NOT `ssl=False`
@@ -176,89 +196,21 @@ class TlsSecurityModule extends BaseModule {
     const isTest = this._isTestPath(rel);
     const errSev = isTest ? 'warning' : 'error';
     const lines = text.split(/\r?\n/);
+    const masked = this._maskedLines(text);
     let issues = 0;
-    let inBlock = false;
-    let inTemplate = false;
 
     for (let i = 0; i < lines.length; i += 1) {
-      let line = lines[i];
-
-      // Block-comment state
-      if (inBlock) {
-        const endIdx = line.indexOf('*/');
-        if (endIdx === -1) continue;
-        line = line.slice(endIdx + 2);
-        inBlock = false;
-      }
-      const startBlock = line.indexOf('/*');
-      if (startBlock !== -1) {
-        const endBlock = line.indexOf('*/', startBlock + 2);
-        if (endBlock === -1) {
-          inBlock = true;
-          line = line.slice(0, startBlock);
-        } else {
-          line = line.slice(0, startBlock) + line.slice(endBlock + 2);
-        }
-      }
-
-      // Capture the block-stripped line BEFORE string-content strip —
-      // the env-bypass rule needs the `"0"` literal preserved.
-      const blockStripped = line;
-
-      // Strip strings across lines so pattern-mentions in docstrings
-      // don't FP for the rules whose patterns don't depend on the
-      // string value.
-      const stripRes = this._stripJsStrings(line, inTemplate);
-      line = stripRes.stripped;
-      inTemplate = stripRes.inTemplate;
-
-      const lc = line.indexOf('//');
-      if (lc !== -1) line = line.slice(0, lc);
-
+      const line = lines[i];        // raw: the `"0"` value, `tls-ok` markers
+      const code = masked[i] || ''; // masked: every pattern match
       if (this._suppressed(lines, i)) continue;
 
-      // env-bypass rule: run against block-stripped (line-comment
-      // stripped) line so `"0"` is preserved. Strip line comments
-      // off that version too.
-      let envLine = blockStripped;
-      const envLc = envLine.indexOf('//');
-      if (envLc !== -1) envLine = envLine.slice(0, envLc);
-      const envMatch = JS_NODE_TLS_ENV_RE.exec(envLine);
-      // A real bypass is never itself nested inside another string literal —
-      // that's fixture/example data (see self-scan 2026-07-15), not a live
-      // assignment. _isInsideStringLiteral is the general-purpose guard.
-      if (envMatch && !this._isInsideStringLiteral(envLine, envMatch.index)) {
-        result.addCheck(`tls-security:js-env-bypass:${rel}:${i + 1}`, false, {
+      const fired = [];
+      if (this._matchOnRaw(code, line, JS_NODE_TLS_ENV_SHAPE_RE, JS_NODE_TLS_ENV_RE)) fired.push(JS_ENV_BYPASS_RULE);
+      for (const rule of JS_RULES) if (rule.re.test(code)) fired.push(rule);
+      for (const rule of fired) {
+        result.addCheck(`tls-security:${rule.id}:${rel}:${i + 1}`, false, {
           severity: errSev,
-          message: '`NODE_TLS_REJECT_UNAUTHORIZED = "0"` globally disables TLS validation for the entire Node process. Every outbound HTTPS call becomes vulnerable to MITM.',
-          file: rel,
-          line: i + 1,
-        });
-        issues += 1;
-      }
-
-      if (JS_REJECT_UNAUTHORIZED_RE.test(line)) {
-        result.addCheck(`tls-security:js-reject-unauthorized:${rel}:${i + 1}`, false, {
-          severity: errSev,
-          message: '`rejectUnauthorized: false` disables TLS cert validation — every cert, including attacker-issued ones, is trusted. MITM risk.',
-          file: rel,
-          line: i + 1,
-        });
-        issues += 1;
-      }
-      if (JS_STRICT_SSL_RE.test(line)) {
-        result.addCheck(`tls-security:js-strict-ssl:${rel}:${i + 1}`, false, {
-          severity: errSev,
-          message: '`strictSSL: false` disables TLS cert validation in the `request` / `superagent` / `got` family.',
-          file: rel,
-          line: i + 1,
-        });
-        issues += 1;
-      }
-      if (JS_INSECURE_RE.test(line)) {
-        result.addCheck(`tls-security:js-insecure-flag:${rel}:${i + 1}`, false, {
-          severity: errSev,
-          message: '`insecure: true` disables TLS validation in several HTTP-client configurations.',
+          message: rule.message,
           file: rel,
           line: i + 1,
         });
@@ -356,11 +308,6 @@ class TlsSecurityModule extends BaseModule {
     return (lines[i] && SUPPRESS_RE.test(lines[i])) ||
       (i > 0 && lines[i - 1] && SUPPRESS_RE.test(lines[i - 1]));
   }
-
-  // _stripJsStrings is inherited from BaseModule (also strips regex-literal
-  // bodies, e.g. `/rejectUnauthorized: false/` in a test assertion — this
-  // module and cookie-security.js used to carry identical private copies
-  // that only handled quotes; consolidated 2026-07-15).
 
   _findUnquotedHash(line) {
     let inStr = null;

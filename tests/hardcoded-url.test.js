@@ -361,3 +361,64 @@ describe('HardcodedUrlModule — localhost dev defaults that are NOT leaks', () 
     ]);
   });
 });
+
+// ── the one stripper: a URL is string content, so the question is WHICH kind of
+// literal holds it (2026-09-05, Doctrine §4 — the private quote counter this
+// replaced could not see a template continuation line or a block comment) ──
+describe('HardcodedUrlModule — string, template and comment are told apart by the one stripper', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-hu-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a URL inside a block comment that opened on an earlier line, or in a line comment with an apostrophe before it, is not a leak; the ones in a string, a template and a template continuation line beside them are (2026-09-05)', async () => {
+    write(tmp, 'src/api.ts', [
+      '/* dev notes:',                                          // 1
+      '   the old box was http://192.168.1.20:8080 — gone */', // 2  comment: silent
+      "const N = 1; // don't point at http://localhost:5000",   // 3  the apostrophe opened a phantom string for the old counter: silent
+      'const A = "http://localhost:3000";',                    // 4  string: fires
+      'const B = `http://10.0.0.5:9000/api`;',                 // 5  template: fires
+      'const C = `',                                           // 6
+      '  preview at http://staging.example.io/x for review',   // 7  continuation line, no quote of its own: fires
+      '`;',                                                    // 8
+      'export const get = () => fetch(A + B + C);',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name).sort();
+    assert.deepStrictEqual(names, [
+      'hardcoded-url:internal-tld:src/api.ts:7',
+      'hardcoded-url:localhost:src/api.ts:4',
+      'hardcoded-url:private-ip:src/api.ts:5',
+    ]);
+  });
+});
+
+describe('HardcodedUrlModule — a private IP or internal host in a test file is a fixture on record (2026-09-05)', () => {
+  // The scanner's own code-scanning alerts on this PR called the
+  // 169.254.169.254 in tests/ssrf.test.js "a developer's LAN address escaped
+  // into committed code": it is link-local, it is the test's subject, and
+  // the localhost rule already had the honest three-way wording.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-hu-fixture-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('info + "a fixture, not a leak" under tests/; error + "escaped into committed code" under src/', async () => {
+    const src = 'fetch("http://169.254.169.254/latest/meta-data/");\nfetch("http://staging.example.io/x");\n';
+    write(tmp, 'tests/meta.test.js', src);
+    write(tmp, 'src/meta.js', src);
+    const r = await run(tmp);
+    const byName = (n) => r.checks.find((c) => c.name === n);
+    const tIp = byName('hardcoded-url:private-ip:tests/meta.test.js:1');
+    const sIp = byName('hardcoded-url:private-ip:src/meta.js:1');
+    const tTld = byName('hardcoded-url:internal-tld:tests/meta.test.js:2');
+    const sTld = byName('hardcoded-url:internal-tld:src/meta.js:2');
+    assert.ok(tIp && sIp && tTld && sTld, r.checks.map((c) => c.name).join(', '));
+    assert.strictEqual(tIp.severity, 'info');
+    assert.match(tIp.message, /in a test file — a fixture, not a leak/);
+    assert.strictEqual(sIp.severity, 'error');
+    assert.match(sIp.message, /link-local.*escaped into committed code/);
+    assert.strictEqual(tTld.severity, 'info');
+    assert.match(tTld.message, /a fixture, not a leak/);
+    assert.strictEqual(sTld.severity, 'warning');
+    assert.match(sTld.message, /won't resolve for external users/);
+  });
+});

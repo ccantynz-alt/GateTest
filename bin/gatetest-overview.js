@@ -35,12 +35,19 @@ function parseArgs(argv) {
   return args;
 }
 
+// One home for the admin base URL — the env var, else the local default. The
+// help text below interpolates it rather than repeating the address in prose
+// (the address in a template literal is as hardcoded as one in code; the
+// hardcoded-url module reported line 43 once the one stripper could see
+// multi-line template literals, 2026-09-05).
+const ADMIN_URL = process.env.GATETEST_ADMIN_URL || 'http://localhost:3333';
+
 function usage() {
   console.log(`Usage: gatetest-overview [--json] [--url <base-url>]
 
 Env:
   ADMIN_TOKEN          Bearer token (required)
-  GATETEST_ADMIN_URL   Base URL (default: http://localhost:3333)
+  GATETEST_ADMIN_URL   Base URL (currently ${ADMIN_URL})
 
 Exit code:
   0 — healthy (no stale repos, no critical issues)
@@ -171,7 +178,7 @@ async function main() {
     console.error('error: ADMIN_TOKEN env var is required');
     process.exit(1);
   }
-  const baseUrl = args.url || process.env.GATETEST_ADMIN_URL || 'http://localhost:3333';
+  const baseUrl = args.url || ADMIN_URL;
 
   let data;
   try {

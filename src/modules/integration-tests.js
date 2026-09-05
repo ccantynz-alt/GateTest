@@ -221,6 +221,12 @@ class IntegrationTestsModule extends BaseModule {
       const routePatterns = [ROUTE_CALL_CAPTURE_RE, USE_CALL_RE, VERB_DECORATOR_CAPTURE_RE];
 
       const lines = content.split(/\r?\n/);
+      // Strings, regex literals and comments blanked to spaces, offsets kept
+      // (BaseModule._maskedLines — the one stripper). The route regexes read
+      // the path out of its quotes, so they still run on the raw content;
+      // whether the match START is code is decided here: a character the
+      // mask blanked sits inside a string literal or a comment.
+      const masked = this._maskedLines(content);
 
       for (const pattern of routePatterns) {
         pattern.lastIndex = 0;
@@ -232,11 +238,14 @@ class IntegrationTestsModule extends BaseModule {
           // run against whole-file content, so a documentation example like
           //     example: "app.get('/r', handler)",
           // was discovered as a real endpoint and then reported as untested.
+          // Before 2026-09-05 a per-line quote counter judged the position;
+          // it could not see a template literal or a block comment that
+          // spans lines.
           const lineNo = content.slice(0, match.index).split(/\r?\n/).length;
           const lineText = lines[lineNo - 1] || '';
           if (this._isCommentLine(lineText)) continue;
-          const lineStart = content.lastIndexOf('\n', match.index - 1) + 1;
-          if (this._isInsideStringLiteral(lineText, match.index - lineStart)) continue;
+          const col = match.index - (content.lastIndexOf('\n', match.index - 1) + 1);
+          if ((masked[lineNo - 1] || '')[col] !== lineText[col]) continue;
 
           const verb = match[1].toLowerCase();
           const method = VERB_ALIASES[verb] || verb.toUpperCase();

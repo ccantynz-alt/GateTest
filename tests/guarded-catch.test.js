@@ -13,11 +13,11 @@
  */
 
 const { describe, it } = require('node:test');
+const { stripStringsAndComments } = require('../src/core/source-strip');
 const assert = require('node:assert');
 
 const {
   classifyEmptyCatch,
-  maskNonCode,
   hasTopLevelExit,
   assignedTargets,
   isTestedAfter,
@@ -28,7 +28,7 @@ const {
 /** Classify the first `catch` in `src`. */
 function classify(src) {
   const raw = src.split('\n');
-  const masked = maskNonCode(src).split('\n');
+  const masked = stripStringsAndComments(src).split('\n');
   for (let i = 0; i < raw.length; i += 1) {
     const m = raw[i].match(/\bcatch\s*(?:\([^)]*\))?\s*\{/);
     if (m) return classifyEmptyCatch(masked, i, m.index);
@@ -237,7 +237,7 @@ describe('guarded-catch — the individual judgements', () => {
     // a masker without regex handling blanks the whole rest of the file — so
     // every catch below it reads as prose and is dropped.
     const src = 'const re = /["\']/;\nfunction f() { try { g(); } catch {} }\n';
-    const masked = maskNonCode(src);
+    const masked = stripStringsAndComments(src);
     assert.strictEqual(masked.length, src.length);
     assert.ok(masked.includes('catch'), 'code after the regex must stay visible');
     assert.ok(!masked.includes('"'), 'the regex body must be blanked');
@@ -245,14 +245,14 @@ describe('guarded-catch — the individual judgements', () => {
 
   it('maskNonCode still treats a division slash as division', () => {
     const src = 'const ratio = total / count;\nconst s = "keep";\n';
-    const masked = maskNonCode(src);
+    const masked = stripStringsAndComments(src);
     assert.ok(masked.includes('total / count'));
     assert.ok(!masked.includes('keep'));
   });
 
   it('maskNonCode blanks string and comment contents but keeps offsets', () => {
     const src = 'const a = "} catch {"; // } catch {\nconst b = 1;';
-    const masked = maskNonCode(src);
+    const masked = stripStringsAndComments(src);
     assert.strictEqual(masked.length, src.length);
     assert.ok(!masked.includes('catch'));
     assert.ok(masked.includes('const b = 1;'));
@@ -379,7 +379,7 @@ describe('guarded-catch — cleanup and rethrow shapes (negative controls)', () 
       '  }',
       '}',
     ];
-    const masked = maskNonCode(raw.join('\n')).split('\n');
+    const masked = stripStringsAndComments(raw.join('\n')).split('\n');
     const inner = classifyEmptyCatch(masked, 6, raw[6].indexOf('catch'));
     assert.strictEqual(inner.guarded, true);
     assert.strictEqual(inner.shape, 'rethrow');
@@ -452,7 +452,7 @@ describe('guarded-catch — cleanup and rethrow shapes (positive controls)', () 
 describe('guarded-catch — enclosingContext and isTeardownName', () => {
   const ctx = (src) => {
     const lines = src.split('\n');
-    const masked = maskNonCode(src).split('\n');
+    const masked = stripStringsAndComments(src).split('\n');
     const at = lines.findIndex((l) => l.includes('HERE'));
     return enclosingContext(masked, at, lines[at].indexOf('HERE'));
   };

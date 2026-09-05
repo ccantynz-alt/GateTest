@@ -112,8 +112,23 @@ function collectShellScripts(module, projectRoot, alsoExts = []) {
   return { scripts, others };
 }
 
+/**
+ * A build tool's own wrapper script, checked in verbatim by `gradle wrapper`
+ * / `mvn wrapper:wrapper` and regenerated the same way — not code the
+ * project's authors wrote or would edit by hand. Findings in it are reported
+ * (a reader should know the `eval "set -- $(…)"` is there) but cannot block a
+ * build the project cannot change: spring-petclinic and ktor each carry the
+ * stock gradlew, and its line 241 became a blocking `shell:eval-var` the day
+ * the confidence scorer stopped mis-masking shell as JavaScript (2026-09-05).
+ */
+const VENDORED_WRAPPER_RE = /^(?:gradlew|gradlew\.bat|mvnw|mvnw\.cmd)$/;
+function isVendoredWrapper(relPath) {
+  return VENDORED_WRAPPER_RE.test(path.basename(String(relPath)));
+}
+
 module.exports = {
   SHELL_EXTENSIONS,
+  isVendoredWrapper,
   SHELL_SHEBANG_RE,
   NON_SCRIPT_NAME_RE,
   SNIFF_BYTES,

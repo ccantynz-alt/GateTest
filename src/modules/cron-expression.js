@@ -117,10 +117,14 @@ const STANDARD_FIELDS_6 = [
 
 // ---- Module harvest regexes ----
 
-const JS_CRON_CALL_RE = /(?:cron|schedule|scheduleJob|Cron|nodeSchedule)\s*(?:\.(?:schedule|scheduleJob|fromCronTab))?\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const JS_NEW_CRON_RE = /\bnew\s+Cron\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1/g;
-const PY_CRON_CALL_RE = /\b(?:CronTrigger\.from_crontab|CronTab)\s*\(\s*r?(['"])((?:\\.|(?!\1).)*)\1/g;
-const SPRING_SCHEDULED_RE = /@Scheduled\s*\(\s*cron\s*=\s*(['"])((?:\\.|(?!\1).)*)\1/g;
+// Source-code harvests are matched on the MASKED line (strings, regex
+// literals and comments blanked, offsets kept), where the call and its quote
+// delimiters survive and the expression is blanks; `d` flag so the
+// expression can be read from the raw line over the same offsets.
+const JS_CRON_CALL_RE = /(?:cron|schedule|scheduleJob|Cron|nodeSchedule)\s*(?:\.(?:schedule|scheduleJob|fromCronTab))?\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1/gd;
+const JS_NEW_CRON_RE = /\bnew\s+Cron\s*\(\s*(['"`])((?:\\.|(?!\1).)*)\1/gd;
+const PY_CRON_CALL_RE = /\b(?:CronTrigger\.from_crontab|CronTab)\s*\(\s*r?(['"])((?:\\.|(?!\1).)*)\1/gd;
+const SPRING_SCHEDULED_RE = /@Scheduled\s*\(\s*cron\s*=\s*(['"])((?:\\.|(?!\1).)*)\1/gd;
 // YAML GitHub Actions schedule: `- cron: '...'`
 const YAML_CRON_RE = /^\s*-?\s*cron\s*:\s*(['"]?)([^'"#\n]+?)\1\s*(?:#.*)?$/;
 // Kubernetes: `schedule: '...'`
@@ -193,6 +197,7 @@ class CronExpressionModule extends BaseModule {
         .some((s) => s.startsWith('.') && s !== '.github'));
   }
 
+
   _harvestCronStrings(rel, text, ext) {
     const found = [];
     const lines = text.split(/\r?\n/);
@@ -225,8 +230,10 @@ class CronExpressionModule extends BaseModule {
     }
 
     // Source code: JS/TS/Python/Java
+    const masked = this._maskedLines(text, rel);
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
+      const line = lines[i];        // raw: the expression text
+      const code = masked[i] || ''; // masked: where a scheduler call really sits
       // Skip pure comment lines
       const trimmed = line.trim();
       if (trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('*')) continue;
@@ -234,16 +241,18 @@ class CronExpressionModule extends BaseModule {
       for (const rx of [JS_CRON_CALL_RE, JS_NEW_CRON_RE, PY_CRON_CALL_RE, SPRING_SCHEDULED_RE]) {
         rx.lastIndex = 0;
         let m;
-        while ((m = rx.exec(line)) !== null) {
-          const expr = m[2];
-          // A real scheduler call is never itself nested inside another
-          // string literal — that's fixture/example data (e.g. a test
-          // writing `'cron.schedule("60 0 * * *", run);'` as a sample
-          // file's contents), not a live call. Found via self-scan:
-          // cron-expression flagging its own test fixtures as real
-          // findings (same class as tls-security/cookie-security/redos
-          // 2026-07-15/16).
-          if (this._isInsideStringLiteral(line, m.index)) continue;
+        // The call is located on the masked line: a scheduler call nested
+        // inside another string literal is fixture/example data (e.g. a test
+        // writing `'cron.schedule("60 0 * * *", run);'` as a sample file's
+        // contents), not a live call — and neither is one in a template
+        // literal or a block comment, which the per-line quote counter this
+        // replaced (2026-09-05) could not see when they spanned lines. Found
+        // via self-scan: cron-expression flagging its own test fixtures as
+        // real findings (same class as tls-security/cookie-security/redos
+        // 2026-07-15/16). The expression is string content the mask blanked,
+        // so it is read from the raw line over the same offsets.
+        while ((m = rx.exec(code)) !== null) {
+          const expr = line.slice(m.indices[2][0], m.indices[2][1]);
           if (this._looksLikeCron(expr)) {
             found.push({ expr: expr.trim(), line: i + 1 });
           }

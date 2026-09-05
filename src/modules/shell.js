@@ -29,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
-const { collectShellScripts } = require('../core/shell-files');
+const { collectShellScripts, isVendoredWrapper } = require('../core/shell-files');
 
 // Hard-coded credentials baked into scripts — same catalogue as secrets
 // module but trimmed to the patterns that show up in CI/ops scripts most.
@@ -95,6 +95,13 @@ class ShellModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const lines = content.split(/\r?\n/);
     let issues = 0;
+    // A vendored build-tool wrapper (src/core/shell-files.js isVendoredWrapper)
+    // is reported at info: the finding is real, the file is not the project's
+    // to edit, and blocking on it would block every Gradle and Maven project.
+    const vendored = isVendoredWrapper(rel);
+    const flag = (name, details) => this._flag(result, name, vendored
+      ? { ...details, severity: 'info', message: `${details.message} — in a vendored build-tool wrapper (${path.basename(rel)}); regenerate it with the tool rather than editing it, and read the finding as information` }
+      : details);
 
     const firstNonBlank = lines.find((l) => l.trim().length > 0) || '';
     const hasShebang = firstNonBlank.startsWith('#!');
@@ -141,7 +148,7 @@ class ShellModule extends BaseModule {
 
       // 1. curl | sh / wget | bash
       if (/\b(?:curl|wget)\b[^|]*\|\s*(?:sh|bash|zsh)\b/.test(trimmed)) {
-        issues += this._flag(result, `shell:curl-pipe-sh:${rel}:${i + 1}`, {
+        issues += flag(`shell:curl-pipe-sh:${rel}:${i + 1}`, {
           severity: 'error',
           file: rel,
           line: i + 1,
@@ -158,7 +165,7 @@ class ShellModule extends BaseModule {
         const unquotedVar = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/.test(target);
         const rootish = /^\/(?:\*)?$/.test(target) || /^\/[^/]+\/\*?$/.test(target) && target.split('/').length <= 3;
         if (unquotedVar || rootish) {
-          issues += this._flag(result, `shell:unsafe-rm:${rel}:${i + 1}`, {
+          issues += flag(`shell:unsafe-rm:${rel}:${i + 1}`, {
             severity: 'error',
             file: rel,
             line: i + 1,
@@ -170,7 +177,7 @@ class ShellModule extends BaseModule {
 
       // 3. eval of variables or command substitution
       if (/\beval\s+["']?\$/.test(trimmed) || /\beval\s+.*\$\(/.test(trimmed) || /\beval\s+.*`/.test(trimmed)) {
-        issues += this._flag(result, `shell:eval-var:${rel}:${i + 1}`, {
+        issues += flag(`shell:eval-var:${rel}:${i + 1}`, {
           severity: 'error',
           file: rel,
           line: i + 1,
@@ -182,7 +189,7 @@ class ShellModule extends BaseModule {
       // 4. Hard-coded secrets
       for (const { name, pattern } of SECRET_PATTERNS) {
         if (pattern.test(line)) {
-          issues += this._flag(result, `shell:hardcoded-secret:${name}:${rel}:${i + 1}`, {
+          issues += flag(`shell:hardcoded-secret:${name}:${rel}:${i + 1}`, {
             severity: 'error',
             file: rel,
             line: i + 1,
@@ -196,7 +203,7 @@ class ShellModule extends BaseModule {
       if (shebangIsSh) {
         for (const { name, pattern } of BASHISMS) {
           if (pattern.test(line)) {
-            issues += this._flag(result, `shell:sh-but-bashism:${name}:${rel}:${i + 1}`, {
+            issues += flag(`shell:sh-but-bashism:${name}:${rel}:${i + 1}`, {
               severity: 'warning',
               file: rel,
               line: i + 1,
@@ -210,7 +217,7 @@ class ShellModule extends BaseModule {
 
       // 6. Backtick command substitution
       if (/`[^`]+`/.test(line) && !/^#/.test(trimmed)) {
-        issues += this._flag(result, `shell:backticks:${rel}:${i + 1}`, {
+        issues += flag(`shell:backticks:${rel}:${i + 1}`, {
           severity: 'info',
           file: rel,
           line: i + 1,

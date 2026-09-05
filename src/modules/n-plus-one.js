@@ -86,7 +86,7 @@ const QUERY_METHOD_RES = [
   /\b(?:client|pool|db|connection|conn)\.(?:query|execute|prepare|run|get|all|each)\s*[`(]/,
   // Knex — typical `knex('table').where(...).first()` or `db('table').select()`
   /\bknex\s*\(/,
-  /\bdb\s*\(\s*['"`][\w]+['"`]\s*\)\s*\.(?:where|select|first|insert|update|del|count|returning)/,
+  knexTableCall, // `db('table').where(...)` — table name read from the raw line, see below
   // Drizzle — `db.select().from(users)`, `db.insert(users)`, etc.
   /\bdb\.(?:select|insert|update|delete)\s*\(/,
   // Generic ORM-ish
@@ -123,17 +123,19 @@ const LOOP_OPENERS = [
   { re: /\.(?:map|forEach|filter|reduce|some|every|flatMap)\s*\(/, kind: 'callback' },
 ];
 
-// String-aware `inString(line, idx)` — consistent with other modules.
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
+// Every deciding regex runs on the MASKED line (BaseModule._maskedLines:
+// string, regex and comment content blanked, offsets preserved). The raw
+// line is read only for text that lives inside quotes: a knex table name,
+// and the SQL literal handed to a raw driver.
+const KNEX_TABLE_RE = /\bdb\s*\(\s*(['"`]) *\1\s*\)\s*\.(?:where|select|first|insert|update|del|count|returning)/;
+
+// `db('users').where(...)`: the call shape on the masked line, the table
+// name — one word between the quotes — on the raw one at the same offset.
+function knexTableCall(code, line) {
+  const m = KNEX_TABLE_RE.exec(code);
+  if (!m) return null;
+  const open = m.index + m[0].search(/['"`]/) + 1;
+  return /^[\w]+['"`]/.test(line.slice(open)) ? m : null;
 }
 
 class NPlusOneModule extends BaseModule {
@@ -179,37 +181,38 @@ class NPlusOneModule extends BaseModule {
 
     const rel = path.relative(projectRoot, file);
     const lines = content.split(/\r?\n/);
+    const masked = this._maskedLines(content);
     let issues = 0;
 
     // Build a depth-map: for each character index, how many braces
     // deep inside a loop we are. This lets us ask "is line N inside a
     // loop?" without parsing.
-    const loopRanges = this._findLoopRanges(content, lines);
+    const loopRanges = this._findLoopRanges(masked);
 
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
+      const line = lines[i];      // raw: the SQL literal, the knex table name
+      const code = masked[i] || ''; // masked: every pattern match
+      if (!code.trim()) continue;
 
       const loopStart = this._enclosingLoopStart(loopRanges, i);
       if (loopStart == null) continue;
 
       // Must be an awaited/chained call (to keep false-positive rate
       // low — synchronous reads of in-memory data aren't N+1).
-      const hasAwait = /\bawait\b/.test(line);
-      const hasThen = /\.(?:then|catch|finally)\s*\(/.test(line);
+      const hasAwait = /\bawait\b/.test(code);
+      const hasThen = /\.(?:then|catch|finally)\s*\(/.test(code);
       if (!hasAwait && !hasThen) continue;
 
       // Check against every query method regex.
       let matched = null;
       let argStart = -1;
       for (const re of QUERY_METHOD_RES) {
-        const m = line.match(re);
-        if (m && !isInString(line, m.index)) { matched = m[0]; argStart = m.index + m[0].length; break; }
+        const m = typeof re === 'function' ? re(code, line) : code.match(re);
+        if (m) { matched = m[0]; argStart = m.index + m[0].length; break; }
       }
       if (!matched) continue;
 
-      const argKind = this._rawDriverArgKind(line, matched, argStart);
+      const argKind = this._rawDriverArgKind(line, code, matched, argStart);
       if (argKind === 'not-n-plus-one') continue;
       const opaque = argKind === 'opaque';
 
@@ -220,9 +223,9 @@ class NPlusOneModule extends BaseModule {
       // Heuristic: if the enclosing loop opener is a `.map(` and the
       // enclosing context is `Promise.all(` (look up a few lines),
       // classify as batched-ok.
-      const enclosingLoop = lines[loopStart] || '';
+      const enclosingLoop = masked[loopStart] || '';
       const isMap = /\.map\s*\(/.test(enclosingLoop);
-      const precedingWindow = lines.slice(Math.max(0, loopStart - 2), loopStart + 1).join('\n');
+      const precedingWindow = masked.slice(Math.max(0, loopStart - 2), loopStart + 1).join('\n');
       const isBatched = isMap && /\bPromise\.all\s*\(/.test(precedingWindow);
 
       if (isBatched) {
@@ -268,13 +271,13 @@ class NPlusOneModule extends BaseModule {
    * literal, 'opaque' for a pre-built statement passed by name, 'lookup'
    * otherwise (and for every ORM shape, whose argument is irrelevant).
    */
-  _rawDriverArgKind(line, matched, argStart) {
+  _rawDriverArgKind(line, code, matched, argStart) {
     if (!RAW_DRIVER_RE.test(matched)) return 'lookup';
-    const arg = line.slice(argStart - 1); // include the `(` or backtick
+    const arg = line.slice(argStart - 1); // raw, including the `(` or backtick: the SQL text is inside the quotes
     const literal = /^[`(]\s*(['"`])([\s\S]*?)(?:\1|$)/.exec(arg) || /^`([\s\S]*?)(?:`|$)/.exec(arg);
     const sqlText = literal ? (literal[2] !== undefined ? literal[2] : literal[1]) : null;
     if (sqlText != null) return NOT_N_PLUS_ONE_SQL_RE.test(sqlText) ? 'not-n-plus-one' : 'lookup';
-    return OPAQUE_STATEMENT_RE.test(arg.slice(1)) ? 'opaque' : 'lookup';
+    return OPAQUE_STATEMENT_RE.test(code.slice(argStart)) ? 'opaque' : 'lookup';
   }
 
   // Find all loop ranges in the file. Returns an array of
@@ -283,24 +286,23 @@ class NPlusOneModule extends BaseModule {
   //   - block-form `for (...) {`: body = brace-matched block
   //   - callback-form `.map(async (x) => { ... })`: body = the
   //     arrow-function's block body (or a single-expression arrow)
-  _findLoopRanges(content, lines) {
+  _findLoopRanges(masked) {
     const ranges = [];
 
     // Walk line-by-line looking for loop openers.
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
+    for (let i = 0; i < masked.length; i += 1) {
+      const line = masked[i];
       for (const { re, kind } of LOOP_OPENERS) {
         const m = line.match(re);
         if (!m) continue;
-        if (isInString(line, m.index)) continue;
 
         if (kind === 'block') {
           // Find the `{` that opens the body. For `for`/`while` this
           // is the first `{` at depth 0 after the matching `)`. For
           // `do`, it's the `{` on this line.
-          const braceLine = this._findOpenBraceLine(lines, i);
+          const braceLine = this._findOpenBraceLine(masked, i);
           if (braceLine < 0) continue;
-          const end = this._findMatchingBrace(lines, braceLine);
+          const end = this._findMatchingBrace(masked, braceLine);
           if (end < 0) continue;
           ranges.push({ start: braceLine, end });
         } else {
@@ -308,7 +310,7 @@ class NPlusOneModule extends BaseModule {
           // We use the paren-matching approach: from the `(` after the
           // method name, walk forward, balancing parens, and accept
           // either a `{...}` block body or a single-line arrow.
-          const end = this._findCallbackEnd(lines, i, m.index + m[0].length - 1);
+          const end = this._findCallbackEnd(masked, i, m.index + m[0].length - 1);
           if (end < 0) continue;
           ranges.push({ start: i, end });
         }
@@ -317,14 +319,13 @@ class NPlusOneModule extends BaseModule {
     return ranges;
   }
 
-  _findOpenBraceLine(lines, startLine) {
+  _findOpenBraceLine(masked, startLine) {
     let depthParen = 0;
     let seenOpenParen = false;
-    for (let i = startLine; i < lines.length && i < startLine + 30; i += 1) {
-      const line = lines[i];
+    for (let i = startLine; i < masked.length && i < startLine + 30; i += 1) {
+      const line = masked[i];
       for (let j = 0; j < line.length; j += 1) {
         const ch = line[j];
-        if (isInString(line, j)) continue;
         if (ch === '(') { depthParen += 1; seenOpenParen = true; }
         else if (ch === ')') { depthParen -= 1; }
         else if (ch === '{' && (depthParen === 0 || !seenOpenParen)) {
@@ -335,13 +336,12 @@ class NPlusOneModule extends BaseModule {
     return -1;
   }
 
-  _findMatchingBrace(lines, braceLine) {
+  _findMatchingBrace(masked, braceLine) {
     let depth = 0;
     let started = false;
-    for (let i = braceLine; i < lines.length && i < braceLine + 200; i += 1) {
-      const line = lines[i];
+    for (let i = braceLine; i < masked.length && i < braceLine + 200; i += 1) {
+      const line = masked[i];
       for (let j = 0; j < line.length; j += 1) {
-        if (isInString(line, j)) continue;
         const ch = line[j];
         if (ch === '{') { depth += 1; started = true; }
         else if (ch === '}') {
@@ -353,14 +353,13 @@ class NPlusOneModule extends BaseModule {
     return -1;
   }
 
-  _findCallbackEnd(lines, startLine, openParenIdx) {
+  _findCallbackEnd(masked, startLine, openParenIdx) {
     let depth = 0;
     let started = false;
-    for (let i = startLine; i < lines.length && i < startLine + 200; i += 1) {
-      const line = lines[i];
+    for (let i = startLine; i < masked.length && i < startLine + 200; i += 1) {
+      const line = masked[i];
       const startCol = i === startLine ? openParenIdx : 0;
       for (let j = startCol; j < line.length; j += 1) {
-        if (isInString(line, j)) continue;
         const ch = line[j];
         if (ch === '(') { depth += 1; started = true; }
         else if (ch === ')') {

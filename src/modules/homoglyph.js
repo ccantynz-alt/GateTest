@@ -69,7 +69,7 @@
 const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
-const { stripStringsAndComments } = require('../core/source-strip');
+const { stripStringsAndComments, stripPythonStringsAndComments, stripLineLiterals } = require('../core/source-strip');
 const JS_FAMILY = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 
 const SOURCE_EXTS = new Set([
@@ -231,9 +231,10 @@ class HomoglyphModule extends BaseModule {
     // for the languages that stripper does not parse: it cannot see a block
     // comment or a template literal that spans lines, so a Cyrillic letter on
     // the second line of either was reported as a mixed-script identifier.
-    const jsStripped = JS_FAMILY.has(path.extname(file).toLowerCase())
+    const ext = path.extname(file).toLowerCase();
+    const jsStripped = JS_FAMILY.has(ext)
       ? stripStringsAndComments(content).split(/\r?\n/)
-      : null;
+      : (ext === '.py' ? stripPythonStringsAndComments(content).split(/\r?\n/) : null);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -291,7 +292,7 @@ class HomoglyphModule extends BaseModule {
       // Walk each identifier-ish run and check if it mixes Latin with
       // Cyrillic/Greek lookalikes. Skip string-literal interiors so
       // translation strings in non-locale files don't false-positive.
-      const scrubbed = jsStripped ? (jsStripped[i] || '') : this._stripLineLiterals(scanLine);
+      const scrubbed = jsStripped ? (jsStripped[i] || '') : stripLineLiterals(scanLine);
       let j = 0;
       while (j < scrubbed.length) {
         if (!IDENT_CHAR_RE.test(scrubbed[j])) { j += 1; continue; }
@@ -334,53 +335,6 @@ class HomoglyphModule extends BaseModule {
     return issues;
   }
 
-  /**
-   * Line-level literal/comment blanking for the languages the canonical
-   * stripper does not parse (Python, Ruby, Go, shell, YAML, …): `#` and
-   * `//` line comments, a block comment that opens and closes on one line,
-   * and single-line quotes.
-   * Positions stay stable so line indexing lines up. JavaScript and
-   * TypeScript never come through here — see `jsStripped` in _scanFile.
-   */
-  _stripLineLiterals(line) {
-    const out = [];
-    let inS = false; let inD = false; let inT = false;
-    let i = 0;
-    while (i < line.length) {
-      const ch = line[i];
-      if (!inS && !inD && !inT && ch === '/' && line[i + 1] === '/') {
-        // Rest of line is a line comment.
-        while (i < line.length) { out.push(' '); i += 1; }
-        break;
-      }
-      if (!inS && !inD && !inT && ch === '#') {
-        // Python / shell / YAML comment.
-        while (i < line.length) { out.push(' '); i += 1; }
-        break;
-      }
-      if (!inS && !inD && !inT && ch === '/' && line[i + 1] === '*') {
-        out.push(' '); out.push(' '); i += 2;
-        while (i < line.length) {
-          if (line[i] === '*' && line[i + 1] === '/') {
-            out.push(' '); out.push(' '); i += 2; break;
-          }
-          out.push(' '); i += 1;
-        }
-        continue;
-      }
-      if (ch === '\\') {
-        out.push(ch);
-        if (i + 1 < line.length) { out.push(line[i + 1]); i += 2; continue; }
-        i += 1; continue;
-      }
-      if (!inD && !inT && ch === '\'') { inS = !inS; out.push(' '); i += 1; continue; }
-      if (!inS && !inT && ch === '"') { inD = !inD; out.push(' '); i += 1; continue; }
-      if (!inS && !inD && ch === '`') { inT = !inT; out.push(' '); i += 1; continue; }
-      if (inS || inD || inT) { out.push(' '); i += 1; continue; }
-      out.push(ch); i += 1;
-    }
-    return out.join('');
-  }
 
   _flag(result, name, details) {
     result.addCheck(name, false, details);

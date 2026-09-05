@@ -242,6 +242,7 @@ class PromptSafetyModule extends BaseModule {
     const isTest = this._isTestPath(rel);
 
     const lines = content.split(/\r?\n/);
+    const isCode = this._codeGuard(rel, content, lines);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -259,7 +260,7 @@ class PromptSafetyModule extends BaseModule {
       const pubMatches = [...line.matchAll(/[A-Z][A-Z0-9_]*/g)];
       for (const pm of pubMatches) {
         const tok = pm[0];
-        if (PUBLIC_ENV_PREFIX.test(tok) && KEYISH_SUFFIX.test(tok) && !this._isInsideStringLiteral(line, pm.index)) {
+        if (PUBLIC_ENV_PREFIX.test(tok) && KEYISH_SUFFIX.test(tok) && isCode(i, pm.index)) {
           issues += this._flag(result, `prompt-safety:public-api-key:${rel}:${i + 1}`, {
             severity: isTest ? 'warning' : 'error',
             file: rel,
@@ -276,7 +277,7 @@ class PromptSafetyModule extends BaseModule {
       for (const m of DEPRECATED_MODELS) {
         const re = new RegExp(`["'\`]${m.replace(/\./g, '\\.')}["'\`]`);
         const modelMatch = re.exec(line);
-        if (modelMatch && !this._isInsideStringLiteral(line, modelMatch.index)) {
+        if (modelMatch && isCode(i, modelMatch.index)) {
           const status = retirementStatus(m);
           const message = status.retired
             ? `Model \`${m}\` is retired${status.on ? ` (as of ${status.on})` : ''} — these calls return 404`
@@ -313,17 +314,33 @@ class PromptSafetyModule extends BaseModule {
     }
 
     // 4. LLM call without max_tokens — scan object-literal calls
-    issues += this._scanLlmCalls(content, lines, rel, result, isTest);
+    issues += this._scanLlmCalls(content, lines, rel, result, isTest, isCode);
 
     // 5. Prompt injection: string templates combining a prompt-shaped
     // literal with a user-input-hinted variable, with no delimiter
     // between the literal and the var.
-    issues += this._scanPromptInjection(lines, rel, result);
+    issues += this._scanPromptInjection(lines, rel, result, isCode);
 
     return issues;
   }
 
-  _scanLlmCalls(content, lines, rel, result, isTest = false) {
+  /**
+   * Is column `idx` of line `i` executable code — not the body of a string,
+   * template, regex literal or comment? Every rule in this module starts its
+   * match on a non-space character (an env token, a quote, an identifier, a
+   * backtick, the `f` of an f-string), so on the masked line
+   * (BaseModule._maskedLines — bodies blanked, offsets preserved) that
+   * character survives exactly when it is code. The mask is JS grammar: a
+   * `#` comment is code to it and an apostrophe in one opens a "string" that
+   * runs to the next quote, lines away — so .py keeps the per-line guard
+   * until a Python stripper exists (2026-09-05).
+   */
+  _codeGuard(rel, content, lines) {
+    const masked = this._maskedLines(content, rel);
+    return (i, idx) => !this._insideLiteral(masked, lines, i, idx);
+  }
+
+  _scanLlmCalls(content, lines, rel, result, isTest = false, isCode = () => true) {
     let issues = 0;
     // Match both JS/TS and Python call-expressions. The object/kwarg
     // body is captured greedily; we then check for `max_tokens`.
@@ -373,10 +390,9 @@ class PromptSafetyModule extends BaseModule {
         const beforeMatch = content.slice(0, idx);
         const lineNo = beforeMatch.split(/\r?\n/).length;
         const lineStart = beforeMatch.lastIndexOf('\n') + 1;
-        const lineText = lines[lineNo - 1] || '';
         // Same fixture-data guard as the other rules in this file — a real
         // API call is never itself nested inside another string literal.
-        if (this._isInsideStringLiteral(lineText, idx - lineStart)) continue;
+        if (!isCode(lineNo - 1, idx - lineStart)) continue;
         issues += this._flag(result, `prompt-safety:no-max-tokens:${kind}:${rel}:${lineNo}`, {
           severity: isTest ? 'warning' : 'error',
           file: rel,
@@ -390,7 +406,7 @@ class PromptSafetyModule extends BaseModule {
     return issues;
   }
 
-  _scanPromptInjection(lines, rel, result) {
+  _scanPromptInjection(lines, rel, result, isCode = () => true) {
     let issues = 0;
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
@@ -399,7 +415,7 @@ class PromptSafetyModule extends BaseModule {
       for (const m of tplMatches) {
         const before = m[1];
         const varName = m[2];
-        if (this._isInsideStringLiteral(line, m.index)) continue;
+        if (!isCode(i, m.index)) continue;
         if (PROMPT_SHAPE.test(before) && this._looksUserControlled(varName)) {
           issues += this._flag(result, `prompt-safety:prompt-injection:${rel}:${i + 1}`, {
             severity: 'warning',
@@ -416,7 +432,7 @@ class PromptSafetyModule extends BaseModule {
       for (const m of pyMatches) {
         const before = m[1];
         const varName = m[2];
-        if (this._isInsideStringLiteral(line, m.index)) continue;
+        if (!isCode(i, m.index)) continue;
         if (PROMPT_SHAPE.test(before) && this._looksUserControlled(varName)) {
           issues += this._flag(result, `prompt-safety:prompt-injection:${rel}:${i + 1}`, {
             severity: 'warning',

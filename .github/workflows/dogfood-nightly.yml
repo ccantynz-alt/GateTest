@@ -46,8 +46,9 @@ jobs:
       - name: Run full test sweep
         run: |
           mkdir -p .dogfood
-          node scripts/run-tests.js --timeout 60000 tests/*.test.js 2>&1 | tee .dogfood/sweep.log || true
+          node scripts/run-tests.js --timeout 60000 tests/*.test.js 2>&1 | tee .dogfood/sweep.log && rc=0 || rc=$?
           grep -E "^# (files|tests|pass|fail|cancelled|skipped)" .dogfood/sweep.log > .dogfood/sweep-summary.txt || true
+          echo "# exit $rc" >> .dogfood/sweep-summary.txt
 
       - name: Self-scan — full suite (measures "green on our own repo")
         # The hero's "N/N modules green" chip was CARRIED (greenSource:
@@ -59,7 +60,8 @@ jobs:
         run: |
           GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --suite full \
             --skip-module mutation --skip-module e2e --skip-module unitTests --skip-module dataIntegrity \
-            > .dogfood/self-full.log 2>&1 || true
+            > .dogfood/self-full.log 2>&1 && rc=0 || rc=$?
+          echo "self-scan exit $rc (1 = findings, by design; anything else is a crash — read the log)"
           node -e '
             const r = require("./.gatetest/reports/gatetest-report-latest.json");
             const mods = r.results || [];
@@ -79,7 +81,7 @@ jobs:
         run: |
           node scripts/generate-site-stats.js --tap-log .dogfood/sweep.log \
             ${GREEN:+--green $GREEN} ${SCANNED:+--scanned $SCANNED}
-          cp website/app/data/site-stats.json .dogfood/site-stats.json || true
+          if [ -f website/app/data/site-stats.json ]; then cp website/app/data/site-stats.json .dogfood/site-stats.json; fi
 
       - name: Regenerate the public precision table
         # website/app/data/precision.json feeds /precision — blocking counts
@@ -98,7 +100,7 @@ jobs:
           # so a human still names each drop before it merges.
           GATETEST_NO_TELEMETRY=1 node scripts/real-world-precision.js \
             --ratchet --write-json website/app/data/precision.json
-          cp website/app/data/precision.json .dogfood/precision.json || true
+          if [ -f website/app/data/precision.json ]; then cp website/app/data/precision.json .dogfood/precision.json; fi
 
       - name: Regenerate the public changelog
         # website/app/data/changelog.json feeds /changelog — the main branch's
@@ -108,35 +110,40 @@ jobs:
         # history is complete.
         run: node scripts/generate-changelog.js --ref origin/main
 
+      # Each self-scan step records the engine's exit code in the report
+      # instead of `|| true`-ing it away: gatetest exits 1 on findings by
+      # design, but a crash exits 1 too, and a swallowed crash reads as
+      # "0 checks" (bash-safety's own `pipe-true` rule, once `.github/`
+      # became visible to it, 2026-09-05).
       - name: Self-scan — dependencies module
         run: |
           mkdir -p .dogfood
-          node bin/gatetest.js --module dependencies --json > .dogfood/dependencies.json 2>&1 || true
-          echo "## Dependencies" > .dogfood/report.md
+          node bin/gatetest.js --module dependencies --json > .dogfood/dependencies.json 2>&1 && rc=0 || rc=$?
+          echo "## Dependencies (exit $rc)" > .dogfood/report.md
           jq -r '.checks // [] | length as $n | "\($n) checks"' .dogfood/dependencies.json >> .dogfood/report.md 2>/dev/null || true
 
       - name: Self-scan — secrets module
         run: |
-          node bin/gatetest.js --module secrets --json > .dogfood/secrets.json 2>&1 || true
-          echo "## Secrets" >> .dogfood/report.md
+          node bin/gatetest.js --module secrets --json > .dogfood/secrets.json 2>&1 && rc=0 || rc=$?
+          echo "## Secrets (exit $rc)" >> .dogfood/report.md
           jq -r '.checks // [] | length as $n | "\($n) checks"' .dogfood/secrets.json >> .dogfood/report.md 2>/dev/null || true
 
       - name: Self-scan — secret rotation module
         run: |
-          node bin/gatetest.js --module secretRotation --json > .dogfood/secret-rotation.json 2>&1 || true
-          echo "## Secret rotation" >> .dogfood/report.md
+          node bin/gatetest.js --module secretRotation --json > .dogfood/secret-rotation.json 2>&1 && rc=0 || rc=$?
+          echo "## Secret rotation (exit $rc)" >> .dogfood/report.md
           jq -r '.checks // [] | length as $n | "\($n) checks"' .dogfood/secret-rotation.json >> .dogfood/report.md 2>/dev/null || true
 
       - name: Self-scan — TypeScript strictness
         run: |
-          node bin/gatetest.js --module typescriptStrictness --json > .dogfood/ts-strictness.json 2>&1 || true
-          echo "## TypeScript strictness" >> .dogfood/report.md
+          node bin/gatetest.js --module typescriptStrictness --json > .dogfood/ts-strictness.json 2>&1 && rc=0 || rc=$?
+          echo "## TypeScript strictness (exit $rc)" >> .dogfood/report.md
           jq -r '.checks // [] | length as $n | "\($n) checks"' .dogfood/ts-strictness.json >> .dogfood/report.md 2>/dev/null || true
 
       - name: Self-scan — log PII
         run: |
-          node bin/gatetest.js --module logPii --json > .dogfood/log-pii.json 2>&1 || true
-          echo "## Log PII" >> .dogfood/report.md
+          node bin/gatetest.js --module logPii --json > .dogfood/log-pii.json 2>&1 && rc=0 || rc=$?
+          echo "## Log PII (exit $rc)" >> .dogfood/report.md
           jq -r '.checks // [] | length as $n | "\($n) checks"' .dogfood/log-pii.json >> .dogfood/report.md 2>/dev/null || true
 
       - name: Upload dogfood artifacts
@@ -152,8 +159,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set +e
-          ERR_COUNT=$(jq -r '[.checks[]? | select(.severity=="error")] | length' .dogfood/dependencies.json 2>/dev/null)
+          # No `set +e`: the one command that can fail outside an `&&` / `||`
+          # list is the jq read, which falls back to 0 explicitly.
+          ERR_COUNT=$(jq -r '[.checks[]? | select(.severity=="error")] | length' .dogfood/dependencies.json 2>/dev/null || echo 0)
           if [ -n "$ERR_COUNT" ] && [ "$ERR_COUNT" -gt 0 ]; then
             TITLE="Dogfood: $ERR_COUNT dependency error(s) in self-scan ($(date -u +%Y-%m-%d))"
             BODY=$(printf '%s\n\nFull artifact: see %s actions run.' \
@@ -180,7 +188,8 @@ jobs:
         if: always()
         run: |
           node scripts/run-tests.js --timeout 60000 tests/heavy/marketing-claim-verification.test.js 2>&1 \
-            | tee .dogfood/claim-check.log || true
+            | tee .dogfood/claim-check.log && rc=0 || rc=$?
+          echo "# exit $rc" >> .dogfood/claim-check.log
           # The runner's own totals: failing tests plus files that never
           # reported a summary (a crash is drift too, not a zero).
           FAIL_COUNT=$(awk '/^# fail /{f=$3} /^# files that did not finish /{u=$NF} END{print f+u+0}' .dogfood/claim-check.log 2>/dev/null || echo 0)
@@ -191,7 +200,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set +e
           FAIL_COUNT="${{ steps.claim_check.outputs.fail_count }}"
           TITLE="Claim drift: $FAIL_COUNT marketing-claim test(s) failed ($(date -u +%Y-%m-%d))"
           BODY=$(printf '## Marketing claim drift detected\n\n%s test(s) in `tests/heavy/marketing-claim-verification.test.js` failed the nightly check.\n\nThis means a public-facing claim (module count, model name, pricing, etc.) no longer matches the shipping code.\n\n**Action:** run `node --test tests/heavy/marketing-claim-verification.test.js` locally, read the failures, then update either the marketing copy or the code to match.\n\nFull log in dogfood artifact for run `%s`.' \
@@ -265,5 +273,5 @@ jobs:
 
           # Not a draft, and auto-merge armed: the moment the required review
           # lands, so does the PR. A draft can never merge — that was the bug.
-          gh pr ready "$BRANCH" || true
+          gh pr ready "$BRANCH" || echo "gh pr ready: already ready, or unavailable ($?)"
           gh pr merge "$BRANCH" --auto --squash || echo "auto-merge unavailable — PR left open for review"

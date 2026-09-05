@@ -5,6 +5,7 @@
 // "Is this a test path" has ONE definition, src/core/test-paths.js; this
 // class exposes it to every module as `_isTestPath` and `TEST_PATH_RE`.
 const { TEST_PATH_RE, isTestPath } = require('../core/test-paths');
+const { maskSource } = require('../core/source-strip');
 
 class BaseModule {
   constructor(name, description) {
@@ -183,11 +184,55 @@ class BaseModule {
    *
    * Deliberately only whole-line: a trailing `// note` after real code
    * leaves that code executable, and callers wanting position-accurate
-   * handling should use `_isInsideStringLiteral` with an index instead.
+   * handling should match on `_maskedLines` instead.
    *
    * @param {string} line
    * @returns {boolean}
    */
+  /**
+   * The file's lines with every string literal blanked and every comment
+   * removed, offsets preserved — masked line i is raw line i, and a token
+   * that survives on the masked line sits at the same index on the raw one.
+   * Match a pattern on the masked line; read a captured name, title or URL
+   * from the raw line at the match's own offsets. One definition
+   * (src/core/source-strip.js) of where a string or comment begins and ends:
+   * the per-line quote counters this is replacing (_isInsideStringLiteral,
+   * _stripJsStrings, and nine private isInString copies, 2026-09-05) could
+   * not see a template literal or a block comment spanning lines, and each
+   * disagreed with the others at the edges.
+   *
+   * @param {string} content
+   * @param {string} [rel] file path — a `.py` file is masked by the Python
+   *   stripper (`#` comments, triple-quoted strings); everything else as JS/TS
+   * @returns {string[]}
+   */
+  _maskedLines(content, rel = '') {
+    return maskSource(content, rel).split(/\r?\n/);
+  }
+
+  /**
+   * Match `shape` (the code around a string, e.g. `secret\s*:\s*['"]`) on the
+   * masked line, then read `full` (a sticky regex, `/…/y`) from the raw line
+   * at that offset — the way a rule reads a value that lives inside quotes
+   * without ever matching prose or a fixture string.
+   */
+  _matchOnRaw(code, line, shape, full) {
+    const m = shape.exec(code);
+    if (!m) return null;
+    full.lastIndex = m.index;
+    return full.exec(line);
+  }
+
+  /**
+   * Is index `idx` of raw line `i` inside a string, regex or comment? True
+   * when the mask blanked that character. Use it where a rule must read the
+   * raw line (the pattern lives inside quotes) but must not fire on prose.
+   */
+  _insideLiteral(masked, lines, i, idx) {
+    const raw = lines[i] || '';
+    return raw[idx] !== undefined && (masked[i] || '')[idx] !== raw[idx];
+  }
+
   _isCommentLine(line) {
     if (typeof line !== 'string') return false;
     const t = line.trim();
@@ -195,107 +240,6 @@ class BaseModule {
     return t.startsWith('//') || t.startsWith('#') || t.startsWith('*') || t.startsWith('/*');
   }
 
-  _isInsideStringLiteral(line, index) {
-    // A stack: each entry is a quote character, or '{' for a `${ … }`
-    // template expression. Code inside `${}` IS code — until 2026-09-05
-    // `apiKey = \`${Math.random()}\`` read as prose to every rule that used
-    // this guard, and the security module worked around it by anchoring its
-    // regex at the line start, which in turn fired on Math.random() inside
-    // a plain string (the inert-fixture sweep caught that).
-    const stack = [];
-    for (let j = 0; j < index && j < line.length; j += 1) {
-      const ch = line[j];
-      const top = stack[stack.length - 1];
-      if (top === "'" || top === '"' || top === '`') {
-        if (ch === '\\') { j += 1; continue; }
-        if (ch === top) { stack.pop(); continue; }
-        if (top === '`' && ch === '$' && line[j + 1] === '{') { stack.push('{'); j += 1; }
-        continue;
-      }
-      // in code (top-level or inside a template expression)
-      if (ch === "'" || ch === '"' || ch === '`') { stack.push(ch); continue; }
-      if (top === '{') {
-        if (ch === '{') stack.push('{');
-        else if (ch === '}') stack.pop();
-      }
-    }
-    const top = stack[stack.length - 1];
-    return top === "'" || top === '"' || top === '`';
-  }
-
-  // A `/` opens a regex literal (not a division operator) when the last
-  // non-space character emitted so far is one of these — covers the
-  // overwhelming majority of real code AND test-assertion style
-  // (`assert.match(x, /foo/)`, `.test(/foo/)`, `const re = /foo/`), without
-  // the false-positive risk of trying to fully disambiguate JS grammar.
-  static _REGEX_PRECEDING_RE = /[([{,:=!&|;]$|^$/;
-
-  /**
-   * Blank out the contents of string ('/"/`) and regex (/.../ ) literals on
-   * a line, keeping the delimiters so downstream regexes that only care
-   * about structure (not content) still see them. Regex literals matter
-   * because rules that match on stripped `line` still see straight through
-   * one: `assert.doesNotMatch(result, /rejectUnauthorized: false/)` is a
-   * test assertion, not a live config value, but textually contains the
-   * exact vulnerable pattern the module is designed to flag. Found via
-   * self-scan 2026-07-15 (tls-security + cookie-security self-flagging
-   * their own test files' regex-literal assertions).
-   */
-  _stripJsStrings(line, inTemplate) {
-    let out = '';
-    let state = inTemplate ? '`' : null;
-    let j = 0;
-    while (j < line.length) {
-      const ch = line[j];
-      if (state) {
-        if (state === '/') {
-          if (ch === '\\') { out += '  '; j += 2; continue; }
-          if (ch === '[') { out += ' '; state = '/['; j += 1; continue; }
-          if (ch === '/') { out += ch; state = null; j += 1; continue; }
-          out += ' ';
-          j += 1;
-          continue;
-        }
-        if (state === '/[') {
-          // Inside a regex character class — `/` doesn't close the regex here.
-          if (ch === '\\') { out += '  '; j += 2; continue; }
-          if (ch === ']') { out += ' '; state = '/'; j += 1; continue; }
-          out += ' ';
-          j += 1;
-          continue;
-        }
-        if (ch === '\\') {
-          out += '  ';
-          j += 2;
-          continue;
-        }
-        if (ch === state) {
-          out += ch;
-          state = null;
-          j += 1;
-          continue;
-        }
-        out += ' ';
-        j += 1;
-        continue;
-      }
-      if (ch === "'" || ch === '"' || ch === '`') {
-        out += ch;
-        state = ch;
-        j += 1;
-        continue;
-      }
-      if (ch === '/' && BaseModule._REGEX_PRECEDING_RE.test(out.trimEnd())) {
-        out += ch;
-        state = '/';
-        j += 1;
-        continue;
-      }
-      out += ch;
-      j += 1;
-    }
-    return { stripped: out, inTemplate: state === '`' };
-  }
 }
 
 module.exports = BaseModule;

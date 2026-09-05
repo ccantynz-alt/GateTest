@@ -78,30 +78,6 @@ const BaseModule = require('./base-module');
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
 
-// String-aware helper.
-function isInString(line, idx) {
-  let inS = false; let inD = false; let inT = false;
-  for (let i = 0; i < idx && i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '\\') { i += 1; continue; }
-    if (!inD && !inT && ch === '\'') inS = !inS;
-    else if (!inS && !inT && ch === '"') inD = !inD;
-    else if (!inS && !inD && ch === '`') inT = !inT;
-  }
-  return inS || inD || inT;
-}
-
-function matchOutsideString(line, re) {
-  const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-  const gre = new RegExp(re.source, flags);
-  let m;
-  while ((m = gre.exec(line)) !== null) {
-    if (!isInString(line, m.index)) return m;
-    if (m.index === gre.lastIndex) gre.lastIndex += 1;
-  }
-  return null;
-}
-
 // fs check patterns — the first argument (the path expression) is read by
 // balancedFirstArg from the text after the `(`, NOT by a `[^,)]+` capture:
 // that cut `path.join(r.dir, 'node_modules')` down to `path.join(r.dir`,
@@ -115,15 +91,15 @@ const FS_CHECK_RES = [
 
 /**
  * The first call argument in `text` (which starts just after the `(`),
- * balanced across nested parens / brackets / braces and quoted strings, so
- * `path.join(a, 'b')` comes back whole. Empty when there is none.
+ * balanced across nested parens / brackets / braces on the MASKED twin
+ * `code` (a bracket or comma inside a string is not one — the one stripper
+ * decides), and sliced from the raw text, so `path.join(a, 'b')` comes back
+ * whole. Empty when there is none.
  */
-function balancedFirstArg(text) {
-  let depth = 0; let quote = null;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quote) { if (ch === '\\') { i++; continue; } if (ch === quote) quote = null; continue; }
-    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+function balancedFirstArg(text, code) {
+  let depth = 0;
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
     if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) return text.slice(0, i).trim(); depth--; continue; }
     if (ch === ',' && depth === 0) return text.slice(0, i).trim();
@@ -239,18 +215,26 @@ class RaceConditionModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const isTestFile = this._isTestPath(rel);
     const lines = content.split(/\r?\n/);
+    // Every call is matched on the masked line (BaseModule._maskedLines:
+    // strings, regexes and comments blanked, offsets kept); the path
+    // ARGUMENTS are read from the raw line at the same offsets, because a
+    // quoted path is string content. Masked line k is cut to raw line k's
+    // length: the stripper blanks a `\r` that sits inside a comment, and the
+    // two forward windows below are joined from both arrays and
+    // cross-referenced by offset.
+    const masked = this._maskedLines(content).map((l, k) => l.slice(0, lines[k].length));
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
+      const line = lines[i];      // raw: path expressions, SQL / error-code markers
+      const code = masked[i] || ''; // masked: every call match
+      if (!code.trim()) continue;
 
       // --- fs TOCTOU ---
       for (const checkRe of FS_CHECK_RES) {
-        const m = matchOutsideString(line, checkRe);
+        const m = checkRe.exec(code);
         if (!m) continue;
-        const pathExpr = balancedFirstArg(line.slice(m.index + m[0].length));
+        const pathExpr = balancedFirstArg(line.slice(m.index + m[0].length), code.slice(m.index + m[0].length));
         if (!pathExpr) continue;
 
         // `stat`/`lstat` broadens the mutation set (symlink-race
@@ -261,8 +245,9 @@ class RaceConditionModule extends BaseModule {
         // Include the tail of the current line (anything after the
         // check expression) so single-line `if (exists(p)) unlink(p)`
         // patterns are caught.
-        const tail = line.slice(m.index + m[0].length + pathExpr.length);
-        const window = `${tail}\n${this._forwardWindow(lines, i, 15)}`;
+        const tailAt = m.index + m[0].length + pathExpr.length;
+        const window = `${line.slice(tailAt)}\n${this._forwardWindow(lines, i, 15)}`;
+        const windowCode = `${code.slice(tailAt)}\n${this._forwardWindow(masked, i, 15)}`;
 
         // Find a mutate call whose FIRST ARGUMENT actually references
         // the same path expression. This avoids false-positives when
@@ -274,12 +259,14 @@ class RaceConditionModule extends BaseModule {
         const mutateRegexGlobal = new RegExp(mutateRe.source, 'g');
         let mutateMatch = null;
         let gm;
-        while ((gm = mutateRegexGlobal.exec(window)) !== null) {
+        while ((gm = mutateRegexGlobal.exec(windowCode)) !== null) {
           // The mutate's first argument, balanced, so a nested call is
           // compared whole: the check's expression must be the argument or a
-          // token inside it, never merely its prefix.
+          // token inside it, never merely its prefix. The call is found on the
+          // masked window; its argument is read from the raw one.
           const after = window.slice(gm.index + gm[0].length, gm.index + gm[0].length + 200);
-          const firstArg = balancedFirstArg(after).replace(/['"`]/g, '').trim();
+          const afterCode = windowCode.slice(gm.index + gm[0].length, gm.index + gm[0].length + 200);
+          const firstArg = balancedFirstArg(after, afterCode).replace(/['"`]/g, '').trim();
           if (firstArg === normalizedPath || (!/[(]/.test(normalizedPath) && new RegExp(`(?:^|[^\\w$])${pathToken}(?:[^\\w$]|$)`).test(firstArg))) {
             mutateMatch = gm;
             break;
@@ -301,18 +288,21 @@ class RaceConditionModule extends BaseModule {
 
       // --- DB get-or-create / get-then-update races ---
       for (const findRe of DB_FIND_RES) {
-        const m = matchOutsideString(line, findRe);
+        const m = findRe.exec(code);
         if (!m) continue;
         const modelExpr = m[1];
         if (!modelExpr) continue;
 
+        // Raw window: the transaction and unique-constraint markers below are
+        // SQL (`FOR UPDATE`, `ON CONFLICT`) and error codes (`'P2002'`) — string
+        // content, blank on the masked lines.
         const window = this._forwardWindow(lines, i, 15);
 
-        // Is there a mutating call on the same model?
+        // Is there a mutating call on the same model? A call, so masked.
         const mutateRe = new RegExp(
           `\\b${modelExpr.replace(/[.$]/g, (c) => `\\${c}`)}\\.(?:${DB_MUTATE_METHODS.join('|')})\\s*\\(`,
         );
-        const mutateMatch = window.match(mutateRe);
+        const mutateMatch = this._forwardWindow(masked, i, 15).match(mutateRe);
         if (!mutateMatch) continue;
 
         // Transaction wrapper visible?

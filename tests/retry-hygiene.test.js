@@ -371,3 +371,41 @@ describe('retry-hygiene — prose about sleep() is not a call to sleep()', () =>
     assert.ok(found.length > 0, 'a genuine constant-delay retry must still be reported');
   });
 });
+
+describe('RetryHygieneModule — one stripper (control pair)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rh-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a constant-delay retry inside a string, a template or a comment is not a retry; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/poll.js', [
+      'const doc = "while (true) { await fetch(url); await sleep(1000); }";',
+      'const tpl = `while (true) {',
+      '  await fetch(url);',
+      '  await sleep(1000);',
+      '}`;',
+      '/*',
+      'while (true) {',
+      '  await fetch(url);',
+      '  await sleep(1000);',
+      '}',
+      '*/',
+      'async function real(url) {',
+      '  for (let attempt = 0; attempt < 5; attempt += 1) {',
+      '    const res = await fetch(url);',
+      '    if (res.ok) return res;',
+      '    await sleep(1000);',
+      '  }',
+      '}',
+      'module.exports = { doc, tpl, real };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^retry-hygiene:/.test(c.name));
+    assert.deepStrictEqual(
+      flagged.map((c) => c.name).sort(),
+      ['retry-hygiene:no-backoff:src/poll.js:16', 'retry-hygiene:no-jitter:src/poll.js:16'],
+      'only the real sleep(1000) on line 16 is a retry delay; the string, the template and the comment are not',
+    );
+    assert.ok(!r.checks.some((c) => c.name.startsWith('retry-hygiene:unbounded-loop:')), 'the `while (true)` in the comment is prose, not a loop');
+  });
+});

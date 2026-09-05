@@ -316,3 +316,76 @@ describe('ResourceLeakModule — clean baseline', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+// ── the one stripper (2026-09-05, Doctrine §4): the private per-line quote
+// counter this module carried could not see a template continuation line or a
+// block comment that opened earlier, and read comment text as code ──
+describe('ResourceLeakModule — matches on the masked line', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rl-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a setInterval inside a string, a template or a comment is not a leak; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/a.ts', [
+      'const doc = "setInterval(tick, 1000)";',              // 1 string
+      'const tpl = `',                                        // 2
+      '  setInterval(tick, 1000);',                           // 3 template continuation
+      '`;',                                                   // 4
+      '/* what not to do:',                                   // 5
+      '   setInterval(tick, 1000);',                          // 6 block comment
+      ' */',                                                  // 7
+      'function start() {',
+      '  setInterval(tick, 1000);',                           // 9 real
+      '}',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name);
+    assert.deepStrictEqual(names, ['resource-leak:setinterval:src/a.ts:9']);
+  });
+
+  it('a handle.close() that exists only in a comment does not close the handle (2026-09-05)', async () => {
+    write(tmp, 'src/b.ts', [
+      'function open(p) {',
+      '  const fd = fs.openSync(p, "r");',                    // 2 real acquire
+      '  // remember: fd.close() is the caller\'s job',       // 3 comment, not a close
+      '  use(fd);',
+      '}',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name);
+    assert.deepStrictEqual(names, ['resource-leak:file-handle:src/b.ts:2']);
+  });
+});
+
+describe('ResourceLeakModule — a numeric descriptor is closed by fs.closeSync(fd) (2026-09-05)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rl-fd-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('does NOT flag fs.openSync whose descriptor is passed to fs.closeSync in finally (src/core/log-streamer.js:90 shape)', async () => {
+    write(tmp, 'src/a.js', [
+      'function sizeOf(p) {',
+      '  const fd = fs.openSync(p, "r");',
+      '  try {',
+      '    return fs.fstatSync(fd).size;',
+      '  } finally {',
+      '    fs.closeSync(fd);',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(r.checks.filter((c) => c.passed === false).map((c) => c.name), []);
+  });
+
+  it('a `/fd/1` inside a template string 70 lines later is not a return of the descriptor — the leak is reported', async () => {
+    // Before the masked line, this was exactly how the log-streamer leak
+    // stayed hidden: the raw return check read `fd` inside the template.
+    const src = ['function sizeOf(p) {', '  const fd = fs.openSync(p, "r");', '  log(fs.fstatSync(fd).size);', '}'];
+    for (let i = 0; i < 70; i += 1) src.push('');
+    src.push('function tail(pid) {', '  return streamCommand(`tail -f /proc/${pid}/fd/1`);', '}', '');
+    write(tmp, 'src/b.js', src.join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(r.checks.filter((c) => c.passed === false).map((c) => c.name), ['resource-leak:file-handle:src/b.js:2']);
+  });
+});

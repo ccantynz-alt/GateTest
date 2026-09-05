@@ -28,6 +28,7 @@
 'use strict';
 
 const fs   = require('fs');
+const { stripStringsAndComments } = require('../core/source-strip');
 const path = require('path');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
@@ -162,40 +163,40 @@ function isPublicFile(relPath) {
  * every `isLoggedIn`-guarded route in OWASP NodeGoat came out "unprotected".
  * Falls back to the handler's brace body, then to a 300-char window.
  */
+// The mask of the file last asked about — every handler in a file is
+// extracted in one pass, so the file is masked once (offsets preserved).
+let lastContent = null;
+let lastMask = null;
+function maskOf(content) {
+  if (content !== lastContent) { lastContent = content; lastMask = stripStringsAndComments(content); }
+  return lastMask;
+}
+
+// Brackets are balanced on the MASKED text (a paren inside a string or a
+// comment is not a paren — src/core/source-strip.js, one definition) and the
+// body is sliced from the raw content at the same offsets.
 function extractHandlerBody(content, matchIndex) {
-  const open = content.indexOf('(', matchIndex);
+  const code = maskOf(content);
+  const open = code.indexOf('(', matchIndex);
   // `export function GET(req)` is a DECLARATION — its parens are the
   // parameter list, so balance braces (the body) instead of parens.
-  const isDeclaration = open !== -1 && /function\s+[A-Za-z0-9_$]*\s*$/.test(content.slice(matchIndex, open));
+  const isDeclaration = open !== -1 && /function\s+[A-Za-z0-9_$]*\s*$/.test(code.slice(matchIndex, open));
   if (!isDeclaration && open !== -1 && open - matchIndex < 120) {
     let depth = 0;
-    let quote = null;
-    for (let i = open; i < content.length; i++) {
-      const ch = content[i];
-      if (quote) {
-        if (ch === '\\') { i++; continue; }
-        if (ch === quote) quote = null;
-        continue;
-      }
-      if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; continue; }
-      if (ch === '(') depth++;
-      else if (ch === ')') {
-        depth--;
-        if (depth === 0) return content.slice(matchIndex, i + 1);
-      }
+    for (let i = open; i < code.length; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')' && --depth === 0) return content.slice(matchIndex, i + 1);
     }
   }
   let depth = 0;
   let start = -1;
-  for (let i = matchIndex; i < content.length; i++) {
-    if (content[i] === '{') {
+  for (let i = matchIndex; i < code.length; i++) {
+    if (code[i] === '{') {
       if (start === -1) start = i;
       depth++;
-    } else if (content[i] === '}') {
+    } else if (code[i] === '}') {
       depth--;
-      if (depth === 0 && start !== -1) {
-        return content.slice(start, i + 1);
-      }
+      if (depth === 0 && start !== -1) return content.slice(start, i + 1);
     }
   }
   return content.slice(matchIndex, matchIndex + 300);
@@ -607,6 +608,12 @@ class AuthBypassDetector extends BaseModule {
     const routePatterns = [{ re: EXPRESS_ROUTE_RE, framework: 'express' }];
     const guardedFrom = routerLevelAuthOffset(content);
     const seen = new Set();
+    // Strings, regex literals and comments blanked to spaces, offsets kept
+    // (BaseModule._maskedLines — the one stripper). The route regex reads the
+    // path out of its quotes (it must start with `/`), so it still runs on
+    // the raw content; whether the match START is code is decided against
+    // the masked line below.
+    const masked = this._maskedLines(content);
 
     for (const { re } of routePatterns) {
       re.lastIndex = 0;
@@ -636,10 +643,14 @@ class AuthBypassDetector extends BaseModule {
         // reported at ERROR severity. Blocking a build over a quoted example is
         // Forbidden #25, and auth-bypass is the worst place for it: the finding
         // says "you shipped an endpoint with no auth", which nobody ignores.
-        // Caught by tests/heavy/inert-fixture-sweep.test.js.
+        // Caught by tests/heavy/inert-fixture-sweep.test.js. A character the
+        // mask blanked sits inside a string literal or a comment — including
+        // a template literal or a block comment opened on an earlier line,
+        // which the per-line quote counter this replaced (2026-09-05) could
+        // not see.
         if (this._isCommentLine(lineText)) continue;
-        const lineStart = content.lastIndexOf('\n', matchIdx - 1) + 1;
-        if (this._isInsideStringLiteral(lineText, matchIdx - lineStart)) continue;
+        const col = matchIdx - (content.lastIndexOf('\n', matchIdx - 1) + 1);
+        if ((masked[lineNo - 1] || '')[col] !== lineText[col]) continue;
 
         const body = extractHandlerBody(content, matchIdx);
         if (AUTH_SIGNAL_RE.test(body)) continue;

@@ -280,3 +280,49 @@ describe('RedosModule — self-scan fixture false positives', () => {
     assert.ok(r.checks.find((c) => c.name && c.name.startsWith('redos:overlapping-alternation:')));
   });
 });
+
+// Control pair for the one-stripper migration (2026-09-05): every shape is
+// located on the masked line (BaseModule._maskedLines), so a pattern quoted
+// in a string, a template literal or a block comment is data; the real one
+// beside them is still a finding. The per-line quote counter this replaced
+// could not see a template or a block comment that spans lines.
+describe('RedosModule — strings, templates and comments are not patterns', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-rdos-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a regex inside a string, a template or a comment is not a finding; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/a.js', [
+      'const doc = "const re = /(\\w+)+/; new RegExp(req.query.q);";',
+      'const tpl = `',
+      '  const re2 = /(\\d+)+/;',
+      '  new RegExp(req.query.q);',
+      '`;',
+      '/* example:',
+      '   const re3 = /(\\s+)+/;',
+      '   new RegExp(req.query.q);',
+      '*/',
+      'const real = /(\\w+)+/;',
+      'const dyn = new RegExp(req.query.q);',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const nested = r.checks.filter((c) => c.name.startsWith('redos:nested-quantifier:'));
+    assert.deepStrictEqual(nested.map((c) => [c.line, c.pattern]), [[10, '(\\w+)+']]);
+    const dyn = r.checks.filter((c) => c.name.startsWith('redos:user-controlled-regex:'));
+    assert.deepStrictEqual(dyn.map((c) => [c.line, c.source]), [[11, 'req.query.q']]);
+  });
+
+  it('Python: the stripper runs one line at a time, so an apostrophe in a `#` comment does not swallow the file', async () => {
+    write(tmp, 'src/a.py', [
+      'import re',
+      "# don't match twice",
+      "PAT = re.compile(r'(\\w+)+')  # quoted example: re.compile(r'(\\d+)+')",
+      "DOC = 're.compile(r\"(\\s+)+\")'",
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const nested = r.checks.filter((c) => c.name.startsWith('redos:nested-quantifier:'));
+    assert.deepStrictEqual(nested.map((c) => [c.line, c.pattern]), [[3, '(\\w+)+']]);
+  });
+});

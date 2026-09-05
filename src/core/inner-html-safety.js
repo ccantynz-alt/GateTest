@@ -1,3 +1,4 @@
+const { stripStringsAndComments, literalKindAt, splitTopLevel: splitTopLevelMasked } = require('./source-strip');
 /**
  * One definition of "this `.innerHTML =` cannot inject markup".
  *
@@ -43,30 +44,17 @@ const STATIC_LITERAL = /^'(?:[^'\\]|\\.)*'$|^"(?:[^"\\]|\\.)*"$|^`(?:[^`\\$]|\\.
  * a bad parse.
  */
 function splitTopLevel(expr, sep) {
-  const parts = [];
-  let buf = '';
+  // One walk (src/core/source-strip.js): depth and separators on the masked
+  // expression, pieces from the raw one. Unbalanced brackets, or a string
+  // that never closes, mean the caller must decline to judge.
+  const code = stripStringsAndComments(expr);
   let depth = 0;
-  let quote = null;
-
-  for (let i = 0; i < expr.length; i++) {
-    const ch = expr[i];
-
-    if (quote) {
-      buf += ch;
-      if (ch === '\\') { buf += expr[++i] ?? ''; continue; }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; buf += ch; continue; }
-    if (ch === '(' || ch === '[' || ch === '{') { depth++; buf += ch; continue; }
-    if (ch === ')' || ch === ']' || ch === '}') { depth--; buf += ch; continue; }
-    if (ch === sep && depth === 0) { parts.push(buf.trim()); buf = ''; continue; }
-    buf += ch;
+  for (const ch of code) {
+    if (ch === '(' || ch === '[' || ch === '{') depth += 1;
+    else if (ch === ')' || ch === ']' || ch === '}') depth -= 1;
   }
-
-  if (quote || depth !== 0) return null;
-  parts.push(buf.trim());
-  return parts.filter(Boolean);
+  if (depth !== 0 || /['"`]\s*$/.test(code.replace(/['"`]\s*['"`]/g, '')) && (code.match(/['"`]/g) || []).length % 2 === 1) return null;
+  return splitTopLevelMasked(expr, sep).map((p) => p.trim()).filter(Boolean);
 }
 
 /**
@@ -88,33 +76,25 @@ function splitTopLevel(expr, sep) {
  * rather than judge a fragment.
  */
 function takeExpression(text) {
-  let buf = '';
+  // Brackets and `;` are judged on the masked twin (string, template and
+  // regex bodies blanked, offsets kept); the expression is sliced from the
+  // raw text at the same offsets. A literal that never closes leaves its
+  // last character blanked, and literalKindAt reports it as a string.
+  const masked = stripStringsAndComments(text);
   let depth = 0;
-  let quote = null;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-
-    if (quote) {
-      buf += ch;
-      if (ch === '\\') { buf += text[++i] ?? ''; continue; }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; buf += ch; continue; }
-    if (ch === '(' || ch === '[' || ch === '{') { depth++; buf += ch; continue; }
+  let end = text.length;
+  for (let i = 0; i < masked.length; i++) {
+    const ch = masked[i];
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
     if (ch === ')' || ch === ']' || ch === '}') {
-      if (depth === 0) break; // belongs to an enclosing block, not to us
+      if (depth === 0) { end = i; break; } // belongs to an enclosing block, not to us
       depth--;
-      buf += ch;
       continue;
     }
-    if (ch === ';' && depth === 0) break;
-    buf += ch;
+    if (ch === ';' && depth === 0) { end = i; break; }
   }
-
-  if (quote) return null;
-  return buf.trim();
+  if (end > 0 && literalKindAt([text], [masked], 0, end - 1) === 'string') return null;
+  return text.slice(0, end).trim();
 }
 
 /**

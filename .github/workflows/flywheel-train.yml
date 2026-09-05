@@ -97,7 +97,7 @@ jobs:
             > .flywheel/stats-snapshot.json || echo "{}" > .flywheel/stats-snapshot.json
           # Also emit a human-readable summary for the run log.
           node scripts/flywheel-stats.js \
-            --path "$HOME/.gatetest/telemetry/fix-attempts.jsonl" || true
+            --path "$HOME/.gatetest/telemetry/fix-attempts.jsonl" || echo "flywheel-stats summary unavailable (exit $?) — the JSON snapshot above is the record"
         env:
           HOME: ${{ github.workspace }}/.flywheel-home
 

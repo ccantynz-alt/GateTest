@@ -72,6 +72,26 @@ describe('IntegrationTestsModule — one route grammar, real test discovery (KI 
     assert.ok(names(c).includes('integration-tests:not-needed'), names(c).join());
   });
 
+  it('a route inside a string, a template or a comment is not an endpoint; the real one beside them is (2026-09-05)', async () => {
+    // Control pair for the one-stripper migration: the match position is
+    // judged against BaseModule._maskedLines, which sees a template literal
+    // and a block comment that span lines — the per-line quote counter it
+    // replaced could not.
+    w('src/server.js', [
+      "const doc = \"app.get('/in-string', h)\";",
+      'const tpl = `',
+      "  app.get('/in-template', h)",
+      '`;',
+      '/* example:',
+      "   app.get('/in-comment', h)",
+      '*/',
+      "app.get('/real', h);",
+      '',
+    ].join('\n'));
+    const c = await run();
+    assert.deepStrictEqual(names(c).filter((n) => n.startsWith('integration:untested:')), ['integration:untested:GET:/real']);
+  });
+
   it('POSITIVE CONTROL for the walk: a tests/integration/*.test.ts that names the route IS found and the route is not "untested"', async () => {
     w('src/app.js', "const app = require('express')();\napp.post('/users', (req, res) => res.json(req.body));\n");
     w('tests/integration/users.test.js', "test('POST /users', async () => { await request(app).post('/users'); });\n");

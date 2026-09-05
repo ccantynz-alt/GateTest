@@ -272,3 +272,30 @@ describe('AsyncIterationModule — summary', () => {
     assert.match(s.message, /file\(s\).*issue\(s\)/);
   });
 });
+
+// ── the one stripper (2026-09-05, Doctrine §4): the private per-line quote
+// counter this module carried could not see a template continuation line or a
+// block comment that opened earlier, and read comment text as code ──
+describe('AsyncIterationModule — matches on the masked line', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ai-strip-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('an async callback inside a string, a template or a comment is not an async iteration; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/a.ts', [
+      'const doc = "items.forEach(async (x) => { await x; });";', // 1 string
+      'const tpl = `',                                             // 2
+      '  items.filter(async (x) => x.ok);',                        // 3 template continuation
+      '`;',                                                        // 4
+      '/* pattern to avoid:',                                      // 5
+      '   items.reduce(async (acc, x) => acc + x, 0);',            // 6 block comment
+      ' */',                                                       // 7
+      'async function go(items) {',
+      '  items.forEach(async (x) => { await x; });',               // 9 real
+      '}',
+    ].join('\n'));
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => c.passed === false).map((c) => c.name);
+    assert.deepStrictEqual(names, ['async-iteration:async-foreach:src/a.ts:9']);
+  });
+});

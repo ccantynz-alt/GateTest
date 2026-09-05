@@ -64,6 +64,21 @@ describe('recall — NoSQL injection and template auto-escaping', () => {
     assert.strictEqual(failedNames(r, /NoSQL injection/).length, 0);
   });
 
+  it('NEGATIVE: a $where inside a block comment is not reported; the live one after it is (NodeGoat allocations-dao.js:73 / :78, 2026-09-05)', async () => {
+    write(tmp, 'app/dao.js', [
+      '/*',
+      '  return {$where: `this.userId == ${parsedUserId} && this.stocks > ${parsedThreshold}`};',
+      '*/',
+      'return { $where: `this.userId == ${parsedUserId} && this.stocks > \'${threshold}\'` };',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(
+      failedNames(r, /NoSQL injection/).map((n) => n.replace(/^.*dao\.js:/, '')),
+      ['4'],
+    );
+  });
+
   it('POSITIVE: autoescape disabled flags; NEGATIVE: enabled does not', async () => {
     write(tmp, 'server.js', 'swig.setDefaults({ autoescape: false });\n');
     write(tmp, 'other.js', 'swig.setDefaults({ autoescape: true });\n');

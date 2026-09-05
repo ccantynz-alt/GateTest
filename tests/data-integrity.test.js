@@ -111,6 +111,25 @@ describe('data-integrity — SQL injection: strings vs code, single vs multi-lin
     assert.strictEqual(found.length, 1, 'multi-line queries are the common formatting');
   });
 
+  it('a query inside a string, a template or a comment is not flagged; the real one beside them is (2026-09-05)', async () => {
+    // Control pair for the one-stripper migration: the match START is judged
+    // against BaseModule._maskedLines, which sees a template literal and a
+    // block comment that span lines — the per-line quote counter it replaced
+    // could not, and the block-comment line below was a live finding.
+    const found = await scan('src/db.js', [
+      'const doc = "db.query(`SELECT * FROM u WHERE id = ${req.query.id}`)";',
+      'const tpl = `',
+      "  db.query('SELECT * FROM u WHERE id = ${req.query.id}')",
+      '`;',
+      '/* example:',
+      '   db.query(`SELECT * FROM u WHERE id = ${req.query.id}`)',
+      '*/',
+      'db.query(`SELECT * FROM u WHERE id = ${req.query.id}`);',
+      '',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => [f.name, f.line]), [['data:sql-injection:src/db.js:8', 8]]);
+  });
+
   it('does NOT flag a parameterised query', async () => {
     const found = await scan('src/safe.js', [
       'async function safe(db, req) {',
@@ -164,6 +183,22 @@ describe('data-integrity — PII: a request body is not a leak, a log is', () =>
       '}',
     ].join('\n'));
     assert.deepStrictEqual(found.map((f) => f.name), []);
+  });
+
+  it('a console.log(password) inside a string, a template or a comment is not a leak; the real one beside them is (2026-09-05)', async () => {
+    // Control pair for the one-stripper migration (see the SQL twin above).
+    const found = await scan('app/log.js', [
+      'const doc = "console.log(user.password)";',
+      'const tpl = `',
+      '  console.log(user.password)',
+      '`;',
+      '/* example:',
+      '   console.log(user.password)',
+      '*/',
+      'console.log(user.password);',
+      '',
+    ].join('\n'));
+    assert.deepStrictEqual(found.map((f) => [f.name, f.line]), [['data:pii:PII in logs:app/log.js', 8]]);
   });
 
   it('POSITIVE: the same payload written to a LOG still fires', async () => {

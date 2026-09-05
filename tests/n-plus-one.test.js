@@ -363,3 +363,51 @@ describe('NPlusOneModule — what a loop of queries is NOT', () => {
     assert.strictEqual(by['src/seed.ts'].severity, 'error');
   });
 });
+
+describe('NPlusOneModule — one stripper (control pair)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-npo-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a query in a loop inside a string, a template or a comment is not a query; the real one beside them is (2026-09-05)', async () => {
+    write(tmp, 'src/users.js', [
+      'const doc = "for (const u of users) { await prisma.user.findUnique({ where: { id: u.id } }); }";',
+      'const tpl = `for (const u of users) {',
+      '  await prisma.user.findUnique({ where: { id: u.id } });',
+      '}`;',
+      '/*',
+      'for (const u of users) {',
+      '  await prisma.user.findUnique({ where: { id: u.id } });',
+      '}',
+      '*/',
+      'async function real(users) {',
+      '  for (const u of users) {',
+      '    await prisma.user.findUnique({ where: { id: u.id } });',
+      '  }',
+      '}',
+      'module.exports = { doc, tpl, real };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^n-plus-one:/.test(c.name));
+    assert.deepStrictEqual(
+      flagged.map((c) => c.name),
+      ['n-plus-one:query-in-loop:src/users.js:12'],
+      'only the real query on line 12 sits inside a loop',
+    );
+    assert.strictEqual(flagged[0].loopStart, 11);
+  });
+
+  it('still reads the knex table name from inside the quotes — db("users").where(...) in a loop is reported (2026-09-05)', async () => {
+    write(tmp, 'src/knex.js', [
+      'async function real(ids, db) {',
+      '  for (const id of ids) {',
+      "    await db('users').where({ id }).first();",
+      '  }',
+      '}',
+      'module.exports = { real };',
+    ].join('\n'));
+    const r = await run(tmp);
+    const flagged = r.checks.filter((c) => !c.passed && /^n-plus-one:/.test(c.name));
+    assert.deepStrictEqual(flagged.map((c) => c.name), ['n-plus-one:query-in-loop:src/knex.js:3']);
+  });
+});

@@ -6,6 +6,7 @@
  */
 
 const BaseModule = require('./base-module');
+const { stripShellLiterals } = require('../core/source-strip');
 const { collectShellScripts } = require('../core/shell-files');
 const fs   = require('fs');
 const path = require('path');
@@ -19,6 +20,10 @@ const OUTCOME_TEST_RE = /(?:^|\s|!)(?:\[\[?\s+!?\s*-[a-zA-Z]\s|test\s+!?\s*-[a-z
 // This module's private list used to be `['.sh', '.bash']` — no `.zsh`, and
 // `bin/deploy` with `#!/usr/bin/env bash` on line one was never opened.
 const YAML_EXTS = ['.yml', '.yaml'];
+// `run:` as a YAML key (optionally a list item), and any YAML key / list item —
+// the two shapes `_isInRunBlock` distinguishes when walking out of a block.
+const RUN_KEY_RE = /^\s*(?:-\s+)?run:(?:\s|$)/;
+const YAML_STRUCTURAL_RE = /^\s*(?:-\s+)?[A-Za-z_][\w.-]*:(?:\s|$)|^\s*-\s/;
 
 /**
  * Commands that use a NON-ZERO EXIT AS AN ANSWER, not as a failure report.
@@ -84,46 +89,6 @@ const RULES = [
   },
 ];
 
-/**
- * Blank out the CONTENTS of quoted strings and of trailing `#` comments while
- * preserving length, so every pattern below matches shell CODE only.
- *
- * `$( ... )` re-enters code even inside double quotes, because it is code —
- * `NODE_BIN="$(command -v node || true)"` must still be analysed.
- *
- * Without this: a comment explaining why a `|| true` is safe was itself a
- * finding, `echo "|| true"` was a finding, and a jq program containing a
- * literal `|` broke the pipeline splitter below.
- */
-function maskNonCode(raw) {
-  const stack = [];
-  let out = '';
-  for (let i = 0; i < raw.length; i++) {
-    const c = raw[i];
-    const ctx = stack[stack.length - 1];
-    if (ctx === 'sq') {                       // single quotes: nothing expands
-      out += c === "'" ? (stack.pop(), c) : ' ';
-      continue;
-    }
-    if (ctx === 'dq') {                       // double quotes: only $( ) is code
-      if (c === '\\' && i + 1 < raw.length) { out += '  '; i++; continue; }
-      if (c === '"') { stack.pop(); out += c; continue; }
-      if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
-      out += ' ';
-      continue;
-    }
-    if (c === "'") { stack.push('sq'); out += c; continue; }
-    if (c === '"') { stack.push('dq'); out += c; continue; }
-    if (c === '$' && raw[i + 1] === '(') { stack.push('cmd'); out += '$('; i++; continue; }
-    if (c === ')' && ctx === 'cmd') { stack.pop(); out += c; continue; }
-    if (c === '#' && stack.length === 0 && (i === 0 || /[\s;&|(]/.test(raw[i - 1]))) {
-      out += ' '.repeat(raw.length - i);
-      break;
-    }
-    out += c;
-  }
-  return out;
-}
 
 /**
  * The head command of the pipeline that `|| true` actually guards — i.e. whose
@@ -151,7 +116,7 @@ function guardedCommandHead(masked) {
 }
 
 function isTolerantSwallow(rawLine) {
-  const head = guardedCommandHead(maskNonCode(rawLine));
+  const head = guardedCommandHead(stripShellLiterals(rawLine));
   return head !== null && TOLERANT_EXIT.has(head);
 }
 
@@ -179,7 +144,10 @@ function isCoverageScript(name) {
  * the step, so the `|| true` is what lets the next lines read `$VAR` at all.
  * Matched on masked code so a quoted string cannot look like an assignment.
  */
-const CAPTURE_SWALLOW_RE = /^\s*(?:export\s+|local\s+)?([A-Za-z_][A-Za-z0-9_]*)=\$\(.*\)\s*\|\|\s*true\b/;
+// Both placements of the `|| true` — after the substitution and inside it
+// (`origin_url=$(git remote get-url "$R" 2>/dev/null || true)`, ktor's
+// switch-base-branch.sh:133) — trade the exit status for the output.
+const CAPTURE_SWALLOW_RE = /^\s*(?:export\s+|local\s+)?([A-Za-z_][A-Za-z0-9_]*)=\$\((?:.*\)\s*\|\|\s*true\b|.*\|\|\s*true\s*\))/;
 
 class BashSafetyModule extends BaseModule {
   constructor() { super('bashSafety', 'Bash / Shell Error-Swallow Detector'); }
@@ -229,7 +197,7 @@ class BashSafetyModule extends BaseModule {
 
       // Match against CODE only — a comment or a quoted string that happens to
       // contain "|| true" is documentation, not a swallowed error.
-      const codeLine = maskNonCode(rawLine);
+      const codeLine = stripShellLiterals(rawLine);
 
       for (const rule of RULES) {
         if (!rule.pattern.test(codeLine)) continue;
@@ -263,7 +231,7 @@ class BashSafetyModule extends BaseModule {
     for (const [name, cmd] of Object.entries(scripts)) {
       if (typeof cmd !== 'string') continue;
       for (const rule of RULES) {
-        if (rule.pattern.test(maskNonCode(cmd))) {
+        if (rule.pattern.test(stripShellLiterals(cmd))) {
           if (rule.swallowGuard && isTolerantSwallow(cmd)) continue;
           const coverage = rule.swallowGuard && isCoverageScript(name);
           result.addCheck(`bash-safety:${rule.code}:package.json:${name}`, false, {
@@ -294,7 +262,7 @@ class BashSafetyModule extends BaseModule {
       // Stop at the next YAML step — a later step's `$?` proves nothing here.
       if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(raw)) break;
       if (/\$\?/.test(raw)) return true;
-      if (/\bset\s+-[a-zA-Z]*e/.test(maskNonCode(raw))) return true;
+      if (/\bset\s+-[a-zA-Z]*e/.test(stripShellLiterals(raw))) return true;
     }
     return false;
   }
@@ -312,7 +280,7 @@ class BashSafetyModule extends BaseModule {
    * assignment is matched against masked code. Stops at the next YAML step.
    */
   _capturedForInspection(lines, idx, mode) {
-    const m = CAPTURE_SWALLOW_RE.exec(maskNonCode(lines[idx]));
+    const m = CAPTURE_SWALLOW_RE.exec(stripShellLiterals(lines[idx]));
     if (!m) return false;
     const ref = new RegExp(`\\$\\{?${m[1]}\\b`);
     const limit = Math.min(lines.length, idx + 60);
@@ -339,7 +307,7 @@ class BashSafetyModule extends BaseModule {
     for (let i = idx + 1; i < lines.length && seen < 3; i++) {
       const raw = lines[i];
       if (mode === 'yaml' && /^\s*-\s+(name|uses|run|id|if|with|env):/.test(raw)) break;
-      const code = maskNonCode(raw).trim();
+      const code = stripShellLiterals(raw).trim();
       if (!code) continue;
       seen++;
       if (OUTCOME_TEST_RE.test(code)) return true;
@@ -348,11 +316,30 @@ class BashSafetyModule extends BaseModule {
   }
 
   _isInRunBlock(lines, idx) {
-    // Scan backwards to find if this line is under a "run:" key
-    for (let i = idx; i >= Math.max(0, idx - 20); i--) {
-      const l = lines[i].trim();
-      if (/^-?\s*run:\s*/.test(l)) return true;
-      if (/^\w/.test(l) && !l.startsWith('-') && i < idx) break;
+    // A `run:` block scalar (`run: |`, `run: >`) owns every following line
+    // indented deeper than the `run:` key. Walk upward through lines at least
+    // as deep as the shallowest line seen so far: a shell line shallower than
+    // us (the `if` our `echo` sits in) is still ours; a YAML key or list item
+    // shallower than us ends the block — it is `run:` or it is something else.
+    //
+    // Until 2026-09-05 the walk broke at the first line above that began
+    // with a word character, so only the FIRST command of every multi-line
+    // run block was scanned; a `|| true` on line two of a step was never
+    // seen (this repo's dogfood workflow had two, and its own `ci.yml` was
+    // read as clean). Doctrine §1 — the rule reported nothing and looked
+    // like a pass.
+    const cur = lines[idx] || '';
+    if (!cur.trim()) return false;
+    if (RUN_KEY_RE.test(cur)) return true;          // `run: cmd || true` on one line
+    let minIndent = cur.match(/^\s*/)[0].length;
+    for (let i = idx - 1; i >= 0; i--) {
+      const l = lines[i];
+      if (!l.trim()) continue;
+      const indent = l.match(/^\s*/)[0].length;
+      if (indent >= minIndent) continue;
+      minIndent = indent;
+      if (RUN_KEY_RE.test(l)) return /^\s*(?:-\s+)?run:\s*[|>]/.test(l);
+      if (YAML_STRUCTURAL_RE.test(l)) return false;   // a shallower key that is not `run:`
     }
     return false;
   }

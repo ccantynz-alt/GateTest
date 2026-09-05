@@ -571,3 +571,44 @@ describe('PromptSafetyModule — every provider opens the file, every call shape
     assert.ok(scanning && /1 AI/.test(scanning.message), JSON.stringify(scanning));
   });
 });
+
+describe('PromptSafetyModule — one stripper: the masked line decides', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ps-mask-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('a public API key or a retired model inside a string, a template or a comment is not a finding; the real ones beside them are (2026-09-05)', async () => {
+    write(tmp, 'src/llm.js', [
+      'import OpenAI from "openai";',
+      'const doc = "model: \'text-davinci-003\'";',
+      'const tpl = `',
+      '  const key = process.env.NEXT_PUBLIC_OPENAI_API_KEY;',
+      '  model: "text-davinci-003",',
+      '`;',
+      '/* a block comment that starts on this line',
+      '   process.env.NEXT_PUBLIC_OPENAI_API_KEY',
+      '   model: "text-davinci-003" */',
+      'const key = process.env.NEXT_PUBLIC_OPENAI_API_KEY;',
+      'const model = "text-davinci-003";',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const keys = r.checks.filter((c) => c.name.startsWith('prompt-safety:public-api-key:'));
+    assert.deepStrictEqual(keys.map((c) => c.line), [10]);
+    const models = r.checks.filter((c) => c.name.startsWith('prompt-safety:deprecated-model:'));
+    assert.deepStrictEqual(models.map((c) => c.line), [11]);
+  });
+
+  it('Python keeps the per-line guard: a retired model nested in a string arg is quiet, the real one fires, and an apostrophe in a # comment does not blank the next line (2026-09-05)', async () => {
+    write(tmp, 'src/llm.py', [
+      'import openai',
+      'write("a.py", "model = \'text-davinci-003\'")',
+      "# don't do this",
+      'model = "text-davinci-003"',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const models = r.checks.filter((c) => c.name.startsWith('prompt-safety:deprecated-model:'));
+    assert.deepStrictEqual(models.map((c) => c.line), [4]);
+  });
+});
