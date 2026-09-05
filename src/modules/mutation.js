@@ -17,51 +17,43 @@ const path = require('path');
 const { MUTATIONS, shouldSkipLine } = require('../core/mutation-engine');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Crash-safe restore.
+// Never write to the user's tree (the Fifty, move 20).
 //
-// This module writes a mutant into the user's REAL source file, runs their
-// tests against it, and restores the original in a `finally`. `finally`
-// covers a thrown exception. It does not cover the process being killed —
-// and that is the common case, not the exotic one: a CI step that times out
-// gets SIGTERM, a developer who hits Ctrl-C sends SIGINT, and either lands
-// inside the window where the file on disk is corrupt.
+// This module used to write each mutant into the user's REAL source file,
+// run their tests, and restore the original — with signal handlers to
+// replay the restore on SIGINT/SIGTERM. Observed three times in one session
+// before those handlers existed: `a - b` left as `a + b`, a `+` flipped
+// inside a string literal, a mutant left in a config file. Handlers cannot
+// cover SIGKILL or a power cut, and a scanner that can leave your working
+// tree corrupt under any circumstance is worse than one that misses a bug.
 //
-// Observed three times in one session: `a - b` left as `a + b` in
-// arena-scaffold/src/math.js, a `+` flipped to `-` inside a string literal
-// in arena-scaffold/scripts/inject-bug.js, and a mutant in
-// benchmarks/bench-target/config/default.js. A scanner that silently edits
-// your working tree is worse than one that misses a bug.
-//
-// So every in-flight mutation is registered here and replayed on any exit
-// path Node can observe. SIGKILL still cannot be caught — nothing can fix
-// that — but SIGTERM/SIGINT/SIGHUP and a plain process.exit() now restore.
+// So mutants are now written into a SANDBOX COPY of the tree
+// (src/core/tree-copy.js: every file except the walk-excluded dirs,
+// node_modules symlinked) and the suite runs there. The user's files are
+// never opened for writing. What survives a kill is a temp directory,
+// removed on every exit path Node can observe and harmless if not.
 // ─────────────────────────────────────────────────────────────────────────────
-const IN_FLIGHT = new Map(); // absPath -> original contents
-
-function restoreAllInFlight() {
-  for (const [file, original] of IN_FLIGHT) {
-    // On an exit path there is nowhere left to report to, and one failed
-    // restore must not stop us restoring the remaining files.
-    try { fs.writeFileSync(file, original); } catch { /* error-ok: exit path, best effort */ }
-  }
-  IN_FLIGHT.clear();
+const { copyTreeForSandbox, removeTree } = require('../core/tree-copy');
+const SANDBOXES = new Set();
+let cleanupInstalled = false;
+function removeAllSandboxes() {
+  for (const d of SANDBOXES) removeTree(d);
+  SANDBOXES.clear();
 }
-
-let handlersInstalled = false;
-function installRestoreHandlers() {
-  if (handlersInstalled) return;
-  handlersInstalled = true;
-  process.on('exit', restoreAllInFlight);
+function installSandboxCleanup() {
+  if (cleanupInstalled) return;
+  cleanupInstalled = true;
+  process.on('exit', removeAllSandboxes);
+  // A signal does not emit 'exit' unless something handles it: without
+  // these, a SIGTERMed scan (a CI step past its limit, a Ctrl-C) leaves the
+  // copy behind. Harmless to the user's tree either way — this is tidiness,
+  // not safety — but tidiness is cheap.
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
     try {
       process.on(sig, () => {
-        restoreAllInFlight();
-        // Re-raise with the conventional exit code so callers still see
-        // that we were signalled rather than that we exited cleanly.
+        removeAllSandboxes();
         process.exit(sig === 'SIGINT' ? 130 : 143);
       });
-      // SIGBREAK is Windows-only and SIGHUP is absent on some platforms; an
-      // unknown signal name is expected here, not a failure.
     } catch { /* error-ok: platform does not have this signal */ }
   }
 }
@@ -137,12 +129,41 @@ class MutationModule extends BaseModule {
     // "Mutation score: 100% (3/3 killed, 0 survived)", all three from
     // timeouts. That is the most dangerous number this engine can print: a
     // team reads it as "our tests are bulletproof".
+    // The sandbox: mutants and every test run live in a copy; the user's
+    // tree is never opened for writing. A copy that cannot be made is
+    // reported as NOT RUN — never a silent fall back to mutating in place.
+    const sandbox = copyTreeForSandbox(projectRoot, { prefix: 'gt-mutate-' });
+    if (sandbox.error) {
+      result.addCheck('mutation:sandbox', true, {
+        severity: 'info',
+        message: `Not run — could not copy the tree into a sandbox (${sandbox.error}). Your working tree was not touched.`,
+        suggestion: 'Exclude build output from the tree, or run mutation testing in CI where the checkout is smaller',
+      });
+      return;
+    }
+    installSandboxCleanup();
+    SANDBOXES.add(sandbox.dir);
+    try {
+      await this._runInSandbox(result, { projectRoot, sandbox, testCmd, sourceFiles, mutationConfig, threshold, maxMutants });
+    } finally {
+      removeTree(sandbox.dir);
+      SANDBOXES.delete(sandbox.dir);
+    }
+  }
+
+  async _runInSandbox(result, { projectRoot, sandbox, testCmd, sourceFiles, mutationConfig, threshold, maxMutants }) {
+    const cwd = sandbox.dir;
+    result.addCheck('mutation:sandbox', true, {
+      severity: 'info',
+      message: `Mutants are applied to a sandbox copy (${sandbox.files} files; node_modules linked), never to your working tree`,
+    });
+
     const baselineStart = Date.now();
-    const baseline = this._exec(testCmd, { cwd: projectRoot, timeout: 120000 });
+    const baseline = this._exec(testCmd, { cwd, timeout: 120000 });
     const baselineMs = Date.now() - baselineStart;
     if (baseline.exitCode !== 0) {
       result.addCheck('mutation:baseline', true, {
-        message: 'Skipped — the suite does not pass, so mutants cannot be measured (see unitTests for the failure)',
+        message: 'Skipped — the suite does not pass in the sandbox copy, so mutants cannot be measured (see unitTests for the failure)',
         severity: 'info',
         suggestion: 'Fix failing tests first, then re-run mutation testing',
       });
@@ -214,11 +235,10 @@ class MutationModule extends BaseModule {
           // running a full set of mutants past the deadline.
           if (Date.now() > deadline) { budgetExhausted = true; break; }
 
+          const target = path.join(cwd, relPath);
           try {
-            installRestoreHandlers();
-            IN_FLIGHT.set(file, original);
-            fs.writeFileSync(file, mutatedSource);
-            const testResult = this._exec(testCmd, { cwd: projectRoot, timeout: mutantTimeout });
+            fs.writeFileSync(target, mutatedSource);
+            const testResult = this._exec(testCmd, { cwd, timeout: mutantTimeout });
 
             if (testResult.timedOut) {
               // We learned nothing. The suite did not finish, so it neither
@@ -239,9 +259,8 @@ class MutationModule extends BaseModule {
               });
             }
           } finally {
-            // Always restore original
-            fs.writeFileSync(file, original);
-            IN_FLIGHT.delete(file);
+            // Put the sandbox copy back so the next mutant starts clean.
+            fs.writeFileSync(target, original);
           }
 
           // Only test first match per mutation per file to keep runtime reasonable

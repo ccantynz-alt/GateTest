@@ -586,3 +586,22 @@ export function Handler(requestPayload: Payload) {
     );
   });
 });
+
+describe('UndefinedRefModule — two declarations on one line (PR #435 bot finding)', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-uref2-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('NEGATIVE: `let tmp; let eventFile;` declares both — the second is not "never declared"', async () => {
+    write(tmp, 'src/a.js', 'let tmp; let eventFile;\nfunction go() { tmp = 1; eventFile = tmp + 1; return eventFile; }\nmodule.exports = go;\n');
+    const r = await run(tmp);
+    const bad = r.checks.filter((c) => !c.passed && /eventFile|\btmp\b/.test(c.message || ''));
+    assert.strictEqual(bad.length, 0, bad.map((c) => c.message).join('\n'));
+  });
+
+  it('POSITIVE: a name declared nowhere on that line is still caught (the Crontech shape)', async () => {
+    write(tmp, 'src/b.ts', 'let tmp; let other;\nconst app = createSomething({\n  tenantCapResolver: neverDeclaredAnywhere,\n});\nexport { app, tmp, other };\n');
+    const r = await run(tmp);
+    assert.ok(r.checks.some((c) => !c.passed && /neverDeclaredAnywhere/.test(c.name || '')), r.checks.map((c) => c.name).join('\n'));
+  });
+});

@@ -18,6 +18,9 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # Merge queues: the same diff-scoped gate runs on each group, judged
+  # against the queue's base (src/core/diff-base.js reads the event payload).
+  merge_group:
 
 permissions:
   contents: read
@@ -143,7 +146,7 @@ jobs:
       # render as inline annotations on the PR diff (red squiggles on the
       # offending line) instead of being buried in the run log.
       - name: GateTest — Quick (diff-mode) on PRs
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GATETEST_ADMIN: ${{ steps.admin_detect.outputs.is_admin == 'true' && '1' || '' }}

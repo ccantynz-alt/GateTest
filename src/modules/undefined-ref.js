@@ -381,7 +381,11 @@ class UndefinedRefModule extends BaseModule {
     // assignment. `let X;` (declaration-only) is a common pattern that
     // earlier drafts missed because the regex required `[:=]` after the
     // identifier.
-    for (const m of src.matchAll(/(?:^|\n)\s*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g)) {
+    // Anchored on a line start OR a `;` on the same line: `let tmp; let
+    // eventFile;` declares two names, and the second was never harvested —
+    // three "used but never declared" alerts on tests/diff-base.test.js
+    // (our own scanner on PR #435, 2026-09-05).
+    for (const m of src.matchAll(/(?:^|\n|;)\s*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g)) {
       scope.add(m[1]);
     }
     // Multi-binding declarations: `let a, b, c;` AND the initialised,
@@ -394,7 +398,7 @@ class UndefinedRefModule extends BaseModule {
     // blocking errors on one NodeGoat chart file (2026-08-18 audit). Walk
     // forward from the keyword balancing brackets/strings to the terminating
     // `;` at depth 0, then split declarators on top-level commas.
-    for (const m of src.matchAll(/(?:^|\n)[ \t]*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+/g)) {
+    for (const m of src.matchAll(/(?:^|\n|;)[ \t]*(?:export\s+)?(?:declare\s+)?(?:const|let|var)\s+/g)) {
       const start = m.index + m[0].length;
       const decl = UndefinedRefModule._readDeclaration(src, start);
       if (!decl) continue;

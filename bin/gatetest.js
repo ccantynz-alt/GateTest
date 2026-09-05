@@ -136,6 +136,11 @@ const HELP = `
     --watch            Watch for file changes and re-scan continuously
     --sarif            Output results in SARIF format (for GitHub Security)
     --junit            Output results in JUnit XML format (for CI)
+    --offline          Air-gapped mode: nothing leaves this machine. No
+                       telemetry upload, no AI calls (--fix / --auto-pr are
+                       refused with a message, not silently skipped), no
+                       live API ping from --doctor. The summary and the signed
+                       provenance record it. Same as GATETEST_OFFLINE=1.
     --compliance       Write the compliance evidence pack: findings filed
                        under OWASP Top 10 / SOC 2 / CIS Controls, control by
                        control, with the raw results and the signed
@@ -289,6 +294,10 @@ async function main() {
     process.exit(code || 0);
   }
   if (first === 'fix') {
+    if (require('../src/core/offline').isOffline()) {
+      console.error('[GateTest] offline mode: `gatetest fix` needs the Anthropic API. Unset GATETEST_OFFLINE to use it.');
+      process.exit(2);
+    }
     const projectRoot = (() => {
       const pidx = rawArgs.indexOf('--project');
       return pidx !== -1 ? rawArgs[pidx + 1] : process.cwd();
@@ -305,6 +314,16 @@ async function main() {
   // either: an ignored `--report-only` blocks a build nobody meant to gate,
   // and an ignored `--strict` is a green that cannot turn red.
   for (const line of describeArgProblems(args)) console.error(line);
+  // --offline: one switch, recorded everywhere (src/core/offline.js). The
+  // AI-backed paths need api.anthropic.com, so they are refused out loud
+  // rather than run against a network that is not there.
+  const { isOffline, enableOffline } = require('../src/core/offline');
+  if (args.offline) enableOffline();
+  if (isOffline() && (args.fix || args.autoPr)) {
+    console.error('[GateTest] offline mode: --fix / --auto-pr need the Anthropic API and are not run. The scan continues without them.');
+    args.fix = false;
+    args.autoPr = false;
+  }
   // Ignore stale "scan" token if it somehow re-appears later.
   if (args._subcommand === 'scan') delete args._subcommand;
   // (KNOWN_SUBCOMMANDS export only used to keep the route table in one place.)
@@ -335,7 +354,7 @@ async function main() {
     const { runDoctor, renderDoctor } = require('../src/core/doctor');
     const result = await runDoctor({
       projectRoot,
-      probeAnthropic: !args.doctorQuick,
+      probeAnthropic: !args.doctorQuick && !isOffline(),
     });
     console.log(renderDoctor(result));
     process.exit(result.summary.bad > 0 ? 1 : 0);
@@ -397,12 +416,17 @@ async function main() {
     return;
   }
 
-  // Resolve the incremental base ref for --since / --pr
+  // Resolve the incremental base ref for --since / --pr. In a merge queue
+  // (GITHUB_EVENT_NAME=merge_group) the base is the queue's, named in the
+  // event payload — not GITHUB_BASE_REF, which is empty there (the Fifty,
+  // move 27). Everything else the modules decide through src/core/diff-base.js.
+  const { mergeGroupBase } = require('../src/core/diff-base');
   const incrementalSince = args.since
     || (args.pr
-      ? (process.env.GITHUB_BASE_REF
-          ? `origin/${process.env.GITHUB_BASE_REF}`
-          : 'origin/main')
+      ? ((mergeGroupBase() || [])[0]
+          || (process.env.GITHUB_BASE_REF
+            ? `origin/${process.env.GITHUB_BASE_REF}`
+            : 'origin/main'))
       : undefined);
 
   const gatetest = new GateTest(projectRoot, {

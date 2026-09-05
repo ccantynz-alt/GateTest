@@ -409,15 +409,23 @@ describe('fakeFixDetector — diff base on a multi-commit pull request', () => {
     assert.equal(skipped(await run(repo(), {}, { GITHUB_BASE_REF: 'main' })), true);
   });
 
-  it('CONTROL: with no base the module reads the last commit only — the hole this closes', async () => {
-    assert.equal(skipped(await run(repo(), {})), false);
+  it('with no --pr at all, origin/main still decides (src/core/diff-base.js) — the .skip is found', async () => {
+    assert.equal(skipped(await run(repo(), {})), true);
   });
 
-  it('CONTROL: an unfetched base ref falls through instead of reporting nothing', async () => {
+  it('CONTROL: with NO base anywhere the module can only read the last commit — the hole the resolver closes', async () => {
+    const tmp = repo();
+    const git = (...a) => execFileSync('git', a, { cwd: tmp, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    git('branch', '-D', 'main');
+    assert.equal(skipped(await run(tmp, {})), false);
+  });
+
+  it('CONTROL: an unfetched base ref falls through to origin/main instead of reporting nothing', async () => {
     const names = await run(repo(), { incrementalSince: 'origin/no-such-branch' });
     assert.ok(names.includes('fake-fix:scanning'), names.join(', '));
     assert.ok(!names.includes('fake-fix:no-diff'), names.join(', '));
-    assert.equal(skipped(names), false, 'the fallback is the last commit, which is innocent');
+    assert.equal(skipped(names), true);
   });
 });
 
