@@ -10,8 +10,12 @@
  *      on the Anthropic client).
  *
  * Detection:
- *   - Cross-reference every bare `import` / `require` against package.json
- *     dependencies + devDependencies. Unknown packages = error.
+ *   - Cross-reference every package import against package.json
+ *     dependencies + devDependencies. Unknown packages = error. The imports
+ *     come from the one import graph (src/core/import-graph.js `externals`):
+ *     the same statements, the same masked text and the same alias /
+ *     workspace resolution that importCycle and deadCode read — this module
+ *     no longer keeps its own harvester or its own tsconfig `paths` reader.
  *   - Scan for known-hallucinated method shapes on popular library objects.
  *   - AI engine (Claude) analyses the diff for invented API calls when
  *     ANTHROPIC_API_KEY is set.
@@ -24,7 +28,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { workspacePackageNames } = require('../core/workspaces');
-const { stripStringsAndComments } = require('../core/source-strip');
+const { buildImportGraph } = require('../core/import-graph');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
 
@@ -58,56 +62,19 @@ const HALLUCINATED_METHODS = [
   { re: /export\s+(?:const|function)\s+getInitialProps\b/, msg: '`getInitialProps` must be a static method on the component class, not a named export' },
 ];
 
-// ─── path alias prefixes that are always local or framework-virtual ──────────
-// These resolve to local files even though they look like bare specifiers.
+// ─── package-shaped prefixes that are conventionally local ───────────────────
+// A tsconfig / jsconfig `paths` alias that RESOLVES is already excluded by the
+// graph (`via: 'alias'`), and `@/`, `~/`, `#/`, `$app/` are not package-shaped
+// so never reach here. These are the scoped-looking conventions a project may
+// use without declaring them anywhere the resolver can read (a bundler alias
+// in webpack.config.js, a Vite `resolve.alias`).
 const PATH_ALIAS_PREFIXES = [
-  '@/', '~/', '#/', '$env/', '$app/', '$lib/', '@components/', '@utils/',
-  '@hooks/', '@store/', '@types/', '@assets/', '@pages/', '@layouts/',
-  '@lib/', // this repo's own tsconfig path alias (see website/tsconfig.json)
+  '@components/', '@utils/', '@hooks/', '@store/', '@types/', '@assets/',
+  '@pages/', '@layouts/', '@lib/',
 ];
 
-function isPathAlias(specifier, extraPrefixes) {
-  if (PATH_ALIAS_PREFIXES.some(p => specifier.startsWith(p))) return true;
-  return !!extraPrefixes && extraPrefixes.some(p => specifier.startsWith(p));
-}
-
-/**
- * The static list above only knows the COMMON alias conventions. A repo with
- * its own tsconfig `paths` (`"#internal/*"`, `"$core/*"`, `"app/*"`) had every
- * aliased import reported as a hallucinated package (2026-08-18 audit
- * residue). Read the repo's declared aliases and trust them.
- * Tolerant of JSONC (tsconfig allows comments and trailing commas).
- */
-function collectTsconfigAliasPrefixes(projectRoot) {
-  const prefixes = new Set();
-  const candidates = ['tsconfig.json', 'tsconfig.base.json', 'jsconfig.json'];
-  try {
-    for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
-      if (entry.isDirectory() && !['node_modules', '.git', '.next', 'dist'].includes(entry.name)) {
-        for (const c of ['tsconfig.json', 'jsconfig.json']) {
-          candidates.push(path.join(entry.name, c));
-        }
-      }
-    }
-  } catch { /* unreadable root — fall through with root-level candidates */ }
-  for (const rel of candidates) {
-    const full = path.join(projectRoot, rel);
-    let raw;
-    try { raw = fs.readFileSync(full, 'utf-8'); } catch { continue; }
-    const jsonish = raw
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/[^\n]*$/gm, '')
-      .replace(/,\s*([}\]])/g, '$1');
-    let parsed;
-    try { parsed = JSON.parse(jsonish); } catch { continue; }
-    const paths = parsed && parsed.compilerOptions && parsed.compilerOptions.paths;
-    if (!paths || typeof paths !== 'object') continue;
-    for (const key of Object.keys(paths)) {
-      const prefix = key.endsWith('*') ? key.slice(0, -1) : key;
-      if (prefix) prefixes.add(prefix);
-    }
-  }
-  return [...prefixes];
+function isPathAlias(specifier) {
+  return PATH_ALIAS_PREFIXES.some(p => specifier.startsWith(p));
 }
 
 // ─── common stdlib / well-known builtins (never flag these as unknown) ─────
@@ -145,11 +112,6 @@ function stripNodePrefix(specifier) {
   return specifier.startsWith('node:') ? specifier.slice(5) : specifier;
 }
 
-// prefixes that are always local
-function isLocalImport(specifier) {
-  return specifier.startsWith('.') || specifier.startsWith('/');
-}
-
 // bare package name (first path segment, strip @scope)
 function barePackage(specifier) {
   if (specifier.startsWith('@')) {
@@ -159,35 +121,23 @@ function barePackage(specifier) {
   return specifier.split('/')[0];
 }
 
-// ─── import harvester ─────────────────────────────────────────────────────
+// The DefinitelyTyped package that types `pkg`: `@types/pkg`, or
+// `@types/scope__name` for a scoped package. A type-only import of `pkg` is
+// satisfied by either — the emitted JS never loads `pkg` at all (trpc's
+// `import type { … } from 'aws-lambda'` next to `@types/aws-lambda`).
+function typesPackage(pkg) {
+  return pkg.startsWith('@') ? `@types/${pkg.slice(1).replace('/', '__')}` : `@types/${pkg}`;
+}
 
-// `[ \t]*`, not `\s*`: on the masked text a blanked doc comment is pure
-// whitespace, and `^\s*import` would start the match lines above the import.
-// The `d` flag gives the specifier group's own offsets, which is where the
-// raw text is read and which line the finding is on.
-const IMPORT_RE  = /^[ \t]*import\s+(?:.*?\s+from\s+)?['"]([^'"]+)['"]/gmd;
-const REQUIRE_RE = /(?:^|[^/])\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/gmd;
-
-// Harvested from the MASKED text — comments gone, string contents blanked,
-// every offset preserved (src/core/source-strip.js, the one definition of
-// where a string or comment begins and ends) — so an import that lives in a
-// comment or a fixture string is never an import. The specifier itself is
-// read back from the raw text at the same offsets. Before 2026-09-05 this
-// scanned raw text with a whole-line comment guard, so a trailing
-// `// import x = require('…')` after code was reported as a hallucinated
-// package named `…` — on our own ts-tokens.js.
-function harvestImports(content) {
-  const masked = stripStringsAndComments(content);
-  const imports = [];
-  for (const re of [IMPORT_RE, REQUIRE_RE]) {
-    re.lastIndex = 0;
-    let m;
-    while ((m = re.exec(masked)) !== null) {
-      const [start, end] = m.indices[1];
-      imports.push({ specifier: content.slice(start, end), index: start });
-    }
-  }
-  return imports;
+// Virtual modules a framework provides at build time under its own scope.
+// `@docusaurus/Link` is not on npm; declaring `@docusaurus/core` is what
+// makes it resolvable (module-type-aliases). Keyed by the specifier prefix,
+// valued by the package whose presence in the manifest provides it.
+const PROVIDED_BY = [
+  ['@docusaurus/', '@docusaurus/core'],
+];
+function providedBy(specifier, knownDeps) {
+  return PROVIDED_BY.some(([prefix, provider]) => specifier.startsWith(prefix) && knownDeps.has(provider));
 }
 
 // ─── module ────────────────────────────────────────────────────────────────
@@ -308,44 +258,54 @@ class AiHallucinationDetector extends BaseModule {
     // dir -> deps visible from it. Populated lazily by _depsForDir.
     const depsCache = new Map();
 
-    // The repo's own declared path aliases (tsconfig/jsconfig `paths`).
-    const repoAliasPrefixes = collectTsconfigAliasPrefixes(projectRoot);
-
+    // 1. Unknown package imports — read from the one import graph. A
+    // specifier that resolved to a workspace package or through a declared
+    // alias is a real file in this repo, not a package to look up; what is
+    // left is what the resolver could not place. The graph reads the masked
+    // source (src/core/source-strip.js), so an import inside a comment or a
+    // fixture string never reaches here. (History: this module had NO string
+    // guard — one of the unguarded modules KI #77 recorded — and fixture
+    // strings alone produced 47 findings on this repo; the column guard that
+    // replaced it missed trailing comments; the masked-text harvester that
+    // replaced THAT was a second copy of the graph's, with its own alias
+    // reader, and could not see `export … from 'pkg'`.)
+    // The file set stays this module's (`_collectFiles`, Doctrine §4: which
+    // files a module sees has one home); the graph answers what each imports.
+    // A file the module sees but the graph never read — its walker skips
+    // dot-directories, and a file over its size cap — is NOT CHECKED, and
+    // the summary says so rather than passing it in silence.
+    const graph = buildImportGraph({ projectRoot });
+    const notRead = [];
     for (const file of files) {
       const rel = path.relative(projectRoot, file);
       if (hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')) continue;
+      const specs = graph.externals.get(file);
+      if (!specs || graph.skipped.has(file)) { notRead.push(rel); continue; }
+      if (specs.size === 0) continue;
 
       // Nearest-manifest resolution, so a nested package's own dependencies count.
       const knownDeps = this._depsForDir(path.dirname(file), projectRoot, depsCache, rootDeps);
+      let lines = null;
 
-      let content;
-      try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
-
-      const lines = content.split(/\r?\n/);
-
-      // 1. Unknown package imports
-      const imports = harvestImports(content);
-      for (const { specifier, index } of imports) {
-        if (isLocalImport(specifier)) continue;
-        if (isPathAlias(specifier, repoAliasPrefixes)) continue; // @/utils, ~/components, repo tsconfig paths
+      for (const [specifier, { line: lineNo, via, typeOnly }] of specs) {
+        if (via !== 'unresolved') continue;
+        if (isPathAlias(specifier)) continue;
         const pkg = barePackage(specifier);
         if (BUILT_IN_MODULES.has(stripNodePrefix(pkg)) || BUILT_IN_MODULES.has(stripNodePrefix(specifier))) continue;
         if (knownDeps.has(pkg)) continue;
         if (workspaceNames.has(pkg)) continue;
+        if (providedBy(specifier, knownDeps)) continue;
+        // Type-only imports are erased at compile time: `@types/pkg` satisfies
+        // them, and an undeclared one is a warning for the reader, not a
+        // missing install.
+        const isTypeOnly = typeOnly === true;
+        if (isTypeOnly && knownDeps.has(typesPackage(pkg))) continue;
 
-        const lineNo  = content.slice(0, index).split(/\r?\n/).length;
+        if (!lines) {
+          try { lines = fs.readFileSync(file, 'utf-8').split(/\r?\n/); } catch { lines = []; }
+        }
         const lineText = lines[lineNo - 1] || '';
         if (lineText.includes('// hallucination-ok')) continue;
-
-        // An "import" inside a string literal or a comment is not an import —
-        // harvestImports works on the masked source, so neither reaches here.
-        // (History: this module had NO string guard — one of the unguarded
-        // modules KI #77 recorded — and fixture strings alone produced 47
-        // findings on this repo, e.g.
-        //   assert.equal(detectFramework("const express = require('express');"), 'express')
-        // The column-based guard that replaced it missed trailing comments.)
-        // Type-only imports are erased at compile time — treat as warning, not error
-        const isTypeOnly = /^\s*import\s+type\b/.test(lineText);
 
         issueCount++;
         result.addCheck(`ai-hallucination:unknown-pkg:${rel}:${pkg}`, false, {
@@ -363,8 +323,16 @@ class AiHallucinationDetector extends BaseModule {
           ),
         });
       }
+    }
 
-      // 2. Known-hallucinated method patterns
+    // 2. Known-hallucinated method patterns
+    for (const file of files) {
+      const rel = path.relative(projectRoot, file);
+      if (hasSegment(rel, 'node_modules') || hasSegment(rel, '.next')) continue;
+      let content;
+      try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+      const lines = content.split(/\r?\n/);
+
       for (const { re, msg } of HALLUCINATED_METHODS) {
         re.lastIndex = 0;
         let m;
@@ -387,10 +355,21 @@ class AiHallucinationDetector extends BaseModule {
       }
     }
 
+    if (notRead.length > 0) {
+      const shown = notRead.slice(0, 5).join(', ');
+      result.addCheck('ai-hallucination:not-checked', true, {
+        severity: 'info',
+        message: `${notRead.length} file(s) the import graph did not read (under a dot-directory, or over its 2 MB cap) — their package imports were NOT checked: ${shown}${notRead.length > 5 ? ', …' : ''}`,
+        notChecked: notRead,
+      });
+    }
+
     if (issueCount === 0) {
       result.addCheck('ai-hallucination:clean', true, {
         severity: 'info',
-        message: 'No hallucinated imports or invented API calls detected',
+        message: notRead.length === 0
+          ? 'No hallucinated imports or invented API calls detected'
+          : `No hallucinated imports or invented API calls detected in the ${files.length - notRead.length} file(s) read (${notRead.length} not checked)`,
       });
     }
   }

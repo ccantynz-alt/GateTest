@@ -319,6 +319,7 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
       'packages/tool/lib/main.js': 'module.exports = {};\n',
       'packages/tool/lib/extra.js': 'module.exports = {};\n',
       'uses-ws.js': "const t = require('@acme/tool');\nconst e = require('@acme/tool/lib/extra.js');\nconst x = require('left-pad');\n",
+      'typed.ts': "import type { T } from 'left-pad';\nimport lp from 'left-pad';\nimport type { U } from 'only-types';\nexport const x = lp(1 as unknown as T as unknown as U);\n",
       'bin/doctor.js': "const { diagnose } = require(path.join(ROOT, 'src/doctor/diagnose.js'));\n",
       'src/doctor/diagnose.js': 'module.exports = {};\n',
     });
@@ -349,11 +350,23 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
     // `@nestjs/common` is a published name); `@/x` has no scope and is a
     // path alias, not a package.
     const g = buildImportGraph({ projectRoot: R });
-    const ext = (rel) => [...(g.externals.get(path.join(R, rel)) || [])].sort();
+    const ext = (rel) => [...(g.externals.get(path.join(R, rel)) || new Map()).keys()].sort();
     assert.deepStrictEqual(ext('uses-ws.js'), ['@acme/tool', '@acme/tool/lib/extra.js', 'left-pad']);
     assert.deepStrictEqual(ext('web/app/page.tsx').filter((s) => s.startsWith('@/')), []);
     assert.deepStrictEqual(ext('src/index.ts'), []);
     assert.deepStrictEqual(ext('bin/doctor.js'), []);
+    // Each external says how it resolved and where it was first seen, so a
+    // consumer can tell a missing package from a monorepo's own package.
+    const ws = g.externals.get(path.join(R, 'uses-ws.js'));
+    assert.deepStrictEqual(ws.get('@acme/tool'), { line: 1, via: 'workspace', typeOnly: false });
+    assert.deepStrictEqual(ws.get('left-pad'), { line: 3, via: 'unresolved', typeOnly: false });
+    assert.deepStrictEqual(g.externals.get(path.join(R, 'web/app/page.tsx')).get('@lib/gate'), { line: 2, via: 'alias', typeOnly: false });
+    // A value import outranks a type import of the same package: the entry
+    // is the strongest use, not the first line seen.
+    const typed = g.externals.get(path.join(R, 'typed.ts'));
+    assert.deepStrictEqual(typed.get('left-pad'), { line: 2, via: 'unresolved', typeOnly: false });
+    assert.deepStrictEqual(typed.get('only-types'), { line: 3, via: 'unresolved', typeOnly: true });
+    assert.strictEqual(g.skipped.size, 0);
   });
   it('a `.js` specifier written for a `.ts` on disk is an edge — outside staticGraph, so import-cycle is unchanged', () => {
     const g = buildImportGraph({ projectRoot: R });
