@@ -91,7 +91,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 43 | SSO, roles, audit log | **Craig** | — |
 | 44 | DPA, subprocessor list, SOC 2 roadmap | **Craig** | — |
 | 45 | Invoicing, POs, annual terms | **Craig** | — |
-| 46 | Compliance mapping as a report | open | `compliance-mappings.js` feeds the CISO report; engine-side evidence pack rides on move 21 |
+| 46 | Compliance mapping as a report | done | `gatetest --compliance` writes the evidence pack (`src/core/compliance-evidence.js` + `src/reporters/compliance-reporter.js`): OWASP / SOC 2 / CIS control by control, three-state (pass / fail / warn / not checked / no module), unattributed modules listed not filed, raw results + provenance + signature so `verify-report` holds. The mapping table moved to `src/core/compliance-mappings.js` (website shim) and SARIF reads its OWASP tag from it — redos and kubernetes had drifted between the two lists |
 
 ## F. The compounding moat (47–50)
 
@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-46; then 07 (the flywheel leaderboard), 26, 27.
+09 (recalibrate confidence against the corpus), 20, 39, 42, 48, 49, 50.
 Waiting on Craig: 15, 29, 35, 41.

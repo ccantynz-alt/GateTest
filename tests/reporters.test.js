@@ -470,3 +470,50 @@ describe('SarifReporter — effective severity, not module severity', () => {
     assert.deepStrictEqual(sarif.runs[0].results.map((r) => r.ruleId), ['gatetest/ssrf/ssrf-live']);
   });
 });
+
+describe('ComplianceReporter — the evidence pack is signed and verifiable (the Fifty, move 46)', () => {
+  const { ComplianceReporter } = require('../src/reporters/compliance-reporter');
+  const { verifyReport } = require('../src/core/report-provenance');
+  let tmpDir;
+  const KEY = 'test-signing-key';
+  let savedKey;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gatetest-compliance-'));
+    savedKey = process.env.GATETEST_REPORT_SIGNING_KEY;
+    process.env.GATETEST_REPORT_SIGNING_KEY = KEY;
+  });
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (savedKey === undefined) delete process.env.GATETEST_REPORT_SIGNING_KEY; else process.env.GATETEST_REPORT_SIGNING_KEY = savedKey;
+  });
+
+  it('writes JSON + Markdown, files the finding under its controls, and verify-report accepts the JSON', async () => {
+    const config = new GateTestConfig(tmpDir);
+    config._silent = true;
+    const runner = new GateTestRunner(config);
+    const reporter = new ComplianceReporter(runner, config);
+    runner.register('ssrf', {
+      async run(result) {
+        result.addCheck('ssrf-user-input-to-fetch', false, { severity: 'error', file: 'src/api.ts', line: 12, message: 'User input handed to fetch()' });
+      },
+    });
+    await runner.run(['ssrf']);
+
+    const dir = path.join(tmpDir, '.gatetest', 'reports');
+    const report = JSON.parse(fs.readFileSync(path.join(dir, 'gatetest-compliance-latest.json'), 'utf-8'));
+    assert.strictEqual(report.gatetest.kind, 'compliance-evidence');
+    assert.strictEqual(report.frameworks.owasp.controls['A10:2021'].status, 'fail');
+    assert.deepStrictEqual(report.frameworks.owasp.controls['A10:2021'].modules.ran, ['ssrf']);
+    assert.ok(Array.isArray(report.results), 'the raw results ride along for the digest');
+    assert.strictEqual(report.signature.keyId.length > 0, true);
+    assert.deepStrictEqual(verifyReport(report, KEY), { ok: true, reason: 'signature and findings digest verified' });
+
+    report.results[0].checks[0].message = 'edited after the fact';
+    assert.strictEqual(verifyReport(report, KEY).ok, false, 'an edited finding must fail verification');
+
+    const md = fs.readFileSync(reporter.lastPaths.markdown, 'utf-8');
+    assert.match(md, /A10:2021 \| Server-Side Request Forgery \(SSRF\) \| FAIL \| ssrf/);
+    assert.match(md, /Signed \(HMAC-SHA256/);
+    assert.match(md, /NOT CHECKED/, 'one module cannot have checked the other nine categories');
+  });
+});
