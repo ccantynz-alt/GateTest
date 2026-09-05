@@ -36,10 +36,26 @@ const { MUTATIONS, shouldSkipLine } = require('../core/mutation-engine');
 const { copyTreeForSandbox, removeTree } = require('../core/tree-copy');
 const SANDBOXES = new Set();
 let cleanupInstalled = false;
+function removeAllSandboxes() {
+  for (const d of SANDBOXES) removeTree(d);
+  SANDBOXES.clear();
+}
 function installSandboxCleanup() {
   if (cleanupInstalled) return;
   cleanupInstalled = true;
-  process.on('exit', () => { for (const d of SANDBOXES) removeTree(d); SANDBOXES.clear(); });
+  process.on('exit', removeAllSandboxes);
+  // A signal does not emit 'exit' unless something handles it: without
+  // these, a SIGTERMed scan (a CI step past its limit, a Ctrl-C) leaves the
+  // copy behind. Harmless to the user's tree either way — this is tidiness,
+  // not safety — but tidiness is cheap.
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
+    try {
+      process.on(sig, () => {
+        removeAllSandboxes();
+        process.exit(sig === 'SIGINT' ? 130 : 143);
+      });
+    } catch { /* error-ok: platform does not have this signal */ }
+  }
 }
 
 class MutationModule extends BaseModule {

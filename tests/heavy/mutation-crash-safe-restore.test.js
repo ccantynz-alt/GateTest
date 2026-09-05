@@ -1,26 +1,23 @@
 // =============================================================================
 // MUTATION — a killed scan must not leave a mutant in the user's source
 // =============================================================================
-// The mutation module writes a mutant into the REAL source file, runs the
-// project's tests against it, and restores the original in a `finally`.
-// `finally` covers a thrown exception. It does not cover the process being
-// killed, and that is the ordinary case rather than the exotic one: a CI
-// step that exceeds its limit gets SIGTERM, a developer who loses patience
-// sends SIGINT, and both land inside the window where the file on disk is
-// the mutated version.
+// The mutation module used to write a mutant into the REAL source file, run
+// the project's tests against it, and restore the original in a `finally`
+// plus signal handlers. Observed three times in a single session on this
+// repo before the handlers existed — a `-` left as `+`, a `+` flipped inside
+// a string literal, a mutant in a config file. Handlers cannot cover SIGKILL
+// or a power cut, so mutants now live in a SANDBOX COPY (src/core/tree-copy.js,
+// the Fifty move 20) and the user's file is never opened for writing at all.
 //
-// Observed three times in a single session on this repo — a `-` left as `+`
-// in arena-scaffold/src/math.js, a `+` flipped inside a string literal in
-// arena-scaffold/scripts/inject-bug.js, and a mutant in
-// benchmarks/bench-target/config/default.js. A scanner that silently edits
-// the tree it was asked to inspect is worse than one that misses a finding:
-// the developer's next commit carries our bug with their name on it.
-//
-// The victim project below is built so the window is genuinely open when the
-// signal arrives — baseline run exits immediately, the first mutant run
-// blocks — because a test that kills the scan before it mutates anything
-// passes whether the restore works or not. That vacuous version of this test
-// was written first and reported success against the UNFIXED module.
+// This test therefore proves the stronger invariant: while the module is
+// inside the mutation window — the sandbox copy of the file IS a mutant and
+// the suite is running against it — the real file reads as the original on
+// every poll, a SIGTERM lands in that window, the real file is still the
+// original afterwards, and the sandbox is gone. The victim project is built
+// so the window is genuinely open when the signal arrives (baseline exits at
+// once, the first mutant run blocks); a test that kills the scan before any
+// mutant exists passes whether the sandbox works or not, so it fails loudly
+// when the window never opened.
 // =============================================================================
 
 const { describe, it } = require('node:test');
@@ -61,10 +58,12 @@ function buildVictim() {
 
 const read = (root) => fs.readFileSync(path.join(root, 'src', 'math.js'), 'utf8');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sandboxes = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gt-mutate-')).map((n) => path.join(os.tmpdir(), n));
 
 describe('mutation — the working tree survives a killed scan', () => {
-  it('restores the original source when the scan is SIGTERMed mid-mutation', async () => {
+  it('the real file is never touched, even when the scan is SIGTERMed mid-mutation; the sandbox is removed', async () => {
     const root = buildVictim();
+    const before = new Set(sandboxes());
     try {
       const child = spawn(process.execPath, [CLI, 'scan', '--module', 'mutation', '--project', root], {
         cwd: REPO_ROOT,
@@ -72,30 +71,36 @@ describe('mutation — the working tree survives a killed scan', () => {
       });
       const exited = new Promise((resolve) => child.on('exit', resolve));
 
-      // Wait for the module to actually mutate the file. Without this the
-      // test proves nothing — see the header.
+      // Wait for the module to actually mutate the SANDBOX copy, reading the
+      // real file on every poll. Without the window this test proves nothing.
       let sawMutation = false;
+      let sandbox = null;
+      let realEverChanged = false;
       for (let i = 0; i < 40; i++) {
         await sleep(500);
-        if (read(root) !== ORIGINAL) { sawMutation = true; break; }
-        if (child.exitCode !== null) break;
+        if (read(root) !== ORIGINAL) realEverChanged = true;
+        const fresh = sandboxes().filter((d) => !before.has(d));
+        for (const d of fresh) {
+          try {
+            if (fs.readFileSync(path.join(d, 'src', 'math.js'), 'utf8') !== ORIGINAL) { sawMutation = true; sandbox = d; }
+          } catch { /* error-ok — the copy is still being written */ }
+        }
+        if (sawMutation || child.exitCode !== null) break;
       }
 
       assert.ok(
         sawMutation,
         'the victim project never reached the mutation window — this test would ' +
-          'pass against a broken restore, so it must fail loudly instead',
+          'pass against a broken sandbox, so it must fail loudly instead',
       );
+      assert.strictEqual(realEverChanged, false, 'the real source file was modified during the scan');
 
       child.kill('SIGTERM');
       await exited;
       await sleep(250);
 
-      assert.strictEqual(
-        read(root),
-        ORIGINAL,
-        'a SIGTERMed scan left a mutant behind in the source file',
-      );
+      assert.strictEqual(read(root), ORIGINAL, 'a SIGTERMed scan left a mutant behind in the source file');
+      assert.strictEqual(fs.existsSync(sandbox), false, `the sandbox ${sandbox} was not removed on SIGTERM`);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
