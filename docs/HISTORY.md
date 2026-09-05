@@ -498,9 +498,12 @@ guards were wrong and are fixed: `_isInsideStringLiteral` did not know
 TEST_PATH_RE. Two CI-only failures taught the same lesson twice: the
 scanned project's remote decides "our own workflow", not the workflow's
 GITHUB_REPOSITORY; and a test command that times out is not a failing
-suite. Corpus ceilings ratcheted: fastify 4, got 14, hono 27, zod 5, django
-62, rails 41, spring-petclinic 8, axum 5, CleanArchitecture 11, vapor 0,
-NodeGoat measured 57 — each drop named.
+suite. Corpus ceilings ratcheted to the twenty-repo run: fastify 3, got 14,
+hono 27, zod 5, django 60, rails 41, spring-petclinic 8, axum 5,
+CleanArchitecture 11, vapor 0; NodeGoat measured 57 (a README link now a
+warning). Each drop was named to a fix — console roles, link severity,
+the SPA shell, env-fallback URLs, teardown catches, Math.random words, and
+`${{ …sha }}` no longer read as shell injection (fastify −1, django −2).
 
 ### v1.61.1 (2026-09-04) — the gate can fail again
 

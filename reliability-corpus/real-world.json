@@ -39,49 +39,49 @@
       "url": "https://github.com/fastify/fastify.git",
       "sha": "15ebc8e2fe6932d3e91afa84709523804f8a2537",
       "why": "large plugin-oriented server; exercises the auth and route grammars",
-      "maxBlocking": 5
+      "maxBlocking": 3
     },
     {
       "name": "got",
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
       "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
-      "maxBlocking": 15
+      "maxBlocking": 14
     },
     {
       "name": "hono",
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
       "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec",
-      "maxBlocking": 33
+      "maxBlocking": 27
     },
     {
       "name": "zod",
       "url": "https://github.com/colinhacks/zod.git",
       "sha": "7a00236683c79000dbab0d92f6faf0b7fba39f59",
       "why": "monorepo with a docs site and benchmarks; was the worst case at 50, of which 33 were errorSwallow — 23 in benchmark harnesses, 7 the parsing library's coerce-then-check idiom (2026-09-04)",
-      "maxBlocking": 10
+      "maxBlocking": 5
     },
     {
       "name": "django",
       "url": "https://github.com/django/django.git",
       "sha": "b3f4d83aad7f589f165a6d8b020b7acba4936f35",
       "why": "Python at scale — the ORM builds SQL by string in django/db, which is the one place that is the job; 74 of 76 \"secrets\" were test fixtures before the identifier-keyed rules learned about test paths",
-      "maxBlocking": 64
+      "maxBlocking": 60
     },
     {
       "name": "rails",
       "url": "https://github.com/rails/rails.git",
       "sha": "1ec64ce82451c52d7407fa665ea5f95291430c23",
       "why": "Ruby at scale — instance_eval in the routes loader, backtick-quoted words in error messages that a naive shell-interp rule read as commands",
-      "maxBlocking": 46
+      "maxBlocking": 41
     },
     {
       "name": "spring-petclinic",
       "url": "https://github.com/spring-projects/spring-petclinic.git",
       "sha": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
       "why": "Java + Thymeleaf templates + a k8s manifest; the reference Spring app",
-      "maxBlocking": 9
+      "maxBlocking": 8
     },
     {
       "name": "gin",
@@ -95,7 +95,7 @@
       "url": "https://github.com/tokio-rs/axum.git",
       "sha": "8b30afbfeee457146d29c9c9db47f0ae621a22a8",
       "why": "Rust — first contact 28 blocking: todo!()/unimplemented!() inside #[cfg(test)] modules, dtolnay/rust-toolchain@stable read as a branch pin; what remains is third-party actions on @master and one real unimplemented!()",
-      "maxBlocking": 6
+      "maxBlocking": 5
     },
     {
       "name": "laravel",
@@ -109,7 +109,7 @@
       "url": "https://github.com/jasontaylordev/CleanArchitecture.git",
       "sha": "3a06afb9258c1f5a9d8e7103bd1479246fa4166a",
       "why": "C# + Angular + React — first contact 39 blocking, 26 of them SEO/a11y rules on the two SPA index.html shells; what remains is real: strict:false, a committed .env, unlabeled inputs, log-and-eat catches in a React component",
-      "maxBlocking": 13
+      "maxBlocking": 11
     },
     {
       "name": "ktor",
@@ -123,7 +123,7 @@
       "url": "https://github.com/vapor/vapor.git",
       "sha": "630763c5e0de50b2ac8c7e9a20d6c3ec5709a4c8",
       "why": "Swift — first contact 6 blocking: its own reusable workflows on @main and README section gaps; what remains is a *.key file the .gitignore does not cover",
-      "maxBlocking": 1
+      "maxBlocking": 0
     },
     {
       "name": "nest",
