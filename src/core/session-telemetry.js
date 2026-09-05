@@ -59,8 +59,11 @@ const FIX_COMMIT_RE = /^(?:fix|feat\+fix|hotfix|patch|chore\(fix\)|refactor\(fix
 // Extract module name from "fix(<module>): ..." subject.
 const SUBJECT_MODULE_RE = /^(?:fix|feat\+fix|hotfix|patch|chore\(fix\)|refactor\(fix\))\(([^)]+)\):/i;
 
-// Test file shapes used to count tests added/changed per commit.
-const TEST_PATH_RE = /(?:^|\/)(?:tests?|__tests__|spec|specs)\/|\.(?:test|spec)\.[a-z0-9]+$/i;
+// Test lines added per commit are counted with the one test-path definition
+// (src/core/test-paths.js) — this file kept a narrower private copy until
+// 2026-09-05 (no fixtures/, e2e/, stories/, compound `*_tests/` dirs, Python
+// runner basenames), so those test lines were never counted.
+const { isTestPath } = require('./test-paths');
 
 // Source module shapes — used to attribute a commit to a module.
 const MODULE_PATH_RE = /^(?:src\/modules|website\/app\/lib)\/([a-z0-9_.-]+)\.[a-z]+$/i;
@@ -187,7 +190,7 @@ function gitTestsAdded(repoRoot, sha) {
       const added = parseInt(parts[0], 10);
       const filePath = parts[2];
       if (!Number.isFinite(added) || !filePath) continue;
-      if (TEST_PATH_RE.test(filePath)) testsAdded += added;
+      if (isTestPath(filePath)) testsAdded += added;
     }
     return testsAdded;
   } catch {

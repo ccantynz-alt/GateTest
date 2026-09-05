@@ -25,10 +25,15 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isTestPath } = require('./test-paths');
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.vue', '.svelte']);
-const TEST_PATH_RE = /(^|\/)(tests?|__tests__|spec|specs|e2e|cypress|__mocks__|fixtures?|stories|storybook|scripts?|tools?|bench(marks?)?|docs?)\//i;
-const TEST_FILE_RE = /\.(test|spec|stories|e2e|bench)\.[a-z]+$|\.config\.[cm]?[jt]s$/i;
+// "Is this a test path" comes from the one definition (src/core/test-paths.js).
+// This walker asks a BROADER question — is the file SHIPPED production source?
+// — so it also excludes what the test predicate deliberately does not: build
+// and maintenance scripts, tooling, benchmarks, docs, cypress trees, and
+// tool config files. A CVE reachable only from a script never runs in prod.
+const NOT_SHIPPED_RE = /(^|\/)(cypress|scripts?|tools?|bench(marks?)?|docs?)\/|\.bench\.[a-z]+$|\.config\.[cm]?[jt]s$/i;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'out', 'vendor', '.gatetest', '.claude', '.turbo', '.cache']);
 
 /** Collect the set of package names imported from PRODUCTION source. */
@@ -46,7 +51,7 @@ function collectImportedPackages(projectRoot, opts = {}) {
       if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(full, depth + 1); continue; }
       if (!SOURCE_EXTS.has(path.extname(e.name).toLowerCase())) continue;
       const rel = path.relative(projectRoot, full).replace(/\\/g, '/');
-      if (TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(rel)) continue;
+      if (isTestPath(rel) || NOT_SHIPPED_RE.test(rel)) continue;
       seen++;
       let src;
       try { src = fs.readFileSync(full, 'utf8'); } catch { continue; }
