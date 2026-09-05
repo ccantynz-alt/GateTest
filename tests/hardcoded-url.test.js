@@ -281,3 +281,77 @@ describe('HardcodedUrlModule — negatives', () => {
     assert.match(s.message, /1 file\(s\)/);
   });
 });
+
+// ── localhost: the env-fallback pattern in its other spellings (trpc, prisma, 2026-09-05) ──
+describe('HardcodedUrlModule — localhost dev defaults that are NOT leaks', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-hu-dev-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const localhost = (r) => r.checks.filter((c) => c.name.startsWith('hardcoded-url:localhost:') && c.severity === 'error');
+
+  it('NEGATIVE: a ternary env fallback across lines (trpc www/og-image/pages/api/_ref/vercel.tsx:36-38, utils/fetchFont.ts:3-5)', async () => {
+    write(tmp, 'src/og/vercel.tsx', [
+      'const src = `${',
+      '  process.env.VERCEL_URL',
+      "    ? 'https://' + process.env.VERCEL_URL",
+      "    : 'http://localhost:3000'",
+      '}/pattern.svg`;',
+      'const baseUrl = process.env.VERCEL',
+      "  ? 'https://' + process.env.VERCEL_URL",
+      "  : 'http://localhost:3001';",
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(localhost(r).map((c) => c.name), []);
+  });
+
+  it('NEGATIVE: a schema default for an env var (trpc www/src/utils/env.js:13-16) and a `case \'development\':` branch (env.js:41-42)', async () => {
+    write(tmp, 'src/utils/env.js', [
+      'const envSchema = z.object({',
+      '  VERCEL_URL: z',
+      '    .string()',
+      "    .default('http://localhost:3000'),",
+      '});',
+      'function getBase(env) {',
+      '  switch (env.VERCEL_ENV) {',
+      "    case 'production':",
+      "      return 'https://og-image.trpc.io';",
+      "    case 'development':",
+      "      return 'http://localhost:3001';",
+      '  }',
+      '}',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(localhost(r).map((c) => c.name), []);
+  });
+
+  it('NEGATIVE: a server logging the address it just bound, and a WHATWG parse base (prisma apps/lsp-playground/src/cli.ts:15, :30, :256-257)', async () => {
+    write(tmp, 'src/cli.ts', [
+      "const REQUEST_URL_BASE = 'http://localhost/';",
+      'function pathOf(requestUrl) {',
+      '  return new URL(requestUrl, REQUEST_URL_BASE).pathname;',
+      '}',
+      "const path2 = new URL(req.url ?? '/', 'http://localhost').pathname;",
+      'httpServer.listen(PORT, () => {',
+      '  const url = `http://localhost:${PORT}/`;',
+      '  console.log(`Playground: ${url}`);',
+      '});',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(localhost(r).map((c) => c.name), []);
+  });
+
+  it('POSITIVE: a bare localhost fetch target, a non-env ternary, and an unused "base" still fire at error', async () => {
+    write(tmp, 'src/api.ts', [
+      "const API = 'http://localhost:3000';",
+      "const B = isStaging ? 'https://staging.example.com' : 'http://localhost:4000';",
+      "const BASE = 'http://localhost/';",
+      'export const get = (p) => fetch(API + p);',
+    ].join('\n'));
+    const r = await run(tmp);
+    assert.deepStrictEqual(localhost(r).map((c) => c.name), [
+      'hardcoded-url:localhost:src/api.ts:1',
+      'hardcoded-url:localhost:src/api.ts:2',
+      'hardcoded-url:localhost:src/api.ts:3',
+    ]);
+  });
+});

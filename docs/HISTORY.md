@@ -467,6 +467,44 @@ index.html` is a docsify shell — `<div id="app"></div>` and scripts — and th
 ten were seo/a11y findings on a body the framework fills at runtime), django
 65 → 64 and rails 47 → 46 (the README usage heading).
 
+**Then the monorepos, and the corpus reached twenty.** nestjs/nest,
+trpc/trpc, apollographql/apollo-server and prisma/prisma at pinned commits:
+first contact 39 / 33 / 4 / 90 blocking, after 9 / 8 / 0 / 16. Six agents
+triaged in parallel, one module family each, disjoint files, no commits,
+every rule change with a control pair; the orchestrator committed per
+cause and ran the sweep once on the combined tree. What was ours: a logger
+class told it uses console, a CLI and build configs likewise; tsconfig flags
+and a missing print stylesheet as build verdicts; `mongodb://localhost`
+fixtures, `postgres:postgres@127.0.0.1` and an Algolia search key as
+secrets; `.catch(() => {})` on a stored promise the caller awaits,
+teardown catches and catch-then-throw as swallows; `${STORAGE_TABLE}`
+constants as SQL injection and seeding loops under test/ as N+1; five
+declaration shapes the undefined-reference harvester could not see (every
+one would not have compiled); a framework adapter registering a handler it
+was handed as an unauthenticated route; an OG-image generator scored as a
+web page; README links the resolver could not follow, at error severity;
+`base.sha` in a shell as injection; tsconfig/ and turbo.json as invalid
+JSON; an un-runnable `test:integration` as failing tests. What is theirs
+and still blocks: six `reduce(async …)`, a committed PKCS#8 key, real
+import cycles, `<img>` without alt, `DROP DATABASE ${dbName}`, a silent
+connect in a constructor.
+
+Five of KI #106's framework gates fell in the same pass — webHeaders,
+integrationTests (whose test-file walk had matched nothing since the module
+was written), webhookPayload, cacheHeaders, monorepoConstraints — the last
+on a new `src/core/workspaces.js` that three modules now share. Two shared
+guards were wrong and are fixed: `_isInsideStringLiteral` did not know
+`${…}` is code, and `confidence.isTestFile` was a private copy of
+TEST_PATH_RE. Two CI-only failures taught the same lesson twice: the
+scanned project's remote decides "our own workflow", not the workflow's
+GITHUB_REPOSITORY; and a test command that times out is not a failing
+suite. Corpus ceilings ratcheted to the twenty-repo run: fastify 3, got 14,
+hono 27, zod 5, django 60, rails 41, spring-petclinic 8, axum 5,
+CleanArchitecture 11, vapor 0; NodeGoat measured 57 (a README link now a
+warning). Each drop was named to a fix — console roles, link severity,
+the SPA shell, env-fallback URLs, teardown catches, Math.random words, and
+`${{ …sha }}` no longer read as shell injection (fastify −1, django −2).
+
 ### v1.61.1 (2026-09-04) — the gate can fail again
 
 **The single most important fact in this file changed: GateTest now ENFORCES

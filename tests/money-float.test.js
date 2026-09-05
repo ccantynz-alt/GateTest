@@ -422,3 +422,37 @@ describe('MoneyFloatModule — test path downgrade', () => {
     assert.strictEqual(hit.severity, 'warning');
   });
 });
+
+// Integer minor units rendered for display. `Math.round(cents / 100)` inside
+// a template literal (website/app/checkout/page.tsx:17) surfaced the moment
+// the shared in-string guard learned that `${…}` is code (2026-09-05). It is
+// the correct way to SHOW money stored as cents; the float is never stored.
+describe('MoneyFloatModule — minor units divided for display are not float money math', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-mf-display-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const arith = (r) => r.checks.filter((c) => !c.passed && c.name.startsWith('money-float:arithmetic:'));
+
+  it('NEGATIVE: cents / 100 fed to Math.round, toFixed, Intl or a template literal is quiet', async () => {
+    write(tmp, 'src/format.ts', [
+      'function formatPrice(cents: number): string {',
+      '  return `$${Math.round(cents / 100)}`;',
+      '}',
+      'const label = `${(amountCents / 100).toFixed(2)} USD`;',
+      'const pretty = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(pence / 100);',
+      '',
+    ].join('\n'));
+    assert.deepStrictEqual(arith(await run(tmp)).map((c) => c.name), []);
+  });
+
+  it('POSITIVE: the same division assigned, returned bare, or on a non-minor name still fires', async () => {
+    write(tmp, 'src/charge.ts', [
+      'const total = cents / 100;',
+      'function dollars(cents: number) { return cents / 100; }',
+      'const rounded = Math.round(price / 100);',
+      '',
+    ].join('\n'));
+    const names = arith(await run(tmp)).map((c) => c.name);
+    assert.strictEqual(names.length, 3, names.join(', '));
+  });
+});

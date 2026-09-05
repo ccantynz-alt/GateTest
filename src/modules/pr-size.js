@@ -420,8 +420,20 @@ class PrSizeModule extends BaseModule {
     //    long-running feature branches: it counts ONLY the changes
     //    introduced on this branch, not changes merged into main
     //    since the branch was created.
-    const explicitBase =
-      moduleConfig.baseBranch || runnerOptions.baseBranch || null;
+    // On GitHub Actions a pull_request run names its base branch: a PR
+    // stacked on another PR must be measured against THAT branch, or the
+    // gate sizes the whole stack (PR #426 part 2, 2026-09-05). Only the
+    // `origin/<ref>` form is tried; if the ref is not fetched it falls
+    // through to the configured/auto-detected base as before.
+    const configuredBase = moduleConfig.baseBranch || runnerOptions.baseBranch || null;
+    const actionsBase = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : null;
+    if (!configuredBase && actionsBase) {
+      const diff = this._diffSinceMergeBase(projectRoot, actionsBase);
+      if (diff !== null) return diff;
+      // not fetched on this runner: behave exactly as if the variable were
+      // unset and let auto-detect find origin/main below.
+    }
+    const explicitBase = configuredBase;
     if (explicitBase) {
       const diff = this._diffSinceMergeBase(projectRoot, explicitBase);
       if (diff !== null) return diff;

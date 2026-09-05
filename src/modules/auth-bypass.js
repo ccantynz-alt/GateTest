@@ -330,6 +330,52 @@ function routerLevelAuthOffset(content) {
   return -1;
 }
 
+/**
+ * A registration whose handler is a PARAMETER of the enclosing function —
+ *
+ *     public setNotFoundHandler(handler: Function, prefix?: string) {
+ *       const router = express.Router();
+ *       router.all('*path', handler as any);
+ *
+ * (nestjs/nest packages/platform-express/adapters/express-adapter.ts:171) — is
+ * a framework adapter registering on behalf of the application. The adapter
+ * cannot carry the auth check: whether `handler` is guarded is decided by
+ * whoever passes it in. Reporting it as an unauthenticated route says "you
+ * shipped an endpoint with no auth" about code that ships no endpoint.
+ *
+ * Precision: EVERY argument after the path must be a bare identifier (a TS
+ * `as` cast allowed) that appears in a parameter list declared before the
+ * registration. An inline `(req, res) => …`, a member expression
+ * (`ctrl.list`), or a module-level `const handler = …` all still fire.
+ */
+const FN_PARAMS_RE = /\b(?!if\b|for\b|while\b|switch\b|catch\b|with\b|return\b)[A-Za-z_$][\w$]*\s*(?:<[^>]*>)?\s*\(([^()]*)\)\s*(?::\s*[^{;=()]+)?\s*\{/g;
+const ARROW_PARAMS_RE = /\(([^()]*)\)\s*(?::\s*[^{;=()]+)?\s*=>/g;
+
+function handlerIsForwardedParameter(content, callExpr, matchIdx) {
+  const firstComma = callExpr.indexOf(',');
+  if (firstComma === -1) return false;
+  const args = callExpr
+    .slice(firstComma + 1)
+    .replace(/\)\s*$/, '')
+    .split(',')
+    .map((a) => a.trim().replace(/\s+as\s+[\s\S]*$/, '').trim());
+  if (args.length === 0 || !args.every((a) => /^[A-Za-z_$][\w$]*$/.test(a))) return false;
+
+  const declaredBefore = content.slice(0, matchIdx);
+  const params = new Set();
+  for (const re of [FN_PARAMS_RE, ARROW_PARAMS_RE]) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(declaredBefore)) !== null) {
+      for (const raw of m[1].split(',')) {
+        const name = raw.match(/^\s*(?:\.\.\.)?([A-Za-z_$][\w$]*)/);
+        if (name) params.add(name[1]);
+      }
+    }
+  }
+  return args.every((a) => params.has(a));
+}
+
 // ─── module ────────────────────────────────────────────────────────────────
 
 class AuthBypassDetector extends BaseModule {
@@ -597,6 +643,10 @@ class AuthBypassDetector extends BaseModule {
 
         const body = extractHandlerBody(content, matchIdx);
         if (AUTH_SIGNAL_RE.test(body)) continue;
+
+        // A handler forwarded from the enclosing function's parameters is
+        // framework plumbing, not an endpoint (nest's express adapter).
+        if (handlerIsForwardedParameter(content, body, matchIdx)) continue;
 
         issues.push({ method, route: routePath, line: lineNo });
       }

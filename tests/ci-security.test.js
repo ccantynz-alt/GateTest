@@ -606,3 +606,29 @@ describe('CiSecurityModule — taiki-e/install-action@<tool> is a channel, not a
     assert.strictEqual(c && c.severity, 'warning');
   });
 });
+
+// prisma pr-code-security.yml (2026-09-05): `--baseline-commit ${{
+// github.event.pull_request.base.sha }}` was "untrusted event data
+// interpolated into a shell". A SHA is 40 hex characters; a `number`/`id`
+// is numeric — neither can carry shell metacharacters. Free-text fields
+// (`head.ref`, `pull_request.title`, `comment.body`, `release.tag_name`)
+// still fire.
+describe('CiSecurityModule — shell injection: SHA and numeric leaves are not injectable', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ci-sha-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const wf = (runLines) => writeWorkflow(tmp, 'ci.yml', [
+    'name: ci', 'permissions: { contents: read }', 'on: pull_request', 'jobs:', '  go:', '    runs-on: ubuntu-latest', '    steps:', '      - run: |', ...runLines.map((l) => `          ${l}`), '',
+  ].join('\n'));
+  const hits = (r) => r.checks.filter((c) => c.name.startsWith('ci-security:shell-injection:')).map((c) => c.name);
+
+  it('NEGATIVE: base.sha, pull_request.number and repository.id are quiet', async () => {
+    wf(['semgrep --baseline-commit ${{ github.event.pull_request.base.sha }}', 'echo "PR #${{ github.event.pull_request.number }} repo ${{ github.event.repository.id }}"']);
+    assert.deepStrictEqual(hits(await run(tmp)), []);
+  });
+
+  it('POSITIVE: head.ref, pull_request.title, comment.body and release.tag_name still fire', async () => {
+    wf(['git checkout ${{ github.event.pull_request.head.ref }}', 'echo "${{ github.event.pull_request.title }}"', 'echo "${{ github.event.comment.body }}"', 'VERSION="${{ github.event.release.tag_name }}"']);
+    assert.strictEqual(hits(await run(tmp)).length, 4);
+  });
+});

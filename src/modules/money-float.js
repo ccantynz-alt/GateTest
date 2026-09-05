@@ -172,6 +172,23 @@ const JS_COMPOUND_ASSIGN_RE = /\b([A-Za-z_$][\w$]*)\s*(\+=|-=|\*=|\/=)/;
 // assignment rule above) and `==`/`===`.
 const JS_MONEY_MULDIV_RE = /\b((?:[A-Za-z_$][\w$]*\.)*[A-Za-z_$][\w$]*)\s*([*/])(?!=)\s*\S/;
 
+// Minor-units display: `cents / 100` (or 1000, 10000) whose result is
+// consumed by a formatter on the same line — Math.round/floor/ceil,
+// .toFixed, Intl.NumberFormat / toLocaleString — or interpolated straight
+// into a template literal. The identifier must NAME minor units (cents,
+// pence, minor, subunit, satoshi…) so `price / 100` still fires.
+const MINOR_UNITS_NAME_RE = /(?:^|[._$])(?:cents?|pence|pennies|minor(?:Units?)?|sub[-_]?units?|sat(?:oshi)?s?|_?in_?cents)$/i;
+const DISPLAY_FORMATTER_RE = /\bMath\.(?:round|floor|ceil|trunc)\s*\(|\.toFixed\s*\(|\bIntl\.NumberFormat\b|\.toLocaleString\s*\(|\.format\s*\(/;
+function isMinorUnitsDisplay(line, mArith, opIdx) {
+  if (mArith[2] !== '/') return false;
+  if (!MINOR_UNITS_NAME_RE.test(mArith[1])) return false;
+  const rhs = line.slice(opIdx + 1).trimStart();
+  if (!/^(?:100|1000|10000|1e2|1e3|1e4)\b/.test(rhs)) return false;
+  const before = line.slice(0, mArith.index);
+  const inTemplate = /\$\{[^}]*$/.test(before);
+  return DISPLAY_FORMATTER_RE.test(before) || inTemplate;
+}
+
 // Library-detection patterns. If any of these appear anywhere in
 // the file, we treat the file as safe-harbour for the float-cast
 // rules (but .toFixed is still checked, since devs sometimes use
@@ -367,7 +384,16 @@ class MoneyFloatModule extends BaseModule {
             const opIdx = line.indexOf(mArith[2], mArith.index + mArith[1].length);
             const isRegexLiteralTail = mArith[2] === '/' && REGEX_LITERAL_TAIL_RE.test(line.slice(opIdx + 1));
             const generic = isGenericMoneyName(mArith[1]);
-            const fires = !isRegexLiteralTail && (generic ? hasCorroboratingMoneyIdentifier(line, mArith[1]) : true);
+            // Integer minor units rendered for display — `cents / 100` fed
+            // straight into Math.round / toFixed / Intl.NumberFormat or a
+            // template literal — is the correct way to SHOW money stored as
+            // cents; nothing is computed with the float and nothing stores
+            // it. Surfaced by the in-string guard learning that `${…}` is
+            // code (website/app/checkout/page.tsx:17, 2026-09-05). A value
+            // that is assigned, returned bare, or passed to anything else
+            // still fires.
+            const isDisplayOfMinorUnits = isMinorUnitsDisplay(line, mArith, opIdx);
+            const fires = !isRegexLiteralTail && !isDisplayOfMinorUnits && (generic ? hasCorroboratingMoneyIdentifier(line, mArith[1]) : true);
             if (fires) {
               result.addCheck(`money-float:arithmetic:${rel}:${i + 1}`, false, {
                 severity: errSev,

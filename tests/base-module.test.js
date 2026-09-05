@@ -114,3 +114,21 @@ describe('BaseModule#_isCommentLine', () => {
     }
   });
 });
+
+// `${…}` inside a template literal is CODE. Until 2026-09-05 the guard read
+// `apiKey = \`${Math.random()}\`` as prose, so the security module anchored
+// its regex at the line start to dodge the guard — and then fired on
+// Math.random() inside a plain string (the inert-fixture sweep caught it).
+describe('BaseModule#_isInsideStringLiteral — template expressions are code', () => {
+  const mod = new BaseModule('t', 'd');
+  const at = (line, word) => mod._isInsideStringLiteral(line, line.indexOf(word));
+  it('a call inside ${…} is not inside a string', () => {
+    assert.strictEqual(at('const apiKey = `${Math.random()}`;', 'Math'), false);
+    assert.strictEqual(at('t = `${ `${Math.random()}` }`', 'Math'), false);
+  });
+  it('POSITIVE CONTROL: text after a closed ${…}, or in a plain string, is still inside the string', () => {
+    assert.strictEqual(at('s = `a ${f("}")} Math`', 'Math'), true);
+    assert.strictEqual(at('s = `a ${ {a:1} } Math`', 'Math'), true);
+    assert.strictEqual(at('x = "const token = Math.random()"', 'Math'), true);
+  });
+});

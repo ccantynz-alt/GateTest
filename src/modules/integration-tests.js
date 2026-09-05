@@ -7,6 +7,7 @@
 const BaseModule = require('./base-module');
 const { JS_SOURCE_EXTS, JS_SOURCE_EXTS_NO_JSX } = require('../core/source-extensions');
 const { ROUTE_OBJECTS, ROUTE_VERBS } = require('../core/route-grammar');
+const { looksLikeMissingToolchain, nodeDepsMissing } = require('../core/toolchain-signals');
 const fs = require('fs');
 const path = require('path');
 
@@ -151,10 +152,21 @@ class IntegrationTestsModule extends BaseModule {
       if (testCmd) {
         const scriptName = pkg.scripts['test:integration'] ? 'test:integration' :
                           pkg.scripts['test:int'] ? 'test:int' : 'test:api';
+        // Dependencies never installed (a fresh clone): the script cannot
+        // run, and that is a fact about this box, not the suite.
+        if (nodeDepsMissing(projectRoot)) {
+          result.addCheck('integration-tests:run', true, {
+            severity: 'info',
+            message: `Integration tests not executed — dependencies are not installed here (\`npm run ${scriptName}\` needs node_modules)`,
+            suggestion: 'Run the scan where dependencies are installed (CI) to include integration test results',
+          });
+          return true;
+        }
         const { exitCode, stdout, stderr, timedOut } = this._exec(`npm run ${scriptName} 2>&1`, {
           cwd: projectRoot,
           timeout: this._testTimeoutMs,
         });
+        const out = `${stdout || ''}${stderr || ''}`;
 
         if (exitCode === 0) {
           result.addCheck('integration-tests:run', true, { message: 'Integration tests passed' });
@@ -165,10 +177,20 @@ class IntegrationTestsModule extends BaseModule {
             message: `Integration tests not executed — \`npm run ${scriptName}\` did not finish within ${Math.round(this._testTimeoutMs / 1000)}s here`,
             suggestion: 'Run the scan where the suite normally runs (CI) to include integration test results',
           });
+        } else if (looksLikeMissingToolchain(out)) {
+          // The runner never reached a test (missing binary/module, a build
+          // that failed first). "Integration tests failed" would blame the
+          // customer's suite for our environment (nest, prisma 2026-09-05).
+          result.addCheck('integration-tests:run', true, {
+            severity: 'info',
+            message: 'Integration tests not executed — the toolchain is missing here',
+            details: out.split('\n').slice(-10),
+            suggestion: 'Run the scan where the toolchain is installed (CI) to include integration test results',
+          });
         } else {
           result.addCheck('integration-tests:run', false, {
             message: 'Integration tests failed',
-            details: (stdout + stderr).split('\n').slice(-20),
+            details: out.split('\n').slice(-20),
             suggestion: 'Fix failing integration tests',
           });
         }

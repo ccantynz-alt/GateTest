@@ -92,6 +92,45 @@ describe('IntegrationTestsModule — one route grammar, real test discovery (KI 
   });
 });
 
+// The third state (doctrine §1): a `test:integration` script that cannot run
+// on this box — dependencies never installed, or a runner that never reached
+// a test — is "not executed", never "Integration tests failed". nest and
+// prisma both blocked on that here (2026-09-05).
+describe('IntegrationTestsModule — an environment failure is not a failing suite', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-integ-env-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  const w = (rel, c) => { const f = path.join(tmp, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, typeof c === 'string' ? c : JSON.stringify(c)); };
+  const run = async () => { const r = makeResult(); await new IntegrationTestsModule().run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } }); return r.checks; };
+  const runCheck = (c) => c.find((x) => x.name === 'integration-tests:run');
+
+  it('dependencies not installed: the script is not run, reported as info', async () => {
+    w('package.json', { name: 'svc', scripts: { 'test:integration': 'node -e "process.exit(1)"' }, devDependencies: { vitest: '^1' } });
+    w('src/app.js', "app.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', () => {});\n");
+    const rc = runCheck(await run());
+    assert.ok(rc && rc.passed && rc.severity === 'info' && /not executed/.test(rc.message), JSON.stringify(rc));
+  });
+
+  it('POSITIVE CONTROL: with dependencies present, a script that really fails is still "Integration tests failed"', async () => {
+    w('package.json', { name: 'svc', scripts: { 'test:integration': 'node -e "console.log(\'1 test failed\'); process.exit(1)"' }, devDependencies: { vitest: '^1' } });
+    fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
+    w('src/app.js', "app.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', () => {});\n");
+    const rc = runCheck(await run());
+    assert.ok(rc && !rc.passed && /failed/.test(rc.message), JSON.stringify(rc));
+  });
+
+  it('a runner that never reached a test (missing binary) is "not executed", not failed', async () => {
+    w('package.json', { name: 'svc', scripts: { 'test:integration': 'node -e "console.error(\'sh: 1: vitest: not found\'); process.exit(127)"' }, devDependencies: { vitest: '^1' } });
+    fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
+    w('src/app.js', "app.post('/users', (req, res) => res.json(req.body));\n");
+    w('tests/integration/users.test.js', "test('POST /users', () => {});\n");
+    const rc = runCheck(await run());
+    assert.ok(rc && rc.passed && /toolchain/.test(rc.message), JSON.stringify(rc));
+  });
+});
+
 describe('IntegrationTestsModule — a timeout is not a verdict', () => {
   let tmp;
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-integ-to-')); });

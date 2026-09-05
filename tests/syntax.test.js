@@ -123,3 +123,29 @@ describe('SyntaxModule — JSON with a BOM, JSONC under vscode/', () => {
     assert.strictEqual((await jsonFailures()).length, 1);
   });
 });
+
+// prisma (2026-09-05): `packages/0-config/tsconfig/base.json` — a tsconfig
+// split into a directory — and `turbo.json` (Turborepo documents comments)
+// were "JSON syntax errors". Both are JSONC by the tool that reads them.
+describe('SyntaxModule — JSONC: a tsconfig/ directory and turbo.json', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-syntax-jsonc-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  async function jsonFailures() {
+    const result = makeResult();
+    await new SyntaxModule().run(result, { projectRoot: tmp });
+    return result.checks.filter((c) => !c.passed && /^json:/.test(c.name)).map((c) => c.name);
+  }
+  it('comments in tsconfig/base.json, turbo.json and a .jsonc file are not errors', async () => {
+    fs.mkdirSync(path.join(tmp, 'packages', 'config', 'tsconfig'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'packages', 'config', 'tsconfig', 'base.json'), '{\n  // we do not emit\n  "compilerOptions": { "noEmit": true },\n}\n');
+    fs.writeFileSync(path.join(tmp, 'turbo.json'), '{\n  // pipeline\n  "tasks": { "build": { "outputs": ["dist/**"] } }\n}\n');
+    fs.writeFileSync(path.join(tmp, 'biome.jsonc'), '{ /* linter */ "linter": { "enabled": true }, }\n');
+    assert.deepStrictEqual(await jsonFailures(), []);
+  });
+  it('POSITIVE CONTROL: a plain data file beside them with a comment is still an error', async () => {
+    fs.mkdirSync(path.join(tmp, 'data'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'data', 'catalog.json'), '{\n  // not allowed here\n  "a": 1\n}\n');
+    assert.strictEqual((await jsonFailures()).length, 1);
+  });
+});

@@ -9,8 +9,12 @@ const BaseModule = require('./base-module');
 const fs   = require('fs');
 const path = require('path');
 
-// Next.js App Router handler — `app/api/**/route.{js,ts,jsx,tsx}`.
-const APP_ROUTE_RE = /app\/api\/.+\/route\.[jt]sx?$/;
+// File-based API routes: Next.js App Router `app/api/**/route.*`, Pages
+// Router `pages/api/**`, SvelteKit `+server.*`, a root `api/` functions
+// dir (Vercel / Netlify). Until 2026-09-05 only the first form was looked
+// at, so a `pages/api` app reported "API routes have cache headers
+// configured" over routes it never opened (KI #106).
+const APP_ROUTE_RE = /(?:^|\/)(?:app\/api\/.+\/route\.[jt]sx?|(?:src\/)?pages\/api\/.+\.[jt]sx?|(?:src\/)?routes\/.+\/\+server\.[jt]s|api\/.+\.[jt]s)$/;
 
 class CacheHeadersModule extends BaseModule {
   constructor() {
@@ -171,7 +175,9 @@ class CacheHeadersModule extends BaseModule {
 
   _checkApiRoutes(root, result) {
     const routeFiles = this._collectFiles(root, ['.js', '.ts', '.jsx', '.tsx'])
-      .filter(f => APP_ROUTE_RE.test(f.replace(/\\/g, '/')));
+      .map((f) => ({ f, rel: path.relative(root, f).replace(/\\/g, '/') }))
+      .filter(({ rel }) => APP_ROUTE_RE.test(rel) && !this._isTestPath(rel))
+      .map(({ f }) => f);
     let uncachedCount = 0;
 
     for (const file of routeFiles) {

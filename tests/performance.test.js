@@ -102,3 +102,72 @@ describe('PerformanceModule — event-cleanup counts only listeners that can out
     assert.ok(run(leaky).some((n) => n.startsWith('perf:event-cleanup:')), run(leaky).join());
   });
 });
+
+// ── event-cleanup: injected / qualified constructors (trpc, 2026-09-05) ────
+//
+// packages/server/src/unstable-core-do-not-import/stream/sse.ts registers six
+// listeners on `const eventSource = (_es = new opts.EventSource(url, init))`
+// and closes it on RETURN, on abort and in cancel(). `new opts.EventSource`
+// did not read as `new EventSource`, so the file was a blocking "leak".
+describe('PerformanceModule — event-cleanup accepts a qualified constructor behind an assignment chain', () => {
+  const mod = () => new PerformanceModule();
+
+  const TRPC_SSE = [
+    'const signal = opts.signal;',
+    'let _es = null;',
+    'const createStream = () =>',
+    '  new ReadableStream({',
+    '    async start(controller) {',
+    '      const [url, init] = await Promise.all([opts.url(), opts.init()]);',
+    '      const eventSource = (_es = new opts.EventSource(',
+    '        url,',
+    '        init,',
+    '      ) as InstanceType<TConfig["EventSource"]>);',
+    '      eventSource.addEventListener(CONNECTED_EVENT, (_msg) => { controller.enqueue({ type: "connected", eventSource }); });',
+    '      eventSource.addEventListener(SERIALIZED_ERROR_EVENT, (_msg) => { controller.enqueue({ type: "serialized-error", eventSource }); });',
+    '      eventSource.addEventListener(PING_EVENT, () => { controller.enqueue({ type: "ping", eventSource }); });',
+    '      eventSource.addEventListener(RETURN_EVENT, () => {',
+    '        eventSource.close();',
+    '        controller.close();',
+    '        _es = null;',
+    '      });',
+    '      eventSource.addEventListener("error", (event) => { controller.error(event); });',
+    '      eventSource.addEventListener("message", (_msg) => { controller.enqueue({ type: "data", eventSource }); });',
+    '      const onAbort = () => { eventSource.close(); controller.close(); };',
+    '      if (signal.aborted) { onAbort(); } else { signal.addEventListener("abort", onAbort); }',
+    '    },',
+    '    cancel() { _es?.close(); },',
+    '  });',
+  ].join('\n');
+
+  it('NEGATIVE: the trpc sse.ts shape counts only the caller-owned signal listener (below the >2 threshold)', () => {
+    assert.strictEqual(mod()._leakyListenerCount(TRPC_SSE), 1);
+  });
+
+  it('POSITIVE: the SAME file with every close() removed is a real leak and counts all seven', () => {
+    const neverClosed = TRPC_SSE.replace(/(?:eventSource|_es\?)\.close\(\);?/g, '');
+    assert.strictEqual(mod()._leakyListenerCount(neverClosed), 7);
+  });
+
+  it('NEGATIVE: `new globalThis.WebSocket(...)` / `new ws.WebSocket(...)` that is closed is disposable', () => {
+    const src = [
+      'const sock = new globalThis.WebSocket(url);',
+      'sock.addEventListener("open", onOpen);',
+      'sock.addEventListener("message", onMessage);',
+      'sock.addEventListener("close", onClose);',
+      'return () => sock.close();',
+    ].join('\n');
+    assert.strictEqual(mod()._leakyListenerCount(src), 0);
+    assert.strictEqual(mod()._leakyListenerCount(src.replace('globalThis.', 'ws.')), 0);
+  });
+
+  it('POSITIVE: a qualified constructor that is never disposed still counts', () => {
+    const src = [
+      'const sock = new globalThis.WebSocket(url);',
+      'sock.addEventListener("open", onOpen);',
+      'sock.addEventListener("message", onMessage);',
+      'sock.addEventListener("close", onClose);',
+    ].join('\n');
+    assert.strictEqual(mod()._leakyListenerCount(src), 3);
+  });
+});

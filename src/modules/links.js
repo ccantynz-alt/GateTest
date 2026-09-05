@@ -6,6 +6,22 @@
 const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
+// One definition, imported (doctrine §4): src/core/scan-scope.js answers
+// "is this JSX a web page or a picture?" for every module that reads JSX.
+const { isImageRenderer } = require('../core/scan-scope');
+
+// A docs-site route is written the way the SITE serves it, not the way the
+// repository stores it: `../getting-started`, `adapters/standalone`,
+// `../schema/schema/#anchor` are `getting-started.mdx`, `adapters/standalone.md`
+// and `schema/schema.md` on disk (apollo-server docs/source/api/apollo-server.mdx,
+// trpc www/docs/server/adapters-intro.md — 277 and 75 "broken" links).
+const ROUTE_FALLBACK_SUFFIXES = ['.md', '.mdx', '.html', '.htm', '/index.md', '/index.mdx', '/index.html', '/README.md'];
+
+/** `%20` and friends are the link's encoding of the path, not the path
+ *  (prisma AGENTS.md → `docs/Architecture%20Overview.md`, 1134 findings). */
+function decodeHref(href) {
+  try { return decodeURIComponent(href); } catch { return href; }
+}
 
 class LinksModule extends BaseModule {
   constructor() {
@@ -15,6 +31,7 @@ class LinksModule extends BaseModule {
   async run(result, config) {
     const projectRoot = config.projectRoot;
 
+    let imageRenderersSkipped = 0;
     // Scan HTML, JSX, TSX, Vue, Svelte, and Markdown files — not just static HTML
     const allExtensions = ['.html', '.htm', '.jsx', '.tsx', '.vue', '.svelte', '.md', '.mdx'];
     const allFiles = this._collectFiles(projectRoot, allExtensions);
@@ -37,6 +54,10 @@ class LinksModule extends BaseModule {
       if (INTERNAL_DOCS_RE.test('/' + relPath.replace(/\\/g, '/'))) continue;
       const content = fs.readFileSync(file, 'utf-8');
       const ext = path.extname(file);
+      // JSX handed to satori / `new ImageResponse(…)` is rasterised to a PNG:
+      // an `href="#"` drawn into an OG image is paint, not a link
+      // (trpc www/og-image/pages/api/_ref/tailwind.tsx:31).
+      if (isImageRenderer(content)) { imageRenderersSkipped++; continue; }
 
       // Pattern set 1: HTML-style href/src attributes (works for HTML, JSX, TSX, Vue, Svelte)
       const hrefRegex = /(?:href|src)\s*=\s*["'{]?\s*["'`]([^"'`{}\s>]+)/gi;
@@ -112,10 +133,9 @@ class LinksModule extends BaseModule {
         if (/^(mailto|tel|javascript|sms):/i.test(href)) continue;
         // Strip any anchor / query fragment before resolving — links like
         // `./other.md#section` should resolve `./other.md` only.
-        const filePart = href.split('#')[0].split('?')[0];
+        const filePart = decodeHref(href.split('#')[0].split('?')[0]);
         if (!filePart) continue;
-        const resolved = path.resolve(path.dirname(path.join(projectRoot, source)), filePart);
-        if (!fs.existsSync(resolved)) {
+        if (!this._resolvesOnDisk(projectRoot, source, filePart)) {
           brokenInternal.push({ href, source });
         }
       }
@@ -130,8 +150,12 @@ class LinksModule extends BaseModule {
       });
     }
 
+    // A broken link in a README or docs page is documentation hygiene; it
+    // cannot fail a build the way a missing auth check or a leaked secret
+    // does (Forbidden #25). Reported, never blocking.
     if (brokenInternal.length > 0) {
       result.addCheck('links:internal', false, {
+        severity: 'warning',
         message: `${brokenInternal.length} broken internal link(s)`,
         details: brokenInternal.slice(0, 20),
         suggestion: 'Fix or remove broken internal links',
@@ -161,8 +185,30 @@ class LinksModule extends BaseModule {
 
     // Summary
     result.addCheck('links:summary', true, {
-      message: `Scanned ${allFiles.length} files (${allExtensions.join(', ')}): ${uniqueInternal.size} internal, ${externalLinks.size} external, ${deadLinks.length} dead`,
+      message: `Scanned ${allFiles.length} files (${allExtensions.join(', ')}): ${uniqueInternal.size} internal, ${externalLinks.size} external, ${deadLinks.length} dead`
+        + (imageRenderersSkipped ? `; ${imageRenderersSkipped} image-renderer file(s) not checked (rendered to PNG, not served as HTML)` : ''),
     });
+  }
+
+  /**
+   * Does a relative link target exist? Tries the literal path first, then the
+   * docs-site route spellings (`foo` → `foo.md`/`foo.mdx`/`foo/index.html`,
+   * trailing slash stripped). A README beside a package.json is rendered by
+   * npm, which rewrites relative links against the REPOSITORY root — nest's
+   * packages/common/Readme.md links `readme_zh.md` and `LICENSE`, both at the
+   * repo root — so for those files a root-relative hit counts too.
+   */
+  _resolvesOnDisk(projectRoot, source, target) {
+    const base = path.dirname(path.join(projectRoot, source));
+    const bare = target.replace(/\/+$/, '') || target;
+    const literal = path.resolve(base, target);
+    if (fs.existsSync(literal)) return true;
+    const stem = path.resolve(base, bare);
+    if (ROUTE_FALLBACK_SUFFIXES.some((s) => fs.existsSync(stem + s))) return true;
+    if (/^readme\.(?:md|mdx)$/i.test(path.basename(source)) && fs.existsSync(path.join(base, 'package.json'))) {
+      return fs.existsSync(path.resolve(projectRoot, target));
+    }
+    return false;
   }
 
   _categorizeLink(link, source, internalLinks, externalLinks) {

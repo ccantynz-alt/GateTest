@@ -102,15 +102,19 @@ function isDocFile(filePath) {
 function isTestFile(filePath) {
   if (!filePath) return null;
   const p = String(filePath).replace(/\\/g, '/');
-  if (
-    /(?:^|\/)tests?\//i.test(p) ||
-    /(?:^|\/)__tests__\//i.test(p) ||
-    /\.test\.[A-Za-z0-9]+$/.test(p) ||
-    /\.spec\.[A-Za-z0-9]+$/.test(p)
-  ) {
-    return { multiplier: 0.6, reason: 'test file' };
-  }
-  return null;
+  // One definition of "is this a test path" (doctrine §4): the private copy
+  // here knew tests/, __tests__/ and .test./.spec. only — fixtures/, e2e/,
+  // __mocks__/, `smoke-test/`, `js_tests/` kept full confidence while every
+  // module already treated them as harness (2026-09-05). Required lazily:
+  // base-module is a module-layer file and confidence is core.
+  const { TEST_PATH_RE } = require('../modules/base-module');
+  if (!TEST_PATH_RE.test(p)) return null;
+  // A path that is a test path ONLY because of a fixture/mock segment
+  // (`src/fixtures/x`) is priced once, by isFixtureFile below; a fixture
+  // under tests/ (`tests/fixtures/x`) is still both, as it always was.
+  const TEST_PROPER_RE = /(?:^|\/)(?:tests?|specs?|__tests__|e2e|stories|storybook|reliability-corpus|testdata|test[-_]?resources|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|e2e)\./i;
+  if (!TEST_PROPER_RE.test(p) && isFixtureFile(p)) return null;
+  return { multiplier: 0.6, reason: 'test file' };
 }
 
 /**

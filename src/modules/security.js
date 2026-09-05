@@ -491,12 +491,9 @@ class SecurityModule extends BaseModule {
       // the substring rule. Identifier-keyed, so a test-tree hit is a
       // warning (a test's `nonce-${Math.random()}` cache-buster is not
       // shipped), same split as the secret patterns below.
-      // Not anchored. The shared in-string guard still reads a template
-      // literal's `${…}` as prose, so `apiKey = \`${Math.random()}\`` is
-      // missed here — the guard learns that `${}` is code in the next PR and
-      // this rule regains it there. Anchoring at the line start to dodge the
-      // guard was tried and fired on Math.random() INSIDE a plain string
-      // (the heavy inert-fixture sweep caught it, 2026-09-05).
+      // Not anchored: the shared in-string guard knows that `${…}` inside a
+      // template literal is code, so `apiKey = \`${Math.random()}\`` fires
+      // and `"const token = Math.random()"` inside a plain string does not.
       {
         regex: /Math\.random\s*\(/g,
         name: 'Math.random() for a security-sensitive value (use crypto.randomBytes / randomUUID)',
