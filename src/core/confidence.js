@@ -37,6 +37,16 @@ const DEFAULT_RULE_OVERRIDES = Object.freeze({
   flakyTests: { ignoreTestPath: true, ignoreFixturePath: true },
   // prSize scans the whole diff; test files are part of the diff
   prSize: { ignoreTestPath: true, ignoreFixturePath: true },
+  // A test that was SKIPPED, DISABLED or FOCUSED instead of fixed lives in a
+  // test file by definition — the whole finding is "this test file changed
+  // in the wrong direction". Discounting it for being in tests/ made every
+  // `test.skip` added in a fix commit a soft, non-blocking error (measured
+  // 2026-09-05: GATE PASSED, "1 soft (low confidence)"; the Fifty, move 30).
+  // Keyed by rule, not module: an empty catch or a `return true` added to a
+  // test is still priced as test code.
+  'fake-fix:pattern:test-skip-added': { ignoreTestPath: true, ignoreFixturePath: true },
+  'fake-fix:pattern:test-xit-added': { ignoreTestPath: true, ignoreFixturePath: true },
+  'fake-fix:pattern:test-only-added': { ignoreTestPath: true, ignoreFixturePath: true },
   // Test-coverage gate cares about test files
   unitTests: { ignoreTestPath: true },
   integrationTests: { ignoreTestPath: true },
@@ -524,11 +534,20 @@ function mergeOverrides(input, callerOverrides) {
   if (input.ruleKey && all[input.ruleKey]) {
     Object.assign(merged, all[input.ruleKey]);
   }
-  // Try rulekey prefix match
+  // Try rulekey prefix match — the module prefix before the first colon,
+  // and any longer override key that names a rule id: check names carry
+  // `:<file>:<line>` after the rule, so `fake-fix:pattern:test-skip-added`
+  // must match `fake-fix:pattern:test-skip-added:tests/a.test.js:5` and not
+  // `fake-fix:pattern:test-skip-added-elsewhere:…`.
   if (input.ruleKey) {
     const colonIdx = input.ruleKey.indexOf(':');
     const prefix = colonIdx > 0 ? input.ruleKey.slice(0, colonIdx) : input.ruleKey;
     if (all[prefix]) Object.assign(merged, all[prefix]);
+    for (const key of Object.keys(all)) {
+      if (key !== prefix && key !== input.ruleKey && input.ruleKey.startsWith(key + ':')) {
+        Object.assign(merged, all[key]);
+      }
+    }
   }
 
   return merged;

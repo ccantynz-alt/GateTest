@@ -607,3 +607,34 @@ test('docs/ change does not disturb real doc files or examples/', () => {
     for (const p of ['src/latest/x.js', 'contest/x.js', 'src/attestation.js', 'src/app.js']) assert.equal(isTestFile(p), null, p);
   });
 }
+
+// ─── a skipped test is not "just a test file" (the Fifty, move 30) ─────────
+
+test('test.skip added in a fix commit scores 1.0 and BLOCKS — the test path is the point of the rule', () => {
+  for (const rule of ['test-skip-added', 'test-xit-added', 'test-only-added']) {
+    const { confidence, signals } = scoreFinding({
+      filePath: 'tests/add.test.js',
+      ruleKey: `fake-fix:pattern:${rule}:tests/add.test.js:5`,
+      module: 'fakeFixDetector',
+      message: 'Test was skipped instead of fixed',
+    });
+    assert.equal(confidence, 1, `${rule}: ${signals.join('; ')}`);
+    assert.ok(isBlockingFinding({ passed: false, severity: 'error', confidence }, BLOCK_THRESHOLD), rule);
+  }
+});
+
+test('control: another fake-fix rule in a test file is still priced as test code', () => {
+  const { confidence } = scoreFinding({
+    filePath: 'tests/add.test.js',
+    ruleKey: 'fake-fix:pattern:empty-catch-added:tests/add.test.js:9',
+    module: 'fakeFixDetector',
+  });
+  assert.ok(confidence <= 0.7, `expected <= 0.7, got ${confidence}`);
+});
+
+test('control: a rule-id override never matches a longer rule id that merely starts with it', () => {
+  const { confidence } = scoreFinding(
+    { filePath: 'tests/add.test.js', ruleKey: 'fake-fix:pattern:test-skip-added-elsewhere:tests/add.test.js:5', module: 'fakeFixDetector' },
+  );
+  assert.ok(confidence <= 0.7, `expected <= 0.7, got ${confidence}`);
+});
