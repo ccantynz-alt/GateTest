@@ -146,6 +146,23 @@ also runs the real-world corpus. A module change also runs
 show the same command passing; one validated push beats three speculative
 ones.
 
+**The runner itself is a thing to verify.** For a year the suite ran as
+`node --test --test-force-exit …`, adopted because one file left a handle open
+and the bare runner hung for hours. Measured on 2026-09-05: that flag exits the
+runner as soon as the tests it has *heard of* are done — a child still
+streaming its later suites is cut off, its tests are never counted, and the
+exit code is 0. The same tree reported 50, 77 and 61 tests on three runs; a
+single file alone reported 63, 40, 33, 63 names. Every `# fail 0` produced
+that way was evidence about whichever tests finished first (§1's bug, in the
+tool that was supposed to catch §1's bug). The suite now runs through
+`scripts/run-tests.js`: one plain `node --test` per file, ended only after its
+final summary line is read, so a leak is killed on our terms after every
+result is in, a file that ends without its summary is a failure, and a file
+whose event loop never drains is reported *cancelled* rather than force-exited
+in silence — which surfaced two such files on the first run. The check that a
+test command counts what it claims to: run it three times on the same tree and
+compare the test-name sets, not the pass line.
+
 ## 9. Our own scanner reviewing our own PR is the best bug report we get
 
 GitHub Code Scanning runs GateTest on every PR to this repository. On

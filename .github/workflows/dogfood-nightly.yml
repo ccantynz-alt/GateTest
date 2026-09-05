@@ -46,8 +46,8 @@ jobs:
       - name: Run full test sweep
         run: |
           mkdir -p .dogfood
-          node --test --test-force-exit --test-timeout=60000 tests/*.test.js 2>&1 | tee .dogfood/sweep.log || true
-          grep -E "^# (tests|pass|fail|skip)" .dogfood/sweep.log > .dogfood/sweep-summary.txt || true
+          node scripts/run-tests.js --timeout 60000 tests/*.test.js 2>&1 | tee .dogfood/sweep.log || true
+          grep -E "^# (files|tests|pass|fail|cancelled|skipped)" .dogfood/sweep.log > .dogfood/sweep-summary.txt || true
 
       - name: Self-scan — full suite (measures "green on our own repo")
         # The hero's "N/N modules green" chip was CARRIED (greenSource:
@@ -179,13 +179,11 @@ jobs:
         id: claim_check
         if: always()
         run: |
-          node --test --test-force-exit --test-timeout=60000 tests/heavy/marketing-claim-verification.test.js 2>&1 \
+          node scripts/run-tests.js --timeout 60000 tests/heavy/marketing-claim-verification.test.js 2>&1 \
             | tee .dogfood/claim-check.log || true
-          # `|| true` (not `|| echo 0`): grep -c already prints "0" and exits 1 on
-          # zero matches — under `bash -e` (this step's shell) that exit code aborts
-          # the whole script before the echo below runs, unless guarded. `|| true`
-          # adds no stdout of its own, so it can't double up grep's own "0" line.
-          FAIL_COUNT=$(grep -c "^not ok" .dogfood/claim-check.log 2>/dev/null || true)
+          # The runner's own totals: failing tests plus files that never
+          # reported a summary (a crash is drift too, not a zero).
+          FAIL_COUNT=$(awk '/^# fail /{f=$3} /^# files that did not finish /{u=$NF} END{print f+u+0}' .dogfood/claim-check.log 2>/dev/null || echo 0)
           echo "fail_count=${FAIL_COUNT:-0}" >> "$GITHUB_OUTPUT"
 
       - name: Open issue if marketing claims drifted

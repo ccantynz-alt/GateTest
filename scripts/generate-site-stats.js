@@ -76,7 +76,7 @@ function parseTapSummary(output) {
   const tests = grab('tests');
   const pass = grab('pass');
   const fail = grab('fail');
-  const skip = grab('skip');
+  const skip = grab('skipped');
   if (tests != null) out.total = tests;
   if (pass != null) out.passing = pass;
   if (fail != null) out.failing = fail;
@@ -152,14 +152,14 @@ function readPrevious() {
 }
 
 function measureTests() {
-  // Shell-expand the glob exactly as the package.json / dogfood workflow do.
-  // MUST use --test-force-exit + --test-timeout (Bible sweep command) — the
-  // bare `node --test` form hangs indefinitely on leaked handles; CI got
-  // this fix in 180bf7c but this script was missed and hung the same way.
-  // --test-reporter=tap is explicit because parseTapSummary reads the
-  // "# tests N" TAP block — newer Node defaults to the spec reporter even
-  // when piped, which parses as 0 tests (and 0 would go on the website).
-  const res = spawnSync('bash', ['-c', 'node --test --test-reporter=tap --test-force-exit --test-timeout=60000 tests/*.test.js'], {
+  // Shell-expand the glob exactly as the package.json / CI workflows do.
+  // scripts/run-tests.js (the Bible sweep command): one plain `node --test`
+  // per file, ended after its summary — a leaked handle cannot hang it and,
+  // unlike the --test-force-exit form this replaced, it counts every file
+  // (that flag cut children off mid-stream, so the number that reached the
+  // website was whatever had finished first). Its totals print in the same
+  // `# tests N` shape parseTapSummary reads.
+  const res = spawnSync('bash', ['-c', 'node scripts/run-tests.js --timeout 60000 tests/*.test.js'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,

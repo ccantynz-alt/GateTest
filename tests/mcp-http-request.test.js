@@ -1,6 +1,6 @@
 'use strict';
 
-const { test, describe, before } = require('node:test');
+const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const net = require('net');
@@ -33,7 +33,10 @@ before(async () => {
       res.writeHead(302, { Location: '/health' });
       res.end();
     } else if (req.url === '/slow') {
-      setTimeout(() => { res.writeHead(200); res.end('finally'); }, 10000);
+      // Never answer: the client under test is expected to give up first.
+      // No timer — a reply that arrives after the client has gone is
+      // nothing to the test, and a pending timer kept this process alive.
+      req.on('close', () => { if (!res.writableEnded) res.destroy(); });
     } else if (req.url === '/auth-check') {
       const auth = req.headers['authorization'] || '';
       res.writeHead(auth ? 200 : 401, { 'Content-Type': 'application/json' });
@@ -52,8 +55,15 @@ before(async () => {
   });
 });
 
-const after = (fn) => process.on('exit', fn);
-after(() => { if (testServer) testServer.close(); });
+// node:test's own `after`, not `process.on('exit')`: an exit hook never
+// fires while the server it is meant to close keeps the event loop alive —
+// that shape left this file's runner waiting until --test-timeout cancelled
+// it (found 2026-09-05 by scripts/run-tests.js; --test-force-exit had hidden it).
+after(async () => {
+  if (!testServer) return;
+  testServer.closeAllConnections();
+  await new Promise((resolve) => testServer.close(resolve));
+});
 
 function localUrl(path) {
   return `http://127.0.0.1:${testPort}${path}`;

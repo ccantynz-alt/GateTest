@@ -140,6 +140,28 @@ describe('FlakyTestsModule — nondeterminism', () => {
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-ft-nd-')); });
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
+  it('does NOT flag a timer, a clock read, an env assignment or a network call that lives inside a string, a template or a comment — and DOES flag the real ones beside them (2026-09-05)', async () => {
+    write(tmp, 'a.test.js', [
+      "const fixture = \"setTimeout(() => {}, 10); const t = Date.now(); process.env.GHOST = '1';\";",
+      'const tpl = `setInterval(() => fetch("https://api.example.com"), 5000)`;',
+      '// setTimeout(() => {}, 1000) and Date.now() in a comment',
+      '/* process.env.GHOST_BLOCK = "x"; fetch("https://api.example.com/x") */',
+      'it("real", (done) => {',
+      '  setTimeout(done, 10);',
+      '  const t = Date.now();',
+      '  expect(t).toBeGreaterThan(0);',
+      '  expect(fixture).toBeDefined(); expect(tpl).toBeDefined();',
+      '});',
+    ].join('\n') + '\n');
+    const r = await run(tmp);
+    const names = r.checks.filter((c) => !c.passed).map((c) => c.name);
+    assert.deepStrictEqual(names.filter((n) => n.includes(':a.test.js:1') || n.includes(':a.test.js:2') || n.includes(':a.test.js:3') || n.includes(':a.test.js:4')), [], `strings and comments must be silent: ${names.join(', ')}`);
+    assert.ok(names.some((n) => n === 'flaky-tests:real-timer:a.test.js:6'), `the real setTimeout must fire: ${names.join(', ')}`);
+    assert.ok(names.some((n) => n === 'flaky-tests:real-clock:a.test.js:7'), `the asserted clock read must fire: ${names.join(', ')}`);
+    assert.ok(!names.some((n) => n.startsWith('flaky-tests:env-leak:')), 'env assignments in strings are not leaks');
+    assert.ok(!names.some((n) => n.startsWith('flaky-tests:real-network:')), 'network calls in strings are not calls');
+  });
+
   it('warns on Math.random() in test', async () => {
     write(tmp, 'a.test.js', [
       'it("picks a number", () => {',

@@ -62,12 +62,15 @@ jobs:
         id: heavy
         run: |
           set -o pipefail
-          node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js | tee /tmp/heavy-suite.tap
+          # scripts/run-tests.js: one plain `node --test` per file, ended only
+          # after its summary is read. `--test-force-exit` across files cut
+          # children off mid-stream and still exited 0 (measured 2026-09-05).
+          node scripts/run-tests.js --timeout 120000 tests/heavy/*.test.js | tee /tmp/heavy-suite.tap
           STATUS=${PIPESTATUS[0]}
           if [ "$STATUS" -ne 0 ]; then
             echo "## Heavy test failures" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -A 12 "^not ok " /tmp/heavy-suite.tap | head -100 >> "$GITHUB_STEP_SUMMARY" || true
+            grep -A 14 "^✗ " /tmp/heavy-suite.tap | head -120 >> "$GITHUB_STEP_SUMMARY" || true
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             exit "$STATUS"
           fi
@@ -75,7 +78,7 @@ jobs:
       - name: Post summary on success
         if: success()
         run: |
-          PASS=$(grep -c "^ok " /tmp/heavy-suite.tap || echo 0)
+          PASS=$(awk '/^# pass /{p=$3} END{print p+0}' /tmp/heavy-suite.tap)
           echo "## Heavy tests: $PASS passed" >> "$GITHUB_STEP_SUMMARY"
 
   test:
@@ -242,17 +245,22 @@ jobs:
       - name: All tests pass
         run: |
           set -o pipefail
-          # --test-force-exit: a test file that leaves a timer/socket/child
-          # open otherwise keeps node --test alive forever (this was the 2.5h
-          # hang). --test-timeout: bound any single genuinely-stuck test.
-          node --test --test-force-exit --test-timeout=60000 tests/*.test.js | tee /tmp/test-suite.tap
+          # scripts/run-tests.js runs one plain `node --test` per file and ends
+          # the child only after its final summary line has been read — so a
+          # leaked timer/socket/child (the 2.5h hang) is killed on our terms,
+          # after every result is in. The `--test-force-exit` flag it replaces
+          # exited as soon as the tests it had HEARD OF were done: children
+          # still streaming were cut off, their tests never counted, exit 0
+          # (measured 2026-09-05: the same tree reported 50, 77 and 61 tests).
+          # A file whose stream ends without a summary is a FAILURE here.
+          node scripts/run-tests.js --timeout 60000 tests/*.test.js | tee /tmp/test-suite.tap
           STATUS=${PIPESTATUS[0]}
           if [ "$STATUS" -ne 0 ]; then
             echo ""
             echo "=========================================================="
             echo "  TEST FAILURES (extracted for CI-log-tail visibility):"
             echo "=========================================================="
-            grep -A 12 "^not ok " /tmp/test-suite.tap || echo "(no 'not ok' lines found — failure may be a process-level error)"
+            grep -A 14 "^✗ " /tmp/test-suite.tap || echo "(no failing file block found — failure may be a process-level error)"
             echo "=========================================================="
             exit "$STATUS"
           fi
@@ -283,7 +291,7 @@ jobs:
       # This packs the real tarball and runs every shipped binary from it, so it
       # is the only check here that sees what a customer sees. ~4s.
       - name: Published package actually runs (npm pack smoke)
-        run: node --test --test-force-exit --test-timeout=300000 tests/heavy/package-smoke.test.js
+        run: node scripts/run-tests.js --timeout 300000 tests/heavy/package-smoke.test.js
 
       # Blocking because it has earned it. Every risky token in the fixture sits
       # inside a string or comment, so any finding naming that file is a false
@@ -292,7 +300,7 @@ jobs:
       # code sample: money-float:js-parse-float, data:pii, auth-bypass (which had
       # no string guard at all), integration:untested. ~1s.
       - name: No module flags inert code (false-positive gate)
-        run: node --test --test-force-exit --test-timeout=300000 tests/heavy/inert-fixture-sweep.test.js
+        run: node scripts/run-tests.js --timeout 300000 tests/heavy/inert-fixture-sweep.test.js
 
       - name: Self-scan green
         run: node bin/gatetest.js --suite quick --parallel
