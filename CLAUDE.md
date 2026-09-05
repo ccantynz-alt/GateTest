@@ -149,6 +149,7 @@ Every turn ends with the **sweep checklist**:
 - [ ] `node --test --test-force-exit --test-timeout=120000 tests/heavy/*.test.js` — heavy suite (subprocess/CLI tests moved here in v1.57.1); non-blocking in CI but must be green before shipping
 - [ ] `cd website && npx next build` — zero errors
 - [ ] `node bin/gatetest.js --list` — all modules load
+- [ ] `GATETEST_NO_TELEMETRY=1 node bin/gatetest.js --suite quick --parallel` — GATE: PASSED, 0 blocking, run AFTER the last edit (2026-09-05: a new env var read in code without a `.env.example` line blocked CI's self-scan; the earlier green self-scan predated the edit)
 - [ ] `grep -rn "TODO\|FIXME" src/ website/app/ --include="*.js" --include="*.ts" --include="*.tsx"` — none left unresolved in code you touched
 - [ ] Known Issues table reviewed — any HIGH item still in the pre-authorization scope gets picked up
 
