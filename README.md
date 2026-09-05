@@ -207,6 +207,28 @@ npx @gatetest/cli --suite full --junit --sarif
 Onboarding an existing codebase? Pair this with **baseline mode** above so the gate
 only fails on new findings.
 
+### Merge queues and monorepos
+
+**Merge queues.** The GitHub Action and the drop-in workflow handle the `merge_group`
+event: each group is scanned diff-scoped against the *queue's* base (the event
+payload's `base_sha`, which the engine resolves through one shared base resolver —
+the same one `--pr`, prSize and the fake-fix detector use, so no module measures a
+different diff from another). Add `merge_group:` under `on:` in your workflow and
+nothing else changes.
+
+**Path filters.** In a monorepo, scope the gate to the packages it owns in
+`.gatetest.json`:
+
+```json
+{ "paths": { "include": ["packages/api", "packages/shared/**"], "exclude": ["**/fixtures/**"] } }
+```
+
+A bare directory means everything under it; `*` is one segment, `**` any depth;
+exclude wins. The filter applies at the one file walk every module shares, findings
+from modules with their own lookups are dropped at the runner, and every report says
+so — `Scope: .gatetest.json paths — include packages/api (3 finding(s) outside it
+not shown)` — and carries it in the signed provenance. No `paths` key, no filter.
+
 ### Replay a failing CI run locally
 
 Reproduce any failing GitHub Actions run on your laptop in seconds:

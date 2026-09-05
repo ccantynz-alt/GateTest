@@ -712,6 +712,15 @@ const DEFAULT_CONFIG = {
       '.gatetestignore',
     ],
   },
+
+  // Monorepo path filters (src/core/scan-paths.js): globs relative to the
+  // project root; a bare directory means everything under it; exclude
+  // wins. Empty = no filter. Applied at BaseModule._collectFiles and to
+  // findings at the runner, and reported as scope in every summary.
+  paths: {
+    include: [],
+    exclude: [],
+  },
 };
 
 /**

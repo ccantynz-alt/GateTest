@@ -222,6 +222,19 @@ runs:
           DIFF_FLAG="--pr"
           echo "Diff-aware mode: scanning only files changed vs origin/${GITHUB_BASE_REF:-main} (set diff-only: false for full-repo scans)."
         fi
+        # A merge queue (`merge_group` event) is a PR judged against the
+        # QUEUE's base, which the event payload names in merge_group.base_sha;
+        # GITHUB_BASE_REF is empty there. Fetch that commit so the engine can
+        # diff against it (src/core/diff-base.js reads the payload); if the
+        # fetch fails the engine falls through to origin/<base_ref>.
+        if [ "${{ inputs.diff-only }}" = "true" ] && [ "${{ github.event_name }}" = "merge_group" ]; then
+          MQ_BASE="${{ github.event.merge_group.base_sha }}"
+          if [ -n "$MQ_BASE" ]; then
+            git fetch --no-tags --depth=1 origin "$MQ_BASE" 2>/dev/null || true
+          fi
+          DIFF_FLAG="--pr"
+          echo "Merge-queue mode: scanning only files this group changes vs its base ${MQ_BASE:-<unknown>}."
+        fi
 
         # A full-repo scan is the one shape that can dump years of backlog on
         # a team the first time it runs. When we are enforcing and NOT
