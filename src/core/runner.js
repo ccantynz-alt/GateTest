@@ -53,6 +53,8 @@ function _loadBaselineMatcher(projectRoot) {
  * @param {{name?: string, file?: string, filePath?: string}} check
  * @returns {string} the rule identity, e.g. `hardcoded-url:localhost`
  */
+const { isOffline: _isOffline } = require('./offline');
+
 function _ruleIdentity(check) {
   let key = String((check && check.name) || '');
   const file = (check && (check.file || check.filePath)) || '';
@@ -1083,6 +1085,8 @@ class GateTestRunner extends EventEmitter {
       duration: endTime - startTime,
       diffOnly: this.options.diffOnly,
       changedFiles: this.options.changedFiles,
+      // Air-gapped mode (src/core/offline.js): nothing left the machine.
+      offline: _isOffline(),
       confidenceThreshold: this._blockThreshold,
       incremental: this._incrementalMode
         ? { fileCount: this._incrementalFileSet ? this._incrementalFileSet.size : 0 }

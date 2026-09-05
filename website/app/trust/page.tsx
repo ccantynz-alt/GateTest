@@ -116,7 +116,7 @@ export default function TrustPage() {
               ]}
               dontList={[
                 "Telemetry is anonymized module names + finding counts only — never code, file paths, or findings. Opt out any time with GATETEST_NO_TELEMETRY=1 or `{\"telemetry\": false}` in .gatetest.json.",
-                "We have no licence server. The CLI runs offline forever, no kill-switch.",
+                "We have no licence server. The CLI runs offline forever, no kill-switch. For an air-gapped runner, `--offline` (or GATETEST_OFFLINE=1) makes it a stated promise: no telemetry upload, no AI calls, no API ping — printed in the console and recorded in the signed provenance.",
                 "We do not require an account. You can run `npx @gatetest/cli` against any repo with zero signup.",
               ]}
             />

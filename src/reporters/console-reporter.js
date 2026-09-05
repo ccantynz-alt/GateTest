@@ -23,6 +23,7 @@ const { suggestLine } = require('../core/ignore-file');
 const { replayCommand } = require('../core/ci-run-url');
 const { ruleKeyOf } = require('../core/finding-registry');
 const { siteUrl } = require('../core/site-url');
+const { OFFLINE_NOTE } = require('../core/offline');
 
 class ConsoleReporter {
   /**
@@ -219,6 +220,9 @@ class ConsoleReporter {
     console.log('');
     if (summary.diffOnly) {
       console.log(`${COLORS.dim}  Mode: diff-only (${(summary.changedFiles || []).length} changed files)${COLORS.reset}`);
+    }
+    if (summary.offline) {
+      console.log(`${COLORS.dim}  Mode: ${OFFLINE_NOTE}${COLORS.reset}`);
     }
     console.log(`  Modules:  ${summary.modules.passed}/${summary.modules.total} passed`);
     // "86/89 passed" reads as "the whole engine ran". When a suite

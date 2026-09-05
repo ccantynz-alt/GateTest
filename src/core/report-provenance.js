@@ -104,6 +104,7 @@ function buildProvenance(summary, opts = {}) {
       diffOnly: summary.diffOnly === true,
       changedFiles: Array.isArray(summary.changedFiles) ? summary.changedFiles.length : null,
       baseline: summary.baseline || null,
+      offline: summary.offline === true,
     },
     modules: { ran, skipped, deferred },
     suppression: { ignoreFile, suppressedRules: summary.suppressedRules || null },

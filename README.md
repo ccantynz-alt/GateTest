@@ -217,6 +217,25 @@ unauthenticated rate limit (60 req/hour, fine for a few replays).
 When a gate is blocked inside GitHub Actions, the log and the checks tab
 already carry this command with the run's URL filled in.
 
+### Self-hosted and air-gapped
+
+The engine is an npm package with four runtime dependencies that reads your tree and
+writes to `.gatetest/`. By default the only thing that leaves the machine is the
+anonymized telemetry flush (module and rule ids with integer counts; opt out with
+`GATETEST_NO_TELEMETRY=1`); the AI-backed fix paths are opt-in and need
+`ANTHROPIC_API_KEY`. For an air-gapped runner, make that a stated promise:
+
+```bash
+gatetest --suite full --offline        # or GATETEST_OFFLINE=1
+```
+
+Under `--offline` nothing leaves the machine: no telemetry upload, no AI calls
+(`--fix` / `--auto-pr` are refused with a message, `gatetest fix` exits 2), no live
+API ping from `--doctor`. The console prints the mode, the summary carries
+`offline: true`, and the signed provenance records it — so a report produced inside
+the perimeter can be verified outside it with `gatetest verify-report` and the key.
+There is no licence server and no account; nothing expires.
+
 ### Verify a scan report
 
 Every JSON report (`.gatetest/reports/gatetest-report-latest.json`) carries a
