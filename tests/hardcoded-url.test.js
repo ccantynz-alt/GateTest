@@ -62,6 +62,8 @@ describe('HardcodedUrlModule — localhost', () => {
     const hit = r.checks.find((c) => c.name.startsWith('hardcoded-url:localhost:'));
     assert.ok(hit);
     assert.strictEqual(hit.severity, 'error');
+    assert.match(hit.message, /localhost leaks break every non-developer machine/);
+    assert.doesNotMatch(hit.message, /test file/);
   });
 
   it('errors on http://127.0.0.1 hardcoded in source', async () => {
@@ -115,6 +117,10 @@ describe('HardcodedUrlModule — localhost', () => {
     const hit = r.checks.find((c) => c.name.startsWith('hardcoded-url:localhost:'));
     assert.ok(hit);
     assert.strictEqual(hit.severity, 'info');
+    // The message must match the severity: a fixture in a test file is not a leak.
+    assert.match(hit.message, /in a test file — a fixture, not a leak/);
+    assert.doesNotMatch(hit.message, /break every non-developer machine/);
+    assert.match(hit.suggestion, /Nothing to change/);
   });
 });
 

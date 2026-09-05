@@ -77,7 +77,7 @@ describe('offline — end to end on a fixture with the network dead', () => {
         ...process.env,
         // A proxy nothing listens on: any outbound attempt fails fast and loudly.
         HTTPS_PROXY: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9', NO_PROXY: '',
-        ANTHROPIC_API_KEY: 'sk-ant-not-a-key', GATETEST_REPORT_SIGNING_KEY: 'offline-e2e-signing-key-32-chars-x',
+        ANTHROPIC_API_KEY: 'not-a-real-key', GATETEST_REPORT_SIGNING_KEY: 'x'.repeat(32),
       };
       delete env.GATETEST_OFFLINE; delete env.GATETEST_NO_TELEMETRY;
       const out = execFileSync(process.execPath, [path.join(__dirname, '..', 'bin', 'gatetest.js'), '--suite', 'quick', '--offline', '--fix', '--project', root],
@@ -98,7 +98,7 @@ describe('offline — end to end on a fixture with the network dead', () => {
     try {
       fs.writeFileSync(path.join(root, 'package.json'), '{"name":"off","version":"1.0.0"}\n');
       const bin = path.join(__dirname, '..', 'bin', 'gatetest.js');
-      const env = { ...process.env, ANTHROPIC_API_KEY: 'sk-ant-not-a-key' };
+      const env = { ...process.env, ANTHROPIC_API_KEY: 'not-a-real-key' };
       const scan = spawnSync(process.execPath, [bin, '--suite', 'quick', '--offline', '--fix', '--project', root], { env, encoding: 'utf8', timeout: 120000 });
       assert.match(scan.stderr, /offline mode: --fix \/ --auto-pr need the Anthropic API and are not run/);
       assert.match(scan.stdout.replace(/\x1b\[[0-9;]*m/g, ''), /GATE: (PASSED|BLOCKED)/, 'the scan itself still ran');
