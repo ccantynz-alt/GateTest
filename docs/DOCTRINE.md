@@ -69,6 +69,7 @@ is always toward the author's own repo.
 | Question | One place |
 |---|---|
 | Which files does a module see? | `BaseModule._collectFiles` (honours `--diff`, the exclude list, `_respectsIncremental`) |
+| Which directories does a walk never enter? | `src/core/walk-excludes.js` (`WALK_EXCLUDES`, `WALK_EXCLUDE_SET`, `isExcludedDir`) — every walker imports it, and `tests/walk-excludes.test.js` fails on the *shape* of a private copy (a literal list naming `node_modules` beside `.git`) anywhere under `src/`. 2026-09-05: fifteen such copies were found, each a different subset; the import graph's also skipped every dot-directory, so `.storybook/` and `examples/.experimental/` were invisible to the graph while other modules scanned them |
 | Is this a test path? | `src/core/test-paths.js` (`isTestPath`, `TEST_PATH_RE`) — modules reach it as `BaseModule._isTestPath`; core files (dependency reachability, session telemetry) import it directly. `tests/test-path-canonical.test.js` forbids any other declaration in `src/modules` and `src/core` |
 | Is this an illustration / harness dir? | `src/core/scan-scope.js` |
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
