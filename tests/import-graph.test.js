@@ -343,6 +343,18 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
     const g = buildImportGraph({ projectRoot: R });
     assert.deepStrictEqual(kindsInto(g, 'src/doctor/diagnose.js'), ['path-literal:bin/doctor.js']);
   });
+  it('externals: a bare package specifier is a package import whether or not it resolves in-repo; a path alias and a scheme are not (2026-09-05)', () => {
+    // dependencyReachability reads this instead of its own regex harvester.
+    // A workspace package is both an edge and a package import (nest's
+    // `@nestjs/common` is a published name); `@/x` has no scope and is a
+    // path alias, not a package.
+    const g = buildImportGraph({ projectRoot: R });
+    const ext = (rel) => [...(g.externals.get(path.join(R, rel)) || [])].sort();
+    assert.deepStrictEqual(ext('uses-ws.js'), ['@acme/tool', '@acme/tool/lib/extra.js', 'left-pad']);
+    assert.deepStrictEqual(ext('web/app/page.tsx').filter((s) => s.startsWith('@/')), []);
+    assert.deepStrictEqual(ext('src/index.ts'), []);
+    assert.deepStrictEqual(ext('bin/doctor.js'), []);
+  });
   it('a `.js` specifier written for a `.ts` on disk is an edge — outside staticGraph, so import-cycle is unchanged', () => {
     const g = buildImportGraph({ projectRoot: R });
     assert.deepStrictEqual(kindsInto(g, 'src/esm.ts'), ['ts-esm:src/index.ts']);
