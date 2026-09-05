@@ -31,16 +31,39 @@ const fs   = require('fs');
 const path = require('path');
 const BaseModule    = require('./base-module');
 const { makeAutoFix } = require('../core/ai-fix-engine');
+const { ROUTE_OBJECTS, hasMutatingHandler } = require('../core/route-grammar');
 
 // ─── patterns ─────────────────────────────────────────────────────────────
 
-const WEBHOOK_ROUTE_RE = /(?:app|router|fastify|server)\s*\.\s*post\s*\(\s*['"`]([^'"`,]*(?:webhook|event|hook|notify|callback|push|pull|receive)[^'"`,]*)['"`]/gi;
+// A webhook route is a POST whose PATH says so. The registering object
+// comes from the shared route grammar (src/core/route-grammar.js): until
+// 2026-09-05 only `app|router|fastify|server` were known, so a Hono, Koa,
+// Elysia or `api.post('/webhooks/stripe', …)` handler, and every NestJS
+// `@Post('webhook')`, was never a webhook to this module (KI #106).
+const WEBHOOK_PATH_WORDS = String.raw`(?:webhook|event|hook|notify|callback|push|pull|receive|ipn)`;
+const WEBHOOK_ROUTE_RE = new RegExp(
+  String.raw`\b${ROUTE_OBJECTS}\s*\.\s*post\s*\(\s*['"\x60]([^'"\x60,]*${WEBHOOK_PATH_WORDS}[^'"\x60,]*)['"\x60]`, 'gi',
+);
+const WEBHOOK_DECORATOR_RE = new RegExp(
+  String.raw`@Post\s*\(\s*['"\x60]([^'"\x60]*${WEBHOOK_PATH_WORDS}[^'"\x60]*)['"\x60]\s*\)`, 'gi',
+);
 
-const BODY_ACCESS_RE   = /req\s*\.\s*body\s*\.\s*[a-zA-Z_$]/;
+// The payload being read, in the frameworks the grammar covers: Express /
+// Koa `req.body.x`, Fastify `request.body.x`, Koa `ctx.request.body`, Next
+// App Router / Hono / Elysia `await req.json()` / `await c.req.json()`.
+const BODY_ACCESS_RE   = /\b(?:req|request)\s*\.\s*body\s*\.\s*[a-zA-Z_$]|\bctx\s*\.\s*request\s*\.\s*body\b|\bawait\s+(?:req|request|c\s*\.\s*req)\s*\.\s*json\s*\(/;
 
 const VALIDATION_SIGNALS = [
-  // Zod
-  /\.(?:parse|safeParse|parseAsync)\s*\(\s*(?:req|request|body)/,
+  // Zod / Valibot / any schema library with a parse: `schema.parse(req.body)`,
+  // `.safeParse(await req.json())`, `v.parse(Schema, body)`
+  /\.(?:parse|safeParse|parseAsync|safeParseAsync)\s*\(\s*(?:await\s+)?(?:req|request|body|payload|json|data|c\s*\.\s*req)/,
+  /\bv\s*\.\s*(?:parse|safeParse)\s*\(/,
+  // Fastify route schema — the framework validates before the handler runs
+  /\bschema\s*:\s*\{[^}]*\bbody\s*:/,
+  // NestJS: a typed `@Body()` DTO goes through the ValidationPipe
+  /@Body\s*\(\s*\)\s*[a-zA-Z_$][\w$]*\s*:\s*[A-Z][\w$]*/,
+  // TypeBox / ajv compiled validators
+  /\bValue\s*\.\s*(?:Check|Decode)\s*\(/,
   // Joi
   /\.validate\s*\(\s*(?:req|request)\s*\.\s*body/,
   // Yup
@@ -91,10 +114,16 @@ class WebhookPayloadValidator extends BaseModule {
       let content;
       try { content = fs.readFileSync(file, 'utf-8'); } catch { continue; }
 
+      // A file that IS a webhook handler by its path — a `webhooks/` or
+      // `events/` directory, or `webhook` in the basename. `includes('/hook')`
+      // used to match `src/hooks/useAuth.ts` (React hooks) and read the whole
+      // file as one handler body (2026-09-05); a bare hooks/ dir is not a
+      // webhook unless the file actually defines a POST handler.
+      const relUnix = rel.replace(/\\/g, '/').toLowerCase();
       const isWebhookFile = (
-        rel.toLowerCase().includes('webhook') ||
-        rel.toLowerCase().includes('/events/') ||
-        rel.toLowerCase().includes('/hook')
+        /(?:^|\/)(?:webhooks?|events)\//.test(relUnix) ||
+        /webhook[^/]*$/.test(relUnix) ||
+        (/(?:^|\/)hooks?\//.test(relUnix) && hasMutatingHandler(content))
       );
 
       // Extract handler bodies for webhook routes
@@ -148,15 +177,21 @@ class WebhookPayloadValidator extends BaseModule {
 
   _extractWebhookHandlers(content) {
     const handlers = [];
-    WEBHOOK_ROUTE_RE.lastIndex = 0;
-    let m;
-    while ((m = WEBHOOK_ROUTE_RE.exec(content)) !== null) {
-      const route   = m[1];
-      const lineNo  = content.slice(0, m.index).split(/\r?\n/).length;
-      const body    = this._extractFunctionBody(content, m.index);
-      handlers.push({ body, route, line: lineNo });
+    for (const re of [WEBHOOK_ROUTE_RE, WEBHOOK_DECORATOR_RE]) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        const route   = m[1];
+        const lineNo  = content.slice(0, m.index).split(/\r?\n/).length;
+        // For a decorator the body is the method that follows; its
+        // signature (`@Body() dto: CreateDto`) is part of what we judge.
+        const body    = re === WEBHOOK_DECORATOR_RE
+          ? content.slice(m.index, m.index + 200) + this._extractFunctionBody(content, m.index + m[0].length)
+          : this._extractFunctionBody(content, m.index);
+        handlers.push({ body, route, line: lineNo });
+      }
+      re.lastIndex = 0;
     }
-    WEBHOOK_ROUTE_RE.lastIndex = 0;
     return handlers;
   }
 
