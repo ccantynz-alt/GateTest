@@ -828,3 +828,263 @@ describe('ErrorSwallowModule — log then exit is handling, not eating', () => {
     assert.ok(r.checks.find((c) => c.name.startsWith('error-swallow:log-and-eat:')));
   });
 });
+
+describe('ErrorSwallowModule — guarded .catch(noop) (control pair)', () => {
+  // Measured 2026-09-05 on nestjs/nest, trpc/trpc and prisma/prisma: 30
+  // blocking `catch-noop` findings, 25 of them one of three shapes where the
+  // rejection is not actually lost. Each negative control is the repo's line;
+  // each positive control is the swallow it resembles, which must still block.
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-es-noop-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  const noop = (r) => r.checks.find((c) => c.name.startsWith('error-swallow:catch-noop:'));
+
+  it('warns (not errors) when the promise is stored and awaited elsewhere', async () => {
+    // nest packages/microservices/client/client-redis.ts:124-129, with the
+    // `connect()` that returns the same field. `.catch()` returns a NEW
+    // promise; the stored one still rejects for whoever awaits it.
+    write(tmp, 'src/client-redis.ts', [
+      'export class ClientRedis {',
+      '  protected connectionPromise: Promise<any> | null = null;',
+      '  public async connect(): Promise<any> {',
+      '    if (this.connectionPromise) {',
+      '      return this.connectionPromise;',
+      '    }',
+      '    this.connectionPromise = this.handleConnection();',
+      '    return this.connectionPromise;',
+      '  }',
+      '  public registerReconnectListener(client) {',
+      '    client.on("reconnecting", () => {',
+      '      this.connectionPromise = Promise.reject(',
+      '        "Error: Connection lost. Trying to reconnect...",',
+      '      );',
+      '      // Prevent unhandled rejections',
+      '      this.connectionPromise.catch(() => {});',
+      '    });',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit, 'a guarded noop is downgraded, never dropped');
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'stored-reference');
+    assert.match(hit.message, /held in `this\.connectionPromise`/);
+  });
+
+  it('STILL ERRORS when the stored promise is never read again', async () => {
+    write(tmp, 'src/checkout.ts', [
+      'export async function checkout(order) {',
+      '  const p = db.commit();',
+      '  p.catch(() => {});',
+      '  return { ok: true };',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+    assert.strictEqual(hit.guarded, undefined);
+  });
+
+  it('STILL ERRORS on `db.commit().catch(() => {})` — the promise exists nowhere else', async () => {
+    write(tmp, 'src/checkout.ts', [
+      'export async function checkout(order) {',
+      '  db.commit().catch(() => {});',
+      '  return { ok: true };',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('warns when the next statement throws — the function is already failing', async () => {
+    // prisma packages/3-extensions/supabase/src/runtime/supabase-runtime.ts:70-73
+    write(tmp, 'src/supabase-runtime.ts', [
+      'export async function executeWithRole(plan, binding, options) {',
+      '  const session = await this.openRoleSession(binding);',
+      '  try {',
+      '    const stats = await session.execute(plan, options);',
+      '    await session.release();',
+      '    return stats;',
+      '  } catch (err) {',
+      '    await session.evict(err).catch(() => undefined);',
+      '    throw err;',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'rethrow');
+  });
+
+  it('STILL ERRORS when the function goes on to succeed after the noop', async () => {
+    write(tmp, 'src/checkout.ts', [
+      'export async function checkout(order, res) {',
+      '  await db.commit().catch(() => {});',
+      '  return res.json({ ok: true });',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('warns on a teardown call — `client.end()` inside `close()`', async () => {
+    // prisma packages/3-targets/7-drivers/postgres/src/exports/control.ts:36-40
+    write(tmp, 'src/control.ts', [
+      'export class PostgresControl {',
+      '  async close(): Promise<void> {',
+      '    // On a dropped connection end() itself can reject; the caller already has',
+      '    // the real failure.',
+      '    await this.client.end().catch(() => {});',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'cleanup');
+    assert.match(hit.message, /teardown \(end\(\)\)/);
+  });
+
+  it('warns on `this.close().catch(() => null)` fired from a timer', async () => {
+    // trpc packages/client/src/links/wsLink/wsClient/wsClient.ts:66-77
+    write(tmp, 'src/wsClient.ts', [
+      'export class WsClient {',
+      '  constructor(opts) {',
+      '    this.inactivityTimeout = new ResettableTimeout(() => {',
+      '      if (this.requestManager.hasPendingRequests()) {',
+      '        this.inactivityTimeout.reset();',
+      '        return;',
+      '      }',
+      '      this.close().catch(() => null);',
+      '    }, opts.closeMs);',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'cleanup');
+  });
+
+  it('warns on any noop inside a `finally` block', async () => {
+    // prisma packages/1-framework/3-tooling/cli/src/commands/init/probe-db.ts:221-230
+    write(tmp, 'src/probe-db.ts', [
+      'export async function probe(databaseUrl) {',
+      '  const client = new pg.Client({ connectionString: databaseUrl });',
+      '  try {',
+      '    await client.connect();',
+      '    const result = await client.query("SELECT version() as version");',
+      '    return { serverVersion: parsePostgresVersion(result.rows[0].version) };',
+      '  } finally {',
+      '    await client.end().catch(() => undefined);',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'cleanup');
+  });
+
+  it('warns inside a function named as teardown even when the callee is not', async () => {
+    // trpc wsClient.ts:165 — `await Promise.all(requestsToAwait).catch(() => null)`
+    // inside `public async close()`: wait for in-flight requests to settle,
+    // then tear down.
+    write(tmp, 'src/wsClient.ts', [
+      'export class WsClient {',
+      '  public async close() {',
+      '    this.allowReconnect = false;',
+      '    const requestsToAwait = this.requestManager.getRequests().map((r) => r.end);',
+      '    await Promise.all(requestsToAwait).catch(() => null);',
+      '    this.connectionState.next({ type: "state", state: "idle", error: null });',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'warning');
+    assert.strictEqual(hit.guarded, 'cleanup');
+    assert.match(hit.message, /teardown \(close\(\)\)/);
+  });
+
+  it('STILL ERRORS on the same noop inside `closeAccount()` — a business operation', async () => {
+    write(tmp, 'src/accounts.ts', [
+      'export async function closeAccount(id) {',
+      '  await db.accounts.update(id, { status: "closed" }).catch(() => {});',
+      '  return { ok: true };',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('STILL ERRORS on `open().catch(() => null)` in a constructor — a connect that fails silently', async () => {
+    // trpc wsClient.ts:109 — deliberately still blocking: `open()` is not
+    // teardown, nothing awaits it, and the next statement is not a throw.
+    write(tmp, 'src/wsClient.ts', [
+      'export class WsClient {',
+      '  constructor(opts) {',
+      '    this.lazyMode = opts.lazy;',
+      '    if (!this.lazyMode) {',
+      '      this.open().catch(() => null);',
+      '    }',
+      '  }',
+      '}',
+      '',
+    ].join('\n'));
+    const hit = noop(await run(tmp));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
+  });
+
+  it('warns on the finally-cleanup empty catch, and still errors on it outside a finally', async () => {
+    // prisma scripts/lint-casts.mjs:104-113 vs. the same try/catch with no finally.
+    write(tmp, 'scripts/lint-casts.mjs', [
+      'function main() {',
+      '  let baseResult;',
+      '  try {',
+      '    baseResult = countCastsInDir(tmpDir);',
+      '  } finally {',
+      '    try {',
+      '      git("worktree", "remove", "--force", tmpDir);',
+      '    } catch {}',
+      '    rmSync(tmpDir, { recursive: true, force: true });',
+      '  }',
+      '  return baseResult;',
+      '}',
+      '',
+    ].join('\n'));
+    write(tmp, 'scripts/no-finally.mjs', [
+      'function main() {',
+      '  try {',
+      '    git("worktree", "remove", "--force", tmpDir);',
+      '  } catch {}',
+      '  rmSync(tmpDir, { recursive: true, force: true });',
+      '}',
+      '',
+    ].join('\n'));
+    const r = await run(tmp);
+    const guarded = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:') && c.file.includes('lint-casts'));
+    const plain = r.checks.find((c) => c.name.startsWith('error-swallow:empty-catch:') && c.file.includes('no-finally'));
+    assert.ok(guarded && plain);
+    assert.strictEqual(guarded.severity, 'warning');
+    assert.strictEqual(guarded.guarded, 'cleanup');
+    assert.match(guarded.message, /inside a `finally` block/);
+    assert.strictEqual(plain.severity, 'error');
+  });
+});

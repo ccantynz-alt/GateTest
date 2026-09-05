@@ -21,6 +21,8 @@ const {
   hasTopLevelExit,
   assignedTargets,
   isTestedAfter,
+  enclosingContext,
+  isTeardownName,
 } = require('../src/core/guarded-catch');
 
 /** Classify the first `catch` in `src`. */
@@ -271,5 +273,242 @@ describe('guarded-catch — the individual judgements', () => {
     assert.strictEqual(isTestedAfter('x', 'if (x) return 1;'), true);
     assert.strictEqual(isTestedAfter('x', 'return x;'), false);
     assert.strictEqual(isTestedAfter('x', 'return other.x ?? 1;'), false);
+  });
+});
+
+/*
+ * Shapes measured 2026-09-05 on prisma/prisma, trpc/trpc and nestjs/nest
+ * (scratchpad corpus, `--suite full --all`): 30 blocking `errorSwallow`
+ * findings, of which 25 were one of three shapes the classifier could not
+ * see. Each negative control below is the repo's idiom (file:line in the
+ * comment); each positive control is the swallow that idiom is one edit
+ * away from, and it must keep blocking.
+ */
+describe('guarded-catch — cleanup and rethrow shapes (negative controls)', () => {
+  it('an empty catch inside a `finally` is cleanup, not a swallow', () => {
+    // prisma scripts/lint-casts.mjs:107 (and lint-throws.mjs:117) — the
+    // worktree removal is best-effort; the rmSync after it is the fallback,
+    // and a throw here would replace the primary result of the try.
+    const r = classify([
+      'function main() {',
+      '  const tmpDir = mkdtempSync(join(tmpdir(), "lint-casts-"));',
+      '  let baseResult;',
+      '  try {',
+      '    git("worktree", "add", "--detach", tmpDir, mergeBase);',
+      '    baseResult = countCastsInDir(tmpDir);',
+      '  } finally {',
+      '    try {',
+      '      git("worktree", "remove", "--force", tmpDir);',
+      '    } catch {}',
+      '    rmSync(tmpDir, { recursive: true, force: true });',
+      '  }',
+      '  return baseResult;',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, true);
+    assert.strictEqual(r.shape, 'cleanup');
+    assert.strictEqual(r.context, 'finally');
+  });
+
+  it('an empty catch inside a function named as teardown is cleanup', () => {
+    // The `try { await client.quit() } catch {}` question: inside `close()`
+    // the resource is being discarded by contract, so a failure to discard
+    // it has no consumer. Still reported — as a warning.
+    const r = classify([
+      'class RedisCache {',
+      '  async close() {',
+      '    try {',
+      '      await this.client.quit();',
+      '    } catch {}',
+      '  }',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, true);
+    assert.strictEqual(r.shape, 'cleanup');
+    assert.strictEqual(r.context, 'close');
+  });
+
+  it('reaches the teardown function through a callback and an `if`', () => {
+    // prisma sqlite.ts:348 — `close()` wraps its body in an async IIFE.
+    const r = classify([
+      'const db = {',
+      '  close(): Promise<void> {',
+      '    if (closePromise) return closePromise;',
+      '    closePromise = (async () => {',
+      '      if (connectPromise) {',
+      '        try {',
+      '          await connectPromise;',
+      '        } catch {}',
+      '      }',
+      '      await ownedDispose?.();',
+      '    })();',
+      '    return closePromise;',
+      '  },',
+      '};',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, true);
+    assert.strictEqual(r.shape, 'cleanup');
+    assert.strictEqual(r.context, 'close');
+  });
+
+  it('an empty catch followed by a `throw` is subsumed by the primary cause', () => {
+    // prisma postgres-serverless.ts:177 has this shape with `.catch(() =>
+    // undefined)`; the empty-catch form is one edit away.
+    const r = classify([
+      'async function create(options) {',
+      '  try {',
+      '    return await build(options);',
+      '  } catch (err) {',
+      '    try {',
+      '      await driver.close();',
+      '    } catch {}',
+      '    throw err;',
+      '  }',
+      '}',
+    ].join('\n'));
+    // The first catch in the fixture is the outer one; classify the inner.
+    const raw = [
+      'async function create(options) {',
+      '  try {',
+      '    return await build(options);',
+      '  } catch (err) {',
+      '    try {',
+      '      await driver.close();',
+      '    } catch {}',
+      '    throw err;',
+      '  }',
+      '}',
+    ];
+    const masked = maskNonCode(raw.join('\n')).split('\n');
+    const inner = classifyEmptyCatch(masked, 6, raw[6].indexOf('catch'));
+    assert.strictEqual(inner.guarded, true);
+    assert.strictEqual(inner.shape, 'rethrow');
+    assert.ok(r); // the outer catch is not empty; its classification is not under test
+  });
+});
+
+describe('guarded-catch — cleanup and rethrow shapes (positive controls)', () => {
+  it('the same `quit()` catch inside `save()` still blocks', () => {
+    const r = classify([
+      'class RedisCache {',
+      '  async save(key, value) {',
+      '    try {',
+      '      await this.client.set(key, value);',
+      '    } catch {}',
+      '  }',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, false);
+  });
+
+  it('`closeAccount()` is a business operation, not teardown', () => {
+    const r = classify([
+      'async function closeAccount(id) {',
+      '  try {',
+      '    await db.accounts.update(id, { status: "closed" });',
+      '  } catch {}',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, false);
+  });
+
+  it('an `onClose` handler is not teardown either', () => {
+    const r = classify([
+      'const onClose = async () => {',
+      '  try {',
+      '    await flushPendingWrites();',
+      '  } catch {}',
+      '};',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, false);
+  });
+
+  it('cleanup in the try block does not rescue a catch outside a finally', () => {
+    const r = classify([
+      'async function run(tmpDir) {',
+      '  try {',
+      '    git("worktree", "remove", "--force", tmpDir);',
+      '  } catch {}',
+      '  rmSync(tmpDir, { recursive: true, force: true });',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, false);
+  });
+
+  it('a `throw` that is not the next statement does not count as rethrow', () => {
+    const r = classify([
+      'async function checkout(order) {',
+      '  try {',
+      '    await db.commit();',
+      '  } catch {}',
+      '  await sendReceipt(order.email);',
+      '  if (!order.paid) throw new Error("unpaid");',
+      '}',
+    ].join('\n'));
+    assert.strictEqual(r.guarded, false);
+  });
+});
+
+describe('guarded-catch — enclosingContext and isTeardownName', () => {
+  const ctx = (src) => {
+    const lines = src.split('\n');
+    const masked = maskNonCode(src).split('\n');
+    const at = lines.findIndex((l) => l.includes('HERE'));
+    return enclosingContext(masked, at, lines[at].indexOf('HERE'));
+  };
+
+  it('names teardown by verb, verb + resource noun, or a teardown tail word', () => {
+    for (const name of ['close', 'end', 'destroy', 'dispose', 'quit', 'destroyDatabasePool', 'closeDb', 'ownedDispose', 'ngOnDestroy', 'cleanupWorkspaces', 'destroyConnection']) {
+      assert.strictEqual(isTeardownName(name), true, name);
+    }
+    for (const name of ['save', 'commit', 'open', 'connect', 'closeAccount', 'closeOrder', 'endTransaction', 'onClose', 'handleClose', 'constructor', '']) {
+      assert.strictEqual(isTeardownName(name), false, name);
+    }
+  });
+
+  it('stops at the first named function, walking through control flow and callbacks', () => {
+    const r = ctx([
+      'class C {',
+      '  public async close() {',
+      '    for await (const row of rows) {',
+      '      if (row.ok) {',
+      '        items.forEach((x) => {',
+      '          HERE',
+      '        });',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n'));
+    assert.deepStrictEqual(r, { finally: false, fn: 'close', teardown: true });
+  });
+
+  it('is not fooled by an `if (` earlier in the method into reading the method as a loop body', () => {
+    // trpc wsClient.ts:144 — `public async close()` follows a method with
+    // `if (...)` conditions; the greedy `\([\s\S]*\)` read those parens
+    // through to `close()` and called the method body an `if` body.
+    const r = ctx([
+      'class C {',
+      '  private tick() {',
+      '    if (this.reconnecting && this.state === "open") { return; }',
+      '  }',
+      '  public async close() {',
+      '    HERE',
+      '  }',
+      '}',
+    ].join('\n'));
+    assert.deepStrictEqual(r, { finally: false, fn: 'close', teardown: true });
+  });
+
+  it('recognises arrow assignment, object property and function expression heads', () => {
+    assert.strictEqual(ctx('const destroyConnection = async (reason: unknown): Promise<void> => {\n  HERE\n};').fn, 'destroyConnection');
+    assert.strictEqual(ctx('const api = {\n  close: async () => {\n    HERE\n  },\n};').fn, 'close');
+    assert.strictEqual(ctx('exports.shutdown = function (signal) {\n  HERE\n};').fn, 'shutdown');
+    assert.strictEqual(ctx('function main() {\n  try {\n    x();\n  } finally {\n    HERE\n  }\n}').finally, true);
+  });
+
+  it('returns nothing at top level or when the enclosing function is anonymous all the way up', () => {
+    assert.deepStrictEqual(ctx('HERE'), { finally: false, fn: null, teardown: false });
+    assert.deepStrictEqual(ctx('setTimeout(() => {\n  HERE\n}, 10);'), { finally: false, fn: null, teardown: false });
   });
 });
