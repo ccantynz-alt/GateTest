@@ -25,6 +25,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // An anchor cannot be canonicalised or indexed on its own.
     { url: `${base}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.95 },
     { url: `${base}/enterprise`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    // /precision renders website/app/data/precision.json, which the corpus
+    // runner writes from its own measurement — the same contract as
+    // site-stats.json. Refreshed on the nightly, so "weekly" is honest.
+    { url: `${base}/precision`, lastModified: now, changeFrequency: "weekly", priority: 0.85 },
     { url: `${base}/how-it-works`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/quickstart`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
