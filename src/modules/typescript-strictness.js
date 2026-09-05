@@ -11,8 +11,8 @@
  *
  * 1. `tsconfig.json` regressions (project-wide):
  *
- *      error:   `strict: false`                — the master switch off
- *      error:   `noImplicitAny: false`         — implicit any flood
+ *      warning: `strict: false`                — the master switch off
+ *      warning: `noImplicitAny: false`         — implicit any flood
  *      warning: `strictNullChecks: false`      — null/undefined errors disabled
  *      warning: `strictFunctionTypes: false`   — variance checks disabled
  *      warning: `skipLibCheck: true`           — type errors in deps are hidden
@@ -20,7 +20,19 @@
  *
  *    `tsconfig.test.json` and `tsconfig.*.test.*.json` files are allowed
  *    to relax strictness (tests often need it); the rules above apply
- *    only to the base config and non-test variants.
+ *    only to the base config and non-test variants. A tsconfig that lives
+ *    under a canonical test path (`BaseModule._isTestPath`) is a test
+ *    config too, whatever its basename.
+ *
+ *    None of the tsconfig rules BLOCK. A compiler flag is a decision the
+ *    project made on purpose and can defend in review; it is not a defect
+ *    on a line. nestjs/nest (corpus6, 2026-09-05) sets `noImplicitAny:
+ *    false` in seven tsconfigs — its root, its published-package build
+ *    config and its integration suites — and was gated on all seven.
+ *    Failing a framework's build for a flag it chose is the gate as the
+ *    bottleneck (CLAUDE.md Forbidden #25). The rules keep reporting the
+ *    flags, as warnings, so the slider is still visible; only `@ts-nocheck`
+ *    — a per-file opt-out that hides real type errors — stays an error.
  *
  * 2. Suppression-comment abuse (per-file):
  *
@@ -198,7 +210,8 @@ class TypeScriptStrictnessModule extends BaseModule {
     const rel = path.relative(projectRoot, file);
     const basename = path.basename(file);
     const isTestConfig = /tsconfig\.(?:test|spec|tests)\./i.test(basename)
-      || /tsconfig\.test\.json$/i.test(basename);
+      || /tsconfig\.test\.json$/i.test(basename)
+      || this._isTestPath(rel);
 
     let parsed;
     try {
@@ -223,9 +236,11 @@ class TypeScriptStrictnessModule extends BaseModule {
     // most dangerous one (`@ts-nocheck`-equivalent skipLibCheck disables
     // library type-checking), but don't escalate the rest.
     if (!isTestConfig) {
+      // Config preference, not a defect — warning, never blocking. See the
+      // header: a flag the project chose is not a line it got wrong.
       if (co.strict === false) {
         issues += this._flag(result, `typescript-strictness:tsconfig-strict-false:${rel}`, {
-          severity: 'error',
+          severity: 'warning',
           file: rel,
           message: `${rel} sets \`strict: false\` — the master strictness switch is off, effectively demoting TypeScript to a syntax linter`,
           suggestion: 'Set `"strict": true`. If a migration forced this, fix one file at a time behind `// @ts-expect-error` comments until you can flip it back.',
@@ -233,7 +248,7 @@ class TypeScriptStrictnessModule extends BaseModule {
       }
       if (co.noImplicitAny === false) {
         issues += this._flag(result, `typescript-strictness:tsconfig-no-implicit-any-false:${rel}`, {
-          severity: 'error',
+          severity: 'warning',
           file: rel,
           message: `${rel} sets \`noImplicitAny: false\` — parameters and returns default to \`any\`, which defeats the point of TS`,
           suggestion: 'Delete the override. Fix the resulting errors one file at a time.',

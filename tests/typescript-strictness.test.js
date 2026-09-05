@@ -54,24 +54,28 @@ describe('TypeScriptStrictnessModule — tsconfig regressions', () => {
   beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-tss-cfg-')); });
   afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
 
-  it('errors on strict: false', async () => {
+  // REVISED 2026-09-05 (corpus6): error -> warning for both master flags. A
+  // compiler flag is a decision the project made and can defend; nestjs/nest
+  // was gated on seven `noImplicitAny: false` tsconfigs it chose on purpose.
+  // See the "preferences, not defects" block at the end of this file.
+  it('warns on strict: false', async () => {
     write(tmp, 'tsconfig.json', JSON.stringify({
       compilerOptions: { strict: false },
     }, null, 2));
     const r = await run(tmp);
     const hit = r.checks.find((c) => c.name.startsWith('typescript-strictness:tsconfig-strict-false:'));
     assert.ok(hit);
-    assert.strictEqual(hit.severity, 'error');
+    assert.strictEqual(hit.severity, 'warning');
   });
 
-  it('errors on noImplicitAny: false', async () => {
+  it('warns on noImplicitAny: false', async () => {
     write(tmp, 'tsconfig.json', JSON.stringify({
       compilerOptions: { strict: true, noImplicitAny: false },
     }, null, 2));
     const r = await run(tmp);
     const hit = r.checks.find((c) => c.name.startsWith('typescript-strictness:tsconfig-no-implicit-any-false:'));
     assert.ok(hit);
-    assert.strictEqual(hit.severity, 'error');
+    assert.strictEqual(hit.severity, 'warning');
   });
 
   it('warns on skipLibCheck: true', async () => {
@@ -340,5 +344,51 @@ describe('TypeScriptStrictnessModule — clean baseline', () => {
     assert.ok(summary);
     assert.match(summary.message, /1 tsconfig/);
     assert.match(summary.message, /1 source/);
+  });
+});
+
+// ── tsconfig flags are preferences, not defects (corpus6, 2026-09-05) ────────
+//
+// nestjs/nest sets `noImplicitAny: false` in seven tsconfigs — root,
+// packages/tsconfig.build.json (the config that BUILDS the published
+// packages), tools/gulp/, and four integration suites — and the gate blocked
+// on every one. That is a framework being failed for a flag it chose:
+// CLAUDE.md Forbidden #25. The flags are still reported so the slider stays
+// visible; nothing in the tsconfig family may block.
+describe('TypeScriptStrictnessModule — tsconfig flags are preferences, not defects', () => {
+  let tmp;
+  beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-tss-pref-')); });
+  afterEach(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+
+  it('NEGATIVE: nestjs/nest root tsconfig.json is reported as a warning, never blocking', async () => {
+    // compilerOptions verbatim from nest @ corpus6 (paths map trimmed)
+    write(tmp, 'tsconfig.json', JSON.stringify({ compilerOptions: {
+      module: 'Node16', moduleResolution: 'Node16', esModuleInterop: true,
+      noImplicitAny: false, noUnusedLocals: false, removeComments: true,
+      strictNullChecks: true, strictPropertyInitialization: false,
+      forceConsistentCasingInFileNames: true, target: 'ES2023', types: ['node'],
+    }, include: ['packages/**/*', 'integration/**/*'] }, null, 2));
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name === 'typescript-strictness:tsconfig-no-implicit-any-false:tsconfig.json');
+    assert.ok(hit, 'the flag must still be reported — downgraded, not hidden');
+    assert.strictEqual(hit.severity, 'warning');
+    assert.ok(!r.checks.some((c) => !c.passed && c.severity === 'error'), 'no tsconfig rule may block');
+  });
+
+  it('NEGATIVE: a tsconfig under a canonical test path is a test config whatever its basename', async () => {
+    write(tmp, 'test/tsconfig.json', JSON.stringify({ compilerOptions: { strict: false, noImplicitAny: false } }));
+    write(tmp, 'e2e/tsconfig.json', JSON.stringify({ compilerOptions: { strict: false } }));
+    const r = await run(tmp);
+    // Silence needs its own positive control: both files were actually seen.
+    assert.match(r.checks.find((c) => c.name === 'typescript-strictness:scanning').message, /2 tsconfig/);
+    assert.ok(!r.checks.some((c) => /tsconfig-(strict|no-implicit-any)/.test(c.name)), r.checks.map((c) => c.name).join());
+  });
+
+  it('POSITIVE CONTROL: @ts-nocheck is a per-file opt-out, not a preference — still an error', async () => {
+    write(tmp, 'src/a.ts', '// @ts-nocheck\nexport const x = 1;\n');
+    const r = await run(tmp);
+    const hit = r.checks.find((c) => c.name.startsWith('typescript-strictness:ts-nocheck:'));
+    assert.ok(hit);
+    assert.strictEqual(hit.severity, 'error');
   });
 });

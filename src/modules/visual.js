@@ -144,9 +144,15 @@ class VisualModule extends BaseModule {
     if (preludes.length === 0) return;
     const hasScreen = preludes.some((p) => /\bscreen\b/i.test(p));
     const hasPrint = preludes.some((p) => /\bprint\b/i.test(p)) || /@page\b/.test(stripped);
+    // Info, never blocking. The absence of a print stylesheet is not a
+    // defect a user hits — it is a nice-to-have on the pages people print.
+    // trpc's docs site (`www/src/css/custom.css`, two `@media only screen`
+    // breakpoints, corpus6 2026-09-05) was gated on it at the default error
+    // severity; the same file passes every other visual rule.
     if (hasScreen && !hasPrint) {
       result.addCheck(`visual:print-styles:${relPath}`, false, {
         file: relPath,
+        severity: 'info',
         message: 'Media queries found but no print stylesheet',
         suggestion: 'Add @media print { ... } for printable pages',
       });
@@ -159,9 +165,13 @@ class VisualModule extends BaseModule {
     let match;
     while ((match = zIndexRegex.exec(content)) !== null) {
       const value = parseInt(match[1]);
+      // A stacking-order smell, not a rendering defect — warning. The one
+      // rule in this module that stays an error is `viewport` on a full
+      // document: that is a page rendering at desktop width on every phone.
       if (value > 9999) {
         result.addCheck(`visual:z-index:${relPath}`, false, {
           file: relPath,
+          severity: 'warning',
           message: `z-index: ${value} — excessively high z-index`,
           suggestion: 'Use a z-index scale/token system instead of arbitrary large values',
         });
