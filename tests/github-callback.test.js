@@ -958,4 +958,26 @@ describe('buildMarkdownComment — in-this-change attribution', () => {
     assert.match(items[0], /security:rule2.*`in this change`/);
     assert.match(items[1], /`pre-existing`/);
   });
+
+  // Line-level attribution (2026-09-05): a finding on an untouched line of
+  // a touched file is old code. It is ranked between the two, tagged so the
+  // reader knows the file moved, and counted as pre-existing — not as
+  // something this change did.
+  it('ranks an old finding in a changed file after in-change ones, before untouched files', () => {
+    const findings = [
+      mk(0, { inDiff: false, inChangedFile: false }),
+      mk(1, { inDiff: false, inChangedFile: true }),
+      mk(2, { inDiff: true, inChangedFile: true }),
+    ];
+    const body = buildMarkdownComment('o/r', 'abc1234def', {
+      status: 'complete', totalIssues: 3, duration: 100, modules: [{ name: 'security', status: 'failed', checks: 3, issues: 3, duration: 1, details: ['[error] x'] }],
+      findings, findingSummary: { total: 3, blocking: 3, softErrors: 0, warnings: 0, info: 0, duplicatesCollapsed: 0, hiddenLowConfidence: 0 },
+      changedFiles: 2, baseRef: 'b'.repeat(40),
+    }, null, 'strict');
+    assert.match(body, /### What matters — 1 in this change, 2 pre-existing/);
+    const items = body.split('\n').filter((l) => /^- 🔴/.test(l));
+    assert.match(items[0], /security:rule2.*`in this change`/);
+    assert.match(items[1], /security:rule1.*`pre-existing, in a changed file`/);
+    assert.match(items[2], /security:rule0\*\* `pre-existing` \[/);
+  });
 });

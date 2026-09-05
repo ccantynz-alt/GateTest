@@ -262,15 +262,19 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
     let ranked = Array.isArray(scanResult.findings) ? scanResult.findings.filter((f) => f && !f.duplicateOf) : [];
     const fsum = scanResult.findingSummary || null;
     // Attribution: when the scan knew the base commit, findings carry
-    // `inDiff`. Findings in files THIS change touched come first (that is
-    // what a reviewer is here for); pre-existing ones are counted, not
-    // hidden — old code counted as new is the SonarQube complaint that has
-    // been open since 2023, and the answer is to say which is which.
+    // `inDiff` (on a line this change inserted or modified) and
+    // `inChangedFile` (the file moved, the line did not). Findings on lines
+    // THIS change touched come first (that is what a reviewer is here for),
+    // then old findings in touched files, then the rest; pre-existing ones
+    // are counted, not hidden — old code counted as new is the SonarQube
+    // complaint that has been open since 2023, and the answer is to say
+    // which is which.
     const attributed = typeof scanResult.changedFiles === 'number' && ranked.some((f) => typeof f.inDiff === 'boolean');
     let preExisting = 0;
     if (attributed) {
       preExisting = ranked.filter((f) => !f.inDiff).length;
-      ranked = [...ranked.filter((f) => f.inDiff), ...ranked.filter((f) => !f.inDiff)];
+      const rank = (f) => (f.inDiff ? 0 : f.inChangedFile ? 1 : 2);
+      ranked = ranked.map((f, i) => [f, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([f]) => f);
     }
     if (ranked.length > 0) {
       const top = ranked.slice(0, PR_COMMENT_TOP_FINDINGS);
@@ -283,7 +287,9 @@ function buildMarkdownComment(repository, sha, scanResult, targetUrl, mode = 'ad
         const sev = f.blocking ? '🔴' : f.severity === 'error' ? '🟠' : f.severity === 'warning' ? '🟡' : '🔵';
         const where = f.file ? linkifyFinding(`${f.file}${f.line ? `:${f.line}` : ''}`, owner, repoName, sha) : '';
         const conf = typeof f.confidence === 'number' && f.confidence < 1 ? ` · confidence ${Math.round(f.confidence * 100)}%` : '';
-        const tag = attributed ? (f.inDiff ? ' `in this change`' : ' `pre-existing`') : '';
+        const tag = attributed
+          ? (f.inDiff ? ' `in this change`' : f.inChangedFile ? ' `pre-existing, in a changed file`' : ' `pre-existing`')
+          : '';
         lines.push(`- ${sev} **${f.rule || f.module}**${tag} ${where ? `${where} — ` : ''}${String(f.message || '').slice(0, 200)}${conf}`);
         // Evidence-attached (advancement #5): the verified quote, so an
         // AI finding is never taken on faith. One line, hard-truncated.
