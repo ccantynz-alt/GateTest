@@ -187,34 +187,27 @@ class ServiceConsistency extends BaseModule {
 
   _collectServiceFiles(projectRoot) {
     const found = [];
-    const walk  = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const e of entries) {
-        if (['node_modules', '.git', '.claude', '.next', 'dist', 'build'].includes(e.name)) continue;
-        const full = path.join(dir, e.name);
-        const rel  = path.relative(projectRoot, full);
-        if (e.isDirectory()) { walk(full); continue; }
+    // KI #104: shared walk replaces the private one. Procfile and Dockerfile
+    // carry no extension, so the sweep takes '*' and classifies on basename.
+    for (const full of this._collectFiles(projectRoot, ['*'])) {
+      const rel   = path.relative(projectRoot, full);
+      const lower = path.basename(full).toLowerCase();
+      let type = null;
 
-        const lower = e.name.toLowerCase();
-        let type = null;
+      if (lower.endsWith('.service'))                                type = 'systemd';
+      else if (lower === 'procfile')                                 type = 'procfile';
+      else if (lower.includes('ecosystem') && lower.endsWith('.js')) type = 'pm2';
+      else if (lower.includes('ecosystem') && lower.endsWith('.json')) type = 'pm2';
+      else if (lower.startsWith('docker-compose') && (lower.endsWith('.yml') || lower.endsWith('.yaml'))) type = 'compose';
+      else if (lower === 'dockerfile')                               type = 'dockerfile';
 
-        if (lower.endsWith('.service'))                                type = 'systemd';
-        else if (lower === 'procfile')                                 type = 'procfile';
-        else if (lower.includes('ecosystem') && lower.endsWith('.js')) type = 'pm2';
-        else if (lower.includes('ecosystem') && lower.endsWith('.json')) type = 'pm2';
-        else if (lower.startsWith('docker-compose') && (lower.endsWith('.yml') || lower.endsWith('.yaml'))) type = 'compose';
-        else if (lower === 'dockerfile')                               type = 'dockerfile';
+      if (!type) continue;
 
-        if (!type) continue;
-
-        try {
-          const content = fs.readFileSync(full, 'utf-8');
-          found.push({ rel, absPath: full, type, content });
-        } catch { /* skip */ }
-      }
-    };
-    walk(projectRoot);
+      try {
+        const content = fs.readFileSync(full, 'utf-8');
+        found.push({ rel, absPath: full, type, content });
+      } catch { /* skip */ }
+    }
     return found;
   }
 }

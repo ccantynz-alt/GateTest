@@ -8,10 +8,10 @@ const BaseModule = require('./base-module');
 const { buildDeadCodeIndex } = require('./dead-code-index');
 const { parseExportsWithAcorn } = require('./dead-code-extractor');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const ALL_EXTS_MAIN = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py']);
 
@@ -54,11 +54,18 @@ class DeadCodeModule extends BaseModule {
       'deadCode',
       'Dead Code — unused exports across JS/TS/Python, orphaned files, rotting commented-out blocks',
     );
+    // Opt out of incremental: unused-export and orphaned-file detection
+    // is a whole-repo set comparison — indexing only the changed files
+    // would report every export in them as unused because their
+    // importers were never walked. Cross-file invariant — always full set.
+    this._respectsIncremental = false;
   }
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const files = this._findFiles(projectRoot);
+    // Shared walk from BaseModule (KI #104). Incremental scoping is opted
+    // out in the constructor — see the note there.
+    const files = this._collectFiles(projectRoot, [...ALL_EXTS_MAIN], EXTRA_EXCLUDES);
 
     if (files.length === 0) {
       result.addCheck('dead-code:no-files', true, {
@@ -86,31 +93,6 @@ class DeadCodeModule extends BaseModule {
       severity: 'info',
       message: `Dead-code scan: ${files.length} file(s), ${totalIssues} issue(s)`,
     });
-  }
-
-  _findFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (ALL_EXTS_MAIN.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
   }
 
   _isEntryPoint(file, projectRoot) {

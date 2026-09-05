@@ -65,15 +65,17 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
-
 const JS_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
 ]);
 const PY_EXTS = new Set(['.py']);
+const SCAN_EXTS = [...JS_EXTS, ...PY_EXTS];
+
+// The walk this module used to own skipped EVERY dot-prefixed entry
+// (`.github`, `.husky`, `.storybook`, dotfiles) — not just the excludes
+// BaseModule._collectFiles knows. Kept as a path filter so the file set
+// does not widen (KI #104); it also covers the old `.terraform` exclude.
+const HIDDEN_SEGMENT_RE = /(?:^|\/)\.[^/]/;
 
 const MINIFIED_RE = /\.(?:min|bundle|prod)\.[a-z]+$/i;
 
@@ -116,7 +118,10 @@ class FeatureFlagModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = (config && config.projectRoot) || process.cwd();
-    const files = this._collect(projectRoot);
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    const files = this._collectFiles(projectRoot, SCAN_EXTS).filter(
+      (abs) => !HIDDEN_SEGMENT_RE.test(path.relative(projectRoot, abs).replace(/\\/g, '/')),
+    );
 
     if (files.length === 0) {
       result.addCheck('feature-flag:no-files', true, {
@@ -159,31 +164,6 @@ class FeatureFlagModule extends BaseModule {
       fileCount: files.length,
       issueCount: issues,
     });
-  }
-
-  _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name.startsWith('.') && e.name !== '.') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (JS_EXTS.has(ext) || PY_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(root);
-    return out;
   }
 
   _scanJs(rel, text, result) {

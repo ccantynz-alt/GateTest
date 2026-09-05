@@ -91,11 +91,6 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
-
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
 
 
@@ -180,24 +175,11 @@ class AsyncIterationModule extends BaseModule {
     });
   }
 
+  // KI #104: the shared walk replaces a private readdir copy so `--diff` /
+  // `--pr` scans only touch changed files. `.terraform` is the one exclude
+  // not in the shared defaults.
   _findFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full, depth + 1);
-        else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    return this._collectFiles(projectRoot, [...SOURCE_EXTS], ['.terraform']);
   }
 
   _scanFile(file, projectRoot, result) {

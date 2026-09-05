@@ -66,10 +66,10 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const CODE_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
@@ -182,6 +182,11 @@ class EnvVarsModule extends BaseModule {
       'envVars',
       'Env-vars — cross-reference process.env / os.environ reads against .env.example and CI env blocks; flag missing and unused keys',
     );
+    // Opt out of incremental: the declared-vs-referenced comparison is a
+    // whole-repo set diff — scanning only the changed files would report
+    // every key read elsewhere as "declared but unused". Cross-file
+    // invariant — always full set.
+    this._respectsIncremental = false;
   }
 
   async run(result, config) {
@@ -266,33 +271,26 @@ class EnvVarsModule extends BaseModule {
 
   _harvestDeclared(projectRoot) {
     const declared = new Set();
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(full, depth + 1); continue; }
-        if (!entry.isFile()) continue;
-
-        if (ENV_BASENAME_RE.test(entry.name)) {
-          this._harvestEnvFile(full, declared);
-        } else if (
-          entry.name === 'vercel.json' ||
-          entry.name === 'netlify.toml' ||
-          entry.name === 'docker-compose.yml' ||
-          entry.name === 'docker-compose.yaml' ||
-          entry.name === 'compose.yml' ||
-          entry.name === 'compose.yaml'
-        ) {
-          this._harvestConfigFile(full, declared);
-        } else if (full.replace(/\\/g, '/').includes('.github/workflows/') && CI_WORKFLOW_RE.test(entry.name)) {
-          this._harvestWorkflowFile(full, declared);
-        }
+    // Shared walk from BaseModule (KI #104) — '*' because the declaring
+    // files (.env*, vercel.json, compose files, CI workflows) share no
+    // extension; the basename routing below is unchanged.
+    for (const full of this._collectFiles(projectRoot, ['*'], EXTRA_EXCLUDES)) {
+      const name = path.basename(full);
+      if (ENV_BASENAME_RE.test(name)) {
+        this._harvestEnvFile(full, declared);
+      } else if (
+        name === 'vercel.json' ||
+        name === 'netlify.toml' ||
+        name === 'docker-compose.yml' ||
+        name === 'docker-compose.yaml' ||
+        name === 'compose.yml' ||
+        name === 'compose.yaml'
+      ) {
+        this._harvestConfigFile(full, declared);
+      } else if (full.replace(/\\/g, '/').includes('.github/workflows/') && CI_WORKFLOW_RE.test(name)) {
+        this._harvestWorkflowFile(full, declared);
       }
-    };
-    walk(projectRoot);
+    }
     return declared;
   }
 
@@ -370,24 +368,14 @@ class EnvVarsModule extends BaseModule {
 
   _harvestReferenced(projectRoot) {
     const referenced = new Map(); // key → [{file, line}]
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(full, depth + 1); continue; }
-        if (!entry.isFile()) continue;
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!CODE_EXTS.has(ext)) continue;
-        const rel = path.relative(projectRoot, full);
-        if (this._isTestPath(rel)) continue;
-        if (DEV_CONFIG_BASENAME_RE.test(entry.name)) continue;
-        this._scanReferences(full, projectRoot, referenced);
-      }
-    };
-    walk(projectRoot);
+    // Shared walk from BaseModule (KI #104); test-path and dev-config
+    // skips are unchanged.
+    for (const full of this._collectFiles(projectRoot, [...CODE_EXTS], EXTRA_EXCLUDES)) {
+      const rel = path.relative(projectRoot, full);
+      if (this._isTestPath(rel)) continue;
+      if (DEV_CONFIG_BASENAME_RE.test(path.basename(full))) continue;
+      this._scanReferences(full, projectRoot, referenced);
+    }
     return referenced;
   }
 

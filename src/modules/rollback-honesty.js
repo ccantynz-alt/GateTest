@@ -180,26 +180,15 @@ class RollbackHonestyModule extends BaseModule {
   }
 
   _findDeployFiles(root) {
-    const results = [];
-    const walk = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const e of entries) {
-        if (['node_modules', '.git', '.claude', '.next', 'dist'].includes(e.name)) continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (/\.(sh|bash)$/.test(e.name) || /deploy/.test(e.name.toLowerCase())) {
-          results.push(full);
-        }
-      }
-    };
-
-    // Also check GitHub Actions workflows
-    const ghWorkflows = path.join(root, '.github', 'workflows');
-    if (fs.existsSync(ghWorkflows)) walk(ghWorkflows);
-
-    walk(root);
-    return results;
+    // KI #104: shared walk replaces the private one. Deploy scripts are
+    // matched by name, not extension (`deploy.yml`, `Deployfile`, a bare
+    // `deploy`), so the sweep takes '*' and filters on basename. The old
+    // walk visited `.github/workflows` and then the whole tree again, so
+    // every workflow was analysed twice; one pass covers it.
+    return this._collectFiles(root, ['*']).filter((full) => {
+      const name = path.basename(full);
+      return /\.(sh|bash)$/.test(name) || /deploy/.test(name.toLowerCase());
+    });
   }
 }
 

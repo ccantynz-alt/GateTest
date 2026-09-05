@@ -71,17 +71,16 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const SOURCE_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs',
   '.ts', '.tsx', '.mts', '.cts',
   '.py',
 ]);
-
 
 const SUPPRESS_RE = /\bredos-ok\b/;
 
@@ -161,28 +160,13 @@ class RedosModule extends BaseModule {
   }
 
   _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name.startsWith('.') && e.name !== '.') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(root);
-    return out;
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104).
+    // The old private walk also skipped every dot-named entry (.github,
+    // .venv, .eslintrc.js, …); that is kept here as a path filter so the
+    // file set is unchanged.
+    return this._collectFiles(root, [...SOURCE_EXTS], EXTRA_EXCLUDES).filter(
+      (f) => !path.relative(root, f).split(path.sep).some((seg) => seg.startsWith('.')),
+    );
   }
 
   _scanFile(rel, text, result) {

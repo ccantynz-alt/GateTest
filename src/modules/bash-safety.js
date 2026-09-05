@@ -11,6 +11,9 @@ const path = require('path');
 
 const SWALLOW_OK = /gatetest:swallow-ok/;
 
+const SHELL_EXTS = ['.sh', '.bash'];
+const YAML_EXTS = ['.yml', '.yaml'];
+
 /**
  * Commands that use a NON-ZERO EXIT AS AN ANSWER, not as a failure report.
  * `grep` exiting 1 means "no match"; `command -v` exiting 1 means "not
@@ -152,13 +155,17 @@ class BashSafetyModule extends BaseModule {
   async run(result, config) {
     const root = config.projectRoot;
 
+    // One shared walk for both kinds (KI #104) — it replaced a private glob
+    // whose exclude test also matched ancestor segments of the project path.
+    const files = this._collectFiles(root, [...SHELL_EXTS, ...YAML_EXTS]);
+
     // Shell scripts
-    for (const file of this._glob(root, /\.(sh|bash)$/, ['node_modules', '.git', '.claude', '.next', 'dist'])) {
+    for (const file of files.filter((f) => SHELL_EXTS.includes(path.extname(f).toLowerCase()))) {
       this._scanFile(file, path.relative(root, file), result, 'shell');
     }
 
     // CI YAML — extract run: blocks
-    for (const file of this._glob(root, /\.(yml|yaml)$/, ['node_modules', '.git', '.claude', '.next', 'dist'])) {
+    for (const file of files.filter((f) => YAML_EXTS.includes(path.extname(f).toLowerCase()))) {
       this._scanFile(file, path.relative(root, file), result, 'yaml');
     }
 
@@ -263,26 +270,6 @@ class BashSafetyModule extends BaseModule {
       if (/^\w/.test(l) && !l.startsWith('-') && i < idx) break;
     }
     return false;
-  }
-
-  _glob(root, pattern, excludes = []) {
-    const results = [];
-    const walk = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      const dirSegments = new Set(dir.split(/[\\/]+/));
-      for (const e of entries) {
-        // Segment-anchored, not substring: `dir.includes('/.git')` also
-        // matched `/.github`, which made every GitHub Actions workflow
-        // invisible to this scanner — the exact files it exists to read.
-        if (excludes.some(x => e.name === x || dirSegments.has(x))) continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) walk(full);
-        else if (pattern.test(full.replace(/\\/g, '/'))) results.push(full);
-      }
-    };
-    walk(root);
-    return results;
   }
 }
 

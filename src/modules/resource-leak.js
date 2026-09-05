@@ -61,13 +61,12 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
-];
+// Directory excludes beyond what `BaseModule._collectFiles` already skips
+// (node_modules, .git, dist, build, coverage, .next, out, …). The old
+// private walk (removed under KI #104) also skipped these.
+const EXTRA_EXCLUDES = ['.terraform'];
 
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts']);
-
 
 function isInString(line, idx) {
   let inS = false; let inD = false; let inT = false;
@@ -143,7 +142,8 @@ class ResourceLeakModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
-    const files = this._findFiles(projectRoot);
+    // Shared walk from BaseModule — honours --diff/--pr scoping (KI #104).
+    const files = this._collectFiles(projectRoot, [...SOURCE_EXTS], EXTRA_EXCLUDES);
 
     if (files.length === 0) {
       result.addCheck('resource-leak:no-files', true, {
@@ -167,26 +167,6 @@ class ResourceLeakModule extends BaseModule {
       severity: 'info',
       message: `Resource-leak scan: ${files.length} file(s), ${issues} issue(s)`,
     });
-  }
-
-  _findFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full, depth + 1);
-        else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
   }
 
   _scanFile(file, projectRoot, result) {

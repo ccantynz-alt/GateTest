@@ -72,9 +72,14 @@ const DEFAULT_EXCLUDES = [
   '.next', '__pycache__', 'target', 'vendor', '.terraform', 'out',
 ];
 
-const SOURCE_EXTS = new Set([
+// Excludes beyond BaseModule._collectFiles' defaults (KI #104).
+const EXTRA_EXCLUDES = ['.terraform'];
+
+const SOURCE_EXTS = [
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
-]);
+];
+
+const SPEC_EXTS = ['.yaml', '.yml', '.json'];
 
 const SPEC_BASENAME_RE = /^(?:openapi|swagger|api-spec|api)(?:\.[A-Za-z0-9_-]+)?\.(?:ya?ml|json)$/i;
 
@@ -93,6 +98,12 @@ class OpenApiDriftModule extends BaseModule {
       'openapiDrift',
       'OpenAPI ↔ code drift detector — flags routes defined in code but missing from openapi.yaml, and spec paths with no matching handler',
     );
+    // Cross-file comparison: a spec path is only "ghost" if NO handler in the
+    // whole repo matches, and a route is only "undocumented" against the whole
+    // spec. Narrowing either side to the diff would invent findings, so the
+    // walk is shared but never scoped (same precedent as duplicateCode /
+    // crossFileTaint); the runner still scopes the findings.
+    this._respectsIncremental = false;
   }
 
   async run(result, config) {
@@ -170,41 +181,16 @@ class OpenApiDriftModule extends BaseModule {
     });
   }
 
+  // Both discovery sweeps go through the shared walk (KI #104); only the
+  // Next.js app-router walk below stays private because it derives the URL
+  // from the directory structure as it descends.
   _findSpecs(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 6) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full, depth + 1);
-        else if (entry.isFile() && SPEC_BASENAME_RE.test(entry.name)) out.push(full);
-      }
-    };
-    walk(projectRoot);
-    return out;
+    return this._collectFiles(projectRoot, SPEC_EXTS, EXTRA_EXCLUDES)
+      .filter((f) => SPEC_BASENAME_RE.test(path.basename(f)));
   }
 
   _findCodeFiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) walk(full, depth + 1);
-        else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    return this._collectFiles(projectRoot, SOURCE_EXTS, EXTRA_EXCLUDES);
   }
 
   _harvestSpec(file, projectRoot, specPaths) {

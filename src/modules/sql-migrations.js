@@ -36,11 +36,6 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor',
-];
-
 // Any ancestor directory whose name matches one of these = migration file.
 const MIGRATION_DIR_NAMES = new Set([
   'migrations', 'migration', 'migrate',
@@ -92,27 +87,9 @@ class SqlMigrationsModule extends BaseModule {
   }
 
   _findMigrations(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 12) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile() && /\.sql$/i.test(entry.name)) {
-          if (this._isMigrationFile(projectRoot, full)) out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the file set (KI #104).
+    return this._collectFiles(projectRoot, ['.sql'])
+      .filter((full) => this._isMigrationFile(projectRoot, full));
   }
 
   _isMigrationFile(projectRoot, full) {

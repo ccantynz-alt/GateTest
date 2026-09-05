@@ -74,11 +74,6 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
-
 const SOURCE_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
   '.py', '.java', '.kt', '.scala',
@@ -187,32 +182,15 @@ class CronExpressionModule extends BaseModule {
     });
   }
 
+  // KI #104: the shared walk replaces a private readdir copy so `--diff` /
+  // `--pr` scans only touch changed files. The old walk skipped every
+  // dot-name except `.github/` (GitHub Actions schedules live there) — kept
+  // as a filter so the file set is unchanged; `.terraform` is the one
+  // exclude not in the defaults.
   _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        // Allow .github/ through — GitHub Actions schedules live there.
-        if (e.name.startsWith('.') && e.name !== '.' && e.name !== '.github') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (SOURCE_EXTS.has(ext) || YAML_EXTS.has(ext) || JSON_EXTS.has(ext)) {
-            out.push(full);
-          }
-        }
-      }
-    };
-    walk(root);
-    return out;
+    return this._collectFiles(root, [...SOURCE_EXTS, ...YAML_EXTS, ...JSON_EXTS], ['.terraform'])
+      .filter((abs) => !path.relative(root, abs).split(path.sep)
+        .some((s) => s.startsWith('.') && s !== '.github'));
   }
 
   _harvestCronStrings(rel, text, ext) {

@@ -22,11 +22,6 @@ const fs = require('fs');
 const path = require('path');
 const BaseModule = require('./base-module');
 
-const DEFAULT_EXCLUDES = [
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', '__pycache__', 'target', 'vendor',
-];
-
 const DOCKERFILE_PATTERN = /^(Dockerfile(\..+)?|.*\.[Dd]ockerfile)$/;
 
 // Secret-looking env/arg values — same style as the secrets module but
@@ -73,27 +68,11 @@ class DockerfileModule extends BaseModule {
   }
 
   _findDockerfiles(projectRoot) {
-    const out = [];
-    const walk = (dir, depth = 0) => {
-      if (depth > 10) return;
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (DEFAULT_EXCLUDES.includes(entry.name)) continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(full, depth + 1);
-        } else if (entry.isFile() && DOCKERFILE_PATTERN.test(entry.name)) {
-          out.push(full);
-        }
-      }
-    };
-    walk(projectRoot);
-    return out;
+    // Shared walk replaced a private readdir sweep so --diff scans shrink the
+    // file set (KI #104). `Dockerfile` has no extension, so collect '*' and
+    // pick by basename — the directory sweep itself costs the same either way.
+    return this._collectFiles(projectRoot, ['*'])
+      .filter((full) => DOCKERFILE_PATTERN.test(path.basename(full)));
   }
 
   _checkDockerfile(file, projectRoot, result) {

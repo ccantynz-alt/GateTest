@@ -78,11 +78,6 @@ const BaseModule = require('./base-module');
 const fs = require('fs');
 const path = require('path');
 
-const EXCLUDE_DIRS = new Set([
-  'node_modules', '.git', '.claude', 'dist', 'build', 'coverage', '.gatetest',
-  '.next', 'out', 'target', 'vendor', '.terraform', '__pycache__',
-]);
-
 const JS_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
 ]);
@@ -160,29 +155,13 @@ class DatetimeBugModule extends BaseModule {
     });
   }
 
+  // KI #104: the shared walk replaces a private readdir copy so `--diff` /
+  // `--pr` scans only touch changed files. The old walk also skipped every
+  // dot-name (`.storybook/`, `.eslintrc.js`) — kept as a filter so the file
+  // set is unchanged; `.terraform` is the one exclude not in the defaults.
   _collect(root) {
-    const out = [];
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        if (EXCLUDE_DIRS.has(e.name)) continue;
-        if (e.name.startsWith('.') && e.name !== '.') continue;
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          walk(full);
-        } else if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (JS_EXTS.has(ext) || PY_EXTS.has(ext)) out.push(full);
-        }
-      }
-    };
-    walk(root);
-    return out;
+    return this._collectFiles(root, [...JS_EXTS, ...PY_EXTS], ['.terraform'])
+      .filter((abs) => !path.relative(root, abs).split(path.sep).some((s) => s.startsWith('.')));
   }
 
   _scanJs(rel, text, result) {
