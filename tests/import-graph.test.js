@@ -296,7 +296,8 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
       'web/app/page.tsx': 'import { cn } from "@/app/lib/cn";\nimport gate from "@lib/gate";\nexport default function P() { return cn(gate); }\n',
       'web/app/lib/cn.ts': 'export const cn = (x: string) => x;\n',
       'lib/gate.js': 'module.exports = 1;\n',
-      'src/index.ts': 'import { fmt } from "~/util/fmt";\nimport {\n  a,\n  b,\n} from "./multi";\nexport const main = () => fmt(a + b);\n',
+      'src/index.ts': 'import { fmt } from "~/util/fmt";\nimport {\n  a,\n  b,\n} from "./multi";\nimport { esm } from "./esm.js";\nexport const main = () => fmt(a + b + esm);\n',
+      'src/esm.ts': 'export const esm = 3;\n',
       'src/util/fmt.ts': 'export const fmt = (x: number) => String(x);\n',
       'src/multi.ts': 'export const a = 1; export const b = 2;\n',
       'packages/tool/package.json': JSON.stringify({ name: '@acme/tool', main: 'lib/main.js' }),
@@ -326,6 +327,12 @@ describe('import-graph — aliases, workspaces, root-relative strings, multi-lin
   it('a root-relative path string that resolves is a path-literal edge', () => {
     const g = buildImportGraph({ projectRoot: R });
     assert.deepStrictEqual(kindsInto(g, 'src/doctor/diagnose.js'), ['path-literal:bin/doctor.js']);
+  });
+  it('a `.js` specifier written for a `.ts` on disk is an edge — outside staticGraph, so import-cycle is unchanged', () => {
+    const g = buildImportGraph({ projectRoot: R });
+    assert.deepStrictEqual(kindsInto(g, 'src/esm.ts'), ['ts-esm:src/index.ts']);
+    const idx = path.join(R, 'src/index.ts');
+    assert.ok(!g.staticGraph.get(idx).has(path.join(R, 'src/esm.ts')));
   });
   it('the closing line of a multi-line import is an edge', () => {
     const g = buildImportGraph({ projectRoot: R });

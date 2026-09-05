@@ -83,7 +83,7 @@ function resolveWorkspace(spec, workspaces, fileSet) {
     if (spec !== name && !spec.startsWith(`${name}/`)) continue;
     const sub = spec === name ? null : spec.slice(name.length + 1);
     if (sub !== null) {
-      const direct = resolveImport(dir, `./${sub}`, fileSet);
+      const direct = resolveImport(dir, `./${sub}`, fileSet) || resolveImportTsEsm(dir, `./${sub}`, fileSet);
       if (direct) return direct;
       const viaExports = resolvePackageSubpath(dir, sub);
       return viaExports && fileSet.has(viaExports) ? viaExports : null;
@@ -158,15 +158,29 @@ function isTopLevel(line) {
 function resolveImport(dir, spec, fileSet) {
   const base = path.resolve(dir, spec);
   if (fileSet.has(base)) return base;
-  // `./x.js` written for a `x.ts` on disk (TypeScript NodeNext / ESM).
-  for (const cand of tsEquivalents(base)) {
-    if (fileSet.has(cand)) return cand;
-  }
   for (const ext of JS_EXTS) {
     if (fileSet.has(base + ext)) return base + ext;
   }
   for (const ext of JS_EXTS) {
     const cand = path.join(base, 'index' + ext);
+    if (fileSet.has(cand)) return cand;
+  }
+  return null;
+}
+
+/**
+ * `./x.js` written for a `x.ts` on disk (TypeScript NodeNext / ESM). Kept
+ * apart from resolveImport on purpose: an edge found only this way is
+ * recorded as kind 'ts-esm', outside staticGraph. Letting it into the static
+ * set surfaced 15 import-cycle findings on nest and 2 on apollo-server in
+ * one corpus run — real cycles through barrel files and `.interface.ts`
+ * imports that TypeScript elides at compile time, which import-cycle cannot
+ * yet tell from runtime ones. Reachability needs the edge; the cycle rule
+ * needs the elision work first (KI #96 follow-up).
+ */
+function resolveImportTsEsm(dir, spec, fileSet) {
+  const base = path.resolve(dir, spec);
+  for (const cand of tsEquivalents(base)) {
     if (fileSet.has(cand)) return cand;
   }
   return null;
@@ -203,7 +217,9 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
   const push = (spec, kind, lineNo) => {
     if (isRelative(spec)) {
       const to = resolveImport(dir, spec, fileSet);
-      if (to) record(to, kind, lineNo);
+      if (to) { record(to, kind, lineNo); return; }
+      const swapped = resolveImportTsEsm(dir, spec, fileSet);
+      if (swapped) record(swapped, 'ts-esm', lineNo);
       return;
     }
     // A bare specifier is external unless a path alias or a workspace
@@ -212,7 +228,9 @@ function edgesForFile(absPath, fileSet, ctx = {}) {
     // is unchanged; that is the deliberate, conservative half of KI #96.
     if (ctx.projectRoot) {
       const bases = resolveAlias(absPath, spec, ctx.projectRoot);
-      const viaAlias = bases ? bases.map((b) => resolveImport(path.dirname(b), `./${path.basename(b)}`, fileSet)).find(Boolean) : null;
+      const viaAlias = bases
+        ? bases.map((b) => resolveImport(path.dirname(b), `./${path.basename(b)}`, fileSet) || resolveImportTsEsm(path.dirname(b), `./${path.basename(b)}`, fileSet)).find(Boolean)
+        : null;
       if (viaAlias) { record(viaAlias, 'alias', lineNo); return; }
       const viaWs = ctx.workspaces && ctx.workspaces.size ? resolveWorkspace(spec, ctx.workspaces, fileSet) : null;
       if (viaWs) record(viaWs, 'workspace', lineNo);
