@@ -65,7 +65,7 @@ describe('scripts/run-tests.js — every file must report its summary', () => {
     assert.strictEqual(line(out, 'pass'), 1, 'the green test inside it is still counted');
     assert.strictEqual(line(out, 'cancelled'), 1);
     assert.strictEqual(line(out, 'files that did not finish'), 0, 'its summary was read');
-    assert.match(out, /leaked timer/);
+    assert.match(out, /leaked timer, socket or child/);
     assert.ok(Date.now() - t0 < 15000, `must not wait for the leaked interval (${Date.now() - t0}ms)`);
   });
 

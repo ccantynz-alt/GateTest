@@ -101,7 +101,7 @@ function runFile(file, opts) {
 
 function verdict(r) {
   if (!r.finished) return r.timedOut ? `did not finish within the file timeout` : `ended before its summary (exit ${r.exitCode}${r.signal ? `, ${r.signal}` : ''}) — its tests are NOT counted`;
-  if (r.fail > 0 || r.cancelled > 0) return `${r.fail} failing, ${r.cancelled} cancelled${r.cancelled ? ' (a cancelled file is one whose event loop never drained — a leaked timer, socket or child; fix the leak, it is a defect in the test)' : ''}`;
+  if (r.fail > 0 || r.cancelled > 0) return `${r.fail} failing, ${r.cancelled} cancelled${r.cancelled ? ' (Node cancels a file when --test-timeout elapses for the file itself: a leaked timer, socket or child kept its event loop alive, or its tests took longer than the timeout — run it alone to tell which)' : ''}`;
   if (r.tests === 0 || r.named === 0) return 'reported zero tests';
   return null;
 }
