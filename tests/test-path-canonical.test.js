@@ -51,6 +51,18 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'ktor-server/core/test-resources/testdir/test.html',
     'py_tests/a.py',
     'runtime-tests/lambda/mock.ts',
+    // Python runners discover tests by BASENAME (2026-09-05): pytest collects
+    // `test_*.py` / `*_test.py` and loads `conftest.py` by name; Django's
+    // runner finds an app's single `tests.py`. django's own `scripts/tests.py`
+    // (233 lines of unittest.TestCase) was application code to this
+    // predicate — four "unused export" warnings on its test classes.
+    'app/test_views.py',
+    'pkg/views_test.py',
+    'app/tests.py',
+    'conftest.py',
+    'src/pkg/conftest.py',
+    'scripts/tests.py',
+    'django/test/testcases.py', // by its `test/` DIRECTORY, unchanged — see below
   ];
   const NO_MATCH = [
     'src/app.js',
@@ -62,6 +74,25 @@ describe('BaseModule._isTestPath — canonical predicate', () => {
     'src/manifest/x.js',      // ends in "test" with no separator
     'src/greatest_hits.js',
     'src/testdatabase.go',
+    // The Python basename branch is a whole word at end-of-path: the test
+    // word inside an identifier is not a test file.
+    'contest.py',
+    'src/latest.py',
+    'src/attestation.py',
+    'src/testing.py',
+    'src/testcases.py',         // django/test/testcases.py matches by DIRECTORY, never by name
+    'src/testutils.py',
+    'test_data.json',           // not .py — a fixture only by its directory
+    'pytest.ini',
+    'src/test_views.pyc',
+    'a/test_x.py/b.js',         // the basename must END the path
+    // Bare `test.py` is not a test: pytest never collects it, and both in
+    // the corpus are shipped code — django/core/management/commands/test.py
+    // IS the `manage.py test` command; django/contrib/messages/test.py is a
+    // public assertion mixin. Matching the name would silence checks on
+    // files that exist because they RUN tests.
+    'django/core/management/commands/test.py',
+    'django/contrib/messages/test.py',
   ];
 
   for (const p of MATCH) {

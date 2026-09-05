@@ -8,15 +8,33 @@
  * normalising the input, so callers must go through it rather than testing
  * this directly (that omission is the Windows bug it was built to fix).
  *
- * Two branches: a directory segment anywhere in the path, or a conventional
- * test-file suffix. Language list covers the runtimes GateTest scans.
+ * Three branches: a directory segment anywhere in the path, a conventional
+ * `.test.<ext>` / `.spec.<ext>` suffix, or a Python runner basename.
+ * Language list covers the runtimes GateTest scans.
  */
 const TEST_PATH_RE =
   // `[a-z0-9]+[-_](?:tests?|specs?)` — django keeps its QUnit suite in
   // `js_tests/`, hono its runtime tests in `runtime-tests/`. A segment that
   // ENDS in a test word with a separator before it is a test dir; `contest`,
   // `latest`, `tester.js` have no separator and stay application code.
-  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus|testdata|test[-_]?resources|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$/i;
+  //
+  // `(?:test_[^/]*|[^/]*_test|tests|conftest)\.py` — the Python runners
+  // find tests by BASENAME, not by suffix: pytest collects `test_*.py` and
+  // `*_test.py` and loads `conftest.py` by name; Django's runner discovers
+  // `test*.py`, so an app ships a single `tests.py` beside `views.py`. The
+  // whole basename is matched at end-of-path (`[^/]*` cannot cross a
+  // segment), and the loading rule is the same as the directory branch: a
+  // test WORD with a separator (`_`) or nothing on the far side. `contest`,
+  // `latest`, `attestation`, `testing`, `testcases`, `testutils` carry the
+  // word inside an identifier and stay application code — django's
+  // `django/test/testcases.py` is test-support code classified by its
+  // `test/` directory, never by its name. Bare `test.py` is deliberately
+  // NOT here: pytest does not collect it, and the two in the corpus are both
+  // shipped code — `django/core/management/commands/test.py` IS the
+  // `manage.py test` command, and `django/contrib/messages/test.py` is a
+  // public assertion mixin. Matching it would silence checks on files that
+  // exist precisely because they run tests, not because they are tests.
+  /(?:^|\/)(?:tests?|specs?|__tests__|__mocks__|e2e|fixtures?|stories|storybook|reliability-corpus|testdata|test[-_]?resources|[a-z0-9]+[-_](?:tests?|specs?))(?:\/|$)|\.(?:test|spec|stories|fixture|e2e)\.(?:js|jsx|ts|tsx|mjs|cjs|mts|cts|py|rb|go|java|rs|php)$|(?:^|\/)(?:test_[^/]*|[^/]*_test|tests|conftest)\.py$/i;
 
 class BaseModule {
   constructor(name, description) {
