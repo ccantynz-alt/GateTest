@@ -381,6 +381,42 @@ describe('DeadCodeModule — orphaned files', () => {
     );
   });
 
+  // Python (KI #96): before src/core/python-imports.js, Python specifiers went
+  // through the JS resolver and every package module was an orphan — flask
+  // 10/10 false, django 351. Control pair: the planted orphan must fire, the
+  // sibling read via `from .x import y` must not.
+  it('flags a planted Python module nothing imports, and NOT its sibling imported via `from .x import y`', async () => {
+    write(tmp, 'pkg/__init__.py', 'from .app import App\n');
+    write(tmp, 'pkg/app.py', 'from .config import Config\n\nclass App:\n    pass\n');
+    write(tmp, 'pkg/config.py', 'class Config:\n    pass\n');
+    write(tmp, 'pkg/orphan.py', 'def lonely():\n    return 1\n');
+    const r = await run(tmp);
+    const orphans = r.checks.filter((c) => c.name.startsWith('dead-code:orphan-file:')).map((c) => c.file.replace(/\\/g, '/'));
+    assert.deepStrictEqual(orphans, ['pkg/orphan.py']);
+  });
+
+  it('flags a Python module whose only reader is tests/test_x.py, or a sibling test_x.py', async () => {
+    write(tmp, 'pkg/__init__.py', '');
+    write(tmp, 'pkg/util.py', 'def helper():\n    return 1\n');
+    write(tmp, 'pkg/other.py', 'def other():\n    return 2\n');
+    write(tmp, 'tests/test_util.py', 'from pkg.util import helper\n');
+    write(tmp, 'pkg/test_other.py', 'from .other import other\n');
+    const r = await run(tmp);
+    const orphans = r.checks.filter((c) => c.name.startsWith('dead-code:orphan-file:')).map((c) => c.file.replace(/\\/g, '/')).sort();
+    assert.deepStrictEqual(orphans, ['pkg/other.py', 'pkg/util.py']);
+  });
+
+  it('does NOT flag a Python module read by production through the src layout or a dotted settings string', async () => {
+    write(tmp, 'src/app/__init__.py', '');
+    write(tmp, 'src/app/service.py', 'def serve():\n    return 1\n');
+    write(tmp, 'src/app/plugins/__init__.py', '');
+    write(tmp, 'src/app/plugins/audit.py', 'class AuditConfig:\n    pass\n');
+    write(tmp, 'src/app/settings.py', "INSTALLED_APPS = ['app.plugins.audit.AuditConfig']\n");
+    write(tmp, 'src/app/cli.py', 'from app.service import serve\nserve()\n');
+    const r = await run(tmp);
+    assert.strictEqual(r.checks.find((c) => c.name.startsWith('dead-code:orphan-file:')), undefined);
+  });
+
   it('does NOT flag Next.js metadata files (robots.ts, sitemap.ts, opengraph-image.tsx)', async () => {
     write(tmp, 'app/robots.ts', 'export default function robots() { return { rules: [] }; }\n');
     write(tmp, 'app/sitemap.ts', 'export default function sitemap() { return []; }\n');
