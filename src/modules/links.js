@@ -9,6 +9,10 @@ const path = require('path');
 // One definition, imported (doctrine §4): src/core/scan-scope.js answers
 // "is this JSX a web page or a picture?" for every module that reads JSX.
 const { isImageRenderer } = require('../core/scan-scope');
+// The one glob grammar (`.gatetest.json` `paths`, workspace patterns): `*` one
+// segment, `**` any depth, a bare prefix means everything under it. Applied to
+// link TARGETS here — `links.excludePatterns` (KI #52).
+const { compilePatterns } = require('../core/scan-paths');
 
 // A docs-site route is written the way the SITE serves it, not the way the
 // repository stores it: `../getting-started`, `adapters/standalone`,
@@ -30,6 +34,12 @@ class LinksModule extends BaseModule {
 
   async run(result, config) {
     const projectRoot = config.projectRoot;
+    const moduleConfig = (config && typeof config.getModuleConfig === 'function')
+      ? (config.getModuleConfig('links') || {})
+      : {};
+    // Link targets a team has decided not to check — a docs route served by
+    // another system, a legacy anchor scheme. Same grammar as `paths`.
+    this._excludeRes = compilePatterns(moduleConfig.excludePatterns);
 
     let imageRenderersSkipped = 0;
     // Scan HTML, JSX, TSX, Vue, Svelte, and Markdown files — not just static HTML
@@ -64,6 +74,7 @@ class LinksModule extends BaseModule {
       let match;
       while ((match = hrefRegex.exec(content)) !== null) {
         const link = match[1].trim();
+        if (this._isExcludedLink(link)) continue;
         this._categorizeLink(link, relPath, internalLinks, externalLinks);
       }
 
@@ -72,7 +83,8 @@ class LinksModule extends BaseModule {
         const toRegex = /\bto\s*=\s*["'`]([^"'`]+)/gi;
         while ((match = toRegex.exec(content)) !== null) {
           const link = match[1].trim();
-          this._categorizeLink(link, relPath, internalLinks, externalLinks);
+          if (this._isExcludedLink(link)) continue;
+        this._categorizeLink(link, relPath, internalLinks, externalLinks);
         }
       }
 
@@ -81,7 +93,8 @@ class LinksModule extends BaseModule {
         const mdRegex = /\]\(([^)\s]+)/g;
         while ((match = mdRegex.exec(content)) !== null) {
           const link = match[1].trim();
-          this._categorizeLink(link, relPath, internalLinks, externalLinks);
+          if (this._isExcludedLink(link)) continue;
+        this._categorizeLink(link, relPath, internalLinks, externalLinks);
         }
       }
 
@@ -209,6 +222,12 @@ class LinksModule extends BaseModule {
       return fs.existsSync(path.resolve(projectRoot, target));
     }
     return false;
+  }
+
+  /** `links.excludePatterns` matched against the link target as written. */
+  _isExcludedLink(link) {
+    const target = String(link).replace(/\\/g, '/').replace(/^\.\//, '');
+    return (this._excludeRes || []).some((re) => re.test(target));
   }
 
   _categorizeLink(link, source, internalLinks, externalLinks) {
