@@ -74,6 +74,7 @@ is always toward the author's own repo.
 | Is this file an HTTP handler? Is session middleware in play? | `src/core/route-grammar.js` |
 | What depends on what? | `src/core/import-graph.js` |
 | What is this finding's identity? | `src/core/report-provenance.js` `fingerprintFindings` (shared with the determinism gate) |
+| Which OWASP / SOC 2 / CIS control does a module speak to? | `src/core/compliance-mappings.js` (the website and the SARIF reporter import it) |
 | Which `.gatetestignore` line silences it? | `src/core/ignore-file.js` `suggestLine` (verified against the matcher) |
 | The public origin | `src/core/site-url.js` / `website/app/lib/site-url.js` |
 | The module count, the corpus numbers, page dates | generated: `site-stats.json`, `precision.json`, `build-info.json` |
