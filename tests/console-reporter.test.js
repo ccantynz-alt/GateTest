@@ -94,3 +94,45 @@ describe('ConsoleReporter — offers the exact .gatetestignore line', () => {
     assert.match(output, /wrong\? add to \.gatetestignore: hardcodedUrl:localhost@src\/x\.ts/);
   });
 });
+
+// Move 28: in CI, a blocked gate leads with the command that reproduces it.
+describe('ConsoleReporter — a blocked gate leads with `gatetest replay` in CI', () => {
+  const GHA = { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '42', GITHUB_SERVER_URL: 'https://github.com' };
+  function withEnv(vars, fn) {
+    const saved = {};
+    for (const k of Object.keys(vars)) { saved[k] = process.env[k]; process.env[k] = vars[k]; }
+    try { return fn(); } finally {
+      for (const k of Object.keys(vars)) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    }
+  }
+  const blocked = {
+    gateStatus: 'BLOCKED', modules: { passed: 0, total: 1 },
+    checks: { total: 1, passed: 0, failed: 1, errors: 1, blockingErrors: 1, softErrors: 0, warnings: 0, infoFindings: 0 },
+    fixes: { total: 0 }, duration: 1, failedModules: ['x'], results: [],
+  };
+  it('prints the replay command right under GATE: BLOCKED', () => {
+    const output = withEnv(GHA, () => captureLog(() => {
+      const runner = new EventEmitter();
+      new ConsoleReporter(runner);
+      runner.emit('suite:end', blocked);
+    }));
+    const lines = output.split('\n').map((l) => l.replace(/\x1b\[[0-9;]*m/g, ''));
+    const i = lines.findIndex((l) => /GATE: BLOCKED/.test(l));
+    assert.ok(i >= 0);
+    assert.match(lines[i + 1], /Reproduce locally: npx gatetest replay https:\/\/github\.com\/o\/r\/actions\/runs\/42/);
+  });
+  it('says nothing about replay outside CI or when the gate passed', () => {
+    const local = withEnv({ GITHUB_ACTIONS: '' }, () => captureLog(() => {
+      const runner = new EventEmitter();
+      new ConsoleReporter(runner);
+      runner.emit('suite:end', blocked);
+    }));
+    assert.doesNotMatch(local, /Reproduce locally/);
+    const passed = withEnv(GHA, () => captureLog(() => {
+      const runner = new EventEmitter();
+      new ConsoleReporter(runner);
+      runner.emit('suite:end', { ...blocked, gateStatus: 'PASSED', checks: { ...blocked.checks, errors: 0, blockingErrors: 0 } });
+    }));
+    assert.doesNotMatch(passed, /Reproduce locally/);
+  });
+});

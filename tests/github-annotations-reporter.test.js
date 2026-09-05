@@ -227,3 +227,35 @@ test('omits file= when check has no file', () => {
   assert.doesNotMatch(out, /file=/);
   assert.match(out, /^::error line=1,col=1,/);
 });
+
+// Move 28: a blocked gate leads with the replay command as a notice in the
+// checks tab; a passing gate, or a run outside Actions, emits none.
+test('blocked gate in Actions emits one "reproduce locally" notice with the replay command', () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '42' });
+  try {
+    const runner = makeRunner();
+    new GithubAnnotationsReporter(runner);
+    const out = captureStdout(() => runner.emit('suite:end', { gateStatus: 'BLOCKED', results: [] }));
+    assert.match(out, /::notice title=GateTest — reproduce locally::npx gatetest replay https:\/\/github\.com\/o\/r\/actions\/runs\/42\n/);
+    const passed = captureStdout(() => runner.emit('suite:end', { gateStatus: 'PASSED', results: [] }));
+    assert.doesNotMatch(passed, /reproduce locally/);
+  } finally {
+    for (const k of ['GITHUB_ACTIONS', 'GITHUB_REPOSITORY', 'GITHUB_RUN_ID']) {
+      if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+    }
+  }
+});
+
+test('no replay notice outside Actions', () => {
+  const saved = process.env.GITHUB_ACTIONS;
+  delete process.env.GITHUB_ACTIONS;
+  try {
+    const runner = makeRunner();
+    new GithubAnnotationsReporter(runner);
+    const out = captureStdout(() => runner.emit('suite:end', { gateStatus: 'BLOCKED', results: [] }));
+    assert.doesNotMatch(out, /reproduce locally/);
+  } finally {
+    if (saved !== undefined) process.env.GITHUB_ACTIONS = saved;
+  }
+});
