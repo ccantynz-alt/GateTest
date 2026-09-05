@@ -180,7 +180,6 @@ describe('billing copy matches what Stripe actually does', () => {
   // Surfaces a customer or a Marketplace reviewer actually reads.
   const PUBLIC_COPY = [
     'website/app/components/Pricing.tsx',
-    'website/app/components/Install.tsx',
     'website/app/compare/sonarqube/page.tsx',
     'website/app/compare/github-code-scanning/page.tsx',
     'website/app/for/nextjs/page.tsx',

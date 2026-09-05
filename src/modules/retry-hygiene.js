@@ -171,7 +171,7 @@ class RetryHygieneModule extends BaseModule {
     try { content = fs.readFileSync(file, 'utf-8'); } catch { return 0; }
 
     const rel = path.relative(projectRoot, file);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     let issues = 0;
 
     // Find retry-shaped loop blocks first. A retry block is a loop

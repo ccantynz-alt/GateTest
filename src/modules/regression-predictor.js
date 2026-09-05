@@ -88,13 +88,13 @@ function getCoChangedFiles(changedFiles, projectRoot, lookback = 50) {
       `git log --format="%H" --follow -n ${lookback} -- "${file}"`,
       projectRoot
     );
-    const commits = log.split('\n').filter(Boolean);
+    const commits = log.split(/\r?\n/).filter(Boolean);
 
     for (const commit of commits.slice(0, lookback)) {
       const filesInCommit = safeExec(
         `git diff-tree --no-commit-id -r --name-only "${commit}"`,
         projectRoot
-      ).split('\n').filter(Boolean);
+      ).split(/\r?\n/).filter(Boolean);
 
       for (const f of filesInCommit) {
         if (changedFiles.includes(f)) continue;
@@ -160,9 +160,9 @@ class RegressionPredictor extends BaseModule {
     const projectRoot = config.projectRoot;
 
     // Get changed files
-    let changedFiles = safeExec('git diff --name-only HEAD~1..HEAD', projectRoot).split('\n').filter(Boolean);
+    let changedFiles = safeExec('git diff --name-only HEAD~1..HEAD', projectRoot).split(/\r?\n/).filter(Boolean);
     if (!changedFiles.length) {
-      changedFiles = safeExec('git diff --name-only --staged', projectRoot).split('\n').filter(Boolean);
+      changedFiles = safeExec('git diff --name-only --staged', projectRoot).split(/\r?\n/).filter(Boolean);
     }
 
     if (!changedFiles.length) {

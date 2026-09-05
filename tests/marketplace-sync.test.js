@@ -52,7 +52,9 @@ const PREFLIGHT = 'scripts/marketplace-preflight.js';
  * Files that reach GitHub's API with an installation token. Each one's call
  * sites are proof of what the App must be granted.
  */
-const BRIDGE_FILES = ['src/core/github-bridge.js', 'src/core/pr-pruner.js'];
+// pr-pruner.js was listed here until 2026-09-05; deadCode's orphan-file rule
+// (KI #96) showed nothing imported it, and a file that never runs calls no API.
+const BRIDGE_FILES = ['src/core/github-bridge.js'];
 
 /** `this._api('POST', `/repos/...`)` / `this._req('DELETE', `/repos/...`)`. */
 const CALL_RE = /_(?:api|req)\(\s*'(GET|POST|PATCH|PUT|DELETE)'\s*,\s*`([^`]+)`/g;

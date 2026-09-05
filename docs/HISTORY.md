@@ -417,6 +417,25 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-05 — confidence calibrated on the corpus (the Fifty, move 09)
+
+The block threshold was 0.7 because 0.7 sounded right. A full corpus run
+(twenty repos, every error-severity finding with its confidence) showed that
+confidence is not a continuum: the multipliers in `src/core/confidence.js`
+are 0.6 (test file), 0.4 (fixture, example, string literal), 0.3 (doc file),
+0.2 (comment) and their products, so the run produced seven values — 1.0,
+0.6, 0.4, 0.3, 0.24, 0.2, 0.12 — and nothing near 0.7. Every threshold in
+(0.6, 1.0] gives the identical gate; 0.6 would admit 87 more findings on the
+clean repositories and zero more on NodeGoat. What the signals buy: 194 of
+416 error findings on real code kept off the gate, for 1 of 58 on NodeGoat
+(a `$where` inside a comment). The measurement now ships with the engine:
+`src/core/confidence-calibration.js` (pure — bands, sweep, gap, cost), the
+corpus runner writes it into `website/app/data/precision.json` on every run,
+`/precision` renders the sweep with the shipped row marked, and
+`tests/confidence-calibration.test.js` holds `BLOCK_THRESHOLD` to the
+calibrated value and inside a band gap, so the first signal that produces a
+band at the threshold fails the suite and forces a reason.
+
 ### 2026-09-05 — the second precision session (PRs #422, #423)
 
 Sixteen commits on #423 and eight on #422, each found by the one before it.

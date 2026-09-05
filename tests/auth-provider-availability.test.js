@@ -25,7 +25,6 @@ const path = require('path');
 const REPO = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8').replace(/\r\n?/g, '\n');
 
-const MODAL = 'website/app/components/AuthModal.tsx';
 const PROVIDERS_ROUTE = 'website/app/api/auth/providers/route.ts';
 const HELPER = 'website/app/lib/auth-unavailable.ts';
 const ROUTES = [
@@ -56,30 +55,11 @@ describe('sign-in providers — never offer a button that 503s', () => {
     }
   });
 
-  it('the modal renders providers from the endpoint, not a hardcoded list', () => {
-    const modal = read(MODAL);
-    assert.ok(
-      modal.includes('/api/auth/providers'),
-      `${MODAL} must ask which providers are configured before rendering buttons`,
-    );
-    // The exact shape of the old bug: a literal href per provider.
-    for (const key of ['github', 'gitlab', 'google']) {
-      assert.ok(
-        !new RegExp(`href="/api/auth/${key}"`).test(modal),
-        `${MODAL} hardcodes a button for '${key}' — render from the availability map instead`,
-      );
-    }
-  });
-
-  it('the modal fails OPEN if the probe breaks', () => {
-    // A broken probe must not lock everyone out of a working sign-in. If this
-    // ever flips to fail-closed, an unrelated outage takes auth down with it.
-    const modal = read(MODAL);
-    assert.ok(
-      /catch[\s\S]{0,320}github:\s*true/.test(modal),
-      `${MODAL} must default to showing providers when /api/auth/providers fails`,
-    );
-  });
+  // AuthModal.tsx was deleted 2026-09-05: deadCode's orphan-file rule (KI #96)
+  // showed nothing rendered it — the live sign-in surfaces (dashboard,
+  // scan/status) link straight to /api/auth/github. The guarantee that
+  // survives is the one below: an initiate route for an unconfigured
+  // provider answers a page, never a JSON blob, so a link can never 503 raw.
 
   for (const [rel, label] of ROUTES) {
     it(`${label} initiate route answers a page, not a JSON error`, () => {

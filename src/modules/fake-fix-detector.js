@@ -680,7 +680,7 @@ class FakeFixDetectorModule extends BaseModule {
 
   _parseDiff(diff) {
     const hunks = [];
-    const lines = diff.split('\n');
+    const lines = diff.split(/\r?\n/);
     let currentFile = null;
     let currentHunk = null;
 

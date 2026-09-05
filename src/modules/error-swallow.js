@@ -236,7 +236,7 @@ class ErrorSwallowModule extends BaseModule {
   _stripComments(body) {
     const withoutBlocks = body.replace(/\/\*[\s\S]*?\*\//g, '');
     return withoutBlocks
-      .split('\n')
+      .split(/\r?\n/)
       .map((l) => {
         const idx = l.indexOf('//');
         if (idx === -1 || isInString(l, idx)) return l;
@@ -258,12 +258,12 @@ class ErrorSwallowModule extends BaseModule {
     // zod's `packages/zod/src/v3/benchmarks/` measured the throw path 22 times
     // and was told 22 times that it had erased an error.
     const isHarness = this._isTestPath(relPosix) || HARNESS_DIR_RE.test(relPosix);
-    const lines = content.split('\n');
+    const lines = content.split(/\r?\n/);
     // Masked copy (string and comment CONTENT blanked, offsets preserved) for
     // the structural analysis in guarded-catch — and for `_isExecutableAt`,
     // which is what keeps this module from reporting the examples in its own
     // documentation. Built once per file.
-    const masked = maskNonCode(content).split('\n');
+    const masked = maskNonCode(content).split(/\r?\n/);
     let issues = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
@@ -667,7 +667,7 @@ class ErrorSwallowModule extends BaseModule {
   // True if the catch body only contains `console.*` calls (or a
   // comment) and no throw / reject / return with an error.
   _isLogAndEat(body) {
-    const lines = body.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('//'));
+    const lines = body.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('//'));
     if (lines.length === 0) return false;
     // Must not throw or reject or return an error value
     if (/\bthrow\b/.test(body)) return false;

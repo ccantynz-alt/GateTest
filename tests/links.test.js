@@ -142,3 +142,38 @@ describe('LinksModule — internal-link resolver reads the link the way its rend
     assert.strictEqual(dead.details[0].source.split(path.sep).join('/'), 'src/App.jsx');
   });
 });
+
+// ── KI #52: the config keys are the ones the module reads ────────────────────
+describe('LinksModule — excludePatterns, and no dead config', () => {
+  const runWith = async (files, moduleConfig) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-links-cfg-'));
+    try {
+      for (const [rel, c] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+        fs.writeFileSync(path.join(root, rel), c);
+      }
+      const checks = [];
+      const result = { checks, addCheck(name, passed, details) { checks.push({ name, passed, ...(details || {}) }); } };
+      await new LinksModule().run(result, { projectRoot: root, getModuleConfig: (m) => (m === 'links' ? moduleConfig : {}) });
+      return checks;
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  };
+  const brokenTargets = (checks) => (checks.find((c) => c.name === 'links:internal') || { details: [] }).details.map((d) => d.href).sort();
+  const files = { 'docs/a.md': '[legacy](legacy/old-page.md)\n[real](missing.md)\n' };
+
+  it('NEGATIVE: a broken target matching an exclude pattern is not reported; a non-matching one still is', async () => {
+    assert.deepStrictEqual(brokenTargets(await runWith(files, { excludePatterns: ['legacy/**'] })), ['missing.md']);
+    assert.deepStrictEqual(brokenTargets(await runWith(files, { excludePatterns: ['legacy'] })), ['missing.md'], 'a bare prefix means everything under it');
+  });
+  it('POSITIVE CONTROL: with no patterns both broken targets are reported', async () => {
+    assert.deepStrictEqual(brokenTargets(await runWith(files, {})), ['legacy/old-page.md', 'missing.md']);
+    assert.deepStrictEqual(brokenTargets(await runWith(files, { excludePatterns: ['other/**'] })), ['legacy/old-page.md', 'missing.md']);
+  });
+  it('every default config key for links is read by the module — no dead schema', () => {
+    const { DEFAULT_CONFIG } = require('../src/core/config');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'modules', 'links.js'), 'utf8');
+    const keys = Object.keys(DEFAULT_CONFIG.modules.links);
+    assert.ok(keys.length > 0, 'the links defaults exist');
+    for (const k of keys) assert.ok(src.includes(`.${k}`), `links.${k} is declared in config.js but src/modules/links.js never reads it`);
+  });
+});

@@ -574,12 +574,13 @@ const DEFAULT_CONFIG = {
       maxTitleLength: 60,
       maxDescriptionLength: 160,
     },
+    // The links module is static — it resolves internal references against
+    // the tree and never opens a connection. `checkExternal`, `checkInternal`,
+    // `timeout`, `retries` and `concurrency` described a live checker that was
+    // never built and were read by nothing (KI #52); a key nothing reads is a
+    // promise the product does not keep. `excludePatterns` is the one key the
+    // module honours: link targets to skip, `paths` glob grammar.
     links: {
-      checkExternal: true,
-      checkInternal: true,
-      timeout: 10000,
-      retries: 2,
-      concurrency: 10,
       excludePatterns: [],
     },
     compatibility: {

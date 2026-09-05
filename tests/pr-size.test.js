@@ -93,3 +93,36 @@ describe('PrSizeModule — a stale local main never decides once origin/main res
     assert.equal(tooManyLines(await run()), true);
   });
 });
+
+describe('PrSizeModule — a whole-file deletion is reviewed by its header, not line by line', () => {
+  let tmp;
+  const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const commit = (msg) => git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-am', msg);
+  const writeLines = (file, n) => fs.writeFileSync(path.join(tmp, file), Array.from({ length: n }, (_, i) => `line ${i}`).join('\n') + '\n');
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gt-prsize-del-'));
+    git('init', '-q', '-b', 'main');
+    writeLines('gone.txt', 700); writeLines('kept.txt', 3);
+    git('add', '.'); commit('base');
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    git('checkout', '-q', '-b', 'change');
+  });
+  afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const run = async () => { const r = makeResult(); await new PrSizeModule().run(r, { projectRoot: tmp, getModuleConfig() { return {}; }, get() { return null; } }); return r.checks; };
+  const failing = (c, prefix) => c.filter((x) => !x.passed && x.name.startsWith(prefix));
+
+  it('NEGATIVE: deleting a 700-line file is not a 700-line change — a warning names it, nothing blocks', async () => {
+    fs.rmSync(path.join(tmp, 'gone.txt')); git('add', '-A'); commit('delete gone.txt');
+    const c = await run();
+    assert.deepEqual(failing(c, 'pr-size:file-too-large').map((x) => x.name), []);
+    assert.deepEqual(failing(c, 'pr-size:too-many-lines'), []);
+    const note = c.find((x) => x.name === 'pr-size:deleted-file:gone.txt');
+    assert.ok(note && note.severity === 'warning', 'the deletion is still reported');
+  });
+
+  it('POSITIVE CONTROL: emptying the same file to one line is a rewrite and still blocks the per-file ceiling', async () => {
+    writeLines('gone.txt', 1); git('add', '-A'); commit('rewrite gone.txt');
+    const c = await run();
+    assert.deepEqual(failing(c, 'pr-size:file-too-large').map((x) => x.name), ['pr-size:file-too-large:gone.txt']);
+  });
+});

@@ -34,7 +34,7 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | 06 | Ratchet the ceilings on a schedule | done | `--ratchet` in `scripts/real-world-precision.js` lowers `maxBlocking` to the measured count (never raises, never touches floors); `dogfood-nightly.yml` runs it and ships the manifest on the rolling PR, so every improvement becomes a ceiling within a day |
 | 07 | Per-rule false-positive rate from the flywheel | done | the recorder now ships per-rule `fired` / `silenced` counts (ids only, `src/core/rule-identity.js`); the store keeps them (`scan_findings.rules`); `website/app/lib/rule-noise.js` ranks the silenced rate (thin below 5 scans); `/noise` + `GET /api/telemetry/noise` publish it, worst first, and say "not available" / "no data yet" instead of inventing a table |
 | 08 | Retire any rule above 20% FP that can't be fixed | open | depends on 07 |
-| 09 | Recalibrate confidence against the corpus | open | 0.7 was chosen, not derived |
+| 09 | Recalibrate confidence against the corpus | done | measured: confidence is a product of a few discrete multipliers, so a full corpus run produces seven values (1.0, 0.6, 0.4, 0.3, 0.24, 0.2, 0.12) and no finding anywhere near 0.7 — every threshold in (0.6, 1.0] gives the identical gate; 0.6 would admit 87 more findings on the clean repos and 0 more on NodeGoat. The signals soften close to half the error findings on real code (194 of 416) at a cost of 1 of 58 on NodeGoat (a `$where` inside a comment). `src/core/confidence-calibration.js` computes bands / sweep / gap / cost; the corpus runner writes it into `precision.json` on every run; `/precision` renders the sweep; `tests/confidence-calibration.test.js` holds the shipped `BLOCK_THRESHOLD` to the calibrated one and inside a band gap — the day a signal produces a band at 0.7 the suite fails and the number needs a reason |
 | 10 | Hunt the substring-vs-segment shape everywhere | done | guard extended to src/core, bin, website analysers; five recall holes closed (PR #423) |
 | 11 | Audit every early return that assumes a framework | done | 15/15 — `src/core/route-grammar.js` (4, PR #423); webHeaders, integrationTests, webhookPayload, cacheHeaders, monorepoConstraints + `src/core/workspaces.js` (5, PR #426); promptSafety, zodSchema, trpcContract, dataIntegrity, sqlMigrations, shell, bashSafety, ciSecurity, seo + `migration-dirs.js`, `shell-files.js` (KI #106 closed, corpus 20/20 at ceilings) |
 | 12 | Publish the precision numbers, including the bad ones | done | `/precision`, generated, sync-tested (PR #422) |
@@ -98,11 +98,11 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 | # | Move | Status | Evidence |
 |---|---|---|---|
 | 47 | Open-source the real-world corpus | **Craig** | — |
-| 48 | Finish the MCP registry submission | open | — |
-| 49 | Pick one editor extension and ship it | open | two unshipped trees |
-| 50 | Make fix recipes the network effect | open | — |
+| 48 | Finish the MCP registry submission | **Craig** | KI #35: `mcp-publisher login github` is a device-flow login in Craig's own browser, then `validate` → `publish ./server.json`; runbook `docs/marketing/SUBMISSION-RUNBOOK.md` §1b. No code action remains |
+| 49 | Pick one editor extension and ship it | **Craig** | KI #68: two trees. Recommendation on file — keep `vscode-extension/` (TypeScript, 7 commands, diagnostics, status bar, sidebar, MCP auto-setup for Claude / Cursor / Windsurf / Cline, compiles, packaging icon fixed) and delete `editors/vscode/` (a four-module MVP on the programmatic API, `@gatetest/cli` pinned to an unpublished version). Publishing needs a Marketplace publisher token — Boss Rule #9 |
+| 50 | Make fix recipes the network effect | **Craig** | the store exists (`src/core/recipe-store-remote.js`, writes gated by `GATETEST_RECIPE_STORE_TOKEN`); what is missing is the policy KI #74f names — how a recipe earns promotion across customers (recommendation on file: count independent re-derivations). Cross-customer sharing of fix patterns is user data — Boss Rule #9 |
 
 ## Next, in order
 
-09 (recalibrate confidence against the corpus), 48, 49, 50.
-Waiting on Craig: 15, 29, 35, 41.
+Nothing pre-authorised is left in the Fifty (20, 39 and 42 merged). Open pre-authorised code work lives in the Known Issues (`docs/ROADMAP.md`): KI #77 (the 22 split/join module pairs), KI #96 (dead-code through indirection), KI #52 (link checking).
+Waiting on Craig: 15, 22, 29, 35, 37, 40, 41, 43, 44, 45, 47, 48, 49, 50.

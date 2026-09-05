@@ -462,7 +462,7 @@ class CrossFileTaintModule extends BaseModule {
       data.hasParameterisedOrm = true;
     }
 
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const dir = path.dirname(abs);
 
     // Track tainted vars (grows as we parse)
@@ -827,7 +827,7 @@ class CrossFileTaintModule extends BaseModule {
     // comment shouldn't falsely suppress a real injection finding.
     const stripped = this._stripComments(rawLine);
     const ctxStripped = (contextLines || '')
-      .split('\n')
+      .split(/\r?\n/)
       .map((l) => this._stripComments(l))
       .join('\n');
     const combined = ctxStripped + '\n' + stripped;

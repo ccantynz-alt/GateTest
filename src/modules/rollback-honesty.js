@@ -118,7 +118,7 @@ class RollbackHonestyModule extends BaseModule {
 
   _extractRollbackBlocks(content) {
     const blocks = [];
-    const lines  = content.split('\n');
+    const lines  = content.split(/\r?\n/);
     let inBlock  = false;
     let depth    = 0;
     let start    = 0;
