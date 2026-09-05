@@ -219,4 +219,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { generate, serialize, describeCommit, areaOf, AREAS };
+module.exports = { serialize, describeCommit, areaOf, AREAS };

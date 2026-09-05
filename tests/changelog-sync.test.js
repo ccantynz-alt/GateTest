@@ -30,7 +30,9 @@ const SCRIPT = path.join(ROOT, 'scripts', 'generate-changelog.js');
 const JSON_PATH = path.join(ROOT, 'website', 'app', 'data', 'changelog.json');
 const PAGE_PATH = path.join(ROOT, 'website', 'app', 'changelog', 'page.tsx');
 
-const { describeCommit, areaOf, serialize, AREAS } = require(SCRIPT);
+// A literal path, not `require(SCRIPT)`: our own deadCode rule resolves
+// imports it can read, and a computed path hid these four from it.
+const { describeCommit, areaOf, serialize, AREAS } = require('../scripts/generate-changelog.js');
 
 describe('generate-changelog — one commit, one entry, either merge shape', () => {
   it('reads the PR number and title from a merge commit body', () => {
