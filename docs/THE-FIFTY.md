@@ -14,7 +14,7 @@ Status legend: **done** (merged or in the open PR, with evidence) · **partial**
 | Metric | Now | Was |
 |---|---|---|
 | Real repos in the corpus at their ceilings | 16 / 16 — all eight languages | 6, all blocked |
-| Blocking on express · django · rails | 0 · 65 · 47 | 2 · 89 · 56 (first contact) |
+| Blocking on express · django · rails | 0 · 64 · 46 | 2 · 89 · 56 (first contact) |
 | PR diff scan | 8s | 17s, and it scanned everything |
 | Full self-scan | 65s (mutation deferred to nightly) | never finished |
 | Tests passing | 8,335 | 7,790 |

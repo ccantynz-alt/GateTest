@@ -461,6 +461,11 @@ rendered at runtime, but its `<head>` and `<html>` are the file's own, so
 CleanArchitecture carried both, so the numbers did not move; the control
 tests are what would have caught it later. NodeGoat 59 → 58: the finding
 that left was `docs:readme-usage`, deliberately downgraded to a warning.
+Three ceilings ratcheted the same way, each drop diffed engine-against-engine
+on a fresh clone before it was accepted: zod 20 → 10 (its `packages/docs-v3/
+index.html` is a docsify shell — `<div id="app"></div>` and scripts — and the
+ten were seo/a11y findings on a body the framework fills at runtime), django
+65 → 64 and rails 47 → 46 (the README usage heading).
 
 ### v1.61.1 (2026-09-04) — the gate can fail again
 
