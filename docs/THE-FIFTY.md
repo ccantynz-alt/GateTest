@@ -104,5 +104,5 @@ The corpus, the ceilings and the runner: `reliability-corpus/real-world.json`,
 
 ## Next, in order
 
-the 8 gates left in KI #106, 06 (schedule the ratchet), 46.
+the 8 gates left in KI #106, 06 (schedule the ratchet); then 07 (the flywheel leaderboard), 26, 27.
 Waiting on Craig: 15, 29, 35, 41.

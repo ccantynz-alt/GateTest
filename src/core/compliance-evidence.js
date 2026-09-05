@@ -177,4 +177,4 @@ function renderComplianceMarkdown(evidence, meta = {}) {
   return lines.join('\n');
 }
 
-module.exports = { buildComplianceEvidence, renderComplianceMarkdown, FRAMEWORKS, bucketOf };
+module.exports = { buildComplianceEvidence, renderComplianceMarkdown, bucketOf };
