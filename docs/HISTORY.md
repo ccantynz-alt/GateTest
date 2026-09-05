@@ -519,9 +519,12 @@ ceilings had been set on top of:
   fallback in the three integrations workflows — `npm ci || npm install ||
   true` now ends in an explicit `::error::` and `exit 1`, a *stricter* gate,
   not a weaker one (PROTECTED PLATFORMS: nothing removed, nothing softened;
-  flagged for Craig's acknowledgement in the PR). Left for KI #108:
-  `action.yml`'s nine — the Marketplace action, which wants its own tested
-  pass. Also: `VAR=$(cmd || true)` is the capture shape too, downgraded when
+  flagged for Craig's acknowledgement in the PR). `action.yml`'s nine were
+  KI #108 and closed in the PR after #458: the install fallback fails
+  loudly, the two `git fetch` fallbacks say they fell back, and the three
+  PR-comment / issue posters annotate a crash with `::warning::` while still
+  exiting 0 — non-blocking by design, never silent. bash-safety on this
+  repository: 0 error-severity findings. Also: `VAR=$(cmd || true)` is the capture shape too, downgraded when
   `$VAR` is read below, as `VAR=$(cmd) || true` already was.
 - **`ci-security` could not see a redirected brace group.** prisma's
   `{ echo "SUPABASE_JWT_SECRET=$JWT_SECRET"; … } >> "$GITHUB_ENV"` had scored

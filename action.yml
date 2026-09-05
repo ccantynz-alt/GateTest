@@ -150,7 +150,9 @@ runs:
         GATETEST_HOME="${{ github.action_path }}"
         chmod +x "$GATETEST_HOME/bin/gatetest.js"
         # Install runtime deps without lifecycle scripts to keep this fast + safe.
-        (cd "$GATETEST_HOME" && (npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --production --ignore-scripts 2>/dev/null || true))
+        # If both installs fail the gate cannot run; say so here rather than
+        # letting the next step fail on a missing module (KI #108).
+        (cd "$GATETEST_HOME" && (npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --production --ignore-scripts 2>/dev/null || { echo "::error::GateTest dependency install failed — npm ci and npm install both exited non-zero in $GATETEST_HOME; the gate cannot run without its dependencies"; exit 1; }))
         echo "GATETEST_BIN=node $GATETEST_HOME/bin/gatetest.js" >> "$GITHUB_ENV"
         echo "GATETEST_HOME=$GATETEST_HOME" >> "$GITHUB_ENV"
         echo "GateTest engine + scripts loaded from the pinned action checkout."
@@ -217,7 +219,9 @@ runs:
         DIFF_FLAG=""
         if [ "${{ inputs.diff-only }}" = "true" ] && { [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "pull_request_target" ]; }; then
           if [ -n "${GITHUB_BASE_REF:-}" ]; then
-            git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF" 2>/dev/null || true
+            if ! git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"; then
+              echo "::warning::could not fetch origin/$GITHUB_BASE_REF — the engine will fall back to a full-repo scan"
+            fi
           fi
           DIFF_FLAG="--pr"
           echo "Diff-aware mode: scanning only files changed vs origin/${GITHUB_BASE_REF:-main} (set diff-only: false for full-repo scans)."
@@ -230,7 +234,9 @@ runs:
         if [ "${{ inputs.diff-only }}" = "true" ] && [ "${{ github.event_name }}" = "merge_group" ]; then
           MQ_BASE="${{ github.event.merge_group.base_sha }}"
           if [ -n "$MQ_BASE" ]; then
-            git fetch --no-tags --depth=1 origin "$MQ_BASE" 2>/dev/null || true
+            if ! git fetch --no-tags --depth=1 origin "$MQ_BASE"; then
+              echo "::warning::could not fetch merge-queue base $MQ_BASE — the engine will fall back to origin/<base_ref>"
+            fi
           fi
           DIFF_FLAG="--pr"
           echo "Merge-queue mode: scanning only files this group changes vs its base ${MQ_BASE:-<unknown>}."
@@ -351,7 +357,10 @@ runs:
         if [ -z "${GATETEST_HOME:-}" ]; then
           exit 0
         fi
-        node "$GATETEST_HOME/scripts/post-scan-summary-comment.js" || true
+        # Non-blocking by design — a comment poster must never fail the gate —
+        # but a crash is recorded, not swallowed (KI #108).
+        node "$GATETEST_HOME/scripts/post-scan-summary-comment.js" && rc=0 || rc=$?
+        if [ "$rc" -ne 0 ]; then echo "::warning::post-scan-summary-comment.js exited $rc — the summary comment may be missing; the gate verdict is unaffected"; fi
         exit 0
 
     # ----------------------------------------------------------------------
@@ -420,8 +429,9 @@ runs:
           exit 0
         fi
         cd "${{ inputs.working-directory }}"
-        # Non-blocking: the script ALWAYS exits 0. We just log.
-        node "$GATETEST_HOME/scripts/post-suggestions-from-snapshot.js" || true
+        # Non-blocking by design; a crash is recorded, not swallowed (KI #108).
+        node "$GATETEST_HOME/scripts/post-suggestions-from-snapshot.js" && rc=0 || rc=$?
+        if [ "$rc" -ne 0 ]; then echo "::warning::post-suggestions-from-snapshot.js exited $rc — inline suggestions may be missing; the auto-repair PR is unaffected"; fi
         exit 0
 
     # ----------------------------------------------------------------------
@@ -454,7 +464,9 @@ runs:
           exit 0
         fi
         cd "${{ inputs.working-directory }}"
-        node "$GATETEST_HOME/scripts/track-non-fixable.js" || true
+        # Non-blocking by design; a crash is recorded, not swallowed (KI #108).
+        node "$GATETEST_HOME/scripts/track-non-fixable.js" && rc=0 || rc=$?
+        if [ "$rc" -ne 0 ]; then echo "::warning::track-non-fixable.js exited $rc — some findings may not have been filed as issues; the gate verdict is unaffected"; fi
         exit 0
 
     # ----------------------------------------------------------------------
