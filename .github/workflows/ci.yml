@@ -359,17 +359,25 @@ jobs:
         run: bash scripts/install-workspaces.sh
 
       - name: Run GateTest full scan
+        # This job was NAMED "Full Scan" and ran `--suite quick` from the day
+        # it was written until 2026-09-06 (#418's audit found it; the comment
+        # above the step cited a nightly-mutation.yml that does not exist).
+        # It now runs the full deterministic suite — the same set the nightly
+        # dogfood measures (dogfood-nightly.yml), minus the four modules that
+        # need the repo's own test runner or a browser: mutation (~28 min,
+        # mutation-nightly.yml), e2e, unitTests, dataIntegrity. Measured
+        # 2026-09-06 on main: GATE PASSED, 0 blocking, 37 s. No
+        # continue-on-error on this step (Bible Forbidden #24).
         # --confidence-threshold 0.95 — same rationale as the quick-scan job
         # above. This is the SARIF-feeding job, not the dogfood gate. The
         # strict `self-scan` job keeps the default 0.7 and is the one that
         # decides whether main is green.
-        # --skip-module mutation — mutation testing mutates source files and
-        # re-runs the full test suite per mutation (~28 min in CI). It's run
-        # nightly via .github/workflows/nightly-mutation.yml instead so the
-        # main CI gate stays under 5 min.
-        run: node bin/gatetest.js --suite quick --sarif --junit --confidence-threshold 0.95 --parallel
+        run: >-
+          node bin/gatetest.js --suite full --sarif --junit --confidence-threshold 0.95 --parallel
+          --skip-module mutation --skip-module e2e --skip-module unitTests --skip-module dataIntegrity
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATETEST_NO_TELEMETRY: '1'
 
       - name: Upload SARIF to GitHub Security
         # Same category as the PR job above — this upload is main's

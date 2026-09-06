@@ -23,9 +23,11 @@ fi
 
 findings=""
 
-# 1. Tests
-if ! node --test tests/*.test.js >/tmp/gatetest-sweep-tests.log 2>&1; then
-  failed=$(grep -E "^(not ok|# fail)" /tmp/gatetest-sweep-tests.log | head -5 | sed 's/^/    /')
+# 1. Tests — through the project runner (Bible sweep checklist, 2026-09-05):
+# the bare `node --test` form hangs for hours on a leaked handle, and the
+# `--test-force-exit` form exits before every file has reported.
+if ! node scripts/run-tests.js --timeout 60000 tests/*.test.js >/tmp/gatetest-sweep-tests.log 2>&1; then
+  failed=$(grep -E "^(✗ |not ok|# fail|SUITE: FAILED)" /tmp/gatetest-sweep-tests.log | head -5 | sed 's/^/    /')
   findings+=$'\n- Tests failing:\n'"$failed"
 fi
 
