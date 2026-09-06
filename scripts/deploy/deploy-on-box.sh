@@ -29,7 +29,12 @@ echo "[deploy] $(date -u +%FT%TZ) — deploying $(git rev-parse --abbrev-ref HEA
 #
 # So: ignore the files this script is known to dirty. `git reset --hard` below
 # discards them anyway — they were never at risk. Anything else still blocks.
-SELF_DIRTIED='package-lock.json website/app/data/build-info.json website/package-lock.json'
+# Every file the website `prebuild` writes belongs here — tests/deploy-self-dirtied.test.js
+# derives that list from website/package.json and fails when one is missing. It
+# happened once already: Move 39 (2026-09-05) added generate-changelog.js to the
+# prebuild, changelog.json was not listed, and the next five deploys refused
+# themselves while production sat 85 commits behind main.
+SELF_DIRTIED='package-lock.json website/app/data/build-info.json website/app/data/changelog.json website/package-lock.json'
 UNEXPECTED="$(git status --porcelain --untracked-files=no | awk '{print $2}' | while read -r f; do
   case " $SELF_DIRTIED " in *" $f "*) ;; *) echo "$f" ;; esac
 done)"
