@@ -417,6 +417,55 @@ pre-existing skips), 0 fail. Website builds clean throughout.
 
 ## VERSION CHANGELOGS (moved from the Bible)
 
+### 2026-09-06 — the #418 port: a conflicted PR replaced by four measured pieces
+
+Craig, from a phone at sea: *"I cant have this many conflicts when only
+working from iphone"*. PR #418 carried real fixes from a 2026-09-02 audit and
+23 conflicted files; it could not be resolved from a phone and had drifted
+twenty-plus commits behind main. It was closed with the port plan in a comment
+and re-landed as four PRs, each re-derived against main's current control
+pairs and re-measured, never merged:
+
+- **#465 — direct-repair verifies or reverts.** A fix that failed a syntax
+  check or still fired on rescan was pushed anyway. `_verifyOrRevert` now
+  fails closed (`verify: false` opts out; `report.verified` says which).
+- **#467 — ten rule and reporter fixes.** Two of #418's rules were NOT taken
+  because main had since added a control pair they would have silenced
+  (hardcoded-url's bare-localhost rule; links' "no slash, no extension"
+  skip). One of #418's rules was narrowed after measurement: "a file outside
+  the package's `files` list is not library code" is right for a package that
+  publishes its source and wrong for one that compiles — on the pinned corpus
+  it silenced five blocking `console.log` errors in hono (`files: ["dist"]`)
+  and one in rails' actioncable. The rule now stands only where the owning
+  package has no `build` / `compile` / `prepare` / `prepack` / `prepublish`
+  script. Corpus 20/20 at ceiling; django 60→59 (a README section is a
+  warning, not an error — Forbidden #25).
+- **#468 — nine website contradictions, and the guard that let them through.**
+  "See All 120 Modules" survived because the module-count guard's prefilter
+  was case-sensitive and the claim regex was not, so the file was skipped
+  whole. Suite sizes (42 / 46 / 88) and the MCP tool count (24) are now
+  written into `site-stats.json` from `DEFAULT_CONFIG` and the server's
+  `TOOLS` array and imported; `tests/website-claims-sync.test.js` guards each
+  class. `Cta.tsx` from #418 no longer existed; its copy lives on scan/status.
+- **#469 — the job named "Full Scan" ran the quick suite** since it was
+  written, with a comment citing a nightly workflow that does not exist. It
+  now runs the full deterministic suite minus the four modules that need a
+  test runner or a browser (measured on main: GATE PASSED, 0 blocking, 37 s).
+  The Stop hook the Bible's ALWAYS-ON section relies on was never wired; it
+  is now, through `scripts/run-tests.js` rather than #418's
+  `--test-force-exit` form, which the runner had already replaced.
+
+Not ported: #418's `corpus-gate.js`, baselines and workflow (superseded by
+`scripts/real-world-precision.js` and the "real repos must not be blocked"
+job), and its docs hunks (rewritten here).
+
+**Method note.** Every cherry-pick failed on a comment line between two
+statements, so each hunk was re-anchored on the exact adjacent code and the
+result diffed engine-against-engine on the kept pinned clones
+(`--repo X --keep`) before the corpus gate was believed. The two false
+negatives the port would have introduced were only visible that way: the
+corpus gate reports *fewer* blocking findings as a pass.
+
 ### 2026-09-05 — one stripper: where a string or a comment begins
 
 "Where do the strings, comments and regex literals begin and end in this
