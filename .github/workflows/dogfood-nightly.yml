@@ -31,14 +31,20 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install dependencies
+      - name: Install all workspaces
         # Without this, node_modules never exists in this job — modules that
         # need a real npm package (pngjs/pixelmatch for visualRegression +
         # crossBrowser) silently drop out of --list, dragging the module
         # count below the real 120 and feeding a wrong number into
         # site-stats.json / the public website (caught 2026-07-09: a nightly
         # run measured 118 modules + 8 spurious test failures this way).
-        run: npm ci
+        # ALL workspaces, the same script ci.yml uses — a root-only `npm ci`
+        # leaves website/node_modules empty, so `typescript` (a website
+        # devDependency) is unresolvable and the three cross-fix-syntax-gate
+        # tests that prove broken TypeScript is REJECTED fail. That is what
+        # published "failing: 3" to site-stats.json on 2026-09-06 while this
+        # job stayed green.
+        run: bash scripts/install-workspaces.sh
 
       - name: Verify all modules load
         run: node bin/gatetest.js --list | wc -l
@@ -275,3 +281,25 @@ jobs:
           # lands, so does the PR. A draft can never merge — that was the bug.
           gh pr ready "$BRANCH" || echo "gh pr ready: already ready, or unavailable ($?)"
           gh pr merge "$BRANCH" --auto --squash || echo "auto-merge unavailable — PR left open for review"
+
+      - name: Fail the job if the test sweep was red
+        # The sweep is a MEASUREMENT (its numbers go to the site whatever they
+        # say), so it runs `&& rc=0 || rc=$?` and the stats still regenerate.
+        # But a green nightly over a failing suite is "reports success while
+        # doing nothing" (Doctrine §1): on 2026-09-06 three tests failed here
+        # for weeks-worth of runs with nothing red anywhere a human looks.
+        # This runs last, after every artifact, issue and PR step, so nothing
+        # is lost — the job just tells the truth.
+        if: always()
+        run: |
+          rc=$(sed -n 's/^# exit //p' .dogfood/sweep-summary.txt 2>/dev/null | tail -1)
+          if [ -z "$rc" ]; then
+            echo "::error title=Test sweep did not run::.dogfood/sweep-summary.txt has no exit line — the sweep step never finished."
+            exit 1
+          fi
+          if [ "$rc" != "0" ]; then
+            echo "::error title=Nightly test sweep failed (exit $rc)::See the 'Run full test sweep' step. The site stats were still regenerated from the real numbers."
+            grep -E "^(✗ |    not ok|# fail|SUITE:)" .dogfood/sweep.log | head -20
+            exit 1
+          fi
+          echo "test sweep exit 0"
