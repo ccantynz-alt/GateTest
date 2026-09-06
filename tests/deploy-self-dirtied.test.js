@@ -54,3 +54,20 @@ test('control: the two known generators are found (build-info.json, changelog.js
   assert.ok(written.has('website/app/data/build-info.json'));
   assert.ok(written.has('website/app/data/changelog.json'));
 });
+
+// The workflow must run the script from the commit being deployed, not the
+// box's copy. The box's copy is whatever the last successful deploy left
+// there, so a fix to the script can never arrive through it: #463 fixed
+// SELF_DIRTIED and was refused by the very script it replaced (run 325).
+const WORKFLOW = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'deploy-box.yml'), 'utf8');
+
+test('deploy-box.yml streams the checked-out deploy script into the box (bash -s < script), after checking out', () => {
+  const ssh = WORKFLOW.indexOf('- name: Deploy over SSH');
+  const checkout = WORKFLOW.indexOf('uses: actions/checkout@');
+  assert.ok(ssh > 0 && checkout > 0);
+  assert.ok(checkout < ssh, 'the checkout must precede the SSH step so the script exists on the runner');
+  const step = WORKFLOW.slice(ssh, WORKFLOW.indexOf('- name:', ssh + 10));
+  assert.match(step, /bash -s/, 'the box must read the script from stdin');
+  assert.match(step, /< scripts\/deploy\/deploy-on-box\.sh/, 'stdin must be this checkout\'s script');
+  assert.doesNotMatch(step, /exec bash "\$d\/scripts/, 'never exec the box\'s own copy');
+});

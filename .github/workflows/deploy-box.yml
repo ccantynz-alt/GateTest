@@ -41,6 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # First, not last: the SSH step below streams THIS checkout's
+      # scripts/deploy/deploy-on-box.sh into the box, and the drift step at
+      # the end counts commits against it.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Check secrets present
         id: gate
         env:
@@ -105,11 +113,21 @@ jobs:
           # step had never actually run: the first deploy after wiring them up
           # would have either failed on a missing path or, worse, succeeded
           # against a stale checkout and reported green.
+          #
+          # The script is streamed from THIS checkout (`bash -s` reading stdin),
+          # not run from the box's copy. The box's copy is whatever the LAST
+          # successful deploy left there, so a fix to the deploy script can
+          # never reach the box through the box's own script: on 2026-09-05
+          # runs 320–325 all refused themselves on a file the OLD script did
+          # not expect (changelog.json), and #463, which fixed the list, was
+          # refused by the same old script it was replacing. tests/
+          # deploy-self-dirtied.test.js pins this shape.
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$BOX_SSH_HOST" \
             'for d in "$GATETEST_APP_DIR" /opt/gatetest "$HOME/gatetest"; do
-               [ -n "$d" ] && [ -f "$d/scripts/deploy/deploy-on-box.sh" ] && exec bash "$d/scripts/deploy/deploy-on-box.sh";
+               [ -n "$d" ] && [ -d "$d/.git" ] && exec env GATETEST_APP_DIR="$d" bash -s;
              done;
-             echo "no GateTest checkout found (tried GATETEST_APP_DIR, /opt/gatetest, \$HOME/gatetest)" >&2; exit 1'
+             echo "no GateTest checkout found (tried GATETEST_APP_DIR, /opt/gatetest, \$HOME/gatetest)" >&2; exit 1' \
+            < scripts/deploy/deploy-on-box.sh
 
       - name: Verify live endpoints
         if: steps.gate.outputs.enabled == 'true'
@@ -118,14 +136,6 @@ jobs:
           status=$(curl -s --max-time 20 https://gatetest.io/api/status || true)
           echo "$status" | head -c 400
           echo "$status" | grep -q '"ready"' || { echo "::error::/api/status did not return JSON — deploy may not have taken"; exit 1; }
-
-      # Needed only so the drift step below can count commits between the
-      # deployed SHA and this one.
-      - name: Checkout (for drift count)
-        if: always()
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Report production drift
         # Runs LAST and regardless of whether the deploy was enabled — after a
