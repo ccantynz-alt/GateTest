@@ -457,7 +457,12 @@ pairs and re-measured, never merged:
 
 Not ported: #418's `corpus-gate.js`, baselines and workflow (superseded by
 `scripts/real-world-precision.js` and the "real repos must not be blocked"
-job), and its docs hunks (rewritten here).
+job); its `_pemHasBody` rule in secrets ("a PEM header with no key material
+within three lines is documentation"), because main had since answered the
+same runbook false positive by ELISION (`illustrationIfElided`: `MIIE...`
+cannot authenticate, and neither a `.pem` on disk nor a key inlined in
+source ever carries an ellipsis) — a second definition of "is this a key"
+is a Doctrine §4 bug; and its docs hunks (rewritten here).
 
 **Method note.** Every cherry-pick failed on a comment line between two
 statements, so each hunk was re-anchored on the exact adjacent code and the
