@@ -70,7 +70,10 @@ function resolveDiffBase({ projectRoot, explicit, incrementalSince, env = proces
   if (incrementalSince) candidates.push({ ref: incrementalSince, source: 'since' });
   for (const ref of mergeGroupBase(env) || []) candidates.push({ ref, source: 'merge-group' });
   if (env.GITHUB_BASE_REF) candidates.push({ ref: `origin/${env.GITHUB_BASE_REF}`, source: 'github-base-ref' });
-  candidates.push({ ref: 'origin/main', source: 'origin' }, { ref: 'origin/master', source: 'origin' });
+  // `origin/HEAD` first: it is the remote's DEFAULT branch, whatever it is
+  // called. axios develops on `v1.x`; against `origin/main` a pinned v1.x
+  // commit diffed as the entire branch (#418's corpus run, 2026-09-02).
+  candidates.push({ ref: 'origin/HEAD', source: 'origin' }, { ref: 'origin/main', source: 'origin' }, { ref: 'origin/master', source: 'origin' });
   if (!refExists(root, 'origin/main') && !refExists(root, 'origin/master')) {
     candidates.push({ ref: 'main', source: 'local' }, { ref: 'master', source: 'local' });
   }

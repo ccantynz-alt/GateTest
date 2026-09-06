@@ -518,9 +518,12 @@ class CiSecurityModule extends BaseModule {
       // `--baseline-commit ${{ github.event.pull_request.base.sha }}` was
       // reported as injection (2026-09-05). GitHub's own guidance draws the
       // same line.
-      const eventExpansion = /\$\{\{\s*github\.event\.([\w.]+)/.exec(l);
-      const safeLeaf = eventExpansion && /(?:^|\.)(?:sha|number|id|node_id|run_number|run_id)$/.test(eventExpansion[1]);
-      if ((eventExpansion && !safeLeaf) || /\$\{\{\s*github\.head_ref\s*\}\}/.test(l)) {
+      // Every expansion on the line, not the first: `echo "${{ …base.sha }}"
+      // "${{ …issue.body }}"` was judged by the safe SHA and the body rode
+      // through (#418's control pair, 2026-09-02).
+      const leaves = [...l.matchAll(/\$\{\{\s*github\.event\.([\w.]+)/g)].map((m) => m[1]);
+      const unsafe = leaves.some((leaf) => !/(?:^|\.)(?:sha|number|id|node_id|run_number|run_id)$/.test(leaf));
+      if (unsafe || /\$\{\{\s*github\.head_ref\s*\}\}/.test(l)) {
         return { how: 'interpolated into a shell script', fix: 'Assign to an env var via `env:` with ${{ github.event.* }} and reference it as $VAR in the shell. GitHub Actions expansion into a shell is unsafe.' };
       }
     } else if (host.template && host.template.test(l)) {

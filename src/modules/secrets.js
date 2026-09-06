@@ -673,17 +673,13 @@ class SecretsModule extends BaseModule {
     // fastify, got and zod all ship one and all four were reported at
     // CRITICAL for it. Only an .npmrc carrying an actual credential is a
     // finding — which is what security.js:_checkNpmrc already tests for.
-    const NEEDS_CREDENTIAL = new Set(['.npmrc']);
-    const CREDENTIAL_RE = /(?:^|\n)\s*(?:\/\/[^\n]*:)?_(?:auth|authToken|password)\s*=\s*\S/i;
-
+    // The same principle now covers every file on the list: the filename is
+    // a prior, the content is the evidence — see _trackedFileVerdict.
     for (const filename of dangerousFiles) {
       const filePath = path.join(projectRoot, filename);
       if (fs.existsSync(filePath)) {
-        if (NEEDS_CREDENTIAL.has(filename)) {
-          let body = '';
-          try { body = fs.readFileSync(filePath, 'utf-8'); } catch { body = ''; }
-          if (!CREDENTIAL_RE.test(body)) continue;
-        }
+        const verdict = this._trackedFileVerdict(filename, filePath);
+        if (!verdict) continue;
         // Check if it's tracked by git
         const { exitCode } = this._exec(`git ls-files --error-unmatch "${filename}" 2>/dev/null`, {
           cwd: projectRoot,
@@ -691,12 +687,64 @@ class SecretsModule extends BaseModule {
         if (exitCode === 0) {
           result.addCheck(`secrets:tracked-${filename}`, false, {
             file: filename,
-            message: `${filename} is tracked by git — this file likely contains secrets`,
+            severity: verdict.severity,
+            message: verdict.message,
             suggestion: `Add "${filename}" to .gitignore and remove from git tracking`,
           });
         }
       }
     }
+  }
+
+  /**
+   * What a TRACKED sensitive-looking file actually holds decides its severity
+   * (ported from #418, 2026-09-02):
+   *
+   *   - key material (`key.pem`, `id_rsa`)                 -> error, always
+   *   - `.npmrc` with `_authToken` / `_auth` / `_password`  -> error
+   *   - `.npmrc` with only config keys                      -> null (no finding)
+   *   - `.env*` with a real-looking value                   -> error
+   *   - `.env*` with only blanks / placeholders / refs      -> warning (hygiene)
+   *   - `credentials.json` etc. with a credential key       -> error, else warning
+   *
+   * @returns {{severity: string, message: string}|null}
+   */
+  _trackedFileVerdict(filename, filePath) {
+    let content = '';
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch (err) {
+      return { severity: 'warning', message: `${filename} is tracked by git but could not be read (${err.message}) — verify it holds no credential` };
+    }
+    const lines = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith(';'));
+    const tracked = `${filename} is tracked by git`;
+
+    if (/^(?:key\.pem|id_rsa)$/.test(filename)) {
+      return { severity: 'error', message: `${tracked} — private key material must never be committed` };
+    }
+    if (filename === '.npmrc') {
+      if (lines.some((l) => /(?:_authToken|_auth|_password|:username|:email)\s*=/i.test(l))) {
+        return { severity: 'error', message: `${tracked} and carries a registry credential` };
+      }
+      return null; // config-only .npmrc is the recommended way to pin npm behaviour
+    }
+    if (filename.startsWith('.env')) {
+      const live = lines.some((l) => {
+        const m = l.match(/^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.*)$/);
+        if (!m) return false;
+        const v = m[1].replace(/^['"]|['"]$/g, '').trim();
+        if (v.length < 8) return false;
+        if (/^\$\{?[A-Za-z_]/.test(v)) return false;           // ${VAR} / $VAR reference
+        return !PLACEHOLDER_VALUE_RE.test(v);
+      });
+      return live
+        ? { severity: 'error', message: `${tracked} and holds at least one real-looking value` }
+        : { severity: 'warning', message: `${tracked} — it holds only blanks or placeholders today; a real value will be committed the first time someone fills it in` };
+    }
+    if (/"(?:private_key|client_secret|secret|token|password|api_key)"\s*:\s*"[^"]{8,}"/i.test(content)) {
+      return { severity: 'error', message: `${tracked} and contains a credential-shaped value` };
+    }
+    return { severity: 'warning', message: `${tracked} — this filename usually holds credentials; verify it is meant to be public` };
   }
 
   /**
