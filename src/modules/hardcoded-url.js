@@ -98,7 +98,7 @@ const DEV_GUARD_RE = /\bprocess\.env\.NODE_ENV\s*(?:===|!==|==|!=)\s*['"`](?:dev
 //     (trpc www/src/utils/env.js:16) — a documented dev default IS the fix this rule suggests
 //   the bound address     — `server.listen(PORT, () => log(`http://localhost:${PORT}`))`
 //     (prisma apps/lsp-playground/src/cli.ts:256-257) — a server announcing where it is listening
-//   WHATWG parse base     — `new URL(req.url, 'http://localhost')`: the host is discarded
+//   WHATWG parse base     — `new URL(req.url, 'http://localhost')`, `location.href || 'http://localhost'`: the host is discarded
 //     (prisma apps/lsp-playground/src/cli.ts:15 → :30)
 const ENV_TERNARY_RE = /\bprocess\.env\.[A-Z_][A-Z0-9_]*\s*\?[^;]*?:\s*['"`]$/;
 const SCHEMA_DEFAULT_RE = /\.(?:default|devDefault)\s*\(\s*['"`]$|\bdevDefault\s*:\s*['"`]$/;
@@ -110,6 +110,13 @@ const BARE_LOCALHOST_RE = /^https?:\/\/localhost\/?['"`]/i;
 // string's own content.
 function isUrlParseBase(line, before, maskedContent) {
   if (/\bnew\s+URL\s*\([^,]+,\s*['"`]$/.test(before)) return true;
+  // The fallback of a browser location — `window.location.href ||
+  // 'http://localhost'`, `document.baseURI ?? 'http://localhost'` — is the
+  // origin a relative URL resolves against when there is no window (axios
+  // lib/platform/common/utils.js; #418's corpus run, 2026-09-02). A bare
+  // host anywhere else — a fetch target, a non-env ternary — still fires:
+  // tests/hardcoded-url.test.js holds that control pair.
+  if (/\b(?:href|origin|baseURI|location)\)*\s*(?:\|\||\?\?)\s*['"`]$/.test(before)) return true;
   const decl = line.match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*['"`]https?:\/\/localhost/);
   return !!decl && new RegExp(`\\bnew\\s+URL\\s*\\([^,]+,\\s*${decl[1]}\\b`).test(maskedContent);
 }

@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 // One definition, imported (doctrine §4): src/core/scan-scope.js answers
 // "is this JSX a web page or a picture?" for every module that reads JSX.
-const { isImageRenderer } = require('../core/scan-scope');
+const { isImageRenderer, isNonUserFacingPage } = require('../core/scan-scope');
 // The one glob grammar (`.gatetest.json` `paths`, workspace patterns): `*` one
 // segment, `**` any depth, a bare prefix means everything under it. Applied to
 // link TARGETS here — `links.excludePatterns` (KI #52).
@@ -25,6 +25,17 @@ const ROUTE_FALLBACK_SUFFIXES = ['.md', '.mdx', '.html', '.htm', '/index.md', '/
  *  (prisma AGENTS.md → `docs/Architecture%20Overview.md`, 1134 findings). */
 function decodeHref(href) {
   try { return decodeURIComponent(href); } catch { return href; }
+}
+
+/** A suffix that names a file, so a dotted token is a path and not a domain or a template property. */
+const LINK_FILE_EXT_RE = /\.(?:md|mdx|markdown|html?|txt|json|ya?ml|png|jpe?g|gif|svg|webp|ico|pdf|css|scss|js|ts|tsx|jsx|mjs|cjs|xml|csv|zip|gz|wasm|map)$/i;
+
+/** Blank out fenced code blocks and inline code spans, preserving line count. */
+function stripMarkdownCode(md) {
+  return md
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/~~~[\s\S]*?~~~/g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(/`[^`\n]*`/g, (span) => ' '.repeat(span.length));
 }
 
 class LinksModule extends BaseModule {
@@ -62,8 +73,18 @@ class LinksModule extends BaseModule {
     for (const file of allFiles) {
       const relPath = path.relative(projectRoot, file);
       if (INTERNAL_DOCS_RE.test('/' + relPath.replace(/\\/g, '/'))) continue;
-      const content = fs.readFileSync(file, 'utf-8');
       const ext = path.extname(file);
+      // A test/benchmark harness page is not a page a user visits: lodash's
+      // perf/index.html links ../node_modules/benchmark/benchmark.js and that
+      // is the harness working, not a broken link (#418's corpus run,
+      // 2026-09-02). Markdown under those dirs is still read — a README in
+      // tests/ is documentation.
+      const isMarkdown = ['.md', '.mdx'].includes(ext);
+      if (!isMarkdown && isNonUserFacingPage(relPath)) continue;
+      let content = fs.readFileSync(file, 'utf-8');
+      // Links inside code are illustrations — `[text](url)` shown in a fenced
+      // block or a backtick span documents syntax, it does not link.
+      if (isMarkdown) content = stripMarkdownCode(content);
       // JSX handed to satori / `new ImageResponse(…)` is rasterised to a PNG:
       // an `href="#"` drawn into an OG image is paint, not a link
       // (trpc www/og-image/pages/api/_ref/tailwind.tsx:31).
@@ -245,6 +266,24 @@ class LinksModule extends BaseModule {
     // `<%`, JSX `${}`, Angular/Vue bindings, mkdocs `!!`, `<https://…>`
     // autolinks that were mis-captured, and bare markdown reference labels.
     if (/^[@{$<%!]|\{\{|\{%|<%|^\[|\]$|^\(|\)$/.test(link)) return;
+    // Placeholders and non-paths (#418's corpus run on chalk / axios /
+    // fastify / lodash, 2026-09-02): `string,` (a signature captured from
+    // prose — a comma or a space never appears in a path reference), `LINK`
+    // (an all-caps placeholder), `sponsor.imageUrl` (a template property —
+    // a dotted bare token whose suffix is no file extension),
+    // `www.websitename.com` (a bare domain is prose, not a path), and
+    // `../node_modules/…` (a dependency asset is installed, not committed).
+    // A bare lowercase word such as `changesets` is still a target — apollo's
+    // CONTRIBUTING.md really did point at a missing directory
+    // (tests/links.test.js holds that control).
+    if (/[,\s]/.test(link)) return;
+    if (/^[A-Z][A-Z0-9_]{2,}$/.test(link)) return;
+    const looksLikeFile = LINK_FILE_EXT_RE.test(link);
+    if (!link.includes('/') && /\.[A-Za-z0-9]+$/.test(link) && !looksLikeFile) return;
+    // `missing.md` is a file, not a domain with a `.md` TLD — the extension
+    // list decides first.
+    if (!looksLikeFile && /^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/|$)/i.test(link) && !link.startsWith('.')) return;
+    if (/(?:^|\/)node_modules\//.test(link)) return;
     internalLinks.push({ href: link, source });
   }
 }

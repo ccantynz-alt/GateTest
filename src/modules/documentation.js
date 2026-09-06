@@ -40,8 +40,13 @@ class DocumentationModule extends BaseModule {
     } catch { readmeName = null; }
     const readmePath = path.join(projectRoot, readmeName || 'README.md');
     if (!readmeName || !fs.existsSync(readmePath)) {
+      // WARNING, not error: a missing README is a real quality signal, but no
+      // build is broken by it, and a gate that blocks on documentation is the
+      // bottleneck (Forbidden #25; lodash blocked on a README section in
+      // #418's corpus run, 2026-09-02). Same for the section checks below.
       result.addCheck('docs:readme', false, {
-        message: 'No README.md found',
+        severity: 'warning',
+        message: 'No README found',
         suggestion: 'Create a README.md with project description, setup, and usage instructions',
       });
       return;
@@ -57,7 +62,7 @@ class DocumentationModule extends BaseModule {
       // (2026-09-05) — the gate as bottleneck, Forbidden #25.
       { name: 'setup/install', keywords: ['install', 'setup', 'getting started', 'quick start'], severity: 'warning' },
       { name: 'usage', keywords: ['usage', 'how to use', 'example', 'quick start'], severity: 'warning' },
-      { name: 'description', keywords: ['##', '# '], severity: 'error' },
+      { name: 'description', keywords: ['##', '# '], severity: 'warning' },
     ];
 
     const recommendedSections = [

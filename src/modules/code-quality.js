@@ -279,7 +279,7 @@ class CodeQualityModule extends BaseModule {
    * @param {string} relFwd - repo-relative path, forward slashes
    * @returns {boolean}
    */
-  _isLibraryPath(relFwd) {
+  _isLibraryPath(relFwd, projectRoot) {
     // The canonical harness / illustration definitions decide first
     // (Doctrine §4) — they know compound segments a bare-word set never will.
     // apollo-server keeps a release check at
@@ -287,7 +287,90 @@ class CodeQualityModule extends BaseModule {
     // to TEST_PATH_RE (`[a-z0-9]+[-_]tests?`) but not to this set, so its
     // "smoke test passed!" line was a blocking error (corpus6, 2026-09-05).
     if (this._isTestPath(relFwd) || isIllustrationPath(relFwd) || HARNESS_DIR_RE.test(relFwd)) return false;
-    return !relFwd.split('/').some(seg => CodeQualityModule.NON_LIBRARY_DIRS.has(seg.toLowerCase()));
+    if (relFwd.split('/').some(seg => CodeQualityModule.NON_LIBRARY_DIRS.has(seg.toLowerCase()))) return false;
+    if (!projectRoot) return true;
+    const pkg = this._nearestPackage(projectRoot, relFwd);
+    return pkg ? this._isPublishedPath(pkg, relFwd) : true;
+  }
+
+  /**
+   * The package.json that OWNS a file — the nearest one walking up from the
+   * file's directory to the project root. In a repo that publishes from its
+   * root and also carries a private app in a subdirectory (this repo:
+   * `website/`), a file in the app was judged as library code of the root
+   * package (#418: 30 blocking findings, all console.log in a Playwright
+   * capture script nobody imports). Cached per directory; `{ dir, json }` or
+   * null.
+   */
+  _nearestPackage(projectRoot, relFwd) {
+    if (!this._pkgCache || this._pkgCache.root !== projectRoot) this._pkgCache = { root: projectRoot, byDir: new Map() };
+    const segs = relFwd.split('/');
+    segs.pop();
+    for (let n = segs.length; n >= 0; n--) {
+      const dir = segs.slice(0, n).join('/');
+      if (this._pkgCache.byDir.has(dir)) {
+        const hit = this._pkgCache.byDir.get(dir);
+        if (hit) return hit;
+        continue;
+      }
+      let entry = null;
+      try {
+        const json = JSON.parse(fs.readFileSync(path.join(projectRoot, dir, 'package.json'), 'utf-8'));
+        entry = { dir, json };
+      } catch (err) {
+        // ENOENT: no package.json at this level, keep walking up. Anything
+        // else (malformed JSON) still OWNS the file — with no `main` or
+        // `files` it reads as an application, which is the safe direction.
+        entry = err && err.code === 'ENOENT' ? null : { dir, json: {}, error: err.message };
+      }
+      this._pkgCache.byDir.set(dir, entry);
+      if (entry) return entry;
+    }
+    return null;
+  }
+
+  /**
+   * Is the file inside what its package actually ships? When package.json
+   * declares `files`, npm publishes only those paths (plus README/LICENSE/
+   * main), so anything outside them cannot be "code a consumer imports". No
+   * `files` list means everything not .npmignored ships — treated as
+   * published.
+   */
+  _isPublishedPath(pkg, relFwd) {
+    const files = Array.isArray(pkg.json.files) ? pkg.json.files : null;
+    if (!files || files.length === 0) return true;
+    // A package with a compile step publishes its OUTPUT: hono ships
+    // `files: ["dist"]` from `src/`, rails' actioncable ships
+    // `app/assets/javascripts/*.js` built from `app/javascript/`. Source
+    // outside the list still becomes the shipped artefact, so `files` says
+    // nothing about it — measured on the corpus 2026-09-06: honouring the
+    // list there silenced 5 console.log errors in hono and 1 in rails.
+    if (CodeQualityModule.hasCompileStep(pkg.json)) return true;
+    const inPkg = pkg.dir ? relFwd.slice(pkg.dir.length + 1) : relFwd;
+    const entries = files.concat(pkg.json.main ? [String(pkg.json.main)] : []);
+    return entries.some((raw) => {
+      let e = String(raw).replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+      const glob = e.search(/[*?[{]/);
+      if (glob === 0) {
+        // `*.d.ts` publishes top-level files with that suffix; `**` publishes
+        // everything; any other leading-glob shape fails toward "published".
+        const suffix = e.match(/^\*(\.[A-Za-z0-9.]+)$/);
+        if (suffix) return !inPkg.includes('/') && inPkg.endsWith(suffix[1]);
+        return true;
+      }
+      if (glob !== -1) e = e.slice(0, glob).replace(/\/+$/, '');
+      return inPkg === e || inPkg.startsWith(e + '/');
+    });
+  }
+
+  /** Script names under which a package turns source into what it ships. `prepublishOnly` is deliberately absent — by convention it runs checks (this repo: `npm run sync-lib`), not a compiler. */
+  static COMPILE_SCRIPTS = new Set(['build', 'compile', 'prepare', 'prepack', 'prepublish']);
+
+  /** Does this package.json declare a step that builds the published artefact from source? */
+  static hasCompileStep(json) {
+    const scripts = json && json.scripts && typeof json.scripts === 'object' ? json.scripts : null;
+    if (!scripts) return false;
+    return Object.keys(scripts).some((k) => CodeQualityModule.COMPILE_SCRIPTS.has(k));
   }
 
   /** `tsdown.config.ts`, `vite.config.mts`, `jest.config.base.js`, `.eslintrc.cjs` — a prefix is required so `src/config.js` (app config, not tool config) stays library code. */
@@ -422,7 +505,7 @@ class CodeQualityModule extends BaseModule {
     // Info is still disclosed and still counted — it moves out of the warning
     // wall, not out of the report. Library paths are untouched: a published
     // package logging from lib/ is still an error.
-    if (!this._isLibraryPath(relFwd)) return 'info';
+    if (!this._isLibraryPath(relFwd, projectRoot)) return 'info';
     // Same reasoning, decided by the FILE rather than the directory: a CLI,
     // a build config or a logger implementation writing to the console is
     // the file doing its job. See `_fileRole`.

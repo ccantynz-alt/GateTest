@@ -111,6 +111,9 @@ const DEFAULT_EXCLUDE_PATTERNS = [
   /(?:^|\/)composer\.lock$/,
   /(?:^|\/)go\.sum$/,
   /(?:^|\/)mix\.lock$/,
+  /(?:^|\/)bun\.lockb?$/,
+  /(?:^|\/)deno\.lock$/,
+  /(?:^|\/)uv\.lock$/,
   /(?:^|\/)flake\.lock$/,
   // Generated / build output
   /(?:^|\/)dist\//,
@@ -466,6 +469,19 @@ class PrSizeModule extends BaseModule {
       incrementalSince: runnerOptions.incrementalSince,
     });
     if (base) {
+      // HEAD already ON a remote base (merge-base == HEAD) means there is no
+      // pull request to size: a checkout of a pinned commit, a scan of main
+      // itself, a nightly. The fall-through below would size `HEAD~1..HEAD`
+      // — or, for a pinned commit behind the base, whatever git produced:
+      // axios @81df7a5 came back as "366 files, 52,447 lines — split the PR"
+      // for a repo with no PR at all (#418's corpus run, 2026-09-02). Only a
+      // REMOTE base proves it; a local `main` with no remote is the developer
+      // committing directly and running the pre-push hook, where the last
+      // commit is the thing to size.
+      if (base.ref.startsWith('origin/')) {
+        const headRes = this._exec('git rev-parse HEAD', { cwd: projectRoot });
+        if (headRes.exitCode === 0 && (headRes.stdout || '').trim() === base.mergeBase) return '';
+      }
       const diffRes = this._exec(`git diff --numstat -C ${base.mergeBase}..HEAD`, { cwd: projectRoot });
       if (diffRes.exitCode === 0 && diffRes.stdout && diffRes.stdout.trim()) return diffRes.stdout;
     }

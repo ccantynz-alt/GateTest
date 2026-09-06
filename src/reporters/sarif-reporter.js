@@ -199,7 +199,13 @@ class SarifReporter {
         if (check.passed) continue;
         // .gatetestignore / baseline suppressions are the user's decision;
         // the Security tab is their alert list, not an audit trail.
-        if (check.suppressed) continue;
+        if (check.suppressed || check.suppressReason) continue;
+        // Info-level findings are notes the gate never blocks on; GitHub Code
+        // Scanning turns every uploaded result into a PR review comment, so
+        // uploading them re-litigates a fixture's `http://localhost` on every
+        // pull request (#418, 2026-09-02; seven such threads on #458).
+        // Errors and warnings still ride.
+        if (check.severity === 'info') continue;
 
         // The level GitHub sees is the level the GATE used: an error the
         // confidence threshold made non-blocking ("soft") is a warning.
