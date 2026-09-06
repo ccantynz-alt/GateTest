@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-05T09:57:10.226Z",
+  "generatedAt": "2026-09-06T08:08:25.610Z",
   "source": "scripts/real-world-precision.js",
   "note": "Measured on every run against pinned commits of repositories we do not control. Ceilings only ratchet down. Do not hand-edit — run the script.",
   "engineVersion": "1.61.0",
-  "engineCommit": "db06e31e",
+  "engineCommit": "34107810",
   "repos": [
     {
       "name": "express",
@@ -37,8 +37,8 @@
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
       "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
-      "blocking": 14,
-      "ceiling": 14,
+      "blocking": 12,
+      "ceiling": 12,
       "softened": 4
     },
     {
@@ -46,8 +46,8 @@
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
       "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec; 2026-09-05 importCycle type-only elision: the four import cycles it blocked on read every binding inside function bodies — deferred, now a warning — ceiling ratchets down",
-      "blocking": 23,
-      "ceiling": 23,
+      "blocking": 20,
+      "ceiling": 20,
       "softened": 55
     },
     {
@@ -84,15 +84,15 @@
       "why": "Java + Thymeleaf templates + a k8s manifest; the reference Spring app",
       "blocking": 8,
       "ceiling": 8,
-      "softened": 1
+      "softened": 0
     },
     {
       "name": "gin",
       "url": "https://github.com/gin-gonic/gin.git",
       "sha": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
       "why": "Go — the ignored-error idiom the go module could not see until 2026-09-04",
-      "blocking": 2,
-      "ceiling": 2,
+      "blocking": 1,
+      "ceiling": 1,
       "softened": 0
     },
     {
@@ -129,7 +129,7 @@
       "why": "Kotlin — first contact 21 blocking, 14 of them a test.html under test-resources/ scored as a public page, plus a Gradle compile failure in our environment reported as failing tests; what remains is six real TODO() stubs and one third-party workflow on @main",
       "blocking": 7,
       "ceiling": 7,
-      "softened": 2
+      "softened": 0
     },
     {
       "name": "vapor",
@@ -174,16 +174,16 @@
       "why": "pnpm monorepo, packages/** nesting, a SQL toolkit that builds SQL by design — first contact 90 blocking: `${STORAGE_TABLE}` constants as injection, seeding loops in test/ as N+1, teardown catches as swallows, tsconfig/ and turbo.json as invalid JSON, `base.sha` as shell injection, an un-runnable test:integration as failing tests; what remains is DDL with a computed database name, three import cycles, telemetry catches and a dev-tool page without a description; 2026-09-05 importCycle type-only elision: the three import cycles it blocked on read their bindings in parameter defaults and method bodies — deferred, now a warning — ceiling ratchets down",
       "blocking": 13,
       "ceiling": 13,
-      "softened": 19
+      "softened": 18
     },
     {
       "name": "NodeGoat",
       "url": "https://github.com/OWASP/NodeGoat.git",
       "sha": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
       "why": "OWASP's deliberately vulnerable app — the recall floor",
-      "blocking": 57,
+      "blocking": 53,
       "floor": 40,
-      "softened": 1
+      "softened": 0
     }
   ],
   "calibration": {
@@ -191,8 +191,8 @@
     "bands": [
       {
         "confidence": 1,
-        "precision": 214,
-        "recall": 57,
+        "precision": 208,
+        "recall": 53,
         "rules": {
           "precision": {
             "python:eval": 3,
@@ -200,7 +200,6 @@
             "error-swallow:catch-noop": 4,
             "auth-bypass": 1,
             "secrets": 7,
-            "security:shell exec with interpolated input": 2,
             "security:secrets-scan": 3,
             "error-swallow:empty-catch": 15,
             "tls-security:js-reject-unauthorized": 3,
@@ -212,8 +211,6 @@
             "n-plus-one:query-in-loop": 2,
             "race-condition:fs-toctou": 1,
             "hardcoded-url:localhost": 4,
-            "taint:sink:file-write": 1,
-            "taint:sink:spawn": 2,
             "bash-safety:pipe-true": 3,
             "bash-safety:devnull-swallow": 1,
             "quality:eval() usage detected": 5,
@@ -241,7 +238,6 @@
             "a11y:img-alt": 6,
             "a11y:contrast-static": 2,
             "k8s:image-tag": 1,
-            "unit-tests:run": 1,
             "ci-security:codeql-sarif-missing-actions-read": 1,
             "rust:unimplemented": 1,
             "php:eval": 2,
@@ -268,11 +264,7 @@
             "perf:render-blocking": 2,
             "security:npm-audit:body-parser": 1,
             "security:npm-audit:bson": 1,
-            "security:npm-audit:connect": 1,
-            "security:npm-audit:debug": 1,
             "security:npm-audit:express": 1,
-            "security:npm-audit:finalhandler": 1,
-            "security:npm-audit:helmet": 1,
             "security:npm-audit:marked": 1,
             "security:npm-audit:mongodb": 1,
             "security:npm-audit:mongodb-core": 1,
@@ -381,19 +373,14 @@
       },
       {
         "confidence": 0.2,
-        "precision": 12,
-        "recall": 1,
+        "precision": 8,
+        "recall": 0,
         "rules": {
           "precision": {
             "security:secret": 1,
-            "quality:commented-code": 7,
-            "shell:eval-var": 2,
-            "bash-safety:pipe-true": 1,
-            "ci-security:secret-echo": 1
+            "quality:commented-code": 7
           },
-          "recall": {
-            "security:NoSQL injection ($where with interpolated input)": 1
-          }
+          "recall": {}
         }
       },
       {
@@ -412,62 +399,62 @@
     "sweep": [
       {
         "threshold": 0.5,
-        "precisionBlocking": 301,
-        "recallBlocking": 57,
+        "precisionBlocking": 295,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.6,
-        "precisionBlocking": 301,
-        "recallBlocking": 57,
+        "precisionBlocking": 295,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.65,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.7,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": true
       },
       {
         "threshold": 0.75,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.8,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.85,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.9,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 0.95,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       },
       {
         "threshold": 1,
-        "precisionBlocking": 214,
-        "recallBlocking": 57,
+        "precisionBlocking": 208,
+        "recallBlocking": 53,
         "shipped": false
       }
     ],
@@ -476,17 +463,17 @@
       "above": 1
     },
     "softened": {
-      "precisionTotal": 408,
-      "precisionBlocking": 214,
-      "precisionSoftened": 194,
-      "recallTotal": 58,
-      "recallBlocking": 57,
-      "recallLost": 1
+      "precisionTotal": 398,
+      "precisionBlocking": 208,
+      "precisionSoftened": 190,
+      "recallTotal": 53,
+      "recallBlocking": 53,
+      "recallLost": 0
     },
     "recallRepos": [
       {
         "name": "NodeGoat",
-        "blocking": 57,
+        "blocking": 53,
         "floor": 40,
         "held": true
       }
