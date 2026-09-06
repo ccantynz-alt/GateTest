@@ -46,14 +46,14 @@
       "url": "https://github.com/sindresorhus/got.git",
       "sha": "687eb7dcc100ea3e548ebba227173b886789e670",
       "why": "TypeScript HTTP client with a benchmark/ tree — a known scope trap",
-      "maxBlocking": 14
+      "maxBlocking": 12
     },
     {
       "name": "hono",
       "url": "https://github.com/honojs/hono.git",
       "sha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
       "why": "every crossFileTaint finding here was false: c.req.query() read as SQL, RegExp.exec() as command exec; 2026-09-05 importCycle type-only elision: the four import cycles it blocked on read every binding inside function bodies — deferred, now a warning — ceiling ratchets down",
-      "maxBlocking": 23
+      "maxBlocking": 20
     },
     {
       "name": "zod",
@@ -88,7 +88,7 @@
       "url": "https://github.com/gin-gonic/gin.git",
       "sha": "dcaa4296d111981ffb31ac3eba90bb63e1eb5ab9",
       "why": "Go — the ignored-error idiom the go module could not see until 2026-09-04",
-      "maxBlocking": 2
+      "maxBlocking": 1
     },
     {
       "name": "axum",
